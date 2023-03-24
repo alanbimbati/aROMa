@@ -144,7 +144,7 @@ class Points:
         answer += '💻 [PC](https://t.me/+_Hmuw95wjwM3ZmY0) Costa 15 '+PointsName+' per gioco'+'\n'
         answer += '🐶 [Nintendo](t.me/albumnintendo) Costa 15 '+PointsName+' per gioco'+'\n'
         answer += '📽 [Cinema](t.me/aROMaCinema) Costa 5 '+PointsName+' per film'+'\n'
-        answer += '🎖 [Premium](t.me/aROMaPremium) Csta 0 '+PointsName+', canale esclusivo agli utenti Premium.'+'\n\n'
+        answer += '🎖 [Premium](t.me/aROMaPremium) Costa 0 '+PointsName+', canale esclusivo agli utenti Premium.'+'\n\n'
         answer += '[Come guadagnare Frutti Wumpa?](https://t.me/aROMadivideogiochi/2486)'+'\n'
         answer += '[Cosa puoi fare con i Frutti Wumpa?](https://t.me/aROMadivideogiochi/2402)'
         return answer
