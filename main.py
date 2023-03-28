@@ -120,7 +120,7 @@ def any(message):
             utenteTarget = None
         
         messaggio = punti.donaPoints(utenteSorgente,utenteTarget,points)
-        bot.reply_to(message,messaggio+'\n\n'+Utente().infoUser(utenteTarget))
+        bot.reply_to(message,messaggio+'\n\n'+Utente().infoUser(utenteTarget),parse_mode='markdown')
     elif comando == 'me':
         bot.reply_to(message,Utente().infoUser(utenteSorgente),parse_mode='markdown')
     elif comando.startswith("status"):
@@ -196,8 +196,8 @@ def buy1game(message):
                 status = sendFileGame(chatid,from_chat,messageid)
                 if status == -1:
                     bot.reply_to(message,"C'è un problema con questo gioco, contatta un admin")
-            elif utenteSorgente.premium==0 and (isPremiumChannel(from_chat)):
-                bot.reply_to(message, "Mi dispiace, solo gli Utenti Premium possono acquistare questo gioco"+'\n\n'+Utente().infoUser(utenteSorgente))
+            #elif utenteSorgente.premium==0 and (isPremiumChannel(from_chat)):
+                #bot.reply_to(message, "Mi dispiace, solo gli Utenti Premium possono acquistare questo gioco"+'\n\n'+Utente().infoUser(utenteSorgente),parse_mode='markdown')
             elif utenteSorgente.points>=costo:
                 status = sendFileGame(chatid,from_chat,messageid)
                 if status == -1:
