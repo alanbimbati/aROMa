@@ -124,7 +124,7 @@ def any(message):
     elif comando == 'me':
         bot.reply_to(message,Utente().infoUser(utenteSorgente),parse_mode='markdown')
     elif comando.startswith("status"):
-        user = punti.getUtente(comando.split()[1])
+        user = Utente().getUtente(comando.split()[1])
         bot.reply_to(message, Utente().infoUser(user),parse_mode='markdown')
     elif comando.startswith("classifica"):
         punti.writeClassifica(message)
