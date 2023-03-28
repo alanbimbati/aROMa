@@ -152,15 +152,22 @@ def any(message):
         bot.reply_to(message, punti.album(),parse_mode='markdown')
 
 def sendFileGame(chatid,from_chat,messageid):
-    while True:
+    content_type = 'photo'
+    while content_type != 'sticker' and content_type=='photo':
         try:
-            message = bot.forward_message(chatid,from_chat, messageid,protect_content=True)
+            message = bot.forward_message(chatid, from_chat, messageid, protect_content=True)
+            content_type = message.content_type
         except:
             pass
-        messageid+=1
-        if message.content_type=='sticker':
-            break
-
+        messageid += 1
+    
+    while content_type != 'sticker' and content_type!='photo':
+        try:
+            message = bot.forward_message(chatid, from_chat, messageid, protect_content=True)
+            content_type = message.content_type
+        except:
+            pass
+        messageid += 1
 
 def isPremiumChannel(from_chat):
     premium = False
