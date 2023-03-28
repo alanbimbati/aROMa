@@ -182,12 +182,13 @@ class Points:
         else:
             # Aggiungi o rimuovi i punti per ogni utente
             for username in usernames:
-                try:
-                    utente = Utente().getUtente(username)
-                    risposta = 'Complimenti! Hai ottenuto {} {}' if op == '+' else 'Hai mangiato {} deliziosi {}!'
-                    Utente().addPoints(utente, points)
-                    bot.send_message(utente.id_telegram, risposta.format(str(points), PointsName)+Utente().infoUser(utente),parse_mode='markdown')
-                    answer += username+': '+risposta.format(str(points), PointsName)+'\n'
-                except:
-                    answer +=  'Comando non valido: username ({}) non trovato\n'.format(username)
+                if username.startswith('@'):
+                    try:
+                        utente = Utente().getUtente(username)
+                        risposta = 'Complimenti! Hai ottenuto {} {}' if op == '+' else 'Hai mangiato {} deliziosi {}!'
+                        Utente().addPoints(utente, points)
+                        bot.send_message(utente.id_telegram, risposta.format(str(points), PointsName)+Utente().infoUser(utente),parse_mode='markdown')
+                        answer += username+': '+risposta.format(str(points), PointsName)+'\n'
+                    except:
+                        answer +=  'Comando non valido: username ({}) non trovato\n'.format(username)
         return answer
