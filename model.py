@@ -11,6 +11,8 @@ from sqlalchemy         import desc,asc
 from settings           import *
 from telebot            import types
 import random
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
 Base = declarative_base()
 
@@ -118,8 +120,7 @@ class Utente(Base):
     abbonamento_attivo =  Column('abbonamento_attivo',Integer)
 
     def CreateUser(self,id_telegram,username,name,last_name):
-        from datetime import datetime
-        from dateutil.relativedelta import relativedelta
+
         session = Database().Session()
         exist = session.query(Utente).filter_by(id_telegram = id_telegram).first()
         if exist is None:
