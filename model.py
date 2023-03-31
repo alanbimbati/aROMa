@@ -538,7 +538,7 @@ class Livello(Base):
     def checkUpdateLevel(self,utenteSorgente,message):
         lv = Livello().getLvByExp(utenteSorgente.exp)
         if lv>utenteSorgente.livello:
-            self.update_user(utenteSorgente.id_telegram,{'livello':lv})
+            Database().update_user(utenteSorgente.id_telegram,{'livello':lv})
             lvObj = Livello().getLevel(lv)
             lbPremiumObj = Livello().getLevelPremium(lv)
             bot.reply_to(message,"Complimenti! 🎉 Sei passato al livello "+str(lv)+"! Hai sbloccato il personaggio ["+lvObj.nome+"]("+lvObj.link_img+"), puoi attivarlo scrivendo a @aROMaGameBot 🎉\n\n"+Utente.infoUser(utenteSorgente),parse_mode='markdown')
