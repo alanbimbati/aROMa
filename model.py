@@ -541,7 +541,7 @@ class Livello(Base):
             Database().update_user(utenteSorgente.id_telegram,{'livello':lv})
             lvObj = Livello().getLevel(lv)
             lbPremiumObj = Livello().getLevelPremium(lv)
-            bot.reply_to(message,"Complimenti! 🎉 Sei passato al livello "+str(lv)+"! Hai sbloccato il personaggio ["+lvObj.nome+"]("+lvObj.link_img+"), puoi attivarlo scrivendo a @aROMaGameBot 🎉\n\n"+Utente.infoUser(utenteSorgente),parse_mode='markdown')
+            bot.reply_to(message,"Complimenti! 🎉 Sei passato al livello "+str(lv)+"! Hai sbloccato il personaggio ["+lvObj.nome+"]("+lvObj.link_img+"), puoi attivarlo scrivendo a @aROMaGameBot 🎉\n\n"+Utente().infoUser(utenteSorgente),parse_mode='markdown')
             bot.reply_to(message,"È anche disponibile il personaggio ["+lbPremiumObj.nome+"]("+lbPremiumObj.link_img+"), puoi attivarlo scrivendo a @aROMaGameBot!",parse_mode='markdown')
             if lv % 5== 0:
                 if lv==5:
@@ -611,7 +611,7 @@ class Abbonamento:
         utente = Utente().getUtente(utente.id_telegram)
         self.bot.send_message(
             utente.id_telegram,
-            f"Il tuo abbonamento è stato correttamente rinnovato mangiando {self.COSTO_MANTENIMENTO} {self.PointsName}\n\n{self.infoUser(utente)}",
+            f"Il tuo abbonamento è stato correttamente rinnovato mangiando {self.COSTO_MANTENIMENTO} {self.PointsName}\n\n{Utente().infoUser(utente)}",
             parse_mode='markdown'
             ,reply_markup=Database().startMarkup(utente)
         )
@@ -621,7 +621,7 @@ class Abbonamento:
         scadenza = datetime.datetime.now()+relativedelta(months=+1)
         rinnovo = "\n\nOgni prossimo mese costerà solo "+str(self.COSTO_MANTENIMENTO)+" "+self.PointsName
         if utente.premium==1:
-            self.attivaAbbonamentoPremium(utente)
+            self.attiva_abbonamento(utente)
             self.bot.send_message(utente.id_telegram, "Sei già Utente Premium fino al "+str(utente.scadenza_premium)+rinnovo,reply_markup=Database().startMarkup(utente))
         elif utente.premium==0 and utente.points>=self.COSTO_PREMIUM:
             items = {
@@ -640,13 +640,13 @@ class Abbonamento:
         try:
             if oggi>utente.scadenza_premium:
                 if utente.abbonamento_attivo==0 and utente.premium==1:
-                    self.stopPremium(utente)
+                    self.stop_premium(utente)
                 elif utente.abbonamento_attivo==1:
                     if utente.points>=COSTO_MANTENIMENTO:
-                        self.rinnovaPremium(utente)
+                        self.rinnova_premium(utente)
                     else:
-                        self.stopPremium(utente)
-                        self.stopAbbonamentoPremium(utente)
+                        self.stop_premium(utente)
+                        self.stop_abbonamentoPremium(utente)
         except Exception as e:
             print(str(e))
     
