@@ -24,6 +24,7 @@ def start(message):
 
 @bot.message_handler(content_types=util.content_type_media)
 def any(message):
+    print(message)
     punti = Points.Points()
     steam = Steam()
     utenteSorgente,_=punti.checkBeforeAll(message)
