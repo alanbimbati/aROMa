@@ -99,7 +99,7 @@ class Points:
         selectedLevel = Livello().GetLevelByNameLevel(message.text)
         Livello().setSelectedLevel(utente,selectedLevel.livello,selectedLevel.lv_premium)
         bot.reply_to(message, "Personaggio "+ message.text +" selezionato!"+"\n\n"+Utente().infoUser(utente),parse_mode='markdown',reply_markup=Database.startMarkup(Database,utente))
-        bot.send_message(CANALE_LOG, "L' utente "+Utente().getUsernameAtLeastName(utente)+" ha selezionato il personaggio "+ message.text +"\n\n"+Utente().infoUser(utente),parse_mode='markdown',reply_markup=Database.startMarkup(Database,utente))
+        #bot.send_message(CANALE_LOG, "L' utente "+Utente().getUsernameAtLeastName(utente)+" ha selezionato il personaggio "+ message.text +"\n\n"+Utente().infoUser(utente),parse_mode='markdown',reply_markup=Database.startMarkup(Database,utente))
 
     
     def purgeSymbols(self,message):
@@ -182,13 +182,19 @@ class Points:
         else:
             # Aggiungi o rimuovi i punti per ogni utente
             for username in usernames:
-                if username.startswith('@'):
-                    try:
-                        utente = Utente().getUtente(username)
-                        risposta = 'Complimenti! Hai ottenuto {} {}' if op == '+' else 'Hai mangiato {} deliziosi {}!'
-                        Utente().addPoints(utente, points)
-                        bot.send_message(utente.id_telegram, risposta.format(str(points), PointsName)+Utente().infoUser(utente),parse_mode='markdown')
-                        answer += username+': '+risposta.format(str(points), PointsName)+'\n'
-                    except:
-                        answer +=  'Comando non valido: username ({}) non trovato\n'.format(username)
+                try:
+                    utente = Utente().getUtente(username)
+                    print(utente.username)
+                    risposta = 'Complimenti! Hai ottenuto {} {}' if op == '+' else 'Hai mangiato {} deliziosi {}!'
+                    Utente().addPoints(utente, points)
+                    answer += username+': '+risposta.format(str(points), PointsName)+'\n'
+                except Exception as e:
+                    answer += f'Errore Telegram: {str(e)}\n'
+                    answer +=  'Comando non valido: username ({}) non trovato\n'.format(username)
+                try:
+                    bot.send_message(utente.id_telegram, risposta.format(str(points), PointsName)+Utente().infoUser(utente),parse_mode='markdown')
+                except Exception as e:
+                    bot.reply_to(message, risposta.format(str(points), PointsName)+Utente().infoUser(utente),parse_mode='markdown')
+
+        if answer == '': answer='nulla da fare'
         return answer
