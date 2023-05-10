@@ -24,7 +24,6 @@ def start(message):
 
 @bot.message_handler(content_types=util.content_type_media)
 def any(message):
-    print(message)
     punti = Points.Points()
     steam = Steam()
     utenteSorgente,_=punti.checkBeforeAll(message)
@@ -89,7 +88,7 @@ def any(message):
                 link_img = parametri[4]
                 saga = parametri[5]
                 lv_premium = parametri[6]
-                punti.addLivello(livello,nome,exp_to_lvl,link_img,saga,lv_premium)
+                Livello().addLivello(livello,nome,exp_to_lvl,link_img,saga,lv_premium)
         elif comando == 'backup':
             punti.backup()
         elif comando == 'backupall':

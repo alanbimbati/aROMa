@@ -232,8 +232,13 @@ class Utente(Base):
     def addExp(self,utente,exp):
         Database().update_user(utente.id_telegram,{'exp':utente.exp+exp})
 
-    def addPoints(self, utente, points):   
-        Database().update_user(utente.id_telegram,{'points':int(utente.points) + int(points)})
+    def addPoints(self, utente, points):  
+        try: 
+            Database().update_user(utente.id_telegram,{'points':int(utente.points) + int(points)})
+        except Exception as e:
+            print(e)
+            Database().update_table_entry(Utente, "username", utente.username, {'points':int(utente.points) + int(points)})
+
 
     def donaPoints(self,utenteSorgente,utenteTarget,points):
         points = int(points)
@@ -458,10 +463,10 @@ class Livello(Base):
 
     def addLivello(self, lvl, nome, exp_to_lv, link_img, saga, lv_premium):
         session = Database().Session()
-        exist = session.query(self.Livello).filter_by(livello=lvl, lv_premium=lv_premium).first()
+        exist = session.query(Livello).filter_by(livello=lvl, lv_premium=lv_premium).first()
         if exist is None:
             try:
-                livello = self.Livello()
+                livello = Livello()
                 livello.livello = lvl
                 livello.nome = nome
                 livello.exp_to_lv = exp_to_lv
@@ -477,7 +482,7 @@ class Livello(Base):
                 session.close()
             return True
         else:
-            self.update_livello(exist.id, {'nome': nome, 'exp_to_lv': exp_to_lv, 'link_img': link_img, 'saga': saga, 'lv_premium': lv_premium})
+            Database().update_livello(exist.id, {'nome': nome, 'exp_to_lv': exp_to_lv, 'link_img': link_img, 'saga': saga, 'lv_premium': lv_premium})
             return False
 
     def infoLivello(self, livello):
@@ -633,7 +638,7 @@ class Abbonamento:
             Database().update_user(utente.id_telegram,items)
             self.bot.send_message(utente.id_telegram, "Complimenti! Sei ora un Utente Premium fino al "+str(utente.scadenza_premium)+rinnovo,reply_markup=Database().startMarkup(utente))
         else:
-            self.bot.send_message(utente.id_telegram, "Mi dispiace, ti servono {}} ".format(self.COSTO_PREMIUM)+self.PointsName,reply_markup=Database().startMarkup(utente))
+            self.bot.send_message(utente.id_telegram, "Mi dispiace, ti servono {} ".format(self.COSTO_PREMIUM)+self.PointsName,reply_markup=Database().startMarkup(utente))
 
     def checkScadenzaPremium(self,utente):
         oggi = datetime.datetime.now()
