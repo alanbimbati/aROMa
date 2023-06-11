@@ -4,7 +4,8 @@ from sqlalchemy         import create_engine
 from model import Livello, Steam,Utente, Abbonamento, Database
 import Points
 from telebot import util
-
+import schedule,time,threading
+import datetime
 @bot.message_handler(content_types=['left_chat_member'])
 def esciDalGruppo(message):
     chatid = message.left_chat_member.id
@@ -136,18 +137,9 @@ def any(message):
         risposta += "<b>numUsers: </b>"+str(numUsers)+" "+PointsName
         bot.reply_to(message, risposta, parse_mode="HTML")
     elif comando.startswith('premium'):
-        listaPremium = Abbonamento().listaPremium()
-        messaggio = '🎖 Utenti Premium 🎖\n\n'
-        for i, premium in enumerate(listaPremium, start=1):
-            messaggio += f'*[{i}]* {punti.infoUser(premium)}\n\n'
-        bot.reply_to(message, messaggio, parse_mode='markdown')
-
+        inviaUtentiPremium()
     elif comando.startswith('livell'):
-        livelli = punti.getLevels()
-        messaggio = ''
-        for lv in livelli:
-            messaggio +=  '*['+str(lv.livello)+']* ['+lv.nome+']('+lv.link_img+')\t ['+lv.saga+']💪 '+str(lv.exp_to_lv)+' exp.\n'
-        bot.reply_to(message,messaggio,parse_mode='markdown')
+        inviaLivelli(40)
     elif 'album' in comando:
         bot.reply_to(message, punti.album(),parse_mode='markdown')
 
@@ -210,7 +202,6 @@ def buy1game(message):
         bot.send_message(CANALE_LOG,"L'utente "+utenteSorgente.username+" ha acquistato da "+message.forward_from_chat.title+" https://t.me/c/"+str(from_chat)[4:]+"/"+str(messageid))
 
 def backup_all(from_chat, to_chat,until_message=9999):
-    import time
     messageid = 1
     condition = True
     while (condition and messageid<until_message):
@@ -225,5 +216,95 @@ def backup_all(from_chat, to_chat,until_message=9999):
                 messageid-=1
         messageid+=1
 
-bot.infinity_polling()
+#bot.infinity_polling()
 
+def inviaUtentiPremium():
+    listaPremium = Abbonamento().listaPremium()
+    messaggio = '🎖 Utenti Premium 🎖\n\n'
+    for i, premium in enumerate(listaPremium, start=1):
+        messaggio += f'*[{i}]* {Utente().infoUser(premium)}\n\n'
+    bot.send_message(GRUPPO_AROMA, messaggio, parse_mode='markdown')
+
+
+def inviaLivelli(limite):
+    livelli_normali = Livello().getLevels(premium=0)
+    livelli_premium = Livello().getLevels(premium=1)
+
+    messaggio_normali = 'Livelli disponibili\n\n'
+    for lv in livelli_normali[:limite]:
+        messaggio_normali += '*[' + str(lv.livello) + ']* [' + lv.nome + '](' + lv.link_img + ')\t [' + lv.saga + ']💪 ' + str(lv.exp_to_lv) + ' exp.\n'
+
+    messaggio_premium = 'Livelli disponibili solo per gli Utenti Premium\n\n'
+    for lv in livelli_premium[:limite]:
+        messaggio_premium += '*[' + str(lv.livello) + ']* [' + lv.nome + '](' + lv.link_img + ')\t [' + lv.saga + ']💪 ' + str(lv.exp_to_lv) + ' exp.\n'
+
+    bot.send_message(GRUPPO_AROMA, messaggio_normali, parse_mode='markdown')
+    bot.send_message(GRUPPO_AROMA, messaggio_premium, parse_mode='markdown')
+
+
+def backup():
+    doc = open('points.db', 'rb')
+    bot.send_document(CANALE_LOG, doc, caption="aROMa #database #backup")
+    doc.close()
+
+def send_album():
+    punti = Points.Points()
+    msg = punti.album()
+    bot.send_message(GRUPPO_AROMA, msg,parse_mode='markdown' )
+
+'''
+# Variabile per tenere traccia dell'ultimo giorno in cui sono stati inviati i vantaggi
+ultimoGiornoInvio = None
+
+# Funzione per inviare i vantaggi degli utenti premium
+def inviaVantaggiPremium():
+    listaUtenti = Utente().getUsers()
+    vantaggi = "🎮 Vantaggi degli Utenti Premium 🎮\n\n"
+    vantaggi += "- Accesso a giochi gratuiti dagli album premium\n"
+    vantaggi += "- Possibilità di personalizzare il proprio personaggio premium\n"
+
+    for utente in listaUtenti:
+        bot.send_message(utente.id_telegram, vantaggi)
+
+# Funzione per gestire i messaggi nel canale degli album premium
+@bot.channel_post_handler(func=lambda message: message.chat.type == "channel" and message.chat.id == ALBUM['premium'])
+def handle_premium_channel_message(message):
+    print(message)
+    global ultimoGiornoInvio
+
+    # Ottiene la data corrente
+    dataCorrente = datetime.date.today()
+
+    # Verifica se è già stato inviato oggi
+    if ultimoGiornoInvio is None or ultimoGiornoInvio < dataCorrente:
+        inviaVantaggiPremium()
+        ultimoGiornoInvio = dataCorrente
+'''
+
+# Funzione per avviare il programma di promemoria
+def start_reminder_program():
+    # Imposta l'orario di esecuzione del promemoria
+    schedule.every().day.at("09:00").do(backup)
+    schedule.every().day.at("15:00").do(send_album)
+    schedule.every().day.at("20:00").do(inviaLivelli, 40)
+    schedule.every().monday.at("12:00").do(inviaUtentiPremium)
+
+    schedule.every().hour.do(Points.Points().checkBeforeAll)
+
+    # Avvia il loop per eseguire il programma di promemoria
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
+# Thread per il polling del bot
+def bot_polling_thread():
+    bot.infinity_polling()
+
+# Avvio del programma
+if __name__ == "__main__":
+    # Creazione e avvio del thread per il polling del bot
+    polling_thread = threading.Thread(target=bot_polling_thread)
+    polling_thread.start()
+
+    # Avvio del programma di promemoria nel thread principale
+    start_reminder_program()
