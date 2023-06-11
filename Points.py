@@ -174,7 +174,7 @@ class Points:
         op          = parts[0][0]
         points      = parts[0][1:]
         points = int(points) if op == '+' else -int(points)
-        usernames   = parts[1:]
+        usernames = [username for username in parts[1:] if username.startswith('@')]
         # Verifica che il comando sia ben formato
         answer = ''
         if len(usernames) == 0:

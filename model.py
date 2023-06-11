@@ -497,12 +497,19 @@ class Livello(Base):
 
     def getLevels(self):
         session = Database().Session()
-        lvs = session.query(Livello).order_by(asc(self.Livello.livello)).all()
+        lvs = session.query(Livello).order_by(asc(Livello.livello)).all()
+        session.close()
         return lvs
 
-    def getLevel(self, lv):
+    def getLevels(self, premium=None):
         session = Database().Session()
-        lvs = session.query(Livello).filter_by(livello=lv, lv_premium=0).first()
+        if premium is None:
+            lvs = session.query(Livello).order_by(asc(Livello.livello)).all()
+        elif premium:
+            lvs = session.query(Livello).filter_by(lv_premium=1).order_by(asc(Livello.livello)).all()
+        else:
+            lvs = session.query(Livello).filter_by(lv_premium=0).order_by(asc(Livello.livello)).all()
+        session.close()
         return lvs
 
     def getLevelPremium(self, lv):
