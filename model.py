@@ -58,7 +58,7 @@ class Database:
                     domenica.utente     = chatid
                     session.add(domenica)
                     session.commit()
-                    self.update_user(chatid,{'points':utente.points+1})
+                    Database().update_user(chatid,{'points':utente.points+1})
                 except:
                     session.rollback()
                     raise
@@ -66,8 +66,8 @@ class Database:
                     session.close()
                 return True
             elif exist.last_day!=oggi:
-                self.update_domenica(chatid,{'last_day':oggi})
-                self.update_user(chatid,{'points':utente.points+1})
+                Database().update_domenica(chatid,{'last_day':oggi})
+                Database().update_user(chatid,{'points':utente.points+1})
                 return True
             else:
                 return False
@@ -149,7 +149,7 @@ class Utente(Base):
                 session.close()
             return False
         elif exist.username!=username:
-            self.update_user(id_telegram,{'username':username,'nome':name,'cognome':last_name})
+            Database().update_user(id_telegram,{'username':username,'nome':name,'cognome':last_name})
         return True
 
     def getUtente(self, target):
