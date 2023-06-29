@@ -11,6 +11,8 @@ from sqlalchemy         import desc,asc
 from settings           import *
 from telebot            import types
 import random
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
 Base = declarative_base()
 
@@ -56,7 +58,7 @@ class Database:
                     domenica.utente     = chatid
                     session.add(domenica)
                     session.commit()
-                    self.update_user(chatid,{'points':utente.points+1})
+                    Database().update_user(chatid,{'points':utente.points+1})
                 except:
                     session.rollback()
                     raise
@@ -64,8 +66,8 @@ class Database:
                     session.close()
                 return True
             elif exist.last_day!=oggi:
-                self.update_domenica(chatid,{'last_day':oggi})
-                self.update_user(chatid,{'points':utente.points+1})
+                Database().update_domenica(chatid,{'last_day':oggi})
+                Database().update_user(chatid,{'points':utente.points+1})
                 return True
             else:
                 return False
@@ -118,8 +120,7 @@ class Utente(Base):
     abbonamento_attivo =  Column('abbonamento_attivo',Integer)
 
     def CreateUser(self,id_telegram,username,name,last_name):
-        from datetime import datetime
-        from dateutil.relativedelta import relativedelta
+
         session = Database().Session()
         exist = session.query(Utente).filter_by(id_telegram = id_telegram).first()
         if exist is None:
@@ -148,7 +149,7 @@ class Utente(Base):
                 session.close()
             return False
         elif exist.username!=username:
-            self.update_user(id_telegram,{'username':username,'nome':name,'cognome':last_name})
+            Database().update_user(id_telegram,{'username':username,'nome':name,'cognome':last_name})
         return True
 
     def getUtente(self, target):
@@ -231,8 +232,13 @@ class Utente(Base):
     def addExp(self,utente,exp):
         Database().update_user(utente.id_telegram,{'exp':utente.exp+exp})
 
-    def addPoints(self, utente, points):   
-        Database().update_user(utente.id_telegram,{'points':int(utente.points) + int(points)})
+    def addPoints(self, utente, points):  
+        try: 
+            Database().update_user(utente.id_telegram,{'points':int(utente.points) + int(points)})
+        except Exception as e:
+            print(e)
+            Database().update_table_entry(Utente, "username", utente.username, {'points':int(utente.points) + int(points)})
+
 
     def donaPoints(self,utenteSorgente,utenteTarget,points):
         points = int(points)
@@ -457,10 +463,10 @@ class Livello(Base):
 
     def addLivello(self, lvl, nome, exp_to_lv, link_img, saga, lv_premium):
         session = Database().Session()
-        exist = session.query(self.Livello).filter_by(livello=lvl, lv_premium=lv_premium).first()
+        exist = session.query(Livello).filter_by(livello=lvl, lv_premium=lv_premium).first()
         if exist is None:
             try:
-                livello = self.Livello()
+                livello = Livello()
                 livello.livello = lvl
                 livello.nome = nome
                 livello.exp_to_lv = exp_to_lv
@@ -476,7 +482,7 @@ class Livello(Base):
                 session.close()
             return True
         else:
-            self.update_livello(exist.id, {'nome': nome, 'exp_to_lv': exp_to_lv, 'link_img': link_img, 'saga': saga, 'lv_premium': lv_premium})
+            Database().update_livello(exist.id, {'nome': nome, 'exp_to_lv': exp_to_lv, 'link_img': link_img, 'saga': saga, 'lv_premium': lv_premium})
             return False
 
     def infoLivello(self, livello):
@@ -491,12 +497,19 @@ class Livello(Base):
 
     def getLevels(self):
         session = Database().Session()
-        lvs = session.query(Livello).order_by(asc(self.Livello.livello)).all()
+        lvs = session.query(Livello).order_by(asc(Livello.livello)).all()
+        session.close()
         return lvs
 
-    def getLevel(self, lv):
+    def getLevels(self, premium=None):
         session = Database().Session()
-        lvs = session.query(Livello).filter_by(livello=lv, lv_premium=0).first()
+        if premium is None:
+            lvs = session.query(Livello).order_by(asc(Livello.livello)).all()
+        elif premium:
+            lvs = session.query(Livello).filter_by(lv_premium=1).order_by(asc(Livello.livello)).all()
+        else:
+            lvs = session.query(Livello).filter_by(lv_premium=0).order_by(asc(Livello.livello)).all()
+        session.close()
         return lvs
 
     def getLevelPremium(self, lv):
@@ -537,10 +550,10 @@ class Livello(Base):
     def checkUpdateLevel(self,utenteSorgente,message):
         lv = Livello().getLvByExp(utenteSorgente.exp)
         if lv>utenteSorgente.livello:
-            self.update_user(utenteSorgente.id_telegram,{'livello':lv})
+            Database().update_user(utenteSorgente.id_telegram,{'livello':lv})
             lvObj = Livello().getLevel(lv)
             lbPremiumObj = Livello().getLevelPremium(lv)
-            bot.reply_to(message,"Complimenti! 🎉 Sei passato al livello "+str(lv)+"! Hai sbloccato il personaggio ["+lvObj.nome+"]("+lvObj.link_img+"), puoi attivarlo scrivendo a @aROMaGameBot 🎉\n\n"+Utente.infoUser(utenteSorgente),parse_mode='markdown')
+            bot.reply_to(message,"Complimenti! 🎉 Sei passato al livello "+str(lv)+"! Hai sbloccato il personaggio ["+lvObj.nome+"]("+lvObj.link_img+"), puoi attivarlo scrivendo a @aROMaGameBot 🎉\n\n"+Utente().infoUser(utenteSorgente),parse_mode='markdown')
             bot.reply_to(message,"È anche disponibile il personaggio ["+lbPremiumObj.nome+"]("+lbPremiumObj.link_img+"), puoi attivarlo scrivendo a @aROMaGameBot!",parse_mode='markdown')
             if lv % 5== 0:
                 if lv==5:
@@ -610,7 +623,7 @@ class Abbonamento:
         utente = Utente().getUtente(utente.id_telegram)
         self.bot.send_message(
             utente.id_telegram,
-            f"Il tuo abbonamento è stato correttamente rinnovato mangiando {self.COSTO_MANTENIMENTO} {self.PointsName}\n\n{self.infoUser(utente)}",
+            f"Il tuo abbonamento è stato correttamente rinnovato mangiando {self.COSTO_MANTENIMENTO} {self.PointsName}\n\n{Utente().infoUser(utente)}",
             parse_mode='markdown'
             ,reply_markup=Database().startMarkup(utente)
         )
@@ -620,7 +633,7 @@ class Abbonamento:
         scadenza = datetime.datetime.now()+relativedelta(months=+1)
         rinnovo = "\n\nOgni prossimo mese costerà solo "+str(self.COSTO_MANTENIMENTO)+" "+self.PointsName
         if utente.premium==1:
-            self.attivaAbbonamentoPremium(utente)
+            self.attiva_abbonamento(utente)
             self.bot.send_message(utente.id_telegram, "Sei già Utente Premium fino al "+str(utente.scadenza_premium)+rinnovo,reply_markup=Database().startMarkup(utente))
         elif utente.premium==0 and utente.points>=self.COSTO_PREMIUM:
             items = {
@@ -632,20 +645,20 @@ class Abbonamento:
             Database().update_user(utente.id_telegram,items)
             self.bot.send_message(utente.id_telegram, "Complimenti! Sei ora un Utente Premium fino al "+str(utente.scadenza_premium)+rinnovo,reply_markup=Database().startMarkup(utente))
         else:
-            self.bot.send_message(utente.id_telegram, "Mi dispiace, ti servono {}} ".format(self.COSTO_PREMIUM)+self.PointsName,reply_markup=Database().startMarkup(utente))
+            self.bot.send_message(utente.id_telegram, "Mi dispiace, ti servono {} ".format(self.COSTO_PREMIUM)+self.PointsName,reply_markup=Database().startMarkup(utente))
 
     def checkScadenzaPremium(self,utente):
         oggi = datetime.datetime.now()
         try:
             if oggi>utente.scadenza_premium:
                 if utente.abbonamento_attivo==0 and utente.premium==1:
-                    self.stopPremium(utente)
+                    self.stop_premium(utente)
                 elif utente.abbonamento_attivo==1:
                     if utente.points>=COSTO_MANTENIMENTO:
-                        self.rinnovaPremium(utente)
+                        self.rinnova_premium(utente)
                     else:
-                        self.stopPremium(utente)
-                        self.stopAbbonamentoPremium(utente)
+                        self.stop_premium(utente)
+                        self.stop_abbonamentoPremium(utente)
         except Exception as e:
             print(str(e))
     

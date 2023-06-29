@@ -99,7 +99,7 @@ class Points:
         selectedLevel = Livello().GetLevelByNameLevel(message.text)
         Livello().setSelectedLevel(utente,selectedLevel.livello,selectedLevel.lv_premium)
         bot.reply_to(message, "Personaggio "+ message.text +" selezionato!"+"\n\n"+Utente().infoUser(utente),parse_mode='markdown',reply_markup=Database.startMarkup(Database,utente))
-        bot.send_message(CANALE_LOG, "L' utente "+Utente().getUsernameAtLeastName(utente)+" ha selezionato il personaggio "+ message.text +"\n\n"+Utente().infoUser(utente),parse_mode='markdown',reply_markup=Database.startMarkup(Database,utente))
+        #bot.send_message(CANALE_LOG, "L' utente "+Utente().getUsernameAtLeastName(utente)+" ha selezionato il personaggio "+ message.text +"\n\n"+Utente().infoUser(utente),parse_mode='markdown',reply_markup=Database.startMarkup(Database,utente))
 
     
     def purgeSymbols(self,message):
@@ -144,7 +144,7 @@ class Points:
         answer += '💻 [PC](https://t.me/+_Hmuw95wjwM3ZmY0) Costa 15 '+PointsName+' per gioco'+'\n'
         answer += '🐶 [Nintendo](t.me/albumnintendo) Costa 15 '+PointsName+' per gioco'+'\n'
         answer += '📽 [Cinema](t.me/aROMaCinema) Costa 5 '+PointsName+' per film'+'\n'
-        answer += '🎖 [Premium](t.me/aROMaPremium) Csta 0 '+PointsName+', canale esclusivo agli utenti Premium.'+'\n\n'
+        answer += '🎖 [Premium](t.me/aROMaPremium) Costa 0 '+PointsName+', canale esclusivo agli utenti Premium.'+'\n\n'
         answer += '[Come guadagnare Frutti Wumpa?](https://t.me/aROMadivideogiochi/2486)'+'\n'
         answer += '[Cosa puoi fare con i Frutti Wumpa?](https://t.me/aROMadivideogiochi/2402)'
         return answer
@@ -174,7 +174,7 @@ class Points:
         op          = parts[0][0]
         points      = parts[0][1:]
         points = int(points) if op == '+' else -int(points)
-        usernames   = parts[1:]
+        usernames = [username for username in parts[1:] if username.startswith('@')]
         # Verifica che il comando sia ben formato
         answer = ''
         if len(usernames) == 0:
@@ -184,10 +184,17 @@ class Points:
             for username in usernames:
                 try:
                     utente = Utente().getUtente(username)
+                    print(utente.username)
                     risposta = 'Complimenti! Hai ottenuto {} {}' if op == '+' else 'Hai mangiato {} deliziosi {}!'
                     Utente().addPoints(utente, points)
-                    bot.send_message(utente.id_telegram, risposta.format(str(points), PointsName)+Utente().infoUser(utente),parse_mode='markdown')
                     answer += username+': '+risposta.format(str(points), PointsName)+'\n'
-                except:
+                except Exception as e:
+                    answer += f'Errore Telegram: {str(e)}\n'
                     answer +=  'Comando non valido: username ({}) non trovato\n'.format(username)
+                try:
+                    bot.send_message(utente.id_telegram, risposta.format(str(points), PointsName)+Utente().infoUser(utente),parse_mode='markdown')
+                except Exception as e:
+                    bot.reply_to(message, risposta.format(str(points), PointsName)+Utente().infoUser(utente),parse_mode='markdown')
+
+        if answer == '': answer='nulla da fare'
         return answer
