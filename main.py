@@ -1,7 +1,7 @@
 from telebot import types
 from settings import *
 from sqlalchemy         import create_engine
-from model import Livello, Steam,Utente, Abbonamento, Database
+from model import Livello, Steam,Utente, Abbonamento, Database, GiocoUtente
 import Points
 from telebot import util
 import schedule,time,threading
@@ -66,6 +66,19 @@ def any(message):
             bot.reply_to(message, 'Abbonamento attivato, il giorno '+str(utenteSorgente.scadenza_premium)+' si rinnoverà al costo di '+str(COSTO_MANTENIMENTO)+' '+PointsName,reply_markup=Database().startMarkup(utenteSorgente))
         elif 'classifica' in message.text.lower():
             punti.writeClassifica(message)
+        elif 'nome in game' in message.text.lower():
+            print('vediamo')
+            giochiutente = GiocoUtente().getGiochiUtente(utente.id_telegram)
+            keyboard = types.InlineKeyboardMarkup()
+
+            for giocoutente in giochiutente:
+                remove_button = types.InlineKeyboardButton(f"❌ {giocoutente.piattaforma} {giocoutente.nome}", callback_data=f"remove_namegame_{giocoutente.id_telegram}_{giocoutente.piattaforma}_{giocoutente.nome}")
+                keyboard.add(remove_button)
+
+            add_button = types.InlineKeyboardButton("➕ Aggiungi Nome in Game", callback_data="add_namegame")
+            keyboard.add(add_button)
+            bot.reply_to(message, "Cosa vuoi fare?", reply_markup=keyboard)
+  
         else:
             bot.reply_to(message, "Cosa vuoi fare?", reply_markup=Database().startMarkup(utenteSorgente))
 
@@ -142,6 +155,39 @@ def any(message):
         inviaLivelli(40)
     elif 'album' in comando:
         bot.reply_to(message, punti.album(),parse_mode='markdown')
+
+
+# Gestione delle query inline
+@bot.callback_query_handler(func=lambda call: True)
+def handle_inline_buttons(call):
+    user_id = call.from_user.id
+    utente = Utente().getUtente(user_id)
+    
+    #remove_namegame_{giocoutente.id_telegram}_{giocoutente.piattaforma}_{giocoutente.nome}
+    #add_namegame
+
+    action = call.data
+
+    if action.startswith("remove_namegame_"):
+        parametri = action.replace('remove_namegame_','').split('_')
+        id_telegram = parametri[0]
+        piattaforma = parametri[1]
+        nome = parametri[2]
+        print(id_telegram,piattaforma,nome)
+        GiocoUtente().delPiattaformaUtente(id_telegram,piattaforma,nome)
+        bot.send_message(user_id,'Piattaforma eliminata',reply_markup=Database().startMarkup(utente))
+
+    elif action.startswith("add_namegame"):
+        msg = bot.send_message(user_id,'Scrivimi la piattaforma (spazio) nome utente, esempio "Steam alan.bimbati"')
+        bot.register_next_step_handler(msg, addnamegame)
+    
+
+def addnamegame(message):
+    chatid = message.chat.id
+    utente = Utente().getUtente(chatid)
+    piattaforma,nomegioco = message.text.split()
+    GiocoUtente().CreateGiocoUtente(chatid,piattaforma,nomegioco) 
+    bot.reply_to(message,'Piattaforma e gioco aggiunti',reply_markup=Database().startMarkup(utente))
 
 def sendFileGame(chatid,from_chat,messageid):
     content_type = 'photo'
