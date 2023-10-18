@@ -108,7 +108,7 @@ def create_table(engine):
 class GiocoUtente(Base):
     __tablename__ = "giocoutente"
     id = Column(Integer, primary_key=True)
-    id_telegram = Column('id_Telegram', Integer, unique=True)
+    id_telegram = Column('id_Telegram', Integer)
     piattaforma = Column('piattaforma', String)
     nome        = Column('nome', String)
 
