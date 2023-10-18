@@ -274,7 +274,7 @@ class Utente(Base):
         if len(giochiutente)>0:
             answer+='\n\n👾 Nome in Game 👾\n'
         for giocoutente in giochiutente:
-            answer +=f"*🎮 {giocoutente.piattaforma}:* {giocoutente.nome}\n"
+            answer +=f"*🎮 {giocoutente.piattaforma}:* `{giocoutente.nome}`\n"
  
         return answer
 

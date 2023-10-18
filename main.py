@@ -67,7 +67,6 @@ def any(message):
         elif 'classifica' in message.text.lower():
             punti.writeClassifica(message)
         elif 'nome in game' in message.text.lower():
-            print('vediamo')
             giochiutente = GiocoUtente().getGiochiUtente(utente.id_telegram)
             keyboard = types.InlineKeyboardMarkup()
 
