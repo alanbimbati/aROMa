@@ -30,6 +30,7 @@ class Database:
         #markup.add('Compra 1 gioco')
         #markup.add('Cosa puoi fare con i Frutti Wumpa?')
         #markup.add('Come guadagno Frutti Wumpa?')
+        markup.add('🎮 Nome in Game')
         markup.add('👤 Scegli il personaggio')
         if utente is not None:
             if utente.premium==1:
@@ -97,9 +98,54 @@ class Database:
 
     def update_livello(self, id, kwargs):
         self.update_table_entry(Livello, "id", id, kwargs) 
+    
+    def update_gameuser(self, chatid, kwargs):
+        self.update_table_entry(GiocoUtente, "id_telegram", chatid, kwargs) 
 
 def create_table(engine):
     Base.metadata.create_all(engine)
+
+class GiocoUtente(Base):
+    __tablename__ = "giocoutente"
+    id = Column(Integer, primary_key=True)
+    id_telegram = Column('id_Telegram', Integer, unique=True)
+    piattaforma = Column('piattaforma', String)
+    nome        = Column('nome', String)
+
+    def CreateGiocoUtente(self,id_telegram,piattaforma,nomegioco):
+        session = Database().Session()
+        exist = session.query(GiocoUtente).filter_by(id_telegram = id_telegram,piattaforma=piattaforma).first()
+        if exist is None:
+            try:
+                giocoutente = GiocoUtente()
+                giocoutente.id_telegram     = id_telegram
+                giocoutente.piattaforma     = piattaforma
+                giocoutente.nome            = nomegioco
+                session.add(giocoutente)
+                session.commit()
+            except:
+                session.rollback()
+                raise
+            finally:
+                session.close()
+            return False
+        else:
+            Database().update_gameuser(id_telegram,{'piattaforma':piattaforma,'gioco':gioco})
+        return True
+
+    def getGiochiUtente(self, id_telegram):
+        session = Database().Session()
+        giochiutente = session.query(GiocoUtente).filter_by(id_telegram=id_telegram).all()
+        session.close()
+        return giochiutente
+
+    def delPiattaformaUtente(self,id_telegram,piattaforma,nome):
+        session = Database().Session()
+        giocoutente = session.query(GiocoUtente).filter_by(id_telegram=id_telegram,piattaforma=piattaforma,nome=nome).first()
+        print(giocoutente.id_telegram,giocoutente.piattaforma,giocoutente.nome)
+        session.delete(giocoutente)
+        session.commit()
+        session.close()      
 
 class Utente(Base):
     __tablename__ = "utente"
@@ -207,6 +253,7 @@ class Utente(Base):
         utente = Utente().getUtente(utenteSorgente.id_telegram)
         infoLv = Livello().infoLivello(utente.livello)
         selectedLevel = Livello().infoLivelloByID(utente.livello_selezionato)
+        giochiutente = GiocoUtente().getGiochiUtente(utente.id_telegram)
         answer = ''
         if utente.premium==1:
             answer += '🎖 Utente Premium\n'
@@ -223,6 +270,12 @@ class Utente(Base):
             answer = "*👤 "+utente.nome+"*: "+str(utente.points)+" "+PointsName
             answer +="\n*💪🏻 Exp*: "+ str(utente.exp)
             answer +="\n*🎖 Lv. *"+str(utente.livello)
+        
+        if len(giochiutente)>0:
+            answer+='\n\n👾 Nome in Game 👾\n'
+        for giocoutente in giochiutente:
+            answer +=f"*🎮 {giocoutente.piattaforma}:* {giocoutente.nome}\n"
+ 
         return answer
 
     def addRandomExp(self,user,message):
