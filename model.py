@@ -30,6 +30,7 @@ class Database:
         #markup.add('Compra 1 gioco')
         #markup.add('Cosa puoi fare con i Frutti Wumpa?')
         #markup.add('Come guadagno Frutti Wumpa?')
+        markup.add('ℹ️ info')
         markup.add('🎮 Nome in Game')
         markup.add('👤 Scegli il personaggio')
         if utente is not None:
