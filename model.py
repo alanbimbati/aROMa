@@ -36,6 +36,7 @@ class Database:
             if utente.premium==1:
                 markup.add('👤 Scegli il personaggio 🎖')
                 markup.add('🎫 Compra un gioco steam')
+                markup.add('🎖 Compro un altro mese')
                 if utente.abbonamento_attivo==1:
                     markup.add('✖️ Disattiva rinnovo automatico')
                 else:
@@ -692,14 +693,14 @@ class Abbonamento:
             parse_mode='markdown'
             ,reply_markup=Database().startMarkup(utente)
         )
-        self.bot.send_message(self.CANALE_LOG, f"L'utente {Utente().getUsernameAtLeastName(utente)} ha rinnovato l'abbonamento #Premium",reply_markup=Database().startMarkup(utente))
+        self.bot.send_message(self.CANALE_LOG, f"L'utente {Utente().getUsernameAtLeastName(utente)} ha rinnovato l'abbonamento #Premium"+Utente().infoUser(utente),reply_markup=Database().startMarkup(utente),parse_mode='mardkown')
 
     def buyPremium(self, utente):
         scadenza = datetime.datetime.now()+relativedelta(months=+1)
         rinnovo = "\n\nOgni prossimo mese costerà solo "+str(self.COSTO_MANTENIMENTO)+" "+self.PointsName
         if utente.premium==1:
             self.attiva_abbonamento(utente)
-            self.bot.send_message(utente.id_telegram, "Sei già Utente Premium fino al "+str(utente.scadenza_premium)[:10]+rinnovo,reply_markup=Database().startMarkup(utente))
+            self.bot.send_message(utente.id_telegram, "Sei già Utente Premium fino al "+str(utente.scadenza_premium)[:10]+rinnovo+Utente().infoUser(utente),reply_markup=Database().startMarkup(utente),parse_mode='mardkown')
         elif utente.premium==0 and utente.points>=self.COSTO_PREMIUM:
             items = {
                 'points': utente.points-self.COSTO_PREMIUM,
@@ -708,22 +709,24 @@ class Abbonamento:
                 'scadenza_premium':scadenza
             }
             Database().update_user(utente.id_telegram,items)
-            self.bot.send_message(utente.id_telegram, "Complimenti! Sei ora un Utente Premium fino al "+str(utente.scadenza_premium)[:10]+rinnovo,reply_markup=Database().startMarkup(utente))
+            self.bot.send_message(utente.id_telegram, "Complimenti! Sei ora un Utente Premium fino al "+str(utente.scadenza_premium)[:10]+rinnovo+Utente().infoUser(utente),reply_markup=Database().startMarkup(utente),parse_mode='mardkown')
         else:
-            self.bot.send_message(utente.id_telegram, "Mi dispiace, ti servono {} ".format(self.COSTO_PREMIUM)+self.PointsName,reply_markup=Database().startMarkup(utente))
+            self.bot.send_message(utente.id_telegram, "Mi dispiace, ti servono {} ".format(self.COSTO_PREMIUM)+self.PointsName+Utente().infoUser(utente),reply_markup=Database().startMarkup(utente),parse_mode='mardkown')
 
     def buyPremiumExtra(self, utente):
-        scadenza = utente.scadenza_premium + relativedelta(months=+1)
         rinnovo = "\n\nOgni prossimo mese costerà solo " + str(self.COSTO_MANTENIMENTO) + " " + self.PointsName
-        if utente.premium == 1:
+        if utente.premium == 1 and utente.points>=self.COSTO_MANTENIMENTO:
             items = {
                 'points': utente.points - self.COSTO_MANTENIMENTO,
                 'premium': 1,
                 'abbonamento_attivo': 1,
-                'scadenza_premium': scadenza
+                'scadenza_premium': utente.scadenza_premium + relativedelta(months=+1)
             }
-            Database().update_user(utente.id_telegram, items)            
-            self.bot.send_message(utente.id_telegram, "Hai rinnovato anticipatamente il costo dell'abbonamento, è quindi valido fino al " + str(utente.scadenza_premium)[:10] + rinnovo, reply_markup=Database().startMarkup(utente))
+            Database().update_user(utente.id_telegram, items)       
+            utente = Utente().getUtente(utente.id_telegram)     
+            self.bot.send_message(utente.id_telegram, "Hai rinnovato anticipatamente il costo dell'abbonamento, è quindi valido fino al " + str(utente.scadenza_premium)[:10] + rinnovo+Utente().infoUser(utente), reply_markup=Database().startMarkup(utente),parse_mode='markdown')
+        else:
+            self.bot.send_message(utente.id_telegram, f"Devi avere {str(self.COSTO_MANTENIMENTO)} {PointsName}", reply_markup=Database().startMarkup(utente))
 
     def checkScadenzaPremium(self,utente):
         oggi = datetime.datetime.now()

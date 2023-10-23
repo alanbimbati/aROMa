@@ -78,7 +78,10 @@ def any(message):
             add_button = types.InlineKeyboardButton("➕ Aggiungi Nome in Game", callback_data="add_namegame")
             keyboard.add(add_button)
             bot.reply_to(message, "Cosa vuoi fare?", reply_markup=keyboard)
-  
+        elif 'compro un altro mese' in message.text.lower():
+            abbonamento.buyPremiumExtra(utenteSorgente)
+            utenteSorgente = Utente().getUtente(utenteSorgente.id_telegram)
+
         else:
             bot.reply_to(message, "Cosa vuoi fare?", reply_markup=Database().startMarkup(utenteSorgente))
 
