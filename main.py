@@ -120,7 +120,19 @@ def any(message):
             #backup_album(PREMIUM_CHANNELS['ps1'],CANALE_LOG)
         elif comando.startswith('checkPremium'):
             punti.checkScadenzaPremiumToAll()
+        elif message.text.startswith('/broadcast'):
+                # Ottieni il messaggio da inviare
+                messaggio = message.text.split('/broadcast')[1]
 
+                # Invia il messaggio a tutti gli utenti del bot
+                for utente in Utente().getUsers():
+                    try:
+                        msg = messaggio.replace('{nome_utente}',utente.nome)
+                        bot.send_message(utente.id_telegram, msg,parse_mode='markdown')
+                    except Exception as e:
+                        print("ERRORE",str(e))
+                # Invia un messaggio di conferma all'utente che ha inviato il comando
+                bot.reply_to(message, 'Messaggio inviato a tutti gli utenti')
     # COMANDI UTENTI
     if comando.lower().startswith('dona') or comando.lower().startswith('Dona'):
         if len(comando.split())==2:
