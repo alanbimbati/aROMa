@@ -81,6 +81,12 @@ def any(message):
         elif 'compro un altro mese' in message.text.lower():
             abbonamento.buyPremiumExtra(utenteSorgente)
             utenteSorgente = Utente().getUtente(utenteSorgente.id_telegram)
+        elif 'info' in message.text.lower():
+            messaggio = f"\n\n*Gestione Abbonamento Premium*\nCosto di attivazione (primo mese): {abbonamento.COSTO_PREMIUM} {PointsName}"
+            messaggio += f"\nRinnovo Abbonamento (+1 mese): {abbonamento.COSTO_MANTENIMENTO} {PointsName}\n👥[Link al gruppo](https://t.me/+VtiCEsByTGqN94pv)\n@aROMadivideogiochi\n\n"
+            bot.reply_to(message,punti.album(),reply_markup=Database().startMarkup(utenteSorgente),parse_mode='markdown')
+            bot.reply_to(message,messaggio,reply_markup=Database().startMarkup(utenteSorgente),parse_mode='markdown')
+            bot.reply_to(message,Utente().infoUser(utenteSorgente),reply_markup=Database().startMarkup(utenteSorgente),parse_mode='markdown')
 
         else:
             bot.reply_to(message, "Cosa vuoi fare?", reply_markup=Database().startMarkup(utenteSorgente))
