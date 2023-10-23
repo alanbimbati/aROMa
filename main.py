@@ -30,6 +30,7 @@ def any(message):
     utenteSorgente,_=punti.checkBeforeAll(message)
     comando = punti.purgeSymbols(message)
 
+    abbonamento = Abbonamento()
     if message.chat.type=='private':
         utente = Utente().getUtente(message.chat.id)
 
@@ -55,15 +56,15 @@ def any(message):
             msg = bot.reply_to(message, "Seleziona il tuo personaggio", reply_markup=markup)
             bot.register_next_step_handler(msg, punti.setCharacter)
         elif 'Compra abbonamento Premium (1 mese)' in message.text:
-            Abbonamento().buyPremium(utenteSorgente)
+            abbonamento.buyPremium(utenteSorgente)
         elif message.text == '✖️ Disattiva rinnovo automatico':
-            Abbonamento().stop_abbonamento(utenteSorgente)
+            abbonamento.stop_abbonamento(utenteSorgente)
             utenteSorgente = Utente().getUtente(utenteSorgente.id_telegram)
-            bot.reply_to(message, 'Abbonamento annullato, sarà comunque valido fino al '+str(utenteSorgente.scadenza_premium),reply_markup=Database().startMarkup(utenteSorgente))
+            bot.reply_to(message, 'Abbonamento annullato, sarà comunque valido fino al '+str(utenteSorgente.scadenza_premium)[:10],reply_markup=Database().startMarkup(utenteSorgente))
         elif message.text == '✅ Attiva rinnovo automatico':
-            Abbonamento().attiva_abbonamento(utenteSorgente)
+            abbonamento.attiva_abbonamento(utenteSorgente)
             utenteSorgente = Utente().getUtente(utenteSorgente.id_telegram)
-            bot.reply_to(message, 'Abbonamento attivato, il giorno '+str(utenteSorgente.scadenza_premium)+' si rinnoverà al costo di '+str(COSTO_MANTENIMENTO)+' '+PointsName,reply_markup=Database().startMarkup(utenteSorgente))
+            bot.reply_to(message, 'Abbonamento attivato, il giorno '+str(utenteSorgente.scadenza_premium)[:10]+' si rinnoverà al costo di '+str(abbonamento.COSTO_MANTENIMENTO)+' '+PointsName,reply_markup=Database().startMarkup(utenteSorgente))
         elif 'classifica' in message.text.lower():
             punti.writeClassifica(message)
         elif 'nome in game' in message.text.lower():
