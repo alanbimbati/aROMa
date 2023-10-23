@@ -1,6 +1,29 @@
+PROMOZIONI = {
+    "Halloween":    {
+        "nome":                 "Halloween",
+        "periodo_inizio":       "20231030",
+        "periodo_fine":         "20231105",
+        "COSTO_PREMIUM":        150,
+        "COSTO_MANTENIMENTO":   25
+
+    },
+    "Natale": {
+        "nome":                 "Natale",
+        "periodo_inizio":       "20231224",
+        "periodo_fine":         "20240108",
+        "COSTO_PREMIUM":        100,
+        "COSTO_MANTENIMENTO":   25
+    },
+    "SanValentino": {
+        "nome":                 "SanValentino",
+        "periodo_inizio":       "20240214",
+        "periodo_fine":         "20240214",
+        "COSTO_PREMIUM":        125,
+        "COSTO_MANTENIMENTO":   25
+    },    
+}
+
 CANALE_LOG          =    '-1001469821841'
-COSTO_PREMIUM       =    250
-COSTO_MANTENIMENTO  =    50
 TEST                =    1
 
 TEST_TOKEN      = 'TEST_TOKEN'
