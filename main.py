@@ -212,22 +212,26 @@ def addnamegame(message):
 
 def sendFileGame(chatid,from_chat,messageid):
     content_type = 'photo'
-    while content_type != 'sticker' and content_type=='photo':
+    max_deep = 20
+    tmp = 0
+    while content_type != 'sticker' and content_type=='photo' and tmp<=max_deep:
         try:
             message = bot.forward_message(chatid, from_chat, messageid, protect_content=True)
             content_type = message.content_type
         except:
             pass
         messageid += 1
-    
-    while content_type != 'sticker' and content_type!='photo':
+        tmp +=1
+    tmp = 0
+    while content_type != 'sticker' and content_type!='photo' and tmp<=max_deep:
         try:
             message = bot.forward_message(chatid, from_chat, messageid, protect_content=True)
             content_type = message.content_type
         except:
             pass
         messageid += 1
-
+        tmp +=1
+        
 def isPremiumChannel(from_chat):
     premium = False
     if from_chat==int(PREMIUM_CHANNELS['tutto']): premium= True
@@ -355,8 +359,6 @@ def start_reminder_program():
     schedule.every().day.at("15:00").do(send_album)
     schedule.every().day.at("20:00").do(inviaLivelli, 40)
     schedule.every().monday.at("12:00").do(inviaUtentiPremium)
-
-    schedule.every().hour.do(Points.Points().checkBeforeAll)
 
     # Avvia il loop per eseguire il programma di promemoria
     while True:
