@@ -11,6 +11,10 @@ from dateutil.relativedelta import relativedelta
 import random
 
 class Points:    
+    def __init__(self):
+        engine = create_engine('sqlite:///points.db')
+        create_table(engine)
+        self.Session = sessionmaker(bind=engine)
 
     def classifica(self):   
         session = self.Session()
@@ -91,7 +95,7 @@ class Points:
         messaggio = ''
         for i in range(20):
             if len(utenti)>i:
-                messaggio += '\n*['+str(i+1)+']* '+Utente.infoUser(utenti[i]) +'\n\n'
+                messaggio += f'\n*[{str(i+1)}]* {Utente().infoUser(utenti[i])} \n'
         bot.reply_to(message, messaggio, parse_mode='markdown')
 
     def setCharacter(self,message):

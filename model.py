@@ -27,24 +27,24 @@ class Database:
 
     def startMarkup(self,utente=None):
         markup = types.ReplyKeyboardMarkup()
+
         #markup.add('Compra 1 gioco')
         #markup.add('Cosa puoi fare con i Frutti Wumpa?')
         #markup.add('Come guadagno Frutti Wumpa?')
-        markup.add('ℹ️ info')
-        markup.add('🎮 Nome in Game')
-        markup.add('👤 Scegli il personaggio')
+        markup.add('ℹ️ info','🎮 Nome in Game')
         if utente is not None:
             if utente.premium==1:
-                markup.add('👤 Scegli il personaggio 🎖')
-                markup.add('🎫 Compra un gioco steam')
-                markup.add('🎖 Compro un altro mese')
+                markup.add('👤 Scegli il personaggio','👤 Scegli il personaggio 🎖')
+                markup.add('🎫 Compra un gioco steam','🎖 Compro un altro mese')
                 if utente.abbonamento_attivo==1:
                     markup.add('✖️ Disattiva rinnovo automatico')
                 else:
+                    
                     markup.add('✅ Attiva rinnovo automatico')
             else:
+                markup.add('👤 Scegli il personaggio')
                 markup.add('🎖 Compra abbonamento Premium (1 mese)')
-        #markup.add('📄 Classifica')
+        markup.add('📄 Classifica')
 
         return markup
 
@@ -257,26 +257,28 @@ class Utente(Base):
         selectedLevel = Livello().infoLivelloByID(utente.livello_selezionato)
         giochiutente = GiocoUtente().getGiochiUtente(utente.id_telegram)
         answer = ''
+
+        nome_utente = utente.nome if utente.username is None else utente.username
         if utente.premium==1:
             answer += '🎖 Utente Premium\n'
             if utente.abbonamento_attivo==1:
-                answer+='✅ Abbonamento attivo (fino al '+str(utenteSorgente.scadenza_premium)[:11]+')\n'
+                answer+=f'✅ Abbonamento attivo (fino al {str(utenteSorgente.scadenza_premium)[:11]})\n'
             else:
                 answer+='✖️ Abbonamento non attivo\n'
         if infoLv is not None:
-            answer += "*👤 "+utente.nome+"*: "+str(utente.points)+" "+PointsName
-            answer +="\n*💪🏻 Exp*: "+ str(utente.exp)+"/"+str(infoLv.exp_to_lv)
-            answer +="\n*🎖 Lv. *"+str(utente.livello)+" ["+selectedLevel.nome+"]("+selectedLevel.link_img+")"
-            answer +="\n*👥 Saga: *"+selectedLevel.saga
+            answer += f"*👤 {nome_utente}*: {str(utente.points)} {PointsName}"
+            answer += f"\n*💪🏻 Exp*: {str(utente.exp)}/{str(infoLv.exp_to_lv)}"
+            answer += f"\n*🎖 Lv. *{str(utente.livello)} [{selectedLevel.nome}]({selectedLevel.link_img})"
+            answer += f"\n*👥 Saga: *{selectedLevel.saga}"
         else:
-            answer = "*👤 "+utente.nome+"*: "+str(utente.points)+" "+PointsName
-            answer +="\n*💪🏻 Exp*: "+ str(utente.exp)
-            answer +="\n*🎖 Lv. *"+str(utente.livello)
+            answer =  f"*👤 {nome_utente}*: {str(utente.points)} {PointsName}"
+            answer += f"\n*💪🏻 Exp*: {str(utente.exp)}"
+            answer += f"\n*🎖 Lv. *{str(utente.livello)}"
         
         if len(giochiutente)>0:
-            answer+='\n\n👾 Nome in Game 👾\n'
+            answer += '\n\n👾 Nome in Game 👾\n'
         for giocoutente in giochiutente:
-            answer +=f"*🎮 {giocoutente.piattaforma}:* `{giocoutente.nome}`\n"
+            answer += f"*🎮 {giocoutente.piattaforma}:* `{giocoutente.nome}`\n"
  
         return answer
 
@@ -629,8 +631,8 @@ class Livello(Base):
                     add = 250
                 else:
                     add = 250
-                self.addPoints(utenteSorgente,add)
-                bot.reply_to(message,"Complimenti per questo traguardo! Per te "+str(add)+" "+PointsName+"! 🎉\n\n"+Utente.infoUser(utenteSorgente),parse_mode='markdown')
+                Utente().addPoints(utenteSorgente,add)
+                bot.reply_to(message,f"Complimenti per questo traguardo! Per te {str(add)} {PointsName}! 🎉\n\n{Utente.infoUser(utenteSorgente)}",parse_mode='markdown')
 
 
 class GiocoAroma(Base):
