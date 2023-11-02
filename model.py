@@ -249,37 +249,33 @@ class Utente(Base):
         else:
             return "Nessun nome"
 
-    def infoUser(self,utenteSorgente):
-        if utenteSorgente is None:
+    def infoUser(self, utenteSorgente):
+        if not utenteSorgente:
             return "L'utente non esiste"
+
         utente = Utente().getUtente(utenteSorgente.id_telegram)
         infoLv = Livello().infoLivello(utente.livello)
         selectedLevel = Livello().infoLivelloByID(utente.livello_selezionato)
         giochiutente = GiocoUtente().getGiochiUtente(utente.id_telegram)
-        answer = ''
 
         nome_utente = utente.nome if utente.username is None else utente.username
-        if utente.premium==1:
-            answer += '🎖 Utente Premium\n'
-            if utente.abbonamento_attivo==1:
-                answer+=f'✅ Abbonamento attivo (fino al {str(utenteSorgente.scadenza_premium)[:11]})\n'
-            else:
-                answer+='✖️ Abbonamento non attivo\n'
+        answer = f"🎖 Utente Premium\n" if utente.premium == 1 else ''
+        answer += f"✅ Abbonamento attivo (fino al {str(utenteSorgente.scadenza_premium)[:11]})\n" if utente.abbonamento_attivo == 1 else ''
+
         if infoLv is not None:
-            answer += f"*👤 {nome_utente}*: {str(utente.points)} {PointsName}"
-            answer += f"\n*💪🏻 Exp*: {str(utente.exp)}/{str(infoLv.exp_to_lv)}"
-            answer += f"\n*🎖 Lv. *{str(utente.livello)} [{selectedLevel.nome}]({selectedLevel.link_img})"
-            answer += f"\n*👥 Saga: *{selectedLevel.saga}"
+            answer += f"*👤 {nome_utente}*: {utente.points} {PointsName}\n"
+            answer += f"*💪🏻 Exp*: {utente.exp}/{infoLv.exp_to_lv}\n"
+            answer += f"*🎖 Lv. *{utente.livello} [{selectedLevel.nome}]({selectedLevel.link_img})\n"
+            answer += f"*👥 Saga: *{selectedLevel.saga}\n"
         else:
-            answer =  f"*👤 {nome_utente}*: {str(utente.points)} {PointsName}"
-            answer += f"\n*💪🏻 Exp*: {str(utente.exp)}"
-            answer += f"\n*🎖 Lv. *{str(utente.livello)}"
-        
-        if len(giochiutente)>0:
+            answer += f"*👤 {nome_utente}*: {utente.points} {PointsName}\n"
+            answer += f"*💪🏻 Exp*: {utente.exp}\n"
+            answer += f"*🎖 Lv. *{utente.livello}\n"
+
+        if giochiutente:
             answer += '\n\n👾 Nome in Game 👾\n'
-        for giocoutente in giochiutente:
-            answer += f"*🎮 {giocoutente.piattaforma}:* `{giocoutente.nome}`\n"
- 
+            answer += '\n'.join(f"*🎮 {giocoutente.piattaforma}:* `{giocoutente.nome}`" for giocoutente in giochiutente)
+
         return answer
 
     def addRandomExp(self,user,message):
@@ -696,14 +692,14 @@ class Abbonamento:
             parse_mode='markdown'
             ,reply_markup=Database().startMarkup(utente)
         )
-        self.bot.send_message(self.CANALE_LOG, f"L'utente {Utente().getUsernameAtLeastName(utente)} ha rinnovato l'abbonamento #Premium"+Utente().infoUser(utente),reply_markup=Database().startMarkup(utente),parse_mode='mardkown')
+        self.bot.send_message(self.CANALE_LOG, f"L'utente {Utente().getUsernameAtLeastName(utente)} ha rinnovato l'abbonamento #Premium"+Utente().infoUser(utente),reply_markup=Database().startMarkup(utente),parse_mode='markdown')
 
     def buyPremium(self, utente):
         scadenza = datetime.datetime.now()+relativedelta(months=+1)
         rinnovo = "\n\nOgni prossimo mese costerà solo "+str(self.COSTO_MANTENIMENTO)+" "+self.PointsName
         if utente.premium==1:
             self.attiva_abbonamento(utente)
-            self.bot.send_message(utente.id_telegram, "Sei già Utente Premium fino al "+str(utente.scadenza_premium)[:10]+rinnovo+Utente().infoUser(utente),reply_markup=Database().startMarkup(utente),parse_mode='mardkown')
+            self.bot.send_message(utente.id_telegram, "Sei già Utente Premium fino al "+str(utente.scadenza_premium)[:10]+rinnovo+Utente().infoUser(utente),reply_markup=Database().startMarkup(utente),parse_mode='markdown')
         elif utente.premium==0 and utente.points>=self.COSTO_PREMIUM:
             items = {
                 'points': utente.points-self.COSTO_PREMIUM,
@@ -712,9 +708,10 @@ class Abbonamento:
                 'scadenza_premium':scadenza
             }
             Database().update_user(utente.id_telegram,items)
-            self.bot.send_message(utente.id_telegram, "Complimenti! Sei ora un Utente Premium fino al "+str(utente.scadenza_premium)[:10]+rinnovo+Utente().infoUser(utente),reply_markup=Database().startMarkup(utente),parse_mode='mardkown')
+            self.bot.send_message(utente.id_telegram, "Complimenti! Sei ora un Utente Premium fino al "+str(utente.scadenza_premium)[:10]+rinnovo+Utente().infoUser(utente),reply_markup=Database().startMarkup(utente),parse_mode='markdown')
         else:
-            self.bot.send_message(utente.id_telegram, "Mi dispiace, ti servono {} ".format(self.COSTO_PREMIUM)+self.PointsName+Utente().infoUser(utente),reply_markup=Database().startMarkup(utente),parse_mode='mardkown')
+            messaggio =  f"Mi dispiace, ti servono {self.COSTO_PREMIUM} {self.PointsName} {Utente().infoUser(utente)}"
+            self.bot.send_message(utente.id_telegram,messaggio,reply_markup=Database().startMarkup(utente),parse_mode='markdown')
 
     def buyPremiumExtra(self, utente):
         rinnovo = "\n\nOgni prossimo mese costerà solo " + str(self.COSTO_MANTENIMENTO) + " " + self.PointsName
