@@ -1,7 +1,7 @@
 from telebot import types
 from settings import *
 from sqlalchemy         import create_engine
-from model import Livello, Steam,Utente, Abbonamento, Database, GiocoUtente
+from model import Livello, Steam,Utente, Abbonamento, Database, GiocoUtente,Collezionabili
 import Points
 from telebot import util
 import schedule,time,threading
@@ -40,6 +40,7 @@ class BotCommands:
             "nome in game": self.handle_nome_in_game,
             "compro un altro mese": self.handle_buy_another_month,
             "info": self.handle_info,
+            "📦 Inventario": self.handle_inventario,
             
         }
 
@@ -65,8 +66,10 @@ class BotCommands:
             "album": self.handle_album,
             
         }
-        Points.Points().checkBeforeAll(message)
-
+        try:
+            self.chatid = message.from_user.id
+        except Exception as e:
+            self.chatid = message.chat.id
     
     def handle_private_command(self):
         message = self.message
@@ -90,6 +93,15 @@ class BotCommands:
                 command[1]()
                 break
 
+    def handle_inventario(self):
+        inventario = Collezionabili().getInventarioUtente(self.chatid)
+        msg = "📦 Inventario 📦\n\n"
+        if inventario:
+            for oggetto in inventario:
+                msg += f"🧷 {oggetto.oggetto}\n"
+        else:
+            msg = "Il tuo inventario è vuoto, partecipa attivamente nel gruppo per trovare oggetti preziosi"
+        self.bot.reply_to(self.message,msg,reply_markup=Database().startMarkup(Utente().getUtente(self.chatid)))
     def handle_broadcast(self):
         message = self.message
         # Ottieni il messaggio da inviare
@@ -99,7 +111,7 @@ class BotCommands:
         for utente in Utente().getUsers():
             try:
                 msg = messaggio.replace('{nome_utente}',utente.nome)
-                bot.send_message(utente.id_telegram, msg,parse_mode='markdown')
+                self.bot.send_message(utente.id_telegram, msg,parse_mode='markdown')
             except Exception as e:
                 print("ERRORE",str(e))
         # Invia un messaggio di conferma all'utente che ha inviato il comando
@@ -107,26 +119,25 @@ class BotCommands:
 
     def handle_me(self):
         message = self.message
-        punti = Points.Points()
-        utente = Utente().getUtente(message.chat.id)
+        utente = Utente().getUtente(self.chatid)
         self.bot.reply_to(message, Utente().infoUser(utente))
 
     def handle_status(self):
         message = self.message
-        utente = punti.getUtente(message.chat.id)
-        self.bot.send_message(message.chat.id, Utente().infoUser(utente),parse_mode='markdown')
+        utente = punti.getUtente(self.chatid)
+        self.bot.send_message(self.chatid, Utente().infoUser(utente),parse_mode='markdown')
 
     def handle_classifica(self):
         message = self.message
-        self.bot.send_message(message.chat.id, Points.Points().writeClassifica(message),parse_mode='markdown')
+        self.bot.send_message(self.chatid, Points.Points().writeClassifica(message),parse_mode='markdown')
 
     def handle_stats(self):
         message = self.message
-        self.bot.send_message(message.chat.id, Points.Points().wumpaStats(message),parse_mode='markdown')
+        self.bot.send_message(self.chatid, Points.Points().wumpaStats(message),parse_mode='markdown')
 
     def handle_premium(self):
         message = self.message
-        self.bot.send_message(message.chat.id, Points.Points().inviaUtentiPremium(message),parse_mode='markdown')
+        self.bot.send_message(meself.chatid, Points.Points().inviaUtentiPremium(message),parse_mode='markdown')
 
     def handle_livell(self,limite=40):
         message = self.message
@@ -153,7 +164,7 @@ class BotCommands:
         message = self.message
         comando = message.text
         punti = Points.Points()
-        utenteSorgente = Utente().getUtente(message.chat.id)
+        utenteSorgente = Utente().getUtente(self.chatid)
         if len(comando.split())==2:
             points = comando.split()[0][4:]
             utenteTarget = Utente().getUtente(comando.split()[1])
@@ -194,11 +205,11 @@ class BotCommands:
 
     def handle_plus_minus(self):
         message = self.message
-        utente = Utente().getUtente(message.chat.id) 
+        utente = Utente().getUtente(self.chatid) 
         self.bot.reply_to(message,Points.Points().addPointsToUsers(utente,message))
 
     def handle_buy_another_month(self):
-        utenteSorgente = Utente().getUtente(self.message.chat.id)
+        utenteSorgente = Utente().getUtente(self.chatid)
         Abbonamento().buyPremiumExtra(utenteSorgente)
 
     def handle_buy_steam_game(self):
@@ -213,7 +224,7 @@ class BotCommands:
 
     def handle_info(self):
         message = self.message
-        utenteSorgente = Utente().getUtente(message.chat.id)
+        utenteSorgente = Utente().getUtente(self.chatid)
         abbonamento = Abbonamento()
         punti = Points.Points()
         messaggio = f"\n\n*Gestione Abbonamento Premium*\nCosto di attivazione (primo mese): {abbonamento.COSTO_PREMIUM} {PointsName}"
@@ -225,7 +236,7 @@ class BotCommands:
     def handle_attiva_abbonamento_premium(self):
         message = self.message
         abbonamento = Abbonamento()
-        utenteSorgente = Utente().getUtente(message.chat.id)
+        utenteSorgente = Utente().getUtente(self.chatid)
         abbonamento.attiva_abbonamento(utenteSorgente)
         utenteSorgente = Utente().getUtente(utenteSorgente.id_telegram)
         self.bot.reply_to(message, 'Abbonamento attivato, il giorno '+str(utenteSorgente.scadenza_premium)[:10]+' si rinnoverà al costo di '+str(abbonamento.COSTO_MANTENIMENTO)+' '+PointsName,reply_markup=Database().startMarkup(utenteSorgente))
@@ -233,14 +244,14 @@ class BotCommands:
     def handle_disattiva_abbonamento_premium(self):
         message = self.message
         abbonamento = Abbonamento()
-        utenteSorgente = Utente().getUtente(message.chat.id)
+        utenteSorgente = Utente().getUtente(self.chatid)
         abbonamento.stop_abbonamento(utenteSorgente)
         utenteSorgente = Utente().getUtente(utenteSorgente.id_telegram)
         self.bot.reply_to(message, 'Abbonamento annullato, sarà comunque valido fino al '+str(utenteSorgente.scadenza_premium)[:10],reply_markup=Database().startMarkup(utenteSorgente))
     
     def handle_nome_in_game(self):
         message = self.message
-        utente = Utente().getUtente(message.chat.id)
+        utente = Utente().getUtente(self.chatid)
         giochiutente = GiocoUtente().getGiochiUtente(utente.id_telegram)
         keyboard = types.InlineKeyboardMarkup()
 
@@ -260,10 +271,8 @@ class BotCommands:
             while (condition and messageid<until_message):
                 try:
                     condition = bot.copy_message(to_chat,from_chat, messageid)
-                    print(condition)
                 except Exception as e:
                     errore = str(e)
-                    print(errore)
                     if "Too Many Requests" in errore:
                         seconds = int(errore.split()[17])
                         time.sleep(seconds)
@@ -289,12 +298,12 @@ class BotCommands:
 
     def handle_buy_premium(self):
         abbonamento = Abbonamento()
-        utente = Utente().getUtente(self.message.chat.id)
+        utente = Utente().getUtente(self.chatid)
         abbonamento.buyPremium(utente)
 
     def handle_choose_character(self):
         message = self.message
-        utente = Utente().getUtente(message.chat.id)
+        utente = Utente().getUtente(self.chatid)
         punti = Points.Points()
         is_premium = '🎖' in message.text
         livelli_disponibili = Livello().listaLivelliPremium() if is_premium else Livello().listaLivelliNormali()
@@ -306,10 +315,10 @@ class BotCommands:
 
     def handle_all_commands(self):
         message = self.message
-        utente = Utente().getUtente(message.chat.id)
+        utente = Utente().getUtente(self.chatid)
         if message.chat.type == "private":
             self.handle_private_command()
-        if Utente().isAdmin(utente):
+        if utente and Utente().isAdmin(utente):
             self.handle_admin_command()
         else:
             self.handle_generic_command()
@@ -317,6 +326,7 @@ class BotCommands:
 
 @bot.message_handler(content_types=util.content_type_media)
 def any(message):
+    Points.Points().checkBeforeAll(message)
     bothandler = BotCommands(message,bot)
     bothandler.handle_all_commands()
 
