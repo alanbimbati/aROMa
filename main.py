@@ -57,12 +57,12 @@ class BotCommands:
             
         }
         self.comandi_generici = {
-            "dona": self.handle_dona,
-            "me": self.handle_me,
-            "status": self.handle_status,
-            "classifica": self.handle_classifica,
-            "stats": self.handle_stats,
-            "livell": self.handle_livell,
+            "!dona": self.handle_dona,
+            "/me": self.handle_me,
+            "!status": self.handle_status,
+            "!classifica": self.handle_classifica,
+            "!stats": self.handle_stats,
+            "!livell": self.handle_livell,
             "album": self.handle_album,
             
         }
