@@ -128,21 +128,23 @@ class Points:
             return "Non posso donare "+PointsName+" negativi"
 
     def checkBeforeAll(self,message):
-        Utente().checkUtente(message)
+        utente = Utente()
+        utente.checkUtente(message)
 
         if message.chat.type == "group" or message.chat.type == "supergroup":
             chatid = message.from_user.id
             utenteSorgente = Utente().getUtente(chatid)
 
             Database().checkIsSunday(utenteSorgente,message)
-            Utente().checkTNT(message,utenteSorgente)  
+            utente.checkTNT(message,utenteSorgente)
+            utente.checkCollezionabile(utenteSorgente,message)  
             ############## GRUPPO ###################
             if message.chat.id == GRUPPO_AROMA:
-                Utente().addRandomExp(utenteSorgente,message)
-                Utente().checkCasse(utenteSorgente,message)
+                utente.addRandomExp(utenteSorgente,message)
+                utente.checkCasse(utenteSorgente,message)
         elif message.chat.type == 'private':
             chatid = message.chat.id
-        utenteSorgente = Utente().getUtente(chatid)
+        utenteSorgente = utente.getUtente(chatid)
         Abbonamento().checkScadenzaPremium(utenteSorgente)
         Livello().checkUpdateLevel(utenteSorgente,message)
         utenteSorgente = Utente().getUtente(chatid)
@@ -200,7 +202,6 @@ class Points:
             for username in usernames:
                 try:
                     utente = Utente().getUtente(username)
-                    print(utente.username)
                     risposta = 'Complimenti! Hai ottenuto {} {}' if op == '+' else 'Hai mangiato {} deliziosi {}!'
                     Utente().addPoints(utente, points)
                     answer += username+': '+risposta.format(str(points), PointsName)+'\n'

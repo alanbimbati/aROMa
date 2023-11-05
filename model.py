@@ -31,7 +31,7 @@ class Database:
         #markup.add('Compra 1 gioco')
         #markup.add('Cosa puoi fare con i Frutti Wumpa?')
         #markup.add('Come guadagno Frutti Wumpa?')
-        markup.add('ℹ️ info','🎮 Nome in Game')
+        markup.add('ℹ️ info','🎮 Nome in Game','📦 Inventario')
         if utente is not None:
             if utente.premium==1:
                 markup.add('👤 Scegli il personaggio','👤 Scegli il personaggio 🎖')
@@ -391,6 +391,50 @@ class Utente(Base):
             self.nitroExploded(utente,message)
         elif culo<5:
             self.tnt_start(utente,message)
+
+    def checkCollezionabile(self,utente,message):
+        print('check collezionabile',utente.id_telegram)
+        def checkSferaDelDrago(inventario):
+            def getSfere(drago,inventario):
+                lista_sfere = []
+                for oggetto in inventario:
+                    if drago in oggetto.oggetto:
+                        import re
+                        numero = re.search(r"\d+", oggetto.oggetto).group()
+                        lista_sfere.append(int(numero))
+                return lista_sfere
+            
+            def desiderioEsprimibile(listasfere):
+                return len(listasfere)==7
+
+            def addSferaACaso(listasfere,rarita):  
+                culo = random.randint(1,100)
+                if not desiderioEsprimibile(listasfere):  
+                    if culo>rarita:
+                        while True:
+                            numero = random.randint(1, 7)
+                            if numero not in listasfere:
+                                return numero  
+                return 0    
+
+            def ricercaSferaDelDrago(drago,inventario):
+                lista_sfere = getSfere(drago,inventario)
+                if not desiderioEsprimibile(lista_sfere):
+                    nuova_sfera = addSferaACaso(lista_sfere, 99)
+                    if nuova_sfera != 0:
+                        oggetto = f"{drago} {nuova_sfera}"
+                        oggetto_creato = Collezionabili().CreateCollezionabile(id_telegram=utente.id_telegram, item=oggetto)
+                        if oggetto_creato:
+                            bot.reply_to(message, f"Complimenti! Hai trovato {oggetto}!")
+                        return True
+                return False
+
+            drago_shenron = "La Sfera del Drago Shenron"
+            drago_porunga = "La Sfera del Drago Porunga"
+            return ricercaSferaDelDrago(drago_shenron, inventario) or ricercaSferaDelDrago(drago_porunga, inventario)
+
+        inventario = Collezionabili().getInventarioUtente(utente.id_telegram)
+        sfera_trovata = checkSferaDelDrago(inventario)
 
 class Domenica(Base):
     __tablename__ = "domenica"
@@ -755,3 +799,46 @@ class Abbonamento:
         session = Database().Session()
         listaPremium = session.query(Utente).filter_by(premium=1).order_by(Utente.points.desc()).all()
         return listaPremium
+
+class Collezionabili(Base):
+    __tablename__ = "collezionabili"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    id_telegram = Column(String, nullable=False)
+    oggetto = Column(String, nullable=False)
+    data_acquisizione = Column(DateTime, nullable=False)
+    quantita = Column(Integer, nullable=False)
+    data_utilizzo = Column(DateTime, nullable=True)
+
+
+    def CreateCollezionabile(self,id_telegram,item, quantita=1):
+            session = Database().Session()
+            try:
+                collezionabile = Collezionabili()
+                collezionabile.id_telegram         = id_telegram
+                collezionabile.oggetto             = item
+                collezionabile.data_acquisizione   = datetime.datetime.today()
+                collezionabile.quantita            = quantita
+                collezionabile.data_utilizzo       = None
+                print(collezionabile.id_telegram)
+                session.add(collezionabile)
+                session.commit()
+                return True
+            except:
+                session.rollback()
+                return False
+            finally:
+                session.close()
+
+    def getInventarioUtente(self,id_telegram):
+        session = Database().Session()
+        inventario = session.query(Collezionabili).filter_by(id_telegram=id_telegram,data_utilizzo=None).order_by(Collezionabili.oggetto).all()
+        return inventario
+    
+    def usaOggetto(self,id_telegram,oggetto):
+        session = Database().Session()
+        collezionabile = session.query(Collezionabili).filter_by(id_telegram=id_telegram,oggetto=oggetto).first()
+        collezionabile.data_utilizzo = datetime.datetime.today()
+        session.commit()
+        session.close()
+
