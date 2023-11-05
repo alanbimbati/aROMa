@@ -120,11 +120,12 @@ class BotCommands:
     def handle_me(self):
         message = self.message
         utente = Utente().getUtente(self.chatid)
-        self.bot.reply_to(message, Utente().infoUser(utente))
+        self.bot.reply_to(message, Utente().infoUser(utente),parse_mode='markdown')
 
     def handle_status(self):
         message = self.message
-        utente = punti.getUtente(self.chatid)
+        utente = Points.Points().getUtente(self.chatid)
+        print(utente.id_telegram)
         self.bot.send_message(self.chatid, Utente().infoUser(utente),parse_mode='markdown')
 
     def handle_classifica(self):
@@ -320,8 +321,8 @@ class BotCommands:
             self.handle_private_command()
         if utente and Utente().isAdmin(utente):
             self.handle_admin_command()
-        else:
-            self.handle_generic_command()
+        
+        self.handle_generic_command()
     
 
 @bot.message_handler(content_types=util.content_type_media)
