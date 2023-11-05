@@ -393,7 +393,6 @@ class Utente(Base):
             self.tnt_start(utente,message)
 
     def checkCollezionabile(self,utente,message):
-        print('check collezionabile',utente.id_telegram)
         def checkSferaDelDrago(inventario):
             def getSfere(drago,inventario):
                 lista_sfere = []
