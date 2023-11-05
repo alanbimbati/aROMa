@@ -230,8 +230,11 @@ class Utente(Base):
     
     def isAdmin(self,utente):
         session = Database().Session()
-        exist = session.query(Admin).filter_by(id_telegram = utente.id_telegram).first()
-        return False if exist is None else True
+        if utente:
+            exist = session.query(Admin).filter_by(id_telegram = utente.id_telegram).first()
+            return False if exist is None else True
+        else:
+            return False
     
     def getUsers(self):
         session = Database().Session()
