@@ -6,6 +6,7 @@ import Points
 from telebot import util
 import schedule,time,threading
 import datetime
+
 @bot.message_handler(content_types=['left_chat_member'])
 def esciDalGruppo(message):
     chatid = message.left_chat_member.id
@@ -49,6 +50,7 @@ class BotCommands:
             "restore": self.handle_restore,
             "addLivello": self.handle_add_livello,
             "backup": self.handle_backup,
+            "extra": self.handle_backup_all,
             "checkPremium":self.handle_checkScadenzaPremiumToAll,
             "broadcast": self.handle_broadcast,
             
@@ -63,6 +65,8 @@ class BotCommands:
             "album": self.handle_album,
             
         }
+        Points.Points().checkBeforeAll(message)
+
     
     def handle_private_command(self):
         message = self.message
@@ -248,6 +252,38 @@ class BotCommands:
         keyboard.add(add_button)
         self.bot.reply_to(message, "Cosa vuoi fare?", reply_markup=keyboard)
     
+    def handle_backup_all(self):
+        message = self.message
+        def backup_all(from_chat, to_chat,until_message=9999):
+            messageid = 1
+            condition = True
+            while (condition and messageid<until_message):
+                try:
+                    condition = bot.copy_message(to_chat,from_chat, messageid)
+                    print(condition)
+                except Exception as e:
+                    errore = str(e)
+                    print(errore)
+                    if "Too Many Requests" in errore:
+                        seconds = int(errore.split()[17])
+                        time.sleep(seconds)
+                        messageid-=1
+                messageid+=1
+
+        #backup_all(PREMIUM_CHANNELS['pc'],PREMIUM_CHANNELS['tutto'])
+        #backup_all(PREMIUM_CHANNELS['nintendo'],PREMIUM_CHANNELS['tutto'])
+        #backup_all(PREMIUM_CHANNELS['ps4'],PREMIUM_CHANNELS['tutto'])
+        #backup_all(PREMIUM_CHANNELS['ps3'],PREMIUM_CHANNELS['tutto'])
+        #backup_all(PREMIUM_CHANNELS['ps2'],PREMIUM_CHANNELS['tutto'])
+        #backup_all(PREMIUM_CHANNELS['ps1'],PREMIUM_CHANNELS['tutto'])
+        #backup_all(PREMIUM_CHANNELS['psp'],PREMIUM_CHANNELS['tutto'])
+        #backup_all(PREMIUM_CHANNELS['horror'],PREMIUM_CHANNELS['tutto'])
+        #backup_all(PREMIUM_CHANNELS['hot'],PREMIUM_CHANNELS['tutto'],352)
+        backup_all(PREMIUM_CHANNELS['big_games'],PREMIUM_CHANNELS['tutto'],622)
+        #backup_album(PREMIUM_CHANNELS['ps1'],CANALE_LOG)
+        bot.reply_to(message, "Ho finito i backup")
+
+
     def handle_classifica(self):
         Points.Points().writeClassifica(self.message)
 
@@ -283,154 +319,6 @@ class BotCommands:
 def any(message):
     bothandler = BotCommands(message,bot)
     bothandler.handle_all_commands()
-
-    """
-    if message.chat.type=='private':
-        utente = Utente().getUtente(message.chat.id)
-
-        if hasattr(message.forward_from_chat,'id'):
-            buy1game(message)
-        elif 'Compra 1 gioco' in message.text:
-            bot.reply_to(message, punti.album())
-        elif message.text=='🎫 Compra un gioco steam':
-            risposta = ''
-            risposta += '50 🍑 = 🥉 Bronze Coin: 10% probabilità TITOLONE casuale\n'
-            risposta += '100 🍑 = 🥈 Silver Coin: 50% TITOLONE casuale\n'
-            risposta += '150 🍑 = 🥇 Gold Coin: 100% TITOLONE casuale\n'
-            risposta += '200 🍑 = 🎖 Platinum Coin: TITOLONE a scelta della lista, visibile solo con l\'acquisto del suddetto Coin\n' 
-            msg = bot.reply_to(message,risposta,reply_markup=Steam().steamMarkup())
-            bot.register_next_step_handler(msg, steam.steamCoin)
-        elif message.text.startswith('👤 Scegli il personaggio'):
-            punti = Points.Points()
-            is_premium = '🎖' in message.text
-            livelli_disponibili = Livello().listaLivelliPremium() if is_premium else Livello().listaLivelliNormali()
-            markup = types.ReplyKeyboardMarkup()
-            for livello in livelli_disponibili:
-                markup.add(f"{livello.nome}{'🔓' if utente.livello < livello.livello else ''}")
-            msg = bot.reply_to(message, "Seleziona il tuo personaggio", reply_markup=markup)
-            bot.register_next_step_handler(msg, punti.setCharacter)
-        elif 'Compra abbonamento Premium (1 mese)' in message.text:
-            abbonamento.buyPremium(utenteSorgente)
-        elif message.text == '✖️ Disattiva rinnovo automatico':
-            abbonamento.stop_abbonamento(utenteSorgente)
-            utenteSorgente = Utente().getUtente(utenteSorgente.id_telegram)
-            bot.reply_to(message, 'Abbonamento annullato, sarà comunque valido fino al '+str(utenteSorgente.scadenza_premium)[:10],reply_markup=Database().startMarkup(utenteSorgente))
-        elif message.text == '✅ Attiva rinnovo automatico':
-            abbonamento.attiva_abbonamento(utenteSorgente)
-            utenteSorgente = Utente().getUtente(utenteSorgente.id_telegram)
-            bot.reply_to(message, 'Abbonamento attivato, il giorno '+str(utenteSorgente.scadenza_premium)[:10]+' si rinnoverà al costo di '+str(abbonamento.COSTO_MANTENIMENTO)+' '+PointsName,reply_markup=Database().startMarkup(utenteSorgente))
-        elif 'classifica' in message.text.lower():
-            punti.writeClassifica(message)
-        elif 'nome in game' in message.text.lower():
-            giochiutente = GiocoUtente().getGiochiUtente(utente.id_telegram)
-            keyboard = types.InlineKeyboardMarkup()
-
-            for giocoutente in giochiutente:
-                remove_button = types.InlineKeyboardButton(f"❌ {giocoutente.piattaforma} {giocoutente.nome}", callback_data=f"remove_namegame_{giocoutente.id_telegram}_{giocoutente.piattaforma}_{giocoutente.nome}")
-                keyboard.add(remove_button)
-
-            add_button = types.InlineKeyboardButton("➕ Aggiungi Nome in Game", callback_data="add_namegame")
-            keyboard.add(add_button)
-            bot.reply_to(message, "Cosa vuoi fare?", reply_markup=keyboard)
-        elif 'compro un altro mese' in message.text.lower():
-            abbonamento.buyPremiumExtra(utenteSorgente)
-            utenteSorgente = Utente().getUtente(utenteSorgente.id_telegram)
-        elif 'info' in message.text.lower():
-            messaggio = f"\n\n*Gestione Abbonamento Premium*\nCosto di attivazione (primo mese): {abbonamento.COSTO_PREMIUM} {PointsName}"
-            messaggio += f"\nRinnovo Abbonamento (+1 mese): {abbonamento.COSTO_MANTENIMENTO} {PointsName}\n👥[Link al gruppo](https://t.me/+VtiCEsByTGqN94pv)\n@aROMadivideogiochi\n\n"
-            bot.reply_to(message,punti.album(),reply_markup=Database().startMarkup(utenteSorgente),parse_mode='markdown')
-            bot.reply_to(message,messaggio,reply_markup=Database().startMarkup(utenteSorgente),parse_mode='markdown')
-            bot.reply_to(message,Utente().infoUser(utenteSorgente),reply_markup=Database().startMarkup(utenteSorgente),parse_mode='markdown')
-
-        else:
-            bot.reply_to(message, "Cosa vuoi fare?", reply_markup=Database().startMarkup(utenteSorgente))
-
-    # ADMINistrazione dei punti
-    
-    if Utente().isAdmin(utenteSorgente):
-        # Assegnare punti
-        if comando.startswith('+') or comando.startswith('-'):
-            bot.reply_to(message,punti.addPointsToUsers(utenteSorgente,message))
-        elif comando.lower() == 'restore':
-            msg = bot.reply_to(message, 'Inviami il db')
-            bot.register_next_step_handler(msg, punti.restore)
-        elif comando.startswith('addLivello'):
-            comandi = message.text
-            comandi = comandi.split('/addLivello')[1:]
-            for comando in comandi:
-                parametri = comando.split(";")
-                livello = int(parametri[1])
-                nome = parametri[2]
-                exp_to_lvl = int(parametri[3])
-                link_img = parametri[4]
-                saga = parametri[5]
-                lv_premium = parametri[6]
-                Livello().addLivello(livello,nome,exp_to_lvl,link_img,saga,lv_premium)
-        elif comando == 'backup':
-            punti.backup()
-        elif comando == 'backupall':
-            bot.reply_to(message, "Ho finito i backup")
-            #backup_all(PREMIUM_CHANNELS['pc'],PREMIUM_CHANNELS['tutto'])
-            #backup_all(PREMIUM_CHANNELS['nintendo'],PREMIUM_CHANNELS['tutto'])
-            #backup_all(PREMIUM_CHANNELS['ps4'],PREMIUM_CHANNELS['tutto'])
-            #backup_all(PREMIUM_CHANNELS['ps3'],PREMIUM_CHANNELS['tutto'])
-            #backup_all(PREMIUM_CHANNELS['ps2'],PREMIUM_CHANNELS['tutto'])
-            #backup_all(PREMIUM_CHANNELS['ps1'],PREMIUM_CHANNELS['tutto'])
-            #backup_all(PREMIUM_CHANNELS['psp'],PREMIUM_CHANNELS['tutto'])
-            #backup_all(PREMIUM_CHANNELS['horror'],PREMIUM_CHANNELS['tutto'])
-            #backup_all(PREMIUM_CHANNELS['hot'],PREMIUM_CHANNELS['tutto'],352)
-            #backup_all(PREMIUM_CHANNELS['big_games'],PREMIUM_CHANNELS['tutto'],622)
-            #backup_album(PREMIUM_CHANNELS['ps1'],CANALE_LOG)
-        elif comando.startswith('checkPremium'):
-            punti.checkScadenzaPremiumToAll()
-        elif message.text.startswith('/broadcast'):
-                # Ottieni il messaggio da inviare
-                messaggio = message.text.split('/broadcast')[1]
-
-                # Invia il messaggio a tutti gli utenti del bot
-                for utente in Utente().getUsers():
-                    try:
-                        msg = messaggio.replace('{nome_utente}',utente.nome)
-                        bot.send_message(utente.id_telegram, msg,parse_mode='markdown')
-                    except Exception as e:
-                        print("ERRORE",str(e))
-                # Invia un messaggio di conferma all'utente che ha inviato il comando
-                bot.reply_to(message, 'Messaggio inviato a tutti gli utenti')
-    # COMANDI UTENTI
-    if comando.lower().startswith('dona') or comando.lower().startswith('Dona'):
-        if len(comando.split())==2:
-            points = comando.split()[0][4:]
-            utenteTarget = Utente().getUtente(comando.split()[1])
-        elif len(comando.split())==3:
-            points = comando.split()[1]
-            utenteTarget = Utente().getUtente(comando.split()[2])
-        else:
-            points = 0
-            utenteTarget = None
-        
-        messaggio = punti.donaPoints(utenteSorgente,utenteTarget,points)
-        bot.reply_to(message,messaggio+'\n\n'+Utente().infoUser(utenteTarget),parse_mode='markdown')
-    elif comando == 'me':
-        bot.reply_to(message,Utente().infoUser(utenteSorgente),parse_mode='markdown')
-    elif comando.startswith("status"):
-        user = Utente().getUtente(comando.split()[1])
-        bot.reply_to(message, Utente().infoUser(user),parse_mode='markdown')
-    elif comando.startswith("classifica"):
-        punti.writeClassifica(message)
-    elif comando == 'stats':
-        wumpaSupply,wumpaMax,wumpaMin,numUsers = punti.wumpaStats()
-        risposta = "<b>Supply: </b>"+str(wumpaSupply)+" "+PointsName+"\n"
-        risposta += "<b>WumpaMax: </b>"+str(wumpaMax)+" "+PointsName+"\n"
-        risposta += "<b>wumpaMin: </b>"+str(wumpaMin)+" "+PointsName+"\n"
-        risposta += "<b>numUsers: </b>"+str(numUsers)+" "+PointsName
-        bot.reply_to(message, risposta, parse_mode="HTML")
-    elif comando.startswith('premium'):
-        inviaUtentiPremium()
-    elif comando.startswith('livell'):
-        inviaLivelli(40)
-    elif 'album' in comando:
-        bot.reply_to(message, punti.album(),parse_mode='markdown')
-    """
 
 # Gestione delle query inline
 @bot.callback_query_handler(func=lambda call: True)
@@ -525,21 +413,6 @@ def buy1game(message):
         
         bot.send_message(CANALE_LOG,"L'utente "+utenteSorgente.username+" ha acquistato da "+message.forward_from_chat.title+" https://t.me/c/"+str(from_chat)[4:]+"/"+str(messageid))
 
-def backup_all(from_chat, to_chat,until_message=9999):
-    messageid = 1
-    condition = True
-    while (condition and messageid<until_message):
-        try:
-            condition = bot.copy_message(to_chat,from_chat, messageid)
-        except Exception as e:
-            errore = str(e)
-            print(errore)
-            if "Too Many Requests" in errore:
-                seconds = int(errore.split()[17])
-                time.sleep(seconds)
-                messageid-=1
-        messageid+=1
-
 #bot.infinity_polling()
 
 def inviaUtentiPremium():
@@ -575,35 +448,6 @@ def send_album():
     punti = Points.Points()
     msg = punti.album()
     bot.send_message(GRUPPO_AROMA, msg,parse_mode='markdown' )
-
-'''
-# Variabile per tenere traccia dell'ultimo giorno in cui sono stati inviati i vantaggi
-ultimoGiornoInvio = None
-
-# Funzione per inviare i vantaggi degli utenti premium
-def inviaVantaggiPremium():
-    listaUtenti = Utente().getUsers()
-    vantaggi = "🎮 Vantaggi degli Utenti Premium 🎮\n\n"
-    vantaggi += "- Accesso a giochi gratuiti dagli album premium\n"
-    vantaggi += "- Possibilità di personalizzare il proprio personaggio premium\n"
-
-    for utente in listaUtenti:
-        bot.send_message(utente.id_telegram, vantaggi)
-
-# Funzione per gestire i messaggi nel canale degli album premium
-@bot.channel_post_handler(func=lambda message: message.chat.type == "channel" and message.chat.id == ALBUM['premium'])
-def handle_premium_channel_message(message):
-    print(message)
-    global ultimoGiornoInvio
-
-    # Ottiene la data corrente
-    dataCorrente = datetime.date.today()
-
-    # Verifica se è già stato inviato oggi
-    if ultimoGiornoInvio is None or ultimoGiornoInvio < dataCorrente:
-        inviaVantaggiPremium()
-        ultimoGiornoInvio = dataCorrente
-'''
 
 # Funzione per avviare il programma di promemoria
 def start_reminder_program():
