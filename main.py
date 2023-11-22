@@ -124,8 +124,7 @@ class BotCommands:
 
     def handle_status(self):
         message = self.message
-        utente = Points.Points().getUtente(self.chatid)
-        print(utente.id_telegram)
+        utente = Points.Points().getUtente(message.text.split()[1])
         self.bot.send_message(self.chatid, Utente().infoUser(utente),parse_mode='markdown')
 
     def handle_classifica(self):
@@ -185,7 +184,9 @@ class BotCommands:
         Points.Points().checkScadenzaPremiumToAll()
 
     def handle_restore(self):
-        Points.Points().restore()
+        msg = self.bot.reply_to(self.message,'Inviami il db')
+        self.bot.register_next_step_handler(msg,Points.Points().restore)
+        
 
     def handle_backup(self):
         Points.Points().backup()
