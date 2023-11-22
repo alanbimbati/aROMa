@@ -781,7 +781,7 @@ class Abbonamento:
                 if utente.abbonamento_attivo==0 and utente.premium==1:
                     self.stop_premium(utente)
                 elif utente.abbonamento_attivo==1:
-                    if utente.points>=COSTO_MANTENIMENTO:
+                    if utente.points>=self.COSTO_MANTENIMENTO:
                         self.rinnova_premium(utente)
                     else:
                         self.stop_premium(utente)
