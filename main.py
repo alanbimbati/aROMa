@@ -466,8 +466,8 @@ def start_reminder_program():
     # Imposta l'orario di esecuzione del promemoria
     schedule.every().day.at("09:00").do(backup)
     schedule.every().day.at("15:00").do(send_album)
-    schedule.every().day.at("20:00").do(inviaLivelli, 40)
-    schedule.every().monday.at("12:00").do(inviaUtentiPremium)
+    #schedule.every().day.at("20:00").do(inviaLivelli, 40)
+    #schedule.every().monday.at("12:00").do(inviaUtentiPremium)
 
     # Avvia il loop per eseguire il programma di promemoria
     while True:
