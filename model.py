@@ -615,6 +615,11 @@ class Livello(Base):
         session = Database().Session()
         lvs = session.query(Livello).filter_by(livello=lv, lv_premium=1).first()
         return lvs
+    
+    def getLevel(self, lv):
+        session = Database().Session()
+        lvs = session.query(Livello).filter_by(livello=lv, lv_premium=0).first()
+        return lvs
 
     def GetLevelByNameLevel(self,nameLevel):
         session = Database().Session()
@@ -674,7 +679,7 @@ class Livello(Base):
                 else:
                     add = 250
                 Utente().addPoints(utenteSorgente,add)
-                bot.reply_to(message,f"Complimenti per questo traguardo! Per te {str(add)} {PointsName}! 🎉\n\n{Utente.infoUser(utenteSorgente)}",parse_mode='markdown')
+                bot.reply_to(message,f"Complimenti per questo traguardo! Per te {str(add)} {PointsName}! 🎉\n\n{Utente().infoUser(utenteSorgente)}",parse_mode='markdown')
 
 
 class GiocoAroma(Base):
