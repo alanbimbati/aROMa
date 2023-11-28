@@ -10,8 +10,11 @@ import datetime
 @bot.message_handler(content_types=['left_chat_member'])
 def esciDalGruppo(message):
     chatid = message.left_chat_member.id
-    Database().update_user(chatid,{'points':0})
-    bot.send_message(CANALE_LOG, f"I punti dell'utente {Utente().getUsernameAtLeastName()} sono stati azzerati perchè è uscito dal gruppo.")
+    try:
+        Database().update_user(chatid,{'points':0})
+        bot.send_message(CANALE_LOG, f"I punti dell'utente {Utente().getUsernameAtLeastName()} sono stati azzerati perchè è uscito dal gruppo.")
+    except Exception as e:
+        print('Errore ',str(e))
 
 @bot.message_handler(content_types=['new_chat_members'])
 def newmember(message):
@@ -124,7 +127,7 @@ class BotCommands:
 
     def handle_status(self):
         message = self.message
-        utente = Points.Points().getUtente(message.text.split()[1])
+        utente = Utente().getUtente(message.text.split()[1])
         self.bot.send_message(self.chatid, Utente().infoUser(utente),parse_mode='markdown')
 
     def handle_classifica(self):
