@@ -128,7 +128,7 @@ class BotCommands:
     def handle_status(self):
         message = self.message
         utente = Utente().getUtente(message.text.split()[1])
-        self.bot.send_message(self.chatid, Utente().infoUser(utente),parse_mode='markdown')
+        self.bot.reply_to(self.message, Utente().infoUser(utente),parse_mode='markdown')
 
     def handle_classifica(self):
         message = self.message
