@@ -506,7 +506,7 @@ class Steam(Base):
 
     def selectPlatinumSteamGame(self,message):
         game = self.selectSteamGame(message.text)
-        self.sendSteamGame(200,message,game,100)
+        self.sendSteamGame(-200,message,game,100)
 
     def sendSteamGame(self,costo,message,game,sculato):
         utente = Utente().getUtente(message.chat.id)
