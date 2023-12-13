@@ -225,7 +225,7 @@ class BotCommands:
         risposta += '150 🍑 = 🥇 Gold Coin: 100% TITOLONE casuale\n'
         risposta += '200 🍑 = 🎖 Platinum Coin: TITOLONE a scelta della lista, visibile solo con l\'acquisto del suddetto Coin\n' 
         msg = bot.reply_to(message,risposta,reply_markup=Steam().steamMarkup())
-        self.bot.register_next_step_handler(msg, Steam().steamCoin)
+        self.bot.register_next_step_handler(msg, Steam().steamCtutoin)
 
     def handle_info(self):
         message = self.message
@@ -293,7 +293,7 @@ class BotCommands:
         #backup_all(PREMIUM_CHANNELS['psp'],PREMIUM_CHANNELS['tutto'])
         #backup_all(PREMIUM_CHANNELS['horror'],PREMIUM_CHANNELS['tutto'])
         #backup_all(PREMIUM_CHANNELS['hot'],PREMIUM_CHANNELS['tutto'],352)
-        backup_all(PREMIUM_CHANNELS['big_games'],PREMIUM_CHANNELS['tutto'],622)
+        #backup_all(PREMIUM_CHANNELS['big_games'],PREMIUM_CHANNELS['tutto'],622)
         #backup_album(PREMIUM_CHANNELS['ps1'],CANALE_LOG)
         bot.reply_to(message, "Ho finito i backup")
 

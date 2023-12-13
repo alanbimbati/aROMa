@@ -132,7 +132,7 @@ class GiocoUtente(Base):
                 session.close()
             return False
         else:
-            Database().update_gameuser(id_telegram,{'piattaforma':piattaforma,'gioco':gioco})
+            Database().update_gameuser(id_telegram,{'piattaforma':piattaforma,'gioco':nomegioco})
         return True
 
     def getGiochiUtente(self, id_telegram):
