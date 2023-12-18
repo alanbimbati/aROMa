@@ -140,7 +140,7 @@ class BotCommands:
 
     def handle_premium(self):
         message = self.message
-        self.bot.send_message(meself.chatid, Points.Points().inviaUtentiPremium(message),parse_mode='markdown')
+        self.bot.send_message(self.chatid, Points.Points().inviaUtentiPremium(message),parse_mode='markdown')
 
     def handle_livell(self,limite=40):
         message = self.message
