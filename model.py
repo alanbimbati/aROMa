@@ -11,6 +11,8 @@ from sqlalchemy         import desc,asc
 from settings           import *
 from telebot            import types
 import random
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
 Base = declarative_base()
 
@@ -25,21 +27,24 @@ class Database:
 
     def startMarkup(self,utente=None):
         markup = types.ReplyKeyboardMarkup()
+
         #markup.add('Compra 1 gioco')
         #markup.add('Cosa puoi fare con i Frutti Wumpa?')
         #markup.add('Come guadagno Frutti Wumpa?')
-        markup.add('👤 Scegli il personaggio')
+        markup.add('ℹ️ info','🎮 Nome in Game','📦 Inventario')
         if utente is not None:
             if utente.premium==1:
-                markup.add('👤 Scegli il personaggio 🎖')
-                markup.add('🎫 Compra un gioco steam')
+                markup.add('👤 Scegli il personaggio','👤 Scegli il personaggio 🎖')
+                markup.add('🎫 Compra un gioco steam','🎖 Compro un altro mese')
                 if utente.abbonamento_attivo==1:
                     markup.add('✖️ Disattiva rinnovo automatico')
                 else:
+                    
                     markup.add('✅ Attiva rinnovo automatico')
             else:
+                markup.add('👤 Scegli il personaggio')
                 markup.add('🎖 Compra abbonamento Premium (1 mese)')
-        #markup.add('📄 Classifica')
+        markup.add('📄 Classifica')
 
         return markup
 
@@ -56,7 +61,7 @@ class Database:
                     domenica.utente     = chatid
                     session.add(domenica)
                     session.commit()
-                    self.update_user(chatid,{'points':utente.points+1})
+                    Database().update_user(chatid,{'points':utente.points+1})
                 except:
                     session.rollback()
                     raise
@@ -64,8 +69,8 @@ class Database:
                     session.close()
                 return True
             elif exist.last_day!=oggi:
-                self.update_domenica(chatid,{'last_day':oggi})
-                self.update_user(chatid,{'points':utente.points+1})
+                Database().update_domenica(chatid,{'last_day':oggi})
+                Database().update_user(chatid,{'points':utente.points+1})
                 return True
             else:
                 return False
@@ -95,9 +100,54 @@ class Database:
 
     def update_livello(self, id, kwargs):
         self.update_table_entry(Livello, "id", id, kwargs) 
+    
+    def update_gameuser(self, chatid, kwargs):
+        self.update_table_entry(GiocoUtente, "id_telegram", chatid, kwargs) 
 
 def create_table(engine):
     Base.metadata.create_all(engine)
+
+class GiocoUtente(Base):
+    __tablename__ = "giocoutente"
+    id = Column(Integer, primary_key=True)
+    id_telegram = Column('id_Telegram', Integer)
+    piattaforma = Column('piattaforma', String)
+    nome        = Column('nome', String)
+
+    def CreateGiocoUtente(self,id_telegram,piattaforma,nomegioco):
+        session = Database().Session()
+        exist = session.query(GiocoUtente).filter_by(id_telegram = id_telegram,piattaforma=piattaforma).first()
+        if exist is None:
+            try:
+                giocoutente = GiocoUtente()
+                giocoutente.id_telegram     = id_telegram
+                giocoutente.piattaforma     = piattaforma
+                giocoutente.nome            = nomegioco
+                session.add(giocoutente)
+                session.commit()
+            except:
+                session.rollback()
+                raise
+            finally:
+                session.close()
+            return False
+        else:
+            Database().update_gameuser(id_telegram,{'piattaforma':piattaforma,'gioco':nomegioco})
+        return True
+
+    def getGiochiUtente(self, id_telegram):
+        session = Database().Session()
+        giochiutente = session.query(GiocoUtente).filter_by(id_telegram=id_telegram).all()
+        session.close()
+        return giochiutente
+
+    def delPiattaformaUtente(self,id_telegram,piattaforma,nome):
+        session = Database().Session()
+        giocoutente = session.query(GiocoUtente).filter_by(id_telegram=id_telegram,piattaforma=piattaforma,nome=nome).first()
+        print(giocoutente.id_telegram,giocoutente.piattaforma,giocoutente.nome)
+        session.delete(giocoutente)
+        session.commit()
+        session.close()      
 
 class Utente(Base):
     __tablename__ = "utente"
@@ -118,8 +168,7 @@ class Utente(Base):
     abbonamento_attivo =  Column('abbonamento_attivo',Integer)
 
     def CreateUser(self,id_telegram,username,name,last_name):
-        from datetime import datetime
-        from dateutil.relativedelta import relativedelta
+
         session = Database().Session()
         exist = session.query(Utente).filter_by(id_telegram = id_telegram).first()
         if exist is None:
@@ -148,7 +197,7 @@ class Utente(Base):
                 session.close()
             return False
         elif exist.username!=username:
-            self.update_user(id_telegram,{'username':username,'nome':name,'cognome':last_name})
+            Database().update_user(id_telegram,{'username':username,'nome':name,'cognome':last_name})
         return True
 
     def getUtente(self, target):
@@ -181,8 +230,11 @@ class Utente(Base):
     
     def isAdmin(self,utente):
         session = Database().Session()
-        exist = session.query(Admin).filter_by(id_telegram = utente.id_telegram).first()
-        return False if exist is None else True
+        if utente:
+            exist = session.query(Admin).filter_by(id_telegram = utente.id_telegram).first()
+            return False if exist is None else True
+        else:
+            return False
     
     def getUsers(self):
         session = Database().Session()
@@ -200,28 +252,33 @@ class Utente(Base):
         else:
             return "Nessun nome"
 
-    def infoUser(self,utenteSorgente):
-        if utenteSorgente is None:
+    def infoUser(self, utenteSorgente):
+        if not utenteSorgente:
             return "L'utente non esiste"
+
         utente = Utente().getUtente(utenteSorgente.id_telegram)
         infoLv = Livello().infoLivello(utente.livello)
         selectedLevel = Livello().infoLivelloByID(utente.livello_selezionato)
-        answer = ''
-        if utente.premium==1:
-            answer += '🎖 Utente Premium\n'
-            if utente.abbonamento_attivo==1:
-                answer+='✅ Abbonamento attivo (fino al '+str(utenteSorgente.scadenza_premium)[:11]+')\n'
-            else:
-                answer+='✖️ Abbonamento non attivo\n'
+        giochiutente = GiocoUtente().getGiochiUtente(utente.id_telegram)
+
+        nome_utente = utente.nome if utente.username is None else utente.username
+        answer = f"🎖 Utente Premium\n" if utente.premium == 1 else ''
+        answer += f"✅ Abbonamento attivo (fino al {str(utenteSorgente.scadenza_premium)[:11]})\n" if utente.abbonamento_attivo == 1 else ''
+
         if infoLv is not None:
-            answer += "*👤 "+utente.nome+"*: "+str(utente.points)+" "+PointsName
-            answer +="\n*💪🏻 Exp*: "+ str(utente.exp)+"/"+str(infoLv.exp_to_lv)
-            answer +="\n*🎖 Lv. *"+str(utente.livello)+" ["+selectedLevel.nome+"]("+selectedLevel.link_img+")"
-            answer +="\n*👥 Saga: *"+selectedLevel.saga
+            answer += f"*👤 {nome_utente}*: {utente.points} {PointsName}\n"
+            answer += f"*💪🏻 Exp*: {utente.exp}/{infoLv.exp_to_lv}\n"
+            answer += f"*🎖 Lv. *{utente.livello} [{selectedLevel.nome}]({selectedLevel.link_img})\n"
+            answer += f"*👥 Saga: *{selectedLevel.saga}\n"
         else:
-            answer = "*👤 "+utente.nome+"*: "+str(utente.points)+" "+PointsName
-            answer +="\n*💪🏻 Exp*: "+ str(utente.exp)
-            answer +="\n*🎖 Lv. *"+str(utente.livello)
+            answer += f"*👤 {nome_utente}*: {utente.points} {PointsName}\n"
+            answer += f"*💪🏻 Exp*: {utente.exp}\n"
+            answer += f"*🎖 Lv. *{utente.livello}\n"
+
+        if giochiutente:
+            answer += '\n\n👾 Nome in Game 👾\n'
+            answer += '\n'.join(f"*🎮 {giocoutente.piattaforma}:* `{giocoutente.nome}`" for giocoutente in giochiutente)
+
         return answer
 
     def addRandomExp(self,user,message):
@@ -231,8 +288,13 @@ class Utente(Base):
     def addExp(self,utente,exp):
         Database().update_user(utente.id_telegram,{'exp':utente.exp+exp})
 
-    def addPoints(self, utente, points):   
-        Database().update_user(utente.id_telegram,{'points':int(utente.points) + int(points)})
+    def addPoints(self, utente, points):  
+        try: 
+            Database().update_user(utente.id_telegram,{'points':int(utente.points) + int(points)})
+        except Exception as e:
+            print(e)
+            Database().update_table_entry(Utente, "username", utente.username, {'points':int(utente.points) + int(points)})
+
 
     def donaPoints(self,utenteSorgente,utenteTarget,points):
         points = int(points)
@@ -330,6 +392,49 @@ class Utente(Base):
         elif culo<5:
             self.tnt_start(utente,message)
 
+    def checkCollezionabile(self,utente,message):
+        def checkSferaDelDrago(inventario):
+            def getSfere(drago,inventario):
+                lista_sfere = []
+                for oggetto in inventario:
+                    if drago in oggetto.oggetto:
+                        import re
+                        numero = re.search(r"\d+", oggetto.oggetto).group()
+                        lista_sfere.append(int(numero))
+                return lista_sfere
+            
+            def desiderioEsprimibile(listasfere):
+                return len(listasfere)==7
+
+            def addSferaACaso(listasfere,rarita):  
+                culo = random.randint(1,100)
+                if not desiderioEsprimibile(listasfere):  
+                    if culo>rarita:
+                        while True:
+                            numero = random.randint(1, 7)
+                            if numero not in listasfere:
+                                return numero  
+                return 0    
+
+            def ricercaSferaDelDrago(drago,inventario):
+                lista_sfere = getSfere(drago,inventario)
+                if not desiderioEsprimibile(lista_sfere):
+                    nuova_sfera = addSferaACaso(lista_sfere, 99)
+                    if nuova_sfera != 0:
+                        oggetto = f"{drago} {nuova_sfera}"
+                        oggetto_creato = Collezionabili().CreateCollezionabile(id_telegram=utente.id_telegram, item=oggetto)
+                        if oggetto_creato:
+                            bot.reply_to(message, f"Complimenti! Hai trovato {oggetto}!")
+                        return True
+                return False
+
+            drago_shenron = "La Sfera del Drago Shenron"
+            drago_porunga = "La Sfera del Drago Porunga"
+            return ricercaSferaDelDrago(drago_shenron, inventario) or ricercaSferaDelDrago(drago_porunga, inventario)
+
+        inventario = Collezionabili().getInventarioUtente(utente.id_telegram)
+        sfera_trovata = checkSferaDelDrago(inventario)
+
 class Domenica(Base):
     __tablename__ = "domenica"
     id = Column(Integer, primary_key=True)
@@ -401,7 +506,7 @@ class Steam(Base):
 
     def selectPlatinumSteamGame(self,message):
         game = self.selectSteamGame(message.text)
-        self.sendSteamGame(200,message,game,100)
+        self.sendSteamGame(-200,message,game,100)
 
     def sendSteamGame(self,costo,message,game,sculato):
         utente = Utente().getUtente(message.chat.id)
@@ -457,10 +562,10 @@ class Livello(Base):
 
     def addLivello(self, lvl, nome, exp_to_lv, link_img, saga, lv_premium):
         session = Database().Session()
-        exist = session.query(self.Livello).filter_by(livello=lvl, lv_premium=lv_premium).first()
+        exist = session.query(Livello).filter_by(livello=lvl, lv_premium=lv_premium).first()
         if exist is None:
             try:
-                livello = self.Livello()
+                livello = Livello()
                 livello.livello = lvl
                 livello.nome = nome
                 livello.exp_to_lv = exp_to_lv
@@ -476,7 +581,7 @@ class Livello(Base):
                 session.close()
             return True
         else:
-            self.update_livello(exist.id, {'nome': nome, 'exp_to_lv': exp_to_lv, 'link_img': link_img, 'saga': saga, 'lv_premium': lv_premium})
+            Database().update_livello(exist.id, {'nome': nome, 'exp_to_lv': exp_to_lv, 'link_img': link_img, 'saga': saga, 'lv_premium': lv_premium})
             return False
 
     def infoLivello(self, livello):
@@ -491,17 +596,29 @@ class Livello(Base):
 
     def getLevels(self):
         session = Database().Session()
-        lvs = session.query(Livello).order_by(asc(self.Livello.livello)).all()
+        lvs = session.query(Livello).order_by(asc(Livello.livello)).all()
+        session.close()
         return lvs
 
-    def getLevel(self, lv):
+    def getLevels(self, premium=None):
         session = Database().Session()
-        lvs = session.query(Livello).filter_by(livello=lv, lv_premium=0).first()
+        if premium is None:
+            lvs = session.query(Livello).order_by(asc(Livello.livello)).all()
+        elif premium:
+            lvs = session.query(Livello).filter_by(lv_premium=1).order_by(asc(Livello.livello)).all()
+        else:
+            lvs = session.query(Livello).filter_by(lv_premium=0).order_by(asc(Livello.livello)).all()
+        session.close()
         return lvs
 
     def getLevelPremium(self, lv):
         session = Database().Session()
         lvs = session.query(Livello).filter_by(livello=lv, lv_premium=1).first()
+        return lvs
+    
+    def getLevel(self, lv):
+        session = Database().Session()
+        lvs = session.query(Livello).filter_by(livello=lv, lv_premium=0).first()
         return lvs
 
     def GetLevelByNameLevel(self,nameLevel):
@@ -540,7 +657,7 @@ class Livello(Base):
             Database().update_user(utenteSorgente.id_telegram,{'livello':lv})
             lvObj = Livello().getLevel(lv)
             lbPremiumObj = Livello().getLevelPremium(lv)
-            bot.reply_to(message,"Complimenti! 🎉 Sei passato al livello "+str(lv)+"! Hai sbloccato il personaggio ["+lvObj.nome+"]("+lvObj.link_img+"), puoi attivarlo scrivendo a @aROMaGameBot 🎉\n\n"+Utente.infoUser(utenteSorgente),parse_mode='markdown')
+            bot.reply_to(message,"Complimenti! 🎉 Sei passato al livello "+str(lv)+"! Hai sbloccato il personaggio ["+lvObj.nome+"]("+lvObj.link_img+"), puoi attivarlo scrivendo a @aROMaGameBot 🎉\n\n"+Utente().infoUser(utenteSorgente),parse_mode='markdown')
             bot.reply_to(message,"È anche disponibile il personaggio ["+lbPremiumObj.nome+"]("+lbPremiumObj.link_img+"), puoi attivarlo scrivendo a @aROMaGameBot!",parse_mode='markdown')
             if lv % 5== 0:
                 if lv==5:
@@ -561,8 +678,8 @@ class Livello(Base):
                     add = 250
                 else:
                     add = 250
-                self.addPoints(utenteSorgente,add)
-                bot.reply_to(message,"Complimenti per questo traguardo! Per te "+str(add)+" "+PointsName+"! 🎉\n\n"+Utente.infoUser(utenteSorgente),parse_mode='markdown')
+                Utente().addPoints(utenteSorgente,add)
+                bot.reply_to(message,f"Complimenti per questo traguardo! Per te {str(add)} {PointsName}! 🎉\n\n{Utente().infoUser(utenteSorgente)}",parse_mode='markdown')
 
 
 class GiocoAroma(Base):
@@ -582,9 +699,21 @@ class Abbonamento:
     def __init__(self):
         self.bot = bot
         self.CANALE_LOG = CANALE_LOG
-        self.COSTO_MANTENIMENTO = COSTO_MANTENIMENTO
-        self.COSTO_PREMIUM = COSTO_PREMIUM
         self.PointsName = PointsName
+        self.COSTO_PREMIUM       =    250
+        self.COSTO_MANTENIMENTO  =    50
+        self.PROMO = ""
+
+        # CHECK PROMO
+        oggi = datetime.date.today()
+
+        for promozione in PROMOZIONI:
+            periodo_inizio = datetime.datetime.strptime(PROMOZIONI[promozione]["periodo_inizio"], "%Y%m%d").date()
+            periodo_fine = datetime.datetime.strptime(PROMOZIONI[promozione]["periodo_fine"], "%Y%m%d").date()
+            if oggi >= periodo_inizio and oggi <= periodo_fine:
+                self.COSTO_PREMIUM       = PROMOZIONI[promozione]["COSTO_PREMIUM"]
+                self.COSTO_MANTENIMENTO  = PROMOZIONI[promozione]["COSTO_MANTENIMENTO"]
+                self.PROMO               = PROMOZIONI[promozione]["nome"]
 
     def stop_abbonamento(self, utente):
         Database().update_user(utente.id_telegram, {'abbonamento_attivo': 0})
@@ -610,18 +739,18 @@ class Abbonamento:
         utente = Utente().getUtente(utente.id_telegram)
         self.bot.send_message(
             utente.id_telegram,
-            f"Il tuo abbonamento è stato correttamente rinnovato mangiando {self.COSTO_MANTENIMENTO} {self.PointsName}\n\n{self.infoUser(utente)}",
+            f"Il tuo abbonamento è stato correttamente rinnovato mangiando {self.COSTO_MANTENIMENTO} {self.PointsName}\n\n{Utente().infoUser(utente)}",
             parse_mode='markdown'
             ,reply_markup=Database().startMarkup(utente)
         )
-        self.bot.send_message(self.CANALE_LOG, f"L'utente {Utente().getUsernameAtLeastName(utente)} ha rinnovato l'abbonamento #Premium",reply_markup=Database().startMarkup(utente))
+        self.bot.send_message(self.CANALE_LOG, f"L'utente {Utente().getUsernameAtLeastName(utente)} ha rinnovato l'abbonamento #Premium"+Utente().infoUser(utente),reply_markup=Database().startMarkup(utente),parse_mode='markdown')
 
     def buyPremium(self, utente):
         scadenza = datetime.datetime.now()+relativedelta(months=+1)
         rinnovo = "\n\nOgni prossimo mese costerà solo "+str(self.COSTO_MANTENIMENTO)+" "+self.PointsName
         if utente.premium==1:
-            self.attivaAbbonamentoPremium(utente)
-            self.bot.send_message(utente.id_telegram, "Sei già Utente Premium fino al "+str(utente.scadenza_premium)+rinnovo,reply_markup=Database().startMarkup(utente))
+            self.attiva_abbonamento(utente)
+            self.bot.send_message(utente.id_telegram, "Sei già Utente Premium fino al "+str(utente.scadenza_premium)[:10]+rinnovo+Utente().infoUser(utente),reply_markup=Database().startMarkup(utente),parse_mode='markdown')
         elif utente.premium==0 and utente.points>=self.COSTO_PREMIUM:
             items = {
                 'points': utente.points-self.COSTO_PREMIUM,
@@ -630,22 +759,38 @@ class Abbonamento:
                 'scadenza_premium':scadenza
             }
             Database().update_user(utente.id_telegram,items)
-            self.bot.send_message(utente.id_telegram, "Complimenti! Sei ora un Utente Premium fino al "+str(utente.scadenza_premium)+rinnovo,reply_markup=Database().startMarkup(utente))
+            self.bot.send_message(utente.id_telegram, "Complimenti! Sei ora un Utente Premium fino al "+str(utente.scadenza_premium)[:10]+rinnovo+Utente().infoUser(utente),reply_markup=Database().startMarkup(utente),parse_mode='markdown')
         else:
-            self.bot.send_message(utente.id_telegram, "Mi dispiace, ti servono {}} ".format(self.COSTO_PREMIUM)+self.PointsName,reply_markup=Database().startMarkup(utente))
+            messaggio =  f"Mi dispiace, ti servono {self.COSTO_PREMIUM} {self.PointsName} {Utente().infoUser(utente)}"
+            self.bot.send_message(utente.id_telegram,messaggio,reply_markup=Database().startMarkup(utente),parse_mode='markdown')
+
+    def buyPremiumExtra(self, utente):
+        rinnovo = "\n\nOgni prossimo mese costerà solo " + str(self.COSTO_MANTENIMENTO) + " " + self.PointsName
+        if utente.premium == 1 and utente.points>=self.COSTO_MANTENIMENTO:
+            items = {
+                'points': utente.points - self.COSTO_MANTENIMENTO,
+                'premium': 1,
+                'abbonamento_attivo': 1,
+                'scadenza_premium': utente.scadenza_premium + relativedelta(months=+1)
+            }
+            Database().update_user(utente.id_telegram, items)       
+            utente = Utente().getUtente(utente.id_telegram)     
+            self.bot.send_message(utente.id_telegram, "Hai rinnovato anticipatamente il costo dell'abbonamento, è quindi valido fino al " + str(utente.scadenza_premium)[:10] + rinnovo+Utente().infoUser(utente), reply_markup=Database().startMarkup(utente),parse_mode='markdown')
+        else:
+            self.bot.send_message(utente.id_telegram, f"Devi avere {str(self.COSTO_MANTENIMENTO)} {PointsName}", reply_markup=Database().startMarkup(utente))
 
     def checkScadenzaPremium(self,utente):
         oggi = datetime.datetime.now()
         try:
             if oggi>utente.scadenza_premium:
                 if utente.abbonamento_attivo==0 and utente.premium==1:
-                    self.stopPremium(utente)
+                    self.stop_premium(utente)
                 elif utente.abbonamento_attivo==1:
-                    if utente.points>=COSTO_MANTENIMENTO:
-                        self.rinnovaPremium(utente)
+                    if utente.points>=self.COSTO_MANTENIMENTO:
+                        self.rinnova_premium(utente)
                     else:
-                        self.stopPremium(utente)
-                        self.stopAbbonamentoPremium(utente)
+                        self.stop_premium(utente)
+                        self.stop_abbonamentoPremium(utente)
         except Exception as e:
             print(str(e))
     
@@ -658,3 +803,46 @@ class Abbonamento:
         session = Database().Session()
         listaPremium = session.query(Utente).filter_by(premium=1).order_by(Utente.points.desc()).all()
         return listaPremium
+
+class Collezionabili(Base):
+    __tablename__ = "collezionabili"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    id_telegram = Column(String, nullable=False)
+    oggetto = Column(String, nullable=False)
+    data_acquisizione = Column(DateTime, nullable=False)
+    quantita = Column(Integer, nullable=False)
+    data_utilizzo = Column(DateTime, nullable=True)
+
+
+    def CreateCollezionabile(self,id_telegram,item, quantita=1):
+            session = Database().Session()
+            try:
+                collezionabile = Collezionabili()
+                collezionabile.id_telegram         = id_telegram
+                collezionabile.oggetto             = item
+                collezionabile.data_acquisizione   = datetime.datetime.today()
+                collezionabile.quantita            = quantita
+                collezionabile.data_utilizzo       = None
+                print(collezionabile.id_telegram)
+                session.add(collezionabile)
+                session.commit()
+                return True
+            except:
+                session.rollback()
+                return False
+            finally:
+                session.close()
+
+    def getInventarioUtente(self,id_telegram):
+        session = Database().Session()
+        inventario = session.query(Collezionabili).filter_by(id_telegram=id_telegram,data_utilizzo=None).order_by(Collezionabili.oggetto).all()
+        return inventario
+    
+    def usaOggetto(self,id_telegram,oggetto):
+        session = Database().Session()
+        collezionabile = session.query(Collezionabili).filter_by(id_telegram=id_telegram,oggetto=oggetto).first()
+        collezionabile.data_utilizzo = datetime.datetime.today()
+        session.commit()
+        session.close()
+
