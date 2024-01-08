@@ -48,11 +48,10 @@ class BotCommands:
         }
 
         self.comandi_admin = {
-            
+            "addLivello": self.handle_add_livello,
             "+": self.handle_plus_minus,
             "-": self.handle_plus_minus,
             "restore": self.handle_restore,
-            "addLivello": self.handle_add_livello,
             "backup": self.handle_backup,
             "extra": self.handle_backup_all,
             "checkPremium":self.handle_checkScadenzaPremiumToAll,
