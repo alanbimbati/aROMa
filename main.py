@@ -100,7 +100,10 @@ class BotCommands:
         msg = "📦 Inventario 📦\n\n"
         if inventario:
             for oggetto in inventario:
-                msg += f"🧷 {oggetto.oggetto}\n"
+                msg += f"🧷 {oggetto.oggetto}"
+                if oggetto.quantita > 1:
+                    msg += f" ({oggetto.quantita})"
+                msg += "\n"
         else:
             msg = "Il tuo inventario è vuoto, partecipa attivamente nel gruppo per trovare oggetti preziosi"
         self.bot.reply_to(self.message,msg,reply_markup=Database().startMarkup(Utente().getUtente(self.chatid)))

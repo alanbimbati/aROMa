@@ -3,7 +3,7 @@ from sqlalchemy         import create_engine, false, null, true
 from sqlalchemy         import update
 from sqlalchemy         import desc,asc
 from sqlalchemy.orm     import sessionmaker
-from model import Utente,Domenica,Steam,Admin,Livello,Database,Abbonamento, create_table
+from model import Utente,Domenica,Steam,Admin,Livello,Database,Abbonamento,Collezionabili, create_table
 import datetime
 from settings import *
 import datetime
@@ -137,11 +137,12 @@ class Points:
 
             Database().checkIsSunday(utenteSorgente,message)
             utente.checkTNT(message,utenteSorgente)
-            utente.checkCollezionabile(utenteSorgente,message)  
+
             ############## GRUPPO ###################
             if message.chat.id == GRUPPO_AROMA:
                 utente.addRandomExp(utenteSorgente,message)
-                utente.checkCasse(utenteSorgente,message)
+                #utente.checkCasse(utenteSorgente,message)
+                Collezionabili().maybeDrop(message)
         elif message.chat.type == 'private':
             chatid = message.chat.id
         utenteSorgente = utente.getUtente(chatid)

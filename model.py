@@ -13,6 +13,7 @@ from telebot            import types
 import random
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+import pandas as pd
 
 Base = declarative_base()
 
@@ -308,19 +309,6 @@ class Utente(Base):
         else:
             return "Non posso donare "+PointsName+" negativi"
     ########################### CASSE WUMPA
-
-    def tnt_start(self,utente,message):
-        sti = open('Stickers/TNT.webp', 'rb')
-        bot.send_sticker(message.chat.id,sti)
-        bot.reply_to(message, "💣 Ops!... Hai calpestato una Cassa TNT! Scrivi entro 3 secondi per evitarla!")
-
-        timestamp = datetime.datetime.now()
-        Database().update_user(utente.id_telegram,{
-            'start_tnt':timestamp,
-            'end_tnt': None
-            }
-        )
-    
     def tnt_end(self,utente):
         timestamp = datetime.datetime.now() 
         Database().update_user(utente.id_telegram,{
@@ -349,6 +337,20 @@ class Utente(Base):
             }
         )
         return res
+    """
+    def tnt_start(self,utente,message):
+        sti = open('Stickers/TNT.webp', 'rb')
+        bot.send_sticker(message.chat.id,sti)
+        bot.reply_to(message, "💣 Ops!... Hai calpestato una Cassa TNT! Scrivi entro 3 secondi per evitarla!")
+
+        timestamp = datetime.datetime.now()
+        Database().update_user(utente.id_telegram,{
+            'start_tnt':timestamp,
+            'end_tnt': None
+            }
+        )
+    
+    
         
     def nitroExploded(self,utente,message):
         sti = open('Stickers/Nitro.webp', 'rb')
@@ -367,7 +369,7 @@ class Utente(Base):
         #punti.addExp(utenteSorgente,exp_extra)
         self.addPoints(utente,wumpa_extra)
         bot.reply_to(message, "📦 Hai trovato una cassa con "+str(wumpa_extra)+" "+PointsName+"!\n\n"+Utente().infoUser(utente),parse_mode='markdown')
-    
+    """
     def checkTNT(self,message,utente):
         chatid = message.from_user.id
         utente = Utente().getUtente(chatid)
@@ -383,58 +385,9 @@ class Utente(Base):
             if intime is not None:
                 bot.reply_to(message,'🎉 TNT evitata!!!! (Ci hai messo '+str(intime.seconds)+') secondi'+'\n\n'+Utente().infoUser(utente),parse_mode='markdown')
 
-    def checkCasse(self,utente,message):
-        culo = random.randint(1,100)
-        if culo>=96:
-            self.cassaWumpa(utente,message)
-        elif culo==1:
-            self.nitroExploded(utente,message)
-        elif culo<5:
-            self.tnt_start(utente,message)
 
-    def checkCollezionabile(self,utente,message):
-        def checkSferaDelDrago(inventario):
-            def getSfere(drago,inventario):
-                lista_sfere = []
-                for oggetto in inventario:
-                    if drago in oggetto.oggetto:
-                        import re
-                        numero = re.search(r"\d+", oggetto.oggetto).group()
-                        lista_sfere.append(int(numero))
-                return lista_sfere
-            
-            def desiderioEsprimibile(listasfere):
-                return len(listasfere)==7
 
-            def addSferaACaso(listasfere,rarita):  
-                culo = random.randint(1,100)
-                if not desiderioEsprimibile(listasfere):  
-                    if culo>rarita:
-                        while True:
-                            numero = random.randint(1, 7)
-                            if numero not in listasfere:
-                                return numero  
-                return 0    
-
-            def ricercaSferaDelDrago(drago,inventario):
-                lista_sfere = getSfere(drago,inventario)
-                if not desiderioEsprimibile(lista_sfere):
-                    nuova_sfera = addSferaACaso(lista_sfere, 99)
-                    if nuova_sfera != 0:
-                        oggetto = f"{drago} {nuova_sfera}"
-                        oggetto_creato = Collezionabili().CreateCollezionabile(id_telegram=utente.id_telegram, item=oggetto)
-                        if oggetto_creato:
-                            bot.reply_to(message, f"Complimenti! Hai trovato {oggetto}!")
-                        return True
-                return False
-
-            drago_shenron = "La Sfera del Drago Shenron"
-            drago_porunga = "La Sfera del Drago Porunga"
-            return ricercaSferaDelDrago(drago_shenron, inventario) or ricercaSferaDelDrago(drago_porunga, inventario)
-
-        inventario = Collezionabili().getInventarioUtente(utente.id_telegram)
-        sfera_trovata = checkSferaDelDrago(inventario)
-
+    
 class Domenica(Base):
     __tablename__ = "domenica"
     id = Column(Integer, primary_key=True)
@@ -816,28 +769,61 @@ class Collezionabili(Base):
 
 
     def CreateCollezionabile(self,id_telegram,item, quantita=1):
-            session = Database().Session()
-            try:
-                collezionabile = Collezionabili()
-                collezionabile.id_telegram         = id_telegram
-                collezionabile.oggetto             = item
-                collezionabile.data_acquisizione   = datetime.datetime.today()
-                collezionabile.quantita            = quantita
-                collezionabile.data_utilizzo       = None
-                print(collezionabile.id_telegram)
-                session.add(collezionabile)
-                session.commit()
-                return True
-            except:
-                session.rollback()
-                return False
-            finally:
-                session.close()
+        session = Database().Session()
+        try:
+            collezionabile = Collezionabili()
+            collezionabile.id_telegram         = id_telegram
+            collezionabile.oggetto             = item
+            collezionabile.data_acquisizione   = datetime.datetime.today()
+            collezionabile.quantita            = quantita
+            collezionabile.data_utilizzo       = None
+            print(collezionabile.id_telegram)
+            session.add(collezionabile)
+            session.commit()
+            return True
+        except:
+            session.rollback()
+            return False
+        finally:
+            session.close()
 
     def getInventarioUtente(self,id_telegram):
         session = Database().Session()
-        inventario = session.query(Collezionabili).filter_by(id_telegram=id_telegram,data_utilizzo=None).order_by(Collezionabili.oggetto).all()
+        #inventario = session.query(Collezionabili).filter_by(id_telegram=id_telegram,data_utilizzo=None).group_by(Collezionabili.oggetto).order_by(Collezionabili.oggetto).all()
+        from sqlalchemy import func
+
+        inventario = session.query(
+            Collezionabili.oggetto,
+            func.count(Collezionabili.oggetto).label('quantita')
+        ).filter_by(
+            id_telegram=id_telegram, 
+            data_utilizzo=None
+        ).group_by(
+            Collezionabili.oggetto
+        ).order_by(
+            Collezionabili.oggetto
+        ).all()
+
         return inventario
+
+    def getItemByUser(self,id_telegram,nome_oggetto):
+        session = Database().Session()
+        from sqlalchemy import func
+
+        oggetto = session.query(
+            Collezionabili.oggetto,
+            func.count(Collezionabili.oggetto).label('quantita')
+        ).filter_by(
+            id_telegram=id_telegram, 
+            oggetto=nome_oggetto,
+            data_utilizzo=None
+        ).group_by(
+            Collezionabili.oggetto
+        ).order_by(
+            Collezionabili.oggetto
+        ).first()
+
+        return oggetto
     
     def usaOggetto(self,id_telegram,oggetto):
         session = Database().Session()
@@ -846,3 +832,69 @@ class Collezionabili(Base):
         session.commit()
         session.close()
 
+    def maybeDrop(self,message):
+        if message.chat.type == "group" or message.chat.type == "supergroup":   
+            id_telegram = message.from_user.id
+            items = pd.read_csv('items.csv')
+            indice_oggetto = random.randint(0,len(items)-1)
+            tento_oggetto = items.iloc[indice_oggetto]
+            oggetto = self.getItemByUser(id_telegram,tento_oggetto['nome'])
+            quantita = random.randint(1,tento_oggetto['massimo_numero_per_drop'])
+            if oggetto:
+                if oggetto.oggetto==tento_oggetto['nome']:
+                    quantita+=1
+                    if oggetto.quantita==int(tento_oggetto['max_per_persona']):
+                        return 0
+
+            culo = random.randint(1,tento_oggetto['rarita'])
+            if culo==tento_oggetto['rarita']:
+                self.CreateCollezionabile(id_telegram,tento_oggetto['nome'],quantita)
+                sti = open(f"Stickers/{tento_oggetto['sticker']}", 'rb')
+                bot.send_sticker(message.chat.id, sti)
+                self.triggerDrop(message,tento_oggetto)
+                return True
+            return False
+                    
+    def triggerDrop(self,message,oggetto):
+        id_telegram = message.from_user.id
+        utente = Utente().getUtente(id_telegram)
+        def tnt_start(utente,message):
+            self.usaOggetto(utente.id_telegram,'TNT')
+            #sti = open('Stickers/TNT.webp', 'rb')
+            #bot.send_sticker(message.chat.id,sti)
+            bot.reply_to(message, "💣 Ops!... Hai calpestato una Cassa TNT! Scrivi entro 3 secondi per evitarla!")
+
+            timestamp = datetime.datetime.now()
+            Database().update_user(utente.id_telegram,{
+                'start_tnt':timestamp,
+                'end_tnt': None
+                }
+            )
+
+
+        def nitroExploded(utente,message):
+            self.usaOggetto(utente.id_telegram,'Nitro')
+
+            #sti = open('Stickers/Nitro.webp', 'rb')
+            #bot.send_sticker(message.chat.id,sti)
+            wumpa_persi = random.randint(1,5)*-1
+            #punti.addExp(utenteSorgente,exp_persi)
+            Utente().addPoints(utente,wumpa_persi)
+            bot.reply_to(message, "💥 Ops!... Hai calpestato una Cassa Nitro! Hai perso "+str(wumpa_persi)+" "+PointsName+"! \n\n"+Utente().infoUser(utente),parse_mode='markdown')
+
+        def cassaWumpa(utente,message):
+            self.usaOggetto(utente.id_telegram,'Cassa')
+            #sti = open('Stickers/Wumpa_create.webp', 'rb')
+            #bot.send_sticker(message.chat.id,sti)
+            wumpa_extra = random.randint(1,5)
+            Utente().addPoints(utente,wumpa_extra)
+            bot.reply_to(message, "📦 Hai trovato una cassa con "+str(wumpa_extra)+" "+PointsName+"!\n\n"+Utente().infoUser(utente),parse_mode='markdown')
+        
+        if oggetto.nome=='TNT':
+            tnt_start(utente,message)
+        elif oggetto.nome=='Nitro':
+            nitroExploded(utente,message)
+        elif oggetto.nome=='Cassa':
+            cassaWumpa(utente,message)
+        else:
+            bot.reply_to(message,f"Complimenti! Hai ottenuto {oggetto.nome}")
