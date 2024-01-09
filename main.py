@@ -106,6 +106,8 @@ class BotCommands:
                 msg += "\n"
         else:
             msg = "Il tuo inventario è vuoto, partecipa attivamente nel gruppo per trovare oggetti preziosi"
+        
+
         self.bot.reply_to(self.message,msg,reply_markup=Database().startMarkup(Utente().getUtente(self.chatid)))
     def handle_broadcast(self):
         message = self.message
@@ -166,20 +168,17 @@ class BotCommands:
         self.bot.reply_to(message, Points.Points().album(),parse_mode='markdown')
         
     def handle_dona(self):
+        #!dona 10 @user
+        #/dona 5 @utente
         message = self.message
-        comando = message.text
+        comando = message.text.replace('/','').replace('!','')
+        print(comando.split())
         punti = Points.Points()
         utenteSorgente = Utente().getUtente(self.chatid)
-        if len(comando.split())==2:
-            points = comando.split()[0][4:]
-            utenteTarget = Utente().getUtente(comando.split()[1])
-        elif len(comando.split())==3:
-            points = comando.split()[1]
-            utenteTarget = Utente().getUtente(comando.split()[2])
-        else:
-            points = 0
-            utenteTarget = None
-        
+        tokenize = comando.split()
+        points = int(tokenize[1])
+        utenteTarget = Utente().getUtente(tokenize[2])
+       
         messaggio = punti.donaPoints(utenteSorgente,utenteTarget,points)
         self.bot.reply_to(message,messaggio+'\n\n'+Utente().infoUser(utenteTarget),parse_mode='markdown')
         
