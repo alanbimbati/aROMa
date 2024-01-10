@@ -66,6 +66,8 @@ class BotCommands:
             "!stats": self.handle_stats,
             "!livell": self.handle_livell,
             "album": self.handle_album,
+            "!inventario": self.handle_inventario,
+            "/inventario": self.handle_inventario,
             
         }
         try:
@@ -172,7 +174,6 @@ class BotCommands:
         #/dona 5 @utente
         message = self.message
         comando = message.text.replace('/','').replace('!','')
-        print(comando.split())
         punti = Points.Points()
         utenteSorgente = Utente().getUtente(self.chatid)
         tokenize = comando.split()
