@@ -929,9 +929,9 @@ class Collezionabili(Base):
                 # evoca drago shenron
                 pass
 
-            sfere_porunga = session.query(Collezionabili).filter_by(id_telegram=id_telegram, oggetto.like('%La Sfera del Drago Porunga%').all()
-            if len(sfere_porunga)==7:
-                # evoca drago porunga
+            sfere_polunga = session.query(Collezionabili).filter_by(id_telegram=id_telegram, oggetto.like('%La Sfera del Drago Polunga%').all()
+            if len(sfere_polunga)==7:
+                # evoca drago polunga
                 pass
             """
         if oggetto['nome']=='TNT':
