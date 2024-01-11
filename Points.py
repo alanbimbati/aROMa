@@ -3,7 +3,7 @@ from sqlalchemy         import create_engine, false, null, true
 from sqlalchemy         import update
 from sqlalchemy         import desc,asc
 from sqlalchemy.orm     import sessionmaker
-from model import Utente,Domenica,Steam,Admin,Livello,Database,Abbonamento, create_table
+from model import Utente,Domenica,Steam,Admin,Livello,Database,Abbonamento,Collezionabili, create_table
 import datetime
 from settings import *
 import datetime
@@ -11,6 +11,10 @@ from dateutil.relativedelta import relativedelta
 import random
 
 class Points:    
+    def __init__(self):
+        engine = create_engine('sqlite:///points.db')
+        create_table(engine)
+        self.Session = sessionmaker(bind=engine)
 
     def classifica(self):   
         session = self.Session()
@@ -91,7 +95,7 @@ class Points:
         messaggio = ''
         for i in range(20):
             if len(utenti)>i:
-                messaggio += '\n*['+str(i+1)+']* '+Utente.infoUser(utenti[i]) +'\n\n'
+                messaggio += f'\n*[{str(i+1)}]* {Utente().infoUser(utenti[i])} \n'
         bot.reply_to(message, messaggio, parse_mode='markdown')
 
     def setCharacter(self,message):
@@ -99,7 +103,7 @@ class Points:
         selectedLevel = Livello().GetLevelByNameLevel(message.text)
         Livello().setSelectedLevel(utente,selectedLevel.livello,selectedLevel.lv_premium)
         bot.reply_to(message, "Personaggio "+ message.text +" selezionato!"+"\n\n"+Utente().infoUser(utente),parse_mode='markdown',reply_markup=Database.startMarkup(Database,utente))
-        bot.send_message(CANALE_LOG, "L' utente "+Utente().getUsernameAtLeastName(utente)+" ha selezionato il personaggio "+ message.text +"\n\n"+Utente().infoUser(utente),parse_mode='markdown',reply_markup=Database.startMarkup(Database,utente))
+        #bot.send_message(CANALE_LOG, "L' utente "+Utente().getUsernameAtLeastName(utente)+" ha selezionato il personaggio "+ message.text +"\n\n"+Utente().infoUser(utente),parse_mode='markdown',reply_markup=Database.startMarkup(Database,utente))
 
     
     def purgeSymbols(self,message):
@@ -111,22 +115,37 @@ class Points:
         else:
             return ""
 
+    def donaPoints(self,utenteSorgente,utenteTarget,points):
+        points = int(points)
+        if points>0:
+            if int(utenteSorgente.points)>=points:
+                Utente().addPoints(utenteTarget,points)
+                Utente().addPoints(utenteSorgente,points*-1)
+                return utenteSorgente.username+" ha donato "+str(points)+ " "+PointsName+ " a "+utenteTarget.username+ "! ❤️"
+            else:
+                return PointsName+" non sufficienti"
+        else:
+            return "Non posso donare "+PointsName+" negativi"
+
     def checkBeforeAll(self,message):
-        Utente().checkUtente(message)
+        utente = Utente()
+        utente.checkUtente(message)
 
         if message.chat.type == "group" or message.chat.type == "supergroup":
             chatid = message.from_user.id
             utenteSorgente = Utente().getUtente(chatid)
 
             Database().checkIsSunday(utenteSorgente,message)
-            Utente().checkTNT(message,utenteSorgente)  
+            utente.checkTNT(message,utenteSorgente)
+
             ############## GRUPPO ###################
             if message.chat.id == GRUPPO_AROMA:
-                Utente().addRandomExp(utenteSorgente,message)
-                Utente().checkCasse(utenteSorgente,message)
+                utente.addRandomExp(utenteSorgente,message)
+                #utente.checkCasse(utenteSorgente,message)
+                Collezionabili().maybeDrop(message)
         elif message.chat.type == 'private':
             chatid = message.chat.id
-        utenteSorgente = Utente().getUtente(chatid)
+        utenteSorgente = utente.getUtente(chatid)
         Abbonamento().checkScadenzaPremium(utenteSorgente)
         Livello().checkUpdateLevel(utenteSorgente,message)
         utenteSorgente = Utente().getUtente(chatid)
@@ -144,7 +163,7 @@ class Points:
         answer += '💻 [PC](https://t.me/+_Hmuw95wjwM3ZmY0) Costa 15 '+PointsName+' per gioco'+'\n'
         answer += '🐶 [Nintendo](t.me/albumnintendo) Costa 15 '+PointsName+' per gioco'+'\n'
         answer += '📽 [Cinema](t.me/aROMaCinema) Costa 5 '+PointsName+' per film'+'\n'
-        answer += '🎖 [Premium](t.me/aROMaPremium) Csta 0 '+PointsName+', canale esclusivo agli utenti Premium.'+'\n\n'
+        answer += '🎖 [Premium](t.me/aROMaPremium) Costa 0 '+PointsName+', canale esclusivo agli utenti Premium.'+'\n\n'
         answer += '[Come guadagnare Frutti Wumpa?](https://t.me/aROMadivideogiochi/2486)'+'\n'
         answer += '[Cosa puoi fare con i Frutti Wumpa?](https://t.me/aROMadivideogiochi/2402)'
         return answer
@@ -174,7 +193,7 @@ class Points:
         op          = parts[0][0]
         points      = parts[0][1:]
         points = int(points) if op == '+' else -int(points)
-        usernames   = parts[1:]
+        usernames = [username for username in parts[1:] if username.startswith('@')]
         # Verifica che il comando sia ben formato
         answer = ''
         if len(usernames) == 0:
@@ -186,8 +205,14 @@ class Points:
                     utente = Utente().getUtente(username)
                     risposta = 'Complimenti! Hai ottenuto {} {}' if op == '+' else 'Hai mangiato {} deliziosi {}!'
                     Utente().addPoints(utente, points)
-                    bot.send_message(utente.id_telegram, risposta.format(str(points), PointsName)+Utente().infoUser(utente),parse_mode='markdown')
                     answer += username+': '+risposta.format(str(points), PointsName)+'\n'
-                except:
+                except Exception as e:
+                    answer += f'Errore Telegram: {str(e)}\n'
                     answer +=  'Comando non valido: username ({}) non trovato\n'.format(username)
+                try:
+                    bot.send_message(utente.id_telegram, risposta.format(str(points), PointsName)+Utente().infoUser(utente),parse_mode='markdown')
+                except Exception as e:
+                    bot.reply_to(message, risposta.format(str(points), PointsName)+Utente().infoUser(utente),parse_mode='markdown')
+
+        if answer == '': answer='nulla da fare'
         return answer
