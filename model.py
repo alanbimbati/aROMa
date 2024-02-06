@@ -832,31 +832,8 @@ class Collezionabili(Base):
         session.commit()
         session.close()
         print(f'{id_telegram} ha usato {oggetto}')
-    """
-    #pandas
-    def maybeDrop(self,message):
-        if message.chat.type == "group" or message.chat.type == "supergroup":   
-            id_telegram = message.from_user.id
-            items = pd.read_csv('items.csv')
-            indice_oggetto = random.randint(0,len(items)-1)
-            tento_oggetto = items.iloc[indice_oggetto]
-            oggetto = self.getItemByUser(id_telegram,tento_oggetto['nome'])
-            quantita = random.randint(1,tento_oggetto['massimo_numero_per_drop'])
-            if oggetto:
-                if oggetto.oggetto==tento_oggetto['nome']:
-                    quantita+=1
-                    if oggetto.quantita==int(tento_oggetto['max_per_persona']):
-                        return 0
 
-            culo = random.randint(1,tento_oggetto['rarita'])
-            if culo==tento_oggetto['rarita']:
-                self.CreateCollezionabile(id_telegram,tento_oggetto['nome'],quantita)
-                sti = open(f"Stickers/{tento_oggetto['sticker']}", 'rb')
-                bot.send_sticker(message.chat.id, sti)
-                self.triggerDrop(message,tento_oggetto)
-                return True
-            return False
-    """
+
     def maybeDrop(self, message):
         if message.chat.type == "group" or message.chat.type == "supergroup":
             id_telegram = message.from_user.id
@@ -865,30 +842,29 @@ class Collezionabili(Base):
                     line.split(',')
                     for line in f.readlines()
                 ]
-            indice_oggetto = random.randint(1, len(items) - 1)
-            obj = items[indice_oggetto]
-            tento_oggetto = {}
-            tento_oggetto['nome'] = obj[0]
-            tento_oggetto['rarita'] = int(obj[1])
-            tento_oggetto['massimo_numero_per_drop'] = int(obj[2])
-            tento_oggetto['max_per_persona'] = int(obj[3])
-            tento_oggetto['sticker'] = obj[4].replace('\n','')
+            #indice_oggetto = random.randint(1, len(items) - 1)
+            for indice_oggetto in range(1,len(items)):
+                obj = items[indice_oggetto]
+                tento_oggetto = {}
+                tento_oggetto['nome'] = obj[0]
+                tento_oggetto['rarita'] = int(obj[1])
+                tento_oggetto['massimo_numero_per_drop'] = int(obj[2])
+                tento_oggetto['max_per_persona'] = int(obj[3])
+                tento_oggetto['sticker'] = obj[4].replace('\n','')
 
-            oggetto = self.getItemByUser(id_telegram, tento_oggetto['nome'])
-            quantita = random.randint(1,tento_oggetto['massimo_numero_per_drop'])
-            if oggetto:
-                if oggetto.oggetto==tento_oggetto['nome']:
-                    quantita+=1
-                    if oggetto.quantita==int(tento_oggetto['max_per_persona']):
-                        return 0
+                oggetto = self.getItemByUser(id_telegram, tento_oggetto['nome'])
+                quantita = random.randint(1,tento_oggetto['massimo_numero_per_drop'])
+                if oggetto:
+                    if oggetto.oggetto==tento_oggetto['nome']:
+                        quantita+=1
+                        if oggetto.quantita==int(tento_oggetto['max_per_persona']):
+                            return 0
 
-            culo = random.randint(1,tento_oggetto['rarita'])
-            if culo==tento_oggetto['rarita']:
-                sti = open(f"Stickers/{tento_oggetto['sticker']}", 'rb')
-                bot.send_sticker(message.chat.id, sti)
-                self.triggerDrop(message,tento_oggetto,quantita)
-                return True
-            return False
+                culo = random.randint(1,tento_oggetto['rarita'])
+                if culo==tento_oggetto['rarita']:
+                    sti = open(f"Stickers/{tento_oggetto['sticker']}", 'rb')
+                    bot.send_sticker(message.chat.id, sti)
+                    self.triggerDrop(message,tento_oggetto,quantita)
 
                     
     def triggerDrop(self,message,oggetto,quantita):
