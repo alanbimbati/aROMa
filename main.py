@@ -227,7 +227,7 @@ class BotCommands:
         risposta += '150 🍑 = 🥇 Gold Coin: 100% TITOLONE casuale\n'
         risposta += '200 🍑 = 🎖 Platinum Coin: TITOLONE a scelta della lista, visibile solo con l\'acquisto del suddetto Coin\n' 
         msg = bot.reply_to(message,risposta,reply_markup=Steam().steamMarkup())
-        self.bot.register_next_step_handler(msg, Steam().steamCtutoin)
+        self.bot.register_next_step_handler(msg, Steam().steamCoin)
 
     def handle_info(self):
         message = self.message
