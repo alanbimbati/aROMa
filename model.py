@@ -14,6 +14,10 @@ import random
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 #import pandas as pd
+import os
+import datetime
+from dateutil.relativedelta import relativedelta
+
 
 Base = declarative_base()
 
@@ -634,18 +638,94 @@ class Livello(Base):
                 Utente().addPoints(utenteSorgente,add)
                 bot.reply_to(message,f"Complimenti per questo traguardo! Per te {str(add)} {PointsName}! 🎉\n\n{Utente().infoUser(utenteSorgente)}",parse_mode='markdown')
 
+class GameInfo(Base):
+    __tablename__ = 'games'
 
-class GiocoAroma(Base):
-    __tablename__ = 'giocoaroma'
-    id = Column('id',Integer, primary_key=True)
-    titolo = Column('nome',String)
-    descrizione = Column('descrizione',String)
-    link = Column('link',String)
-    from_chat = Column('from_chat',String)
-    messageid = Column('messageid',Integer)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    title = Column(String, nullable=False)
+    platform = Column(String, nullable=True)
+    genre = Column(Text, nullable=True)  # Changed to Text to store multiple genres
+    description = Column(Text, nullable=True)
+    language = Column(String, nullable=True)
+    year = Column(Integer, nullable=True)
+    region = Column(String, nullable=True)  # Added region
+    message_link = Column(String, nullable=False,unique=True)
 
-import datetime
-from dateutil.relativedelta import relativedelta
+    @staticmethod
+    def insert_from_dict(data):
+        session = Database().Session()
+
+        def join_field(data, key):
+            value = data.get(key, '')
+            return ', '.join(value if isinstance(value, list) else [value])
+
+
+        # Create a new GameInfo instance
+        game = GameInfo(
+            title=data.get('titolo'),
+            platform=join_field(data, 'piattaforma'),
+            genre=join_field(data, 'genere'),
+            description=data.get('descrizione'),
+            language=join_field(data, 'lingua'),
+            year=data.get('anno'),
+            region=join_field(data, 'regione'),
+            message_link=data.get('message_link')
+        )
+
+
+
+        # Add to the session and commit
+        session.add(game)
+        session.commit()
+
+    @staticmethod
+    def insert_error_data(message_link,content,e):
+        message_link = message_link.replace("\n","")
+        content = content.replace("\n","")
+        e = str(e).replace("\n","")
+        error_log_file = 'error_log.csv'
+        file_exists = os.path.isfile(error_log_file)
+        try:
+            with open(error_log_file, 'a', encoding='utf-8') as f:
+                # Scrivi l'intestazione solo se il file è stato appena creato
+                if not file_exists:
+                    f.write('message_link|message_text|error\n')
+                # Scrivi la riga nel file CSV
+                f.write(f'{message_link}|{content}|{str(e)}\n')
+                f.flush()  # Forza la scrittura su disco
+        except Exception as file_error:
+            print("Errore durante la scrittura del file:", str(file_error))
+
+    @staticmethod
+    def find_error_by_message_link(message_link, error_log_file='error_log.csv'):
+        # Controlla se il file di log degli errori esiste
+        if not os.path.isfile(error_log_file):
+            return False
+        
+        try:
+            with open(error_log_file, 'r', encoding='utf-8') as f:
+                # Salta l'intestazione (la prima riga)
+                next(f)
+                for line in f:
+                    # Divide la riga in colonne usando la virgola come separatore
+                    columns = line.strip().split('|')
+                    if columns[0] == message_link:
+                        return True
+            return False
+        except Exception as e:
+            print("Errore durante la lettura del file:", str(e))
+            return False
+
+    @staticmethod
+    def find_by_message_link(message_link):
+        session = Database().Session()
+        try:
+            # Query the database for the game with the given message_link
+            game = session.query(GameInfo).filter_by(message_link=message_link).first()
+            return game
+        except Exception as e:
+            print(f"Error: {e}")
+            return None
 
 class Abbonamento:
 
