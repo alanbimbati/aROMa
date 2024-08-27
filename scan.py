@@ -88,7 +88,7 @@ def re_scan_errors(error_log_file):
         try:
             columns = line.strip().split('|')
             message_link = columns[0]
-            content = columns[1]
+            content = columns[1].replace("\n","").replace("null","None")
 
             try:
                 game = fromClaudeToDict(content)
@@ -114,7 +114,7 @@ def re_scan_errors(error_log_file):
 
 
 
-with tg_client:
-   tg_client.loop.run_until_complete(scan_channel(channel_id,start_id=1, end_id=999999))
+#with tg_client:
+ #  tg_client.loop.run_until_complete(scan_channel(channel_id,start_id=1, end_id=999999))
 
 re_scan_errors('error_log.csv')

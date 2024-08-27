@@ -7,7 +7,7 @@ from sqlalchemy.orm             import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy                 import (Integer, String, Date, DateTime, Float, Boolean, Text)
 from sqlalchemy.orm     import sessionmaker
-from sqlalchemy         import desc,asc
+from sqlalchemy         import desc,asc,distinct,or_
 from settings           import *
 from telebot            import types
 import random
@@ -726,6 +726,61 @@ class GameInfo(Base):
         except Exception as e:
             print(f"Error: {e}")
             return None
+        
+    @staticmethod
+    def find_by_title(title):
+        session = Database().Session()
+        try:
+            # Query the database for the game with the given message_link
+            game = session.query(GameInfo).filter_by(title=title).first()
+            return game
+        except Exception as e:
+            print(f"Error: {e}")
+            return None
+
+
+
+    @staticmethod
+    def search_games(query):
+        session = Database().Session()
+        try:
+            # Recupera tutte le piattaforme uniche utilizzando SQLAlchemy
+            platforms = session.query(distinct(GameInfo.platform)).all()
+            platforms = [p[0].lower() for p in platforms if p[0]]
+
+            # Estrai piattaforme dal testo della query
+            query_words = query.lower().split()
+            platform_filters = [word for word in query_words if word.lower() in platforms]
+
+            # Rimuovi le piattaforme dalle parole di ricerca
+            stop_words = {'il', 'la', 'lo', 'i', 'gli', 'le', 'un', 'uno', 'una', 'e', 'di', 'a', 'da', 'in', 'con', 'su', 'per', 'tra', 'fra'}
+
+            search_terms = [word for word in query_words if word not in platform_filters and word not in stop_words]
+
+            # Costruisci la query SQL utilizzando SQLAlchemy
+            sql_query = session.query(GameInfo)
+
+            # Filtra per piattaforme
+            if platform_filters:
+                platform_filter = or_(*[GameInfo.platform.ilike(f'%{pf}%') for pf in platform_filters])
+                sql_query = sql_query.filter(platform_filter)
+
+            # Aggiungi le condizioni di ricerca per titolo, descrizione, e genere
+            if search_terms:
+                search_filter = or_(
+                    *[GameInfo.title.ilike(f'%{term}%') for term in search_terms]
+                    #,*[GameInfo.description.ilike(f'%{term}%') for term in search_terms],
+                    #,*[GameInfo.genre.ilike(f'%{term}%') for term in search_terms]
+                )
+                sql_query = sql_query.filter(search_filter)
+
+            # Esegui la query
+            results = sql_query.all()
+
+            return results
+        except Exception as e:
+            print(f"Errore durante la ricerca: {e}")
+            return []
 
 class Abbonamento:
 

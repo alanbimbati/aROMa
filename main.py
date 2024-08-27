@@ -1,7 +1,7 @@
 from telebot import types
 from settings import *
 from sqlalchemy         import create_engine
-from model import Livello, Steam,Utente, Abbonamento, Database, GiocoUtente,Collezionabili
+from model import Livello, Steam,Utente, Abbonamento, Database, GiocoUtente,Collezionabili,GameInfo
 import Points
 from telebot import util
 import schedule,time,threading
@@ -84,6 +84,19 @@ class BotCommands:
                 if command[0].lower() in message.text.lower():
                     command[1]()
                     break
+            self.handle_search_games(message)
+
+    def handle_search_games(self,message):
+        games = GameInfo.search_games(message.text)
+        if games:
+            markup = types.InlineKeyboardMarkup()
+            for game in games:
+                button = types.InlineKeyboardButton(
+                    text=f"{game.title}",callback_data=f"searchgame|{game.title}"
+                )
+                markup.add(button)
+            bot.reply_to(message,'Seleziona il gioco',reply_markup=markup)
+
     def handle_admin_command(self):
         message = self.message
         for command in self.comandi_admin.items():
@@ -359,7 +372,17 @@ def handle_inline_buttons(call):
     elif action.startswith("add_namegame"):
         msg = bot.send_message(user_id,'Scrivimi la piattaforma (spazio) nome utente, esempio "Steam alan.bimbati"')
         bot.register_next_step_handler(msg, addnamegame)
-    
+    elif action.startswith("searchgame"):
+        game = GameInfo.find_by_title(action.split("|")[1])
+        if game:
+            messageid = int(game.message_link.split("/")[-1])
+            from_chat = f'-100{game.message_link.split("/")[-2]}'
+            utenteSorgente = Utente().getUtente(user_id)
+            buyGame(utenteSorgente,user_id,from_chat,messageid)
+
+
+        else:
+            bot.send_message(user_id,"Gioco non trovato")
 
 def addnamegame(message):
     chatid = message.chat.id
@@ -367,6 +390,26 @@ def addnamegame(message):
     piattaforma,nomegioco = message.text.split()
     GiocoUtente().CreateGiocoUtente(chatid,piattaforma,nomegioco) 
     bot.reply_to(message,'Piattaforma e gioco aggiunti',reply_markup=Database().startMarkup(utente))
+
+
+def buyGame(utenteSorgente,chatid,from_chat,messageid):
+    user_id = utenteSorgente.id_telegram
+    costo = 5 if isMiscellaniaChannel(from_chat) else 15
+    if  utenteSorgente.premium==1 and (isPremiumChannel(from_chat) or isMiscellaniaChannel(from_chat)):
+        status = sendFileGame(chatid,from_chat,messageid)
+        if status == -1:
+            bot.send_message(user_id,"C'è un problema con questo gioco, contatta un admin")
+    #elif utenteSorgente.premium==0 and (isPremiumChannel(from_chat)):
+        #bot.reply_to(message, "Mi dispiace, solo gli Utenti Premium possono acquistare questo gioco"+'\n\n'+Utente().infoUser(utenteSorgente),parse_mode='markdown')
+    elif utenteSorgente.points>=costo:
+        status = sendFileGame(chatid,from_chat,messageid)
+        if status == -1:
+            bot.send_message(user_id,"C'è un problema con questo gioco, contatta un admin")
+        Database().update_user(chatid, {'points':utenteSorgente.points-costo})
+        bot.send_message(user_id, "Hai mangiato "+str(costo)+" "+PointsName+"\n\n"+Utente().infoUser(utenteSorgente),parse_mode='markdown')
+    else:
+        bot.send_message(user_id, "Mi dispiace, ti servono "+str(costo)+" "+PointsName+" per comprare questo gioco"+"\n\n"+Utente().infoUser(utenteSorgente),parse_mode='markdown')
+        
 
 def sendFileGame(chatid,from_chat,messageid):
     content_type = 'photo'
@@ -407,30 +450,14 @@ def buy1game(message):
     chatid = message.chat.id
     utenteSorgente  = Utente().getUtente(chatid)
     from_chat =  message.forward_from_chat.id
-
+    messageid = message.forward_from_message_id
     if from_chat is not None:
-        costo = 5 if isMiscellaniaChannel(from_chat) else 15
-        messageid = message.forward_from_message_id
-        
-        if message.content_type=='photo':
-            if  utenteSorgente.premium==1 and (isPremiumChannel(from_chat) or isMiscellaniaChannel(from_chat)):
-                status = sendFileGame(chatid,from_chat,messageid)
-                if status == -1:
-                    bot.reply_to(message,"C'è un problema con questo gioco, contatta un admin")
-            #elif utenteSorgente.premium==0 and (isPremiumChannel(from_chat)):
-                #bot.reply_to(message, "Mi dispiace, solo gli Utenti Premium possono acquistare questo gioco"+'\n\n'+Utente().infoUser(utenteSorgente),parse_mode='markdown')
-            elif utenteSorgente.points>=costo:
-                status = sendFileGame(chatid,from_chat,messageid)
-                if status == -1:
-                    bot.reply_to(message,"C'è un problema con questo gioco, contatta un admin")
-                Database().update_user(chatid, {'points':utenteSorgente.points-costo})
-                bot.reply_to(message, "Hai mangiato "+str(costo)+" "+PointsName+"\n\n"+Utente().infoUser(utenteSorgente),parse_mode='markdown')
-            else:
-                bot.reply_to(message, "Mi dispiace, ti servono "+str(costo)+" "+PointsName+" per comprare questo gioco"+"\n\n"+Utente().infoUser(utenteSorgente),parse_mode='markdown')
-        
+        buyGame(utenteSorgente,chatid,from_chat,messageid)
+
         bot.send_message(CANALE_LOG,"L'utente "+utenteSorgente.username+" ha acquistato da "+message.forward_from_chat.title+" https://t.me/c/"+str(from_chat)[4:]+"/"+str(messageid))
 
-#bot.infinity_polling()
+
+
 
 def inviaUtentiPremium():
     listaPremium = Abbonamento().listaPremium()
