@@ -755,7 +755,7 @@ class GameInfo(Base):
             # Rimuovi le piattaforme dalle parole di ricerca
             stop_words = {'il', 'la', 'lo', 'i', 'gli', 'le', 'un', 'uno', 'una', 'e', 'di', 'a', 'da', 'in', 'con', 'su', 'per', 'tra', 'fra'}
 
-            search_terms = [word for word in query_words if word not in platform_filters and word not in stop_words]
+            search_terms = [word for word in query_words if word not in platform_filters and word not in stop_words and len(word)>2]
 
             # Costruisci la query SQL utilizzando SQLAlchemy
             sql_query = session.query(GameInfo)
