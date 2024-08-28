@@ -732,7 +732,7 @@ class GameInfo(Base):
         session = Database().Session()
         try:
             # Query the database for the game with the given message_link
-            game = session.query(GameInfo).filter_by(title=title).first()
+            game = session.query(GameInfo).filter(GameInfo.title.like(f"{title}%")).first()
             return game
         except Exception as e:
             print(f"Error: {e}")
@@ -755,7 +755,7 @@ class GameInfo(Base):
             # Rimuovi le piattaforme dalle parole di ricerca
             stop_words = {'il', 'la', 'lo', 'i', 'gli', 'le', 'un', 'uno', 'una', 'e', 'di', 'a', 'da', 'in', 'con', 'su', 'per', 'tra', 'fra'}
 
-            search_terms = [word for word in query_words if word not in platform_filters and word not in stop_words and len(word)>2]
+            search_terms = [word for word in query_words if word not in platform_filters and word not in stop_words]
 
             # Costruisci la query SQL utilizzando SQLAlchemy
             sql_query = session.query(GameInfo)
@@ -766,9 +766,9 @@ class GameInfo(Base):
                 sql_query = sql_query.filter(platform_filter)
 
             # Aggiungi le condizioni di ricerca per titolo, descrizione, e genere
-            if search_terms:
+            for term in search_terms:
                 search_filter = or_(
-                    *[GameInfo.title.ilike(f'%{term}%') for term in search_terms]
+                    *[GameInfo.title.ilike(f'%{term}%')]
                     #,*[GameInfo.description.ilike(f'%{term}%') for term in search_terms],
                     #,*[GameInfo.genre.ilike(f'%{term}%') for term in search_terms]
                 )

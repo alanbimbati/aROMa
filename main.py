@@ -91,9 +91,10 @@ class BotCommands:
         if games:
             markup = types.InlineKeyboardMarkup()
             for game in games:
-                button = types.InlineKeyboardButton(
-                    text=f"{game.title}",callback_data=f"searchgame|{game.title}"
+                button = types.InlineKeyboardButton(                    
+                    text=f"{game.title} (👾{game.platform}) (👾{game.genre})",callback_data=f"sg|{game.title}"[:64]
                 )
+                # Aggiungi i pulsanti al markup
                 markup.add(button)
             bot.reply_to(message,'Seleziona il gioco',reply_markup=markup)
 
@@ -372,7 +373,7 @@ def handle_inline_buttons(call):
     elif action.startswith("add_namegame"):
         msg = bot.send_message(user_id,'Scrivimi la piattaforma (spazio) nome utente, esempio "Steam alan.bimbati"')
         bot.register_next_step_handler(msg, addnamegame)
-    elif action.startswith("searchgame"):
+    elif action.startswith("sg|"):
         game = GameInfo.find_by_title(action.split("|")[1])
         if game:
             messageid = int(game.message_link.split("/")[-1])
