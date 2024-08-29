@@ -650,7 +650,8 @@ class GameInfo(Base):
     year = Column(Integer, nullable=True)
     region = Column(String, nullable=True)  # Added region
     message_link = Column(String, nullable=False,unique=True)
-
+    premium      = Column(Integer,nullable=True)
+    
     @staticmethod
     def insert_from_dict(data):
         session = Database().Session()
@@ -669,7 +670,8 @@ class GameInfo(Base):
             language=join_field(data, 'lingua'),
             year=data.get('anno'),
             region=join_field(data, 'regione'),
-            message_link=data.get('message_link')
+            message_link=data.get('message_link'),
+            premium = 0
         )
 
 
