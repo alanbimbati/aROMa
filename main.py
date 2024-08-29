@@ -55,7 +55,9 @@ class BotCommands:
             "backup": self.handle_backup,
             "extra": self.handle_backup_all,
             "checkPremium":self.handle_checkScadenzaPremiumToAll,
+            "randomPremium"
             "broadcast": self.handle_broadcast,
+            "setRandomPremium": self.handle_set_random_premium_games
             
         }
         self.comandi_generici = {
@@ -75,6 +77,13 @@ class BotCommands:
         except Exception as e:
             self.chatid = message.chat.id
     
+    def handle_set_random_premium_games(self):
+        message = self.message 
+        n_games = int(message.text.split()[1])
+        try:
+            GameInfo.set_random_premium_games(n_games)
+        except Exception as e:
+            bot.reply_to(message,"Errore "+str(e))
     def handle_private_command(self):
         message = self.message
         if hasattr(message.forward_from_chat,'id'):
@@ -393,24 +402,27 @@ def addnamegame(message):
     bot.reply_to(message,'Piattaforma e gioco aggiunti',reply_markup=Database().startMarkup(utente))
 
 
-def buyGame(utenteSorgente,chatid,from_chat,messageid):
+def buyGame(utenteSorgente, chatid, from_chat, messageid):
     user_id = utenteSorgente.id_telegram
-    costo = 5 if isMiscellaniaChannel(from_chat) else 15
-    if  utenteSorgente.premium==1 and (isPremiumChannel(from_chat) or isMiscellaniaChannel(from_chat)):
-        status = sendFileGame(chatid,from_chat,messageid)
-        if status == -1:
-            bot.send_message(user_id,"C'è un problema con questo gioco, contatta un admin")
-    #elif utenteSorgente.premium==0 and (isPremiumChannel(from_chat)):
-        #bot.reply_to(message, "Mi dispiace, solo gli Utenti Premium possono acquistare questo gioco"+'\n\n'+Utente().infoUser(utenteSorgente),parse_mode='markdown')
-    elif utenteSorgente.points>=costo:
-        status = sendFileGame(chatid,from_chat,messageid)
-        if status == -1:
-            bot.send_message(user_id,"C'è un problema con questo gioco, contatta un admin")
-        Database().update_user(chatid, {'points':utenteSorgente.points-costo})
-        bot.send_message(user_id, "Hai mangiato "+str(costo)+" "+PointsName+"\n\n"+Utente().infoUser(utenteSorgente),parse_mode='markdown')
+
+    if utenteSorgente.premium == 1:
+        message_link = f"https://t.me/c/{from_chat[4:]}/{messageid}"
+        costo = 0 if GameInfo.isPremiumGame(message_link) else 5
     else:
-        bot.send_message(user_id, "Mi dispiace, ti servono "+str(costo)+" "+PointsName+" per comprare questo gioco"+"\n\n"+Utente().infoUser(utenteSorgente),parse_mode='markdown')
-        
+        costo = 15
+
+    # Controlla se l'utente ha abbastanza punti
+    if utenteSorgente.points >= costo:
+        status = sendFileGame(chatid, from_chat, messageid)
+        if status == -1:
+            bot.send_message(user_id, "C'è un problema con questo gioco, contatta un admin")
+        else:
+            # Aggiorna i punti dell'utente
+            Database().update_user(chatid, {'points': utenteSorgente.points - costo})
+            bot.send_message(user_id, "Hai speso " + str(costo) + " " + PointsName + "\n\n" + Utente().infoUser(utenteSorgente), parse_mode='markdown')
+    else:
+        bot.send_message(user_id, "Mi dispiace, ti servono " + str(costo) + " " + PointsName + " per comprare questo gioco" + "\n\n" + Utente().infoUser(utenteSorgente), parse_mode='markdown')
+
 
 def sendFileGame(chatid,from_chat,messageid):
     content_type = 'photo'

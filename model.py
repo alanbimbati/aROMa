@@ -740,12 +740,59 @@ class GameInfo(Base):
             print(f"Error: {e}")
             return None
 
+    
+    @staticmethod
+    def isPremiumGame(message_link):
+        session = Database().Session()
+        try:
+            print(message_link)
+            # Supponiamo che ci sia una tabella GameInfo che contiene i giochi
+            game = session.query(GameInfo).filter(GameInfo.message_link == message_link).first()
+            if game:
+                return game.premium == 1  # Restituisce True se il gioco è premium, altrimenti False
+            else:
+                return False  # Se il gioco non esiste, restituisce False
+        except Exception as e:
+            print(f"Errore durante il controllo del gioco premium: {e}")
+            return False
+        finally:
+            session.close()
 
+    @staticmethod
+    def set_random_premium_games(n):
+        session = Database().Session()
+        try:
+            # Imposta tutti i giochi premium a 0
+            session.query(GameInfo).update({GameInfo.premium: 0})
+
+            # Recupera tutti i giochi
+            all_games = session.query(GameInfo).all()
+            if len(all_games) < n:
+                print("Non ci sono abbastanza giochi per impostare come premium.")
+                return
+
+            # Seleziona N giochi casuali
+            random_games = random.sample(all_games, n)
+
+            # Aggiorna il campo premium per i giochi selezionati
+            for game in random_games:
+                game.premium = 1
+
+            # Commit delle modifiche al database
+            session.commit()
+            print(f"{n} giochi sono stati impostati come premium.")
+        except Exception as e:
+            print(f"Errore durante l'impostazione dei giochi premium: {e}")
+            session.rollback()
+        finally:
+            session.close()
 
     @staticmethod
     def search_games(query):
         session = Database().Session()
         try:
+            if query.lower() == "premium":
+                return session.query(GameInfo).filter(GameInfo.premium == 1).all()
             # Recupera tutte le piattaforme uniche utilizzando SQLAlchemy
             platforms = session.query(distinct(GameInfo.platform)).all()
             platforms = [p[0].lower() for p in platforms if p[0]]
