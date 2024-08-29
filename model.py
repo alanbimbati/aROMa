@@ -757,7 +757,25 @@ class GameInfo(Base):
             return False
         finally:
             session.close()
+            
+    @staticmethod
+    def get_premium_games(limit=None):
+        session = Database().Session()
+        try:
+            # Costruisci la query per recuperare i giochi premium
+            query = session.query(GameInfo).filter(GameInfo.premium == 1)
 
+            # Se è specificato un limite, applicalo
+            if limit is not None:
+                query = query.limit(limit)
+
+            # Esegui la query e restituisci i risultati
+            return query.all()
+        except Exception as e:
+            print(f"Errore durante il recupero dei giochi premium: {e}")
+            return []
+        finally:
+            session.close()
     @staticmethod
     def set_random_premium_games(n):
         session = Database().Session()

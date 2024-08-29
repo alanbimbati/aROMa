@@ -82,8 +82,23 @@ class BotCommands:
         n_games = int(message.text.split()[1])
         try:
             GameInfo.set_random_premium_games(n_games)
+
+            premium_games = GameInfo.get_premium_games(n_games)  # Assicurati di avere un metodo per ottenere i giochi premium
+
+            # Inoltra i giochi al canale premium
+            for game in premium_games:
+                PREMIUM_CHANNEL_ID = '-1001856587680'
+                from_chat = "-100"+game.message_link.split('/')[-2]
+                messageid = game.message_link.split('/')[-1]
+                print(from_chat,messageid)
+                bot.forward_message(PREMIUM_CHANNEL_ID, from_chat,messageid)
+
+                print("ho inoltrato",game.message_link)
+
+            bot.reply_to(message, f"{n_games} giochi sono stati impostati come premium e inoltrati al canale.")
         except Exception as e:
-            bot.reply_to(message,"Errore "+str(e))
+            bot.reply_to(message, "Errore: " + str(e))
+
     def handle_private_command(self):
         message = self.message
         if hasattr(message.forward_from_chat,'id'):
