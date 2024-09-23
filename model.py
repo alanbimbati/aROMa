@@ -663,15 +663,15 @@ class GameInfo(Base):
 
         # Create a new GameInfo instance
         game = GameInfo(
-            title=data.get('titolo'),
-            platform=join_field(data, 'piattaforma'),
-            genre=join_field(data, 'genere'),
-            description=data.get('descrizione'),
-            language=join_field(data, 'lingua'),
-            year=data.get('anno'),
-            region=join_field(data, 'regione'),
-            message_link=data.get('message_link'),
-            premium = 0
+            title       =   data.get('titolo'),
+            platform    =   join_field(data, 'piattaforma'),
+            genre       =   join_field(data, 'genere'),
+            description =   data.get('descrizione'),
+            language    =   join_field(data, 'lingua'),
+            year        =   data.get('anno'),
+            region      =   join_field(data, 'regione'),
+            message_link=   data.get('message_link'),
+            premium     =   0
         )
 
 
@@ -730,11 +730,15 @@ class GameInfo(Base):
             return None
         
     @staticmethod
-    def find_by_title(title):
+    def find_by_title(title,platform=None):
+        print(title)
         session = Database().Session()
         try:
-            # Query the database for the game with the given message_link
-            game = session.query(GameInfo).filter(GameInfo.title.like(f"{title}%")).first()
+            # Query the: database for the game with the given message_link
+            if platform:
+                game = session.query(GameInfo).filter(GameInfo.title.like(f"{title}%"),GameInfo.platform.like(platform)).first()
+            else:
+                game = session.query(GameInfo).filter(GameInfo.title.like(f"{title}%")).first()
             return game
         except Exception as e:
             print(f"Error: {e}")

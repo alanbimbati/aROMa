@@ -116,7 +116,7 @@ class BotCommands:
             markup = types.InlineKeyboardMarkup()
             for game in games:
                 button = types.InlineKeyboardButton(                    
-                    text=f"{game.title} (👾{game.platform}) (👾{game.genre})",callback_data=f"sg|{game.title}"[:64]
+                    text=f"{game.title} (👾{game.platform}) (👾{game.genre})",callback_data=f"sg|{game.title}|{game.platform}"[:64]
                 )
                 # Aggiungi i pulsanti al markup
                 markup.add(button)
@@ -385,7 +385,7 @@ def handle_inline_buttons(call):
     #add_namegame
 
     action = call.data
-
+    print(action)
     if action.startswith("remove_namegame_"):
         parametri = action.replace('remove_namegame_','').split('_')
         id_telegram = parametri[0]
@@ -398,7 +398,9 @@ def handle_inline_buttons(call):
         msg = bot.send_message(user_id,'Scrivimi la piattaforma (spazio) nome utente, esempio "Steam alan.bimbati"')
         bot.register_next_step_handler(msg, addnamegame)
     elif action.startswith("sg|"):
-        game = GameInfo.find_by_title(action.split("|")[1])
+        game_title = action.split("|")[1]
+        platform   = action.split("|")[2]
+        game = GameInfo.find_by_title(game_title,platform=platform)
         if game:
             messageid = int(game.message_link.split("/")[-1])
             from_chat = f'-100{game.message_link.split("/")[-2]}'
@@ -441,7 +443,7 @@ def buyGame(utenteSorgente, chatid, from_chat, messageid):
 
 def sendFileGame(chatid,from_chat,messageid):
     content_type = 'photo'
-    max_deep = 20
+    max_deep = 50
     tmp = 0
     while content_type != 'sticker' and content_type=='photo' and tmp<=max_deep:
         try:

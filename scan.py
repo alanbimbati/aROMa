@@ -11,7 +11,16 @@ tg_client = TelegramClient('user_session', api_id, api_hash)
 
 
 def CLAUDEAPIgameToJson(gioco):
-    scope = "Ritornami solo un json con i dettagli precisi di qeusto gioco, semancanti cercali e aggiungili: titolo, piattaforma (es. ps1,ps2,gba,switch,pc,android...), genere, descrizione, limgua,regione,anno"
+    scope = """Ritorna il json con i dettagli precisi di qeusto gioco, {
+        "titolo": "",
+        "piattaforma": "",
+        "genere": "",
+        "descrizione": "",
+        "lingua": "",
+        "regione": "",
+        "anno": 0
+        }
+        """
     message = claude_client.messages.create(
         model="claude-3-haiku-20240307",
         max_tokens=1000,
@@ -93,6 +102,7 @@ def re_scan_errors(error_log_file):
             try:
                 game = fromClaudeToDict(content)
                 game['message_link'] = message_link
+                print("\n",game)
                 GameInfo.insert_from_dict(game)
 
                 # Verifica che l'inserimento sia avvenuto con successo
@@ -114,7 +124,7 @@ def re_scan_errors(error_log_file):
 
 
 
-#with tg_client:
- #  tg_client.loop.run_until_complete(scan_channel(channel_id,start_id=1, end_id=999999))
+with tg_client:
+   tg_client.loop.run_until_complete(scan_channel(channel_id,start_id=1, end_id=99999))
 
 re_scan_errors('error_log.csv')
