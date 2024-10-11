@@ -7,13 +7,17 @@ from sqlalchemy.orm             import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy                 import (Integer, String, Date, DateTime, Float, Boolean, Text)
 from sqlalchemy.orm     import sessionmaker
-from sqlalchemy         import desc,asc
+from sqlalchemy         import desc,asc,distinct,or_
 from settings           import *
 from telebot            import types
 import random
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 #import pandas as pd
+import os
+import datetime
+from dateutil.relativedelta import relativedelta
+
 
 Base = declarative_base()
 
@@ -634,18 +638,220 @@ class Livello(Base):
                 Utente().addPoints(utenteSorgente,add)
                 bot.reply_to(message,f"Complimenti per questo traguardo! Per te {str(add)} {PointsName}! 🎉\n\n{Utente().infoUser(utenteSorgente)}",parse_mode='markdown')
 
+class GameInfo(Base):
+    __tablename__ = 'games'
 
-class GiocoAroma(Base):
-    __tablename__ = 'giocoaroma'
-    id = Column('id',Integer, primary_key=True)
-    titolo = Column('nome',String)
-    descrizione = Column('descrizione',String)
-    link = Column('link',String)
-    from_chat = Column('from_chat',String)
-    messageid = Column('messageid',Integer)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    title = Column(String, nullable=False)
+    platform = Column(String, nullable=True)
+    genre = Column(Text, nullable=True)  # Changed to Text to store multiple genres
+    description = Column(Text, nullable=True)
+    language = Column(String, nullable=True)
+    year = Column(Integer, nullable=True)
+    region = Column(String, nullable=True)  # Added region
+    message_link = Column(String, nullable=False,unique=True)
+    premium      = Column(Integer,nullable=True)
+    
+    @staticmethod
+    def insert_from_dict(data):
+        session = Database().Session()
 
-import datetime
-from dateutil.relativedelta import relativedelta
+        def join_field(data, key):
+            value = data.get(key, '')
+            return ', '.join(value if isinstance(value, list) else [value])
+
+
+        # Create a new GameInfo instance
+        game = GameInfo(
+            title       =   data.get('titolo'),
+            platform    =   join_field(data, 'piattaforma'),
+            genre       =   join_field(data, 'genere'),
+            description =   data.get('descrizione'),
+            language    =   join_field(data, 'lingua'),
+            year        =   data.get('anno'),
+            region      =   join_field(data, 'regione'),
+            message_link=   data.get('message_link'),
+            premium     =   0
+        )
+
+
+
+        # Add to the session and commit
+        session.add(game)
+        session.commit()
+
+    @staticmethod
+    def insert_error_data(message_link,content,e):
+        message_link = message_link.replace("\n","")
+        content = content.replace("\n","")
+        e = str(e).replace("\n","")
+        error_log_file = 'error_log.csv'
+        file_exists = os.path.isfile(error_log_file)
+        try:
+            with open(error_log_file, 'a', encoding='utf-8') as f:
+                # Scrivi l'intestazione solo se il file è stato appena creato
+                if not file_exists:
+                    f.write('message_link|message_text|error\n')
+                # Scrivi la riga nel file CSV
+                f.write(f'{message_link}|{content}|{str(e)}\n')
+                f.flush()  # Forza la scrittura su disco
+        except Exception as file_error:
+            print("Errore durante la scrittura del file:", str(file_error))
+
+    @staticmethod
+    def find_error_by_message_link(message_link, error_log_file='error_log.csv'):
+        # Controlla se il file di log degli errori esiste
+        if not os.path.isfile(error_log_file):
+            return False
+        
+        try:
+            with open(error_log_file, 'r', encoding='utf-8') as f:
+                # Salta l'intestazione (la prima riga)
+                next(f)
+                for line in f:
+                    # Divide la riga in colonne usando la virgola come separatore
+                    columns = line.strip().split('|')
+                    if columns[0] == message_link:
+                        return True
+            return False
+        except Exception as e:
+            print("Errore durante la lettura del file:", str(e))
+            return False
+
+    @staticmethod
+    def find_by_message_link(message_link):
+        session = Database().Session()
+        try:
+            # Query the database for the game with the given message_link
+            game = session.query(GameInfo).filter_by(message_link=message_link).first()
+            return game
+        except Exception as e:
+            print(f"Error: {e}")
+            return None
+        
+    @staticmethod
+    def find_by_title(title,platform=None):
+        print(title)
+        session = Database().Session()
+        try:
+            # Query the: database for the game with the given message_link
+            if platform:
+                game = session.query(GameInfo).filter(GameInfo.title.like(f"{title}%"),GameInfo.platform.like(platform)).first()
+            else:
+                game = session.query(GameInfo).filter(GameInfo.title.like(f"{title}%")).first()
+            return game
+        except Exception as e:
+            print(f"Error: {e}")
+            return None
+
+    
+    @staticmethod
+    def isPremiumGame(message_link):
+        session = Database().Session()
+        try:
+            print(message_link)
+            # Supponiamo che ci sia una tabella GameInfo che contiene i giochi
+            game = session.query(GameInfo).filter(GameInfo.message_link == message_link).first()
+            if game:
+                return game.premium == 1  # Restituisce True se il gioco è premium, altrimenti False
+            else:
+                return False  # Se il gioco non esiste, restituisce False
+        except Exception as e:
+            print(f"Errore durante il controllo del gioco premium: {e}")
+            return False
+        finally:
+            session.close()
+            
+    @staticmethod
+    def get_premium_games(limit=None):
+        session = Database().Session()
+        try:
+            # Costruisci la query per recuperare i giochi premium
+            query = session.query(GameInfo).filter(GameInfo.premium == 1)
+
+            # Se è specificato un limite, applicalo
+            if limit is not None:
+                query = query.limit(limit)
+
+            # Esegui la query e restituisci i risultati
+            return query.all()
+        except Exception as e:
+            print(f"Errore durante il recupero dei giochi premium: {e}")
+            return []
+        finally:
+            session.close()
+    @staticmethod
+    def set_random_premium_games(n):
+        session = Database().Session()
+        try:
+            # Imposta tutti i giochi premium a 0
+            session.query(GameInfo).update({GameInfo.premium: 0})
+
+            # Recupera tutti i giochi
+            all_games = session.query(GameInfo).all()
+            if len(all_games) < n:
+                print("Non ci sono abbastanza giochi per impostare come premium.")
+                return
+
+            # Seleziona N giochi casuali
+            random_games = random.sample(all_games, n)
+
+            # Aggiorna il campo premium per i giochi selezionati
+            for game in random_games:
+                game.premium = 1
+
+            # Commit delle modifiche al database
+            session.commit()
+            print(f"{n} giochi sono stati impostati come premium.")
+        except Exception as e:
+            print(f"Errore durante l'impostazione dei giochi premium: {e}")
+            session.rollback()
+        finally:
+            session.close()
+
+    @staticmethod
+    def search_games(query):
+        session = Database().Session()
+        try:
+            if query.lower() == "premium":
+                return session.query(GameInfo).filter(GameInfo.premium == 1).all()
+            # Recupera tutte le piattaforme uniche utilizzando SQLAlchemy
+            platforms = session.query(distinct(GameInfo.platform)).all()
+            platforms = [p[0].lower() for p in platforms if p[0]]
+
+            # Estrai piattaforme dal testo della query
+            query_words = query.lower().split()
+            platform_filters = [word for word in query_words if word.lower() in platforms]
+
+            # Rimuovi le piattaforme dalle parole di ricerca
+            stop_words = {'il', 'la', 'lo', 'i', 'gli', 'le', 'un', 'uno', 'una', 'e', 'di', 'a', 'da', 'in', 'con', 'su', 'per', 'tra', 'fra'}
+
+            search_terms = [word for word in query_words if word not in platform_filters and word not in stop_words]
+
+            # Costruisci la query SQL utilizzando SQLAlchemy
+            sql_query = session.query(GameInfo)
+
+            # Filtra per piattaforme
+            if platform_filters:
+                platform_filter = or_(*[GameInfo.platform.ilike(f'%{pf}%') for pf in platform_filters])
+                sql_query = sql_query.filter(platform_filter)
+
+            # Aggiungi le condizioni di ricerca per titolo, descrizione, e genere
+            for term in search_terms:
+                search_filter = or_(
+                    *[GameInfo.title.ilike(f'%{term}%')]
+                    #,*[GameInfo.description.ilike(f'%{term}%') for term in search_terms],
+                    #,*[GameInfo.genre.ilike(f'%{term}%') for term in search_terms]
+                )
+                sql_query = sql_query.filter(search_filter)
+
+            # Esegui la query
+            results = sql_query.all()
+
+            return results
+        except Exception as e:
+            print(f"Errore durante la ricerca: {e}")
+            return []
 
 class Abbonamento:
 
