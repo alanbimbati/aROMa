@@ -1,0 +1,10 @@
+id,base_character_name,transformed_character_name,transformation_name,wumpa_cost,duration_days,health_bonus,mana_bonus,damage_bonus,is_progressive,previous_transformation_id,required_level
+1,Yugi,Yugi Ho,Yami Yugi,5000,3,50,30,40,0,,42
+2,Kurosaki Ichigo,Ichigo Bankai,Bankai,8000,3,80,40,60,0,,58
+3,Ichigo Bankai,Ichigo Vasto Lorde,Vasto Lorde,15000,2,150,60,100,1,2,65
+4,Goku,Goku SSJ,Super Saiyan,10000,3,100,50,80,0,,30
+5,Goku SSJ,Goku SSJ2,Super Saiyan 2,15000,3,120,60,100,1,4,40
+6,Goku SSJ2,Goku SSJ3,Super Saiyan 3,25000,3,150,80,130,1,5,50
+7,Vegeta,Vegeta SSJ,Super Saiyan,10000,3,100,50,80,0,,18
+8,Vegeta SSJ,Vegeta SSJ2,Super Saiyan 2,15000,3,120,60,100,1,7,25
+9,Vegeta SSJ2,Vegeta Blue,Super Saiyan Blue,30000,3,180,90,150,1,8,60

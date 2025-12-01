@@ -1,0 +1,58 @@
+id,nome,livello,lv_premium,exp_required,special_attack_name,special_attack_damage,special_attack_mana_cost,price,description,character_group,max_concurrent_owners,is_pokemon
+1,Chocobo,1,0,100,Beak Peck,20,10,0,Il chocobo di Final Fantasy,Final Fantasy,-1,0
+2,Bulbasaur,2,2,235,Vine Whip,25,12,250,Lo starter erba,Pokemon,3,1
+3,Squirtle,2,2,235,Water Gun,25,12,250,Lo starter acqua,Pokemon,3,1
+4,Charmander,2,2,235,Ember,25,12,250,Lo starter fuoco,Pokemon,3,1
+5,Crash Bandicoot,3,0,505,Spin Attack,30,12,0,L'eroe marsupiale,Crash,1,0
+6,Pichu,4,2,810,Thunder Shock,35,15,300,Il baby Pokemon elettrico,Pokemon,3,1
+7,Spyro,5,2,1250,Flame Breath,45,18,400,Il draghetto viola,Spyro,1,0
+8,Tidus,6,2,1725,Blitz Ace,80,35,600,L'eroe di FFX,Final Fantasy,1,0
+9,Ivysaur,7,2,2335,Razor Leaf,65,25,700,L'evoluzione di Bulbasaur,Pokemon,3,1
+10,Wartortle,7,2,2335,Bubble Beam,65,25,700,L'evoluzione di Squirtle,Pokemon,3,1
+11,Charmeleon,7,2,2335,Flamethrower,90,35,900,Il Pokemon fuoco evoluto,Pokemon,3,1
+12,Spike,8,2,2980,Time Net,70,25,700,Il protagonista di Ape Escape,Ape Escape,1,0
+13,Pikachu,8,2,2980,Thunderbolt,80,30,850,Il Pokemon simbolo,Pokemon,3,1
+14,Squall,10,2,4575,Renzokuken,100,40,1000,Il SeeD di FFVIII,Final Fantasy,1,0
+15,Venusaur,12,2,6510,Solar Beam,110,40,1300,Il Pokemon erba finale,Pokemon,3,1
+16,Blastoise,12,2,6510,Hydro Pump,110,40,1300,Il Pokemon acqua finale,Pokemon,3,1
+17,Charizard,12,2,6510,Fire Blast,130,45,1500,Il drago di fuoco,Pokemon,3,1
+18,Cloud,14,2,8785,Omnislash,150,50,1500,Il soldato SOLDIER di FFVII,Final Fantasy,1,0
+19,Dante,15,2,10075,Devil Trigger,140,45,1400,Il cacciatore di demoni,Devil May Cry,1,0
+20,Alakazam,16,2,11400,Psychic,150,50,1700,Il Pokemon psichico,Pokemon,3,1
+21,Vegeta,18,2,14355,Final Flash,180,55,2000,Il principe dei Saiyan,Dragonball,1,0
+22,Goku SSJ3,20,1,17650,Super Kamehameha,220,70,0,Goku trasformato (Premium),Dragonball,1,0
+23,Sephiroth,22,1,21285,Supernova,200,60,0,L'angelo monoala (Premium),Final Fantasy,1,0
+24,Spiderman,24,2,25260,Web Strike,120,42,1300,L'arrampicamuri,Marvel,1,0
+25,Batman,25,2,27400,Batarang Strike,125,43,1350,Il cavaliere oscuro,DC Comics,1,0
+26,Iron Man,26,2,29575,Repulsor Ray,140,48,1600,L'uomo d'acciaio,Marvel,1,0
+27,Wolverine,28,2,34230,Berserker Rage,160,50,1700,Il mutante artigliato,Marvel,1,0
+28,Robin,30,2,39225,Acrobatic Strike,110,40,1250,Il giovane titano,DC Comics,1,0
+29,Hulk,32,2,44560,Hulk Smash,180,55,1800,Il gigante verde,Marvel,1,0
+30,Venom,34,2,50235,Symbiote Strike,170,52,1900,Il simbionte alieno,Marvel,1,0
+31,Hagrid,35,2,53225,Umbrella Spell,75,28,800,Il gigante buono,Harry Potter,1,0
+32,Harry Potter,38,2,62605,Expelliarmus,100,38,1200,Il ragazzo che è sopravvissuto,Harry Potter,1,0
+33,Severus Piton,40,2,70000,Sectumsempra,130,45,1500,Il maestro delle pozioni,Harry Potter,1,0
+34,Yugi,42,2,80000,Dark Magician,95,36,1100,Il re dei giochi,Yu-Gi-Oh,1,0
+35,Mago Nero,44,2,90000,Dark Magic Attack,115,42,1350,Il servo fedele di Yugi,Yu-Gi-Oh,1,0
+36,Teschio Evocato,46,2,100000,Skull Strike,135,46,1600,Il mostro oscuro,Yu-Gi-Oh,1,0
+37,Don Salieri,48,2,110000,Tommy Gun,125,44,1450,Il boss della mafia,Mafia,1,0
+38,Hit Man,50,2,120000,Silent Kill,105,39,1250,L'assassino silenzioso,Mafia,1,0
+39,Principe di Persia,52,2,130000,Time Rewind,110,41,1320,Il principe del tempo,Prince of Persia,1,0
+40,Gon,54,2,140000,Jajanken Rock,140,47,1580,Il giovane Hunter,Hunter x Hunter,1,0
+41,Killua,56,2,150000,Thunderbolt,150,49,1680,L'assassino fulmine,Hunter x Hunter,1,0
+42,Kurosaki Ichigo,58,2,160000,Getsuga Tensho,170,53,1850,Lo Shinigami sostituto,Bleach,1,0
+43,Gigante,60,2,170000,Titan Crush,155,50,1700,Il titano colossale,Attacco dei Giganti,1,0
+44,Gigante Bestia,62,2,180000,Beast Roar,165,52,1850,Il gigante bestiale,Attacco dei Giganti,1,0
+45,Gigante Armato,64,2,190000,Hardening,175,54,1950,Il gigante corazzato,Attacco dei Giganti,1,0
+46,Gigante Corazzato,66,2,200000,Armor Charge,185,56,2050,Il gigante blindato,Attacco dei Giganti,1,0
+47,Albedo,68,2,210000,Fallen Down,195,58,2100,Il guardiano di Nazarick,Overlord,1,0
+48,Gigante Colossale,70,1,220000,Colossal Stomp,230,72,0,Il titano più grande (Premium),Attacco dei Giganti,1,0
+49,Albus Silente,72,1,230000,Elder Wand,210,65,0,Il preside di Hogwarts (Premium),Harry Potter,1,0
+50,Goku SSJ God,75,1,245000,God Kamehameha,240,75,0,Il potere divino (Premium),Dragonball,1,0
+51,Mew,78,1,260000,Psystrike,220,70,0,Il Pokemon leggendario (Premium),Pokemon,3,1
+52,Goku Ultra Istinto,80,1,270000,Autonomous Ultra,300,100,0,L'istinto perfetto (Premium),Dragonball,1,0
+53,Drago Shenron,85,1,295000,Eternal Dragon,250,80,0,Il drago dei desideri (Premium),Dragonball,1,0
+54,Exodia,90,1,320000,Obliterate,280,90,0,Il proibito (Premium),Yu-Gi-Oh,1,0
+55,Zeus,95,1,345000,Lightning Bolt,350,120,0,Il re degli dei greci (Premium),Mitologia,1,0
+56,Odino,98,1,360000,Gungnir Strike,370,130,0,Il padre di tutti (Premium),Mitologia,1,0
+57,Ra,100,1,370000,Solar Flare,400,150,0,Il dio del sole egizio (Premium),Mitologia,1,0

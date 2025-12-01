@@ -1,0 +1,98 @@
+nome,hp,attack_damage,attack_type,difficulty,series,description
+Goomba,30,5,physical,1,Mario,Il fungo marrone
+Koopa Troopa,50,8,physical,1,Mario,La tartaruga verde
+Piranha Plant,40,12,ranged,2,Mario,La pianta carnivora
+Boo,45,7,magic,2,Mario,Il fantasma timido
+Thwomp,80,15,physical,2,Mario,Il blocco schiacciante
+Chain Chomp,70,18,physical,3,Mario,Il cane a catena
+Lakitu,55,10,ranged,2,Mario,La nuvola con occhiali
+Hammer Bro,60,14,ranged,2,Mario,Il koopa con martelli
+Bullet Bill,35,20,ranged,2,Mario,Il proiettile
+Dry Bones,48,9,physical,2,Mario,Lo scheletro di Koopa
+Creeper,40,20,explosive,2,Minecraft,L'esplosivo verde
+Zombie,55,8,physical,1,Minecraft,Il non-morto
+Skeleton,50,12,ranged,2,Minecraft,Lo scheletro arciere
+Enderman,90,15,magic,3,Minecraft,Il teletrasportatore
+Spider,45,10,physical,1,Minecraft,Il ragno velenoso
+Cave Spider,40,14,physical,2,Minecraft,Il ragno delle caverne
+Witch,65,18,magic,3,Minecraft,La strega velenosa
+Blaze,80,22,ranged,3,Minecraft,La palla di fuoco
+Ghast,100,25,ranged,4,Minecraft,Il fantasma del Nether
+Slime,30,6,physical,1,Minecraft,La gelatina verde
+Bokoblin,60,12,physical,2,Zelda,Il mostro rosso
+Moblin,85,18,physical,3,Zelda,L'orco blu
+Lizalfos,70,16,physical,3,Zelda,Il lucertola guerriera
+Octorok,35,8,ranged,1,Zelda,Il polpo sputante
+Keese,25,5,physical,1,Zelda,Il pipistrello
+Chuchu,40,9,magic,1,Zelda,La gelatina elementale
+Wizzrobe,75,20,magic,3,Zelda,Il mago elementale
+Stalfos,80,17,physical,3,Zelda,Lo scheletro guerriero
+Lynel,150,30,physical,5,Zelda,Il centauro leone
+Guardian,120,28,ranged,4,Zelda,Il guardiano antico
+Headcrab,25,6,physical,1,Half-Life,Il granchio saltante
+Zombie Combine,60,12,physical,2,Half-Life,Il soldato zombie
+Barnacle,35,10,physical,2,Half-Life,Il mostro del soffitto
+Antlion,50,14,physical,2,Half-Life,La formica leone
+Vortigaunt,70,16,magic,3,Half-Life,L'alieno elettrico
+Hunter,90,22,physical,4,Half-Life,Il cacciatore agile
+Combine Soldier,75,18,ranged,3,Half-Life,Il soldato Combine
+Turret,40,25,ranged,2,Half-Life,La torretta automatica
+Strider,180,35,ranged,5,Half-Life,Il camminatore gigante
+Manhack,30,8,physical,1,Half-Life,La sega volante
+Space Pirate,70,15,ranged,2,Metroid,Il pirata spaziale
+Metroid,95,20,magic,4,Metroid,La creatura energetica
+Chozo Ghost,80,18,magic,3,Metroid,Il fantasma Chozo
+Ing,65,14,physical,2,Metroid,La creatura oscura
+Rezbit,45,10,physical,2,Metroid,Il robot volante
+Phazon Elite,110,25,physical,4,Metroid,L'elite Phazon
+Quadraxis,200,40,ranged,5,Metroid,Il mega robot
+Sheegoth,130,28,magic,4,Metroid,Il mostro di ghiaccio
+Ridley Clone,160,32,physical,5,Metroid,Il clone del drago
+Kraid,190,38,physical,5,Metroid,Il gigante verde
+Grunt,55,12,physical,2,Halo,Il soldato Covenant
+Elite,90,20,physical,3,Halo,L'Elite Sangheili
+Brute,100,24,physical,4,Halo,Il Brute Jiralhanae
+Hunter,150,30,physical,4,Halo,Il cacciatore corazzato
+Jackal,40,15,ranged,2,Halo,Lo sciacallo con scudo
+Drone,50,10,physical,2,Halo,Il drone volante
+Sentinel,70,18,ranged,3,Halo,Il costruttore antico
+Flood Combat,65,16,physical,3,Halo,La forma da combattimento
+Promethean Knight,85,22,ranged,3,Halo,Il cavaliere Promethean
+Watcher,45,12,ranged,2,Halo,L'osservatore volante
+Imp,50,12,physical,2,Doom,Il demone classico
+Demon,70,16,physical,3,Doom,Il demone rosa
+Cacodemon,80,18,ranged,3,Doom,La palla sputafuoco
+Baron of Hell,120,26,physical,4,Doom,Il barone infernale
+Mancubus,100,22,ranged,4,Doom,Il grasso demone
+Revenant,75,20,ranged,3,Doom,Lo scheletro missilistico
+Archvile,95,28,magic,4,Doom,L'evocatore
+Pain Elemental,85,16,ranged,3,Doom,Il generatore di anime
+Hell Knight,110,24,physical,4,Doom,Il cavaliere infernale
+Cyberdemon,250,50,ranged,5,Doom,Il cyborg demone
+Covenant Grunt,45,10,physical,2,Various,Il soldato base
+Swarmer,35,8,physical,1,Gears of War,Lo sciame
+Wretch,55,12,physical,2,Gears of War,Il mostro veloce
+Drone,60,14,ranged,2,Gears of War,Il soldato locust
+Grenadier,70,18,ranged,3,Gears of War,Il lanciagranate
+Boomer,85,20,explosive,3,Gears of War,L'esplosivo
+Kantus,75,16,magic,3,Gears of War,Il sacerdote
+Theron Guard,90,22,physical,3,Gears of War,La guardia d'elite
+Corpser,140,30,physical,4,Gears of War,Il ragno gigante
+Berserker,180,35,physical,5,Gears of War,La bestia cieca
+Brumak,220,45,ranged,5,Gears of War,Il titano Locust
+Xenomorph Drone,65,15,physical,2,Alien,L'alieno drone
+Xenomorph Warrior,85,20,physical,3,Alien,L'alieno guerriero
+Facehugger,20,5,physical,1,Alien,L'invasore facciale
+Chestburster,30,8,physical,1,Alien,L'embrione
+Praetorian,120,28,physical,4,Alien,La guardia reale
+Queen,200,40,physical,5,Alien,La regina aliena
+Necromorph Slasher,60,14,physical,2,Dead Space,Il tagliatore
+Necromorph Leaper,55,12,physical,2,Dead Space,Il saltatore
+Necromorph Lurker,50,16,ranged,2,Dead Space,L'agguattatore
+Necromorph Brute,110,25,physical,4,Dead Space,Il brutale
+Necromorph Divider,75,18,physical,3,Dead Space,Il divisore
+Little Sister,15,3,none,1,Bioshock,La sorellina
+Big Daddy,150,32,physical,4,Bioshock,Il papà grosso
+Splicer,55,12,physical,2,Bioshock,Lo squartatore
+Houdini Splicer,60,16,magic,3,Bioshock,Il mago pazzo
+Nitro Splicer,65,20,explosive,3,Bioshock,L'esplosivo
