@@ -1,7 +1,4 @@
-points.db
-csv_to_steam_db.py
-steamcoin.csv
 .venv/*
-__pycache__/*
 points.db
 settings.py
+*.pyc

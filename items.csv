@@ -1,18 +1,23 @@
-nome,rarita,massimo_numero_per_drop,max_per_persona,sticker,emoji
-TNT,110,1,1,TNT.webp
-Cassa,100,1,1,Wumpa_create.webp
-Nitro,120,1,1,Nitro.webp
-La Sfera del Drago Shenron 1,10000,1,1,sfera_drago_shenron.webp,🐉
-La Sfera del Drago Shenron 2,10000,1,1,sfera_drago_shenron.webp,🐉
-La Sfera del Drago Shenron 3,10000,1,1,sfera_drago_shenron.webp,🐉
-La Sfera del Drago Shenron 4,10000,1,1,sfera_drago_shenron.webp,🐉
-La Sfera del Drago Shenron 5,10000,1,1,sfera_drago_shenron.webp,🐉
-La Sfera del Drago Shenron 6,10000,1,1,sfera_drago_shenron.webp,🐉
-La Sfera del Drago Shenron 7,10000,1,1,sfera_drago_shenron.webp,🐉
-La Sfera del Drago Porunga 1,10000,1,1,sfera_drago_porunga.webp,🐉
-La Sfera del Drago Porunga 2,10000,1,1,sfera_drago_porunga.webp,🐉
-La Sfera del Drago Porunga 3,10000,1,1,sfera_drago_porunga.webp,🐉
-La Sfera del Drago Porunga 4,10000,1,1,sfera_drago_porunga.webp,🐉
-La Sfera del Drago Porunga 5,10000,1,1,sfera_drago_porunga.webp,🐉
-La Sfera del Drago Porunga 6,10000,1,1,sfera_drago_porunga.webp,🐉
-La Sfera del Drago Porunga 7,10000,1,1,sfera_drago_porunga.webp,🐉
+nome,rarita,massimo_numero_per_drop,max_per_persona,sticker,emoji,descrizione
+TNT,110,1,1,TNT.webp,💣,Esplode se non scrivi entro 3 secondi!
+Cassa,100,1,1,Wumpa_create.webp,📦,Contiene oggetti misteriosi.
+Nitro,120,1,1,Nitro.webp,🧨,Esplode al contatto!
+Turbo,30,1,1,Turbo.png,🏍🌪,Avrai culo nel prossimo messaggio.
+Mira un giocatore,20,1,1,Target.png,🚀💥,Gli farai cadere Frutti Wumpa.
+Colpisci un giocatore,20,1,1,Hit.png,💣💥,Il prossimo utente perderà exp.
+Aku Aku,10,1,1,AkuAku.png,🎭,Sarai immortale per il prossimo colpo.
+Uka Uka,5,1,1,UkaUka.png,👺,Sarai immortale per il prossimo colpo (versione malvagia).
+La Sfera del Drago Shenron 1,10000,1,1,sfera_drago_shenron.webp,🐉,Una delle 7 sfere del drago Shenron.
+La Sfera del Drago Shenron 2,10000,1,1,sfera_drago_shenron.webp,🐉,Una delle 7 sfere del drago Shenron.
+La Sfera del Drago Shenron 3,10000,1,1,sfera_drago_shenron.webp,🐉,Una delle 7 sfere del drago Shenron.
+La Sfera del Drago Shenron 4,10000,1,1,sfera_drago_shenron.webp,🐉,Una delle 7 sfere del drago Shenron.
+La Sfera del Drago Shenron 5,10000,1,1,sfera_drago_shenron.webp,🐉,Una delle 7 sfere del drago Shenron.
+La Sfera del Drago Shenron 6,10000,1,1,sfera_drago_shenron.webp,🐉,Una delle 7 sfere del drago Shenron.
+La Sfera del Drago Shenron 7,10000,1,1,sfera_drago_shenron.webp,🐉,Una delle 7 sfere del drago Shenron.
+La Sfera del Drago Porunga 1,10000,1,1,sfera_drago_porunga.webp,🐉,Una delle 7 sfere del drago Porunga.
+La Sfera del Drago Porunga 2,10000,1,1,sfera_drago_porunga.webp,🐉,Una delle 7 sfere del drago Porunga.
+La Sfera del Drago Porunga 3,10000,1,1,sfera_drago_porunga.webp,🐉,Una delle 7 sfere del drago Porunga.
+La Sfera del Drago Porunga 4,10000,1,1,sfera_drago_porunga.webp,🐉,Una delle 7 sfere del drago Porunga.
+La Sfera del Drago Porunga 5,10000,1,1,sfera_drago_porunga.webp,🐉,Una delle 7 sfere del drago Porunga.
+La Sfera del Drago Porunga 6,10000,1,1,sfera_drago_porunga.webp,🐉,Una delle 7 sfere del drago Porunga.
+La Sfera del Drago Porunga 7,10000,1,1,sfera_drago_porunga.webp,🐉,Una delle 7 sfere del drago Porunga.

@@ -1,0 +1,5 @@
+id,character_id,name,damage,mana_cost,elemental_type,crit_chance,crit_multiplier,status_effect,status_chance,status_duration,description
+1,1,Chocobo Kick,25,10,Normal,5,1.5,,0,0,A standard kick.
+2,2,Thunder Shock,22,12,Electric,8,1.6,stun,10,1,A small electric shock.
+3,4,Thunderbolt,35,15,Electric,10,1.8,stun,20,1,A powerful electric blast.
+4,5,Flamethrower,40,20,Fire,7,1.7,burn,10,3,Spews intense fire.
