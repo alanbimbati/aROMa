@@ -7,6 +7,15 @@ import sqlite3
 import shutil
 import os
 from datetime import datetime
+from database import Database
+# Import models to register them with Base
+import models.user
+import models.system
+import models.character_ownership
+import models.pve
+import models.legacy_tables
+import models.game
+import models.items
 
 SOURCE_DB = "points_official.db"
 TARGET_DB = "points.db"
@@ -287,6 +296,14 @@ if __name__ == "__main__":
         if response.lower() != 'y':
             print("Migration cancelled.")
             exit(0)
+        
+        # Initialize database schema
+        print("\n🛠️  Initializing database schema...")
+        db = Database()
+        # Force creation of tables
+        from database import Base
+        Base.metadata.create_all(db.engine)
+        print("✅ Database schema initialized.")
     
     success = migrate_data()
     
