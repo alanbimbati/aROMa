@@ -1,11 +1,11 @@
-nome,hp,attack_damage,attack_type,series,description,loot_wumpa,loot_exp
-Bowser,5000,50,physical,Mario,Il re dei Koopa,2000,500
-Ganondorf,7000,65,magic,Zelda,Il signore delle tenebre,2500,600
-Ender Dragon,10000,80,ranged,Minecraft,Il drago del End,3000,800
-Sephiroth,8000,75,magic,Final Fantasy,L'angelo dell'ala nera,2800,700
-Ridley,6500,70,physical,Metroid,Il drago spaziale,2300,550
-The Gravemind,9000,85,magic,Halo,La mente Flood,3200,750
-Cyberdemon,7500,90,ranged,Doom,Il demone cyborg,2600,650
-General RAAM,8500,80,physical,Gears of War,Il generale Locust,2900,720
-Alien Queen,9500,95,physical,Alien,La regina xenomorfa,3500,850
-Songbird,7200,75,ranged,Bioshock,Il guardiano alato,2400,580
+nome,hp,attack_damage,attack_type,series,description,loot_wumpa,loot_exp,speed
+Bowser,5000,50,physical,Mario,Il re dei Koopa,2000,500,70
+Ganondorf,7000,65,magic,Zelda,Il signore delle tenebre,2500,600,70
+Ender Dragon,10000,80,ranged,Minecraft,Il drago del End,3000,800,70
+Sephiroth,8000,75,magic,Final Fantasy,L'angelo dell'ala nera,2800,700,70
+Ridley,6500,70,physical,Metroid,Il drago spaziale,2300,550,70
+The Gravemind,9000,85,magic,Halo,La mente Flood,3200,750,70
+Cyberdemon,7500,90,ranged,Doom,Il demone cyborg,2600,650,70
+General RAAM,8500,80,physical,Gears of War,Il generale Locust,2900,720,70
+Alien Queen,9500,95,physical,Alien,La regina xenomorfa,3500,850,70
+Songbird,7200,75,ranged,Bioshock,Il guardiano alato,2400,580,70

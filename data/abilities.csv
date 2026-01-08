@@ -1,5 +1,260 @@
 id,character_id,name,damage,mana_cost,elemental_type,crit_chance,crit_multiplier,status_effect,status_chance,status_duration,description
-1,1,Chocobo Kick,25,10,Normal,5,1.5,,0,0,A standard kick.
-2,2,Thunder Shock,22,12,Electric,8,1.6,stun,10,1,A small electric shock.
-3,4,Thunderbolt,35,15,Electric,10,1.8,stun,20,1,A powerful electric blast.
-4,5,Flamethrower,40,20,Fire,7,1.7,burn,10,3,Spews intense fire.
+1,1,Beak Peck,20,10,Normal,15,1.8,,0,0,Uses Beak Peck.
+2,2,Thunder Shock,22,12,Normal,10,1.5,,0,0,Uses Thunder Shock.
+3,3,Bounce,18,8,Normal,10,1.5,,0,0,Uses Bounce.
+4,4,Thunderbolt,35,15,Normal,10,1.5,,0,0,Uses Thunderbolt.
+5,5,Vine Whip,32,14,Normal,10,1.5,,0,0,Uses Vine Whip.
+6,6,Water Gun,32,14,Normal,10,1.5,,0,0,Uses Water Gun.
+7,7,Ember,32,14,Normal,10,1.5,,0,0,Uses Ember.
+8,8,Spin Attack,45,18,Normal,10,1.5,wumpa_steal,30,0,Uses Spin Attack.
+9,9,Flame Breath,48,20,Normal,10,1.5,burn,35,3,Uses Flame Breath.
+10,10,Sonic Spin,50,22,Normal,10,1.5,,0,0,Uses Sonic Spin.
+11,11,Thunder,55,25,Normal,10,1.5,,0,0,Uses Thunder.
+12,12,Razor Leaf,52,23,Normal,10,1.5,,0,0,Uses Razor Leaf.
+13,13,Bubble Beam,52,23,Normal,10,1.5,,0,0,Uses Bubble Beam.
+14,14,Flamethrower,52,23,Normal,10,1.5,,0,0,Uses Flamethrower.
+15,15,Fire Ball,60,28,Normal,10,1.5,burn,25,3,Uses Fire Ball.
+16,16,Thunder Hand,58,26,Normal,10,1.5,,0,0,Uses Thunder Hand.
+17,17,Egg Throw,55,24,Normal,10,1.5,,0,0,Uses Egg Throw.
+18,18,Tail Swipe,65,30,Normal,10,1.5,,0,0,Uses Tail Swipe.
+19,19,Power Punch,68,32,Normal,10,1.5,,0,0,Uses Power Punch.
+20,20,Chaos Spear,75,35,Normal,10,1.5,,0,0,Uses Chaos Spear.
+21,21,Solar Beam,80,38,Normal,10,1.5,,0,0,Uses Solar Beam.
+22,22,Hydro Pump,80,38,Normal,10,1.5,,0,0,Uses Hydro Pump.
+23,23,Fire Blast,85,40,Normal,10,1.5,,0,0,Uses Fire Blast.
+24,24,Master Sword,90,42,Normal,20,1.5,,0,0,Uses Master Sword.
+25,25,Light Arrow,85,40,Normal,20,1.5,,0,0,Uses Light Arrow.
+26,26,Dark Magic,88,41,Normal,20,1.5,stun,20,1,Uses Dark Magic.
+27,27,Charge Beam,95,45,Normal,10,1.5,,0,0,Uses Charge Beam.
+28,28,Plasma Breath,92,43,Normal,10,1.5,,0,0,Uses Plasma Breath.
+29,29,Phazon Beam,90,42,Normal,10,1.5,,0,0,Uses Phazon Beam.
+30,30,Omnislash,105,50,Normal,15,1.8,,0,0,Uses Omnislash.
+31,31,Final Heaven,100,48,Normal,15,1.8,,0,0,Uses Final Heaven.
+32,32,Octaslash,102,49,Normal,15,1.8,,0,0,Uses Octaslash.
+33,33,Renzokuken,110,52,Normal,15,1.8,,0,0,Uses Renzokuken.
+34,34,Angel Wing,108,51,Normal,15,1.8,,0,0,Uses Angel Wing.
+35,35,No Mercy,105,50,Normal,15,1.8,,0,0,Uses No Mercy.
+36,36,Blitz Ace,120,55,Normal,15,1.8,,0,0,Uses Blitz Ace.
+37,37,Grand Summon,115,53,Normal,15,1.8,heal,100,0,Uses Grand Summon.
+38,38,Tornado,118,54,Normal,15,1.8,,0,0,Uses Tornado.
+39,39,Devil Trigger,130,58,Normal,10,1.5,,0,0,Uses Devil Trigger.
+40,40,Judgement Cut,125,56,Normal,10,1.5,,0,0,Uses Judgement Cut.
+41,41,Devil Bringer,122,55,Normal,10,1.5,,0,0,Uses Devil Bringer.
+42,42,Spartan Rage,140,62,Normal,10,1.5,,0,0,Uses Spartan Rage.
+43,43,Runic Summon,132,59,Normal,10,1.5,,0,0,Uses Runic Summon.
+44,44,Vanir Magic,135,60,Normal,10,1.5,,0,0,Uses Vanir Magic.
+45,45,Hadouken,145,65,Normal,10,1.5,,0,0,Uses Hadouken.
+46,46,Shoryuken,143,64,Normal,10,1.5,,0,0,Uses Shoryuken.
+47,47,Raging Demon,155,68,Normal,10,1.5,,0,0,Uses Raging Demon.
+48,48,Spear Strike,150,66,Normal,10,1.5,,0,0,Uses Spear Strike.
+49,49,Ice Ball,148,65,Normal,10,1.5,,0,0,Uses Ice Ball.
+50,50,Lightning Strike,160,70,Normal,10,1.5,,0,0,Uses Lightning Strike.
+51,51,Rocket Launcher,165,72,Normal,10,1.5,,0,0,Uses Rocket Launcher.
+52,52,CQC Master,162,71,Normal,10,1.5,,0,0,Uses CQC Master.
+53,53,High Frequency Blade,160,70,Normal,10,1.5,,0,0,Uses High Frequency Blade.
+54,54,Mega Buster,170,75,Normal,10,1.5,,0,0,Uses Mega Buster.
+55,55,Z-Saber,168,74,Normal,10,1.5,,0,0,Uses Z-Saber.
+56,56,Charged Shot,180,78,Normal,10,1.5,,0,0,Uses Charged Shot.
+57,57,RYNO,175,77,Normal,10,1.5,,0,0,Uses RYNO.
+58,58,Time Bomb,172,76,Normal,10,1.5,,0,0,Uses Time Bomb.
+59,59,Annihilator,185,80,Normal,10,1.5,,0,0,Uses Annihilator.
+60,60,Kamehameha,209,82,Normal,25,2.0,buff_attack,20,2,Uses Kamehameha.
+61,61,Galick Gun,203,80,Normal,25,2.0,buff_attack,20,2,Uses Galick Gun.
+62,62,Special Beam Cannon,200,79,Normal,25,2.0,buff_attack,20,2,Uses Special Beam Cannon.
+63,63,Grenade Launcher,195,85,Normal,10,1.5,,0,0,Uses Grenade Launcher.
+64,64,Sniper Shot,192,84,Normal,10,1.5,,0,0,Uses Sniper Shot.
+65,65,Cigar Bomb,200,87,Normal,10,1.5,,0,0,Uses Cigar Bomb.
+66,66,Triple Shot,205,90,Normal,10,1.5,,0,0,Uses Triple Shot.
+67,67,Hammer Slam,200,88,Normal,10,1.5,,0,0,Uses Hammer Slam.
+68,68,Spear Thrust,198,87,Normal,10,1.5,,0,0,Uses Spear Thrust.
+69,69,Molotov,210,92,Normal,10,1.5,,0,0,Uses Molotov.
+70,70,Bow Shot,208,91,Normal,10,1.5,,0,0,Uses Bow Shot.
+71,71,Pipe Swing,220,95,Normal,10,1.5,,0,0,Uses Pipe Swing.
+72,72,Igni,225,98,Normal,10,1.5,,0,0,Uses Igni.
+73,73,Blink Strike,220,96,Normal,10,1.5,,0,0,Uses Blink Strike.
+74,74,Lightning Bolt,218,95,Normal,10,1.5,,0,0,Uses Lightning Bolt.
+75,75,Hidden Blade,235,102,Normal,10,1.5,,0,0,Uses Hidden Blade.
+76,76,Eagle Strike,230,100,Normal,10,1.5,,0,0,Uses Eagle Strike.
+77,77,Tomahawk Throw,228,99,Normal,10,1.5,buff_attack,100,3,Uses Tomahawk Throw.
+78,78,Super Kamehameha,275,108,Normal,25,2.0,buff_attack,20,2,Uses Super Kamehameha.
+79,79,Big Bang Attack,269,106,Normal,25,2.0,buff_attack,20,2,Uses Big Bang Attack.
+80,80,Masenko,266,105,Normal,25,2.0,buff_attack,20,2,Uses Masenko.
+81,81,Spartan Laser,260,112,Normal,10,1.5,,0,0,Uses Spartan Laser.
+82,82,Energy Sword,255,110,Normal,10,1.5,buff_defense,100,3,Uses Energy Sword.
+83,83,AI Hack,252,109,Normal,10,1.5,crit_boost,100,2,Uses AI Hack.
+84,84,BFG 9000,275,118,Normal,10,1.5,burn,25,3,Uses BFG 9000.
+85,85,Argent Beam,268,115,Normal,10,1.5,buff_attack,100,3,Uses Argent Beam.
+86,86,Data Surge,265,114,Normal,10,1.5,,0,0,Uses Data Surge.
+87,87,Biotic Charge,280,122,Normal,10,1.5,,0,0,Uses Biotic Charge.
+88,88,Sniper Calibration,278,121,Normal,10,1.5,wumpa_steal,50,0,Uses Sniper Calibration.
+89,89,Singularity,290,125,Normal,10,1.5,,0,0,Uses Singularity.
+90,90,Super Kamehameha x2,330,130,Normal,25,2.0,buff_attack,20,2,Uses Super Kamehameha x2.
+91,91,Final Flash,324,128,Normal,25,2.0,buff_attack,20,2,Uses Final Flash.
+92,92,Father-Son Kamehameha,321,127,Normal,25,2.0,buff_attack,20,2,Uses Father-Son Kamehameha.
+93,93,Inhale,305,133,Normal,10,1.5,buff_attack,100,3,Uses Inhale.
+94,94,Galaxia Darkness,308,134,Normal,10,1.5,poison,25,3,Uses Galaxia Darkness.
+95,95,Waddle Dee Army,315,137,Normal,10,1.5,,0,0,Uses Waddle Dee Army.
+96,96,Landmaster,320,140,Normal,10,1.5,,0,0,Uses Landmaster.
+97,97,Arwing Strike,315,138,Normal,10,1.5,,0,0,Uses Arwing Strike.
+98,98,Wolfen Assault,312,137,Normal,10,1.5,,0,0,Uses Wolfen Assault.
+99,99,Ragnarok,330,145,Normal,10,1.5,wumpa_steal,50,0,Uses Ragnarok.
+100,100,Dark Aura,325,143,Normal,10,1.5,buff_defense,100,3,Uses Dark Aura.
+101,101,Light Burst,322,142,Normal,10,1.5,,0,0,Uses Light Burst.
+102,102,Morph Gun,335,148,Normal,10,1.5,,0,0,Uses Morph Gun.
+103,103,Bug Spray,332,147,Normal,10,1.5,life_drain,100,0,Uses Bug Spray.
+104,104,Scatter Gun,345,152,Normal,10,1.5,,0,0,Uses Scatter Gun.
+105,105,Breegull Bash,350,155,Normal,10,1.5,,0,0,Uses Breegull Bash.
+106,106,Egg Shot,348,154,Normal,10,1.5,,0,0,Uses Egg Shot.
+107,107,Transformation Magic,360,158,Normal,10,1.5,,0,0,Uses Transformation Magic.
+108,108,Dragon Fist,407,162,Normal,25,2.0,buff_attack,20,2,Uses Dragon Fist.
+109,109,Final Shine Attack,401,160,Normal,25,2.0,buff_attack,20,2,Uses Final Shine Attack.
+110,110,Super Ghost Kamikaze,398,159,Normal,25,2.0,buff_attack,20,2,Uses Super Ghost Kamikaze.
+111,111,Lockjaw,375,165,Normal,10,1.5,,0,0,Uses Lockjaw.
+112,112,Rain Dance,372,164,Normal,10,1.5,,0,0,Uses Rain Dance.
+113,113,Berserker Spin,385,168,Normal,10,1.5,,0,0,Uses Berserker Spin.
+114,114,Dual Pistols,390,172,Normal,10,1.5,,0,0,Uses Dual Pistols.
+115,115,Climbing Axe,385,170,Normal,10,1.5,,0,0,Uses Climbing Axe.
+116,116,Heavy Rifle,382,169,Normal,10,1.5,,0,0,Uses Heavy Rifle.
+117,117,Wicked Weave,400,178,Normal,10,1.5,stun,15,1,Uses Wicked Weave.
+118,118,All 4 One,395,176,Normal,10,1.5,wumpa_steal,50,0,Uses All 4 One.
+119,119,Demon Summon,392,175,Normal,10,1.5,,0,0,Uses Demon Summon.
+120,120,10x Kamehameha,462,185,Normal,25,2.0,buff_attack,20,2,Uses 10x Kamehameha.
+121,121,Final Shine,456,183,Normal,25,2.0,buff_attack,20,2,Uses Final Shine.
+122,122,Big Bang Kamehameha,453,182,Normal,25,2.0,buff_attack,20,2,Uses Big Bang Kamehameha.
+123,123,PK Thunder,425,188,Normal,10,1.5,,0,0,Uses PK Thunder.
+124,124,PK Love,422,187,Normal,10,1.5,,0,0,Uses PK Love.
+125,125,Mech Assault,435,192,Normal,10,1.5,,0,0,Uses Mech Assault.
+126,126,Palutena Bow,440,195,Normal,10,1.5,crit_boost,100,2,Uses Palutena Bow.
+127,127,Silver Bow,438,194,Normal,10,1.5,,0,0,Uses Silver Bow.
+128,128,Divine Light,450,198,Normal,10,1.5,,0,0,Uses Divine Light.
+129,129,Monado Buster,460,205,Normal,10,1.5,,0,0,Uses Monado Buster.
+130,130,Sword Drive,455,203,Normal,10,1.5,,0,0,Uses Sword Drive.
+131,131,Lock-On,452,202,Normal,10,1.5,poison,25,3,Uses Lock-On.
+132,132,Move,465,208,Normal,10,1.5,,0,0,Uses Move.
+133,133,Blast,462,207,Normal,10,1.5,,0,0,Uses Blast.
+134,134,Plasma,475,212,Normal,10,1.5,buff_attack,100,3,Uses Plasma.
+135,135,Critical Hit,480,215,Normal,10,1.5,,0,0,Uses Critical Hit.
+136,136,Blazer,478,214,Normal,10,1.5,,0,0,Uses Blazer.
+137,137,Aether,490,218,Normal,10,1.5,buff_attack,100,3,Uses Aether.
+138,138,Awakening,495,222,Normal,10,1.5,buff_attack,100,3,Uses Awakening.
+139,139,Future Vision,492,221,Normal,10,1.5,,0,0,Uses Future Vision.
+140,140,Thoron,505,225,Normal,10,1.5,,0,0,Uses Thoron.
+141,141,Dragon Fang,510,228,Normal,10,1.5,,0,0,Uses Dragon Fang.
+142,142,Sublime Heaven,508,227,Normal,10,1.5,,0,0,Uses Sublime Heaven.
+143,143,Raging Storm,520,232,Normal,10,1.5,,0,0,Uses Raging Storm.
+144,144,God Kamehameha,583,238,Normal,25,2.0,buff_attack,20,2,Uses God Kamehameha.
+145,145,Final Explosion,577,236,Normal,25,2.0,buff_attack,20,2,Uses Final Explosion.
+146,146,Final Kamehameha,574,235,Normal,25,2.0,buff_attack,20,2,Uses Final Kamehameha.
+147,147,Falcon Punch,540,245,Normal,10,1.5,,0,0,Uses Falcon Punch.
+148,148,Katana Slash,535,243,Normal,10,1.5,,0,0,Uses Katana Slash.
+149,149,Dark Strike,532,242,Normal,10,1.5,freeze,20,2,Uses Dark Strike.
+150,150,Autonomous Ultra,616,255,Normal,25,2.0,buff_attack,20,2,Uses Autonomous Ultra.
+151,151,Power Impact,610,253,Normal,25,2.0,buff_attack,20,2,Uses Power Impact.
+152,152,Gigantic Roar,607,252,Normal,25,2.0,buff_attack,20,2,Uses Gigantic Roar.
+153,153,Pikmin Army,565,258,Normal,10,1.5,life_drain,100,0,Uses Pikmin Army.
+154,154,Purple Pikmin,562,257,Normal,10,1.5,poison,25,3,Uses Purple Pikmin.
+155,155,Rock Pikmin,575,262,Normal,10,1.5,,0,0,Uses Rock Pikmin.
+156,156,Pocket,580,265,Normal,10,1.5,buff_attack,100,3,Uses Pocket.
+157,157,Fishing Rod,578,264,Normal,10,1.5,,0,0,Uses Fishing Rod.
+158,158,Bell Bag,590,268,Normal,10,1.5,,0,0,Uses Bell Bag.
+159,159,Splat Roller,595,272,Normal,10,1.5,,0,0,Uses Splat Roller.
+160,160,Octo Shot,592,271,Normal,10,1.5,,0,0,Uses Octo Shot.
+161,161,Splashdown,605,275,Normal,10,1.5,,0,0,Uses Splashdown.
+162,162,Diamond Sword,610,278,Normal,10,1.5,life_drain,100,0,Uses Diamond Sword.
+163,163,TNT Blast,608,277,Normal,10,1.5,,0,0,Uses TNT Blast.
+164,164,Nether Portal,620,282,Normal,10,1.5,,0,0,Uses Nether Portal.
+165,165,Izuna Drop,630,288,Normal,10,1.5,,0,0,Uses Izuna Drop.
+166,166,Art of the Raging Mountain God,625,286,Normal,10,1.5,wumpa_steal,50,0,Uses Art of the Raging Mountain God.
+167,167,Tearing Wind Combo,622,285,Normal,10,1.5,crit_boost,100,2,Uses Tearing Wind Combo.
+168,168,Create Platform,635,292,Normal,10,1.5,buff_defense,100,3,Uses Create Platform.
+169,169,Speed Dash,632,291,Normal,10,1.5,wumpa_steal,50,0,Uses Speed Dash.
+170,170,Size Change,645,295,Normal,10,1.5,,0,0,Uses Size Change.
+171,171,Mega Spin,650,298,Normal,10,1.5,wumpa_steal,30,0,Uses Mega Spin.
+172,172,Laptop Hack,648,297,Normal,10,1.5,wumpa_steal,30,0,Uses Laptop Hack.
+173,173,Ancient Protection,660,302,Normal,10,1.5,wumpa_steal,30,0,Uses Ancient Protection.
+174,174,Elder Fire,665,305,Normal,10,1.5,burn,35,3,Uses Elder Fire.
+175,175,Shadow Strike,662,304,Normal,10,1.5,burn,35,3,Uses Shadow Strike.
+176,176,Dark Master Beam,675,308,Normal,10,1.5,burn,35,3,Uses Dark Master Beam.
+177,177,Super Sonic Boost,680,312,Normal,10,1.5,,0,0,Uses Super Sonic Boost.
+178,178,Chaos Blast,678,311,Normal,10,1.5,,0,0,Uses Chaos Blast.
+179,179,Psychokinesis,690,315,Normal,10,1.5,,0,0,Uses Psychokinesis.
+180,180,Dragon Fire,700,320,Normal,10,1.5,,0,0,Uses Dragon Fire.
+181,181,Fireball Breath,698,319,Normal,10,1.5,poison,25,3,Uses Fireball Breath.
+182,182,Ice Flame,710,323,Normal,10,1.5,,0,0,Uses Ice Flame.
+183,183,Emerald Flame,715,327,Normal,10,1.5,buff_attack,100,3,Uses Emerald Flame.
+184,184,Dark Fire,712,326,Normal,10,1.5,,0,0,Uses Dark Fire.
+185,185,Ridge Spike,725,330,Normal,10,1.5,,0,0,Uses Ridge Spike.
+186,186,Horn Charge,730,334,Normal,10,1.5,,0,0,Uses Horn Charge.
+187,187,Venom Fang,728,333,Normal,10,1.5,,0,0,Uses Venom Fang.
+188,188,Opal Beam,740,337,Normal,10,1.5,,0,0,Uses Opal Beam.
+189,189,Iron Scale,745,341,Normal,10,1.5,,0,0,Uses Iron Scale.
+190,190,Catalan Inferno,742,340,Normal,10,1.5,,0,0,Uses Catalan Inferno.
+191,191,Flame Snout,755,344,Normal,10,1.5,wumpa_steal,50,0,Uses Flame Snout.
+192,192,Blind Fury,770,350,Normal,10,1.5,,0,0,Uses Blind Fury.
+193,193,Baby Fire,765,348,Normal,10,1.5,buff_defense,100,3,Uses Baby Fire.
+194,194,Dragon Command,762,347,Normal,10,1.5,,0,0,Uses Dragon Command.
+195,195,Mega Flare,800,365,Normal,15,1.8,,0,0,Uses Mega Flare.
+196,196,Five Heads,795,363,Normal,15,1.8,wumpa_steal,50,0,Uses Five Heads.
+197,197,Tidal Wave,792,362,Normal,15,1.8,,0,0,Uses Tidal Wave.
+198,198,Hellfire,810,370,Normal,15,1.8,burn,40,3,Uses Hellfire.
+199,199,Diamond Dust,808,369,Normal,15,1.8,freeze,30,2,Uses Diamond Dust.
+200,200,Judgment Bolt,820,373,Normal,15,1.8,stun,25,1,Uses Judgment Bolt.
+201,201,Zantetsuken,825,377,Normal,15,1.8,,0,0,Uses Zantetsuken.
+202,202,Divine Judgment,822,376,Normal,15,1.8,,0,0,Uses Divine Judgment.
+203,203,Rebirth Flame,835,380,Normal,15,1.8,,0,0,Uses Rebirth Flame.
+204,204,Ultimate End,860,390,Normal,15,1.8,,0,0,Uses Ultimate End.
+205,205,Zanmato,855,388,Normal,15,1.8,buff_defense,100,3,Uses Zanmato.
+206,206,Oblivion,852,387,Normal,15,1.8,buff_defense,100,3,Uses Oblivion.
+207,207,Eternal Breath,870,395,Normal,15,1.8,crit_boost,100,2,Uses Eternal Breath.
+208,208,Eternal Breath,868,394,Normal,15,1.8,,0,0,Uses Eternal Breath.
+209,209,Runaway Train,880,398,Normal,15,1.8,,0,0,Uses Runaway Train.
+210,210,Final Eclipse,900,405,Normal,15,1.8,,0,0,Uses Final Eclipse.
+211,211,Redemption,895,403,Normal,15,1.8,,0,0,Uses Redemption.
+212,212,Meteor,892,402,Normal,15,1.8,,0,0,Uses Meteor.
+213,213,Judgment,950,430,Normal,10,1.5,,0,0,Uses Judgment.
+214,214,Roar of Time,945,428,Normal,10,1.5,,0,0,Uses Roar of Time.
+215,215,Spacial Rend,942,427,Normal,10,1.5,,0,0,Uses Spacial Rend.
+216,216,Shadow Force,960,435,Normal,10,1.5,stun,15,1,Uses Shadow Force.
+217,217,Dragon Ascent,958,434,Normal,10,1.5,,0,0,Uses Dragon Ascent.
+218,218,Precipice Blades,970,438,Normal,10,1.5,wumpa_steal,50,0,Uses Precipice Blades.
+219,219,Origin Pulse,975,442,Normal,10,1.5,buff_attack,100,3,Uses Origin Pulse.
+220,220,Psystrike,972,441,Normal,10,1.5,stun,25,1,Uses Psystrike.
+221,221,Aeroblast,985,445,Normal,10,1.5,,0,0,Uses Aeroblast.
+222,222,Sacred Fire,990,448,Normal,10,1.5,,0,0,Uses Sacred Fire.
+223,223,Time Travel,988,447,Normal,10,1.5,wumpa_steal,50,0,Uses Time Travel.
+224,224,Doom Desire,1000,452,Normal,10,1.5,,0,0,Uses Doom Desire.
+225,225,Eternal Dragon,1155,470,Normal,25,2.0,buff_attack,20,2,Uses Eternal Dragon.
+226,226,Three Wishes,1149,468,Normal,25,2.0,buff_attack,20,2,Uses Three Wishes.
+227,227,Divine Wish,1146,467,Normal,25,2.0,buff_attack,20,2,Uses Divine Wish.
+228,228,Lightning Bolt,1150,510,Normal,10,1.5,buff_attack,100,3,Uses Lightning Bolt.
+229,229,Tidal Fury,1145,508,Normal,10,1.5,crit_boost,100,2,Uses Tidal Fury.
+230,230,Underworld Flame,1142,507,Normal,10,1.5,stun,15,1,Uses Underworld Flame.
+231,231,Wisdom Strike,1160,515,Normal,10,1.5,buff_defense,100,3,Uses Wisdom Strike.
+232,232,War Cry,1158,514,Normal,10,1.5,,0,0,Uses War Cry.
+233,233,Sun Arrow,1170,518,Normal,10,1.5,,0,0,Uses Sun Arrow.
+234,234,Moon Bow,1175,522,Normal,10,1.5,,0,0,Uses Moon Bow.
+235,235,Queen's Wrath,1172,521,Normal,10,1.5,buff_attack,100,3,Uses Queen's Wrath.
+236,236,Divine Speed,1185,525,Normal,10,1.5,buff_attack,100,3,Uses Divine Speed.
+237,237,Gungnir Strike,1250,550,Normal,10,1.5,,0,0,Uses Gungnir Strike.
+238,238,Mjolnir Thunder,1245,548,Normal,10,1.5,,0,0,Uses Mjolnir Thunder.
+239,239,Trickster Magic,1242,547,Normal,10,1.5,,0,0,Uses Trickster Magic.
+240,240,Valkyrie Strike,1260,555,Normal,10,1.5,,0,0,Uses Valkyrie Strike.
+241,241,Justice Blade,1258,554,Normal,10,1.5,,0,0,Uses Justice Blade.
+242,242,Bifrost Beam,1270,558,Normal,10,1.5,,0,0,Uses Bifrost Beam.
+243,243,Solar Flare,1350,590,Normal,10,1.5,,0,0,Uses Solar Flare.
+244,244,Death Judgment,1345,588,Normal,10,1.5,buff_attack,100,3,Uses Death Judgment.
+245,245,Resurrection,1342,587,Normal,10,1.5,,0,0,Uses Resurrection.
+246,246,Sky Attack,1360,595,Normal,10,1.5,buff_defense,100,3,Uses Sky Attack.
+247,247,Chaos Storm,1358,594,Normal,10,1.5,,0,0,Uses Chaos Storm.
+248,248,Divine Magic,1370,598,Normal,10,1.5,,0,0,Uses Divine Magic.
+249,249,Divine Sun,1450,620,Normal,10,1.5,crit_boost,100,2,Uses Divine Sun.
+250,250,Storm Blade,1445,618,Normal,10,1.5,poison,25,3,Uses Storm Blade.
+251,251,Moon Illusion,1442,617,Normal,10,1.5,,0,0,Uses Moon Illusion.
+252,252,Omnipotence,1600,700,Normal,10,1.5,,0,0,Uses Omnipotence.
+253,253,Creation,1595,698,Normal,10,1.5,,0,0,Uses Creation.
+254,254,Preservation,1592,697,Normal,10,1.5,,0,0,Uses Preservation.
+255,255,Destruction,1589,696,Normal,10,1.5,freeze,20,2,Uses Destruction.
+256,256,Divine Love,1586,695,Normal,10,1.5,,0,0,Uses Divine Love.
+257,257,Divine Wrath,1583,694,Normal,10,1.5,wumpa_steal,50,0,Uses Divine Wrath.
+258,258,Divine Wisdom,1580,693,Normal,10,1.5,freeze,20,2,Uses Divine Wisdom.
+259,259,Divine Wealth,1578,692,Normal,10,1.5,life_drain,100,0,Uses Divine Wealth.
