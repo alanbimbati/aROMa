@@ -1,0 +1,97 @@
+"""
+Script to create default generic images for mobs and bosses
+"""
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    print("⚠️ PIL/Pillow non disponibile. Installa con: pip install Pillow")
+    print("Oppure aggiungi manualmente le immagini:")
+    print("  - images/mobs/default.png (256x256, mostro semplice)")
+    print("  - images/bosses/default.png (256x256, boss potente)")
+
+def create_mob_image():
+    """Create a generic mob image"""
+    if not PIL_AVAILABLE:
+        return False
+    
+    # Create 256x256 image with dark background
+    img = Image.new('RGB', (256, 256), color='#2d5016')  # Dark green
+    draw = ImageDraw.Draw(img)
+    
+    # Draw a simple monster shape (circle body + eyes)
+    # Body (circle)
+    draw.ellipse([50, 80, 206, 236], fill='#4a7c2a', outline='#1a3009', width=3)
+    
+    # Head (smaller circle)
+    draw.ellipse([80, 40, 176, 136], fill='#5a8c3a', outline='#1a3009', width=3)
+    
+    # Eyes (red glowing)
+    draw.ellipse([100, 70, 120, 90], fill='#ff0000')
+    draw.ellipse([136, 70, 156, 90], fill='#ff0000')
+    
+    # Mouth (simple line)
+    draw.arc([100, 100, 156, 120], start=0, end=180, fill='#000000', width=4)
+    
+    # Save
+    img.save('images/mobs/default.png')
+    print("✅ Creata immagine generica mob: images/mobs/default.png")
+    return True
+
+def create_boss_image():
+    """Create a generic boss image"""
+    if not PIL_AVAILABLE:
+        return False
+    
+    # Create 256x256 image with dark red/purple background
+    img = Image.new('RGB', (256, 256), color='#4a0e0e')  # Dark red
+    draw = ImageDraw.Draw(img)
+    
+    # Draw a more menacing boss shape
+    # Large body (ellipse)
+    draw.ellipse([30, 100, 226, 246], fill='#8b1a1a', outline='#ff0000', width=4)
+    
+    # Head (larger)
+    draw.ellipse([60, 20, 196, 156], fill='#a02a2a', outline='#ff0000', width=4)
+    
+    # Glowing red eyes (larger)
+    draw.ellipse([90, 70, 120, 100], fill='#ff3333')
+    draw.ellipse([136, 70, 166, 100], fill='#ff3333')
+    # Eye glow
+    draw.ellipse([95, 75, 115, 95], fill='#ff6666')
+    draw.ellipse([141, 75, 161, 95], fill='#ff6666')
+    
+    # Angry mouth
+    draw.arc([100, 110, 156, 140], start=180, end=360, fill='#000000', width=5)
+    
+    # Horns/spikes on head
+    draw.polygon([(100, 30), (110, 10), (120, 30)], fill='#660000')
+    draw.polygon([(136, 30), (146, 10), (156, 30)], fill='#660000')
+    
+    # Save
+    img.save('images/bosses/default.png')
+    print("✅ Creata immagine generica boss: images/bosses/default.png")
+    return True
+
+if __name__ == "__main__":
+    import os
+    import sys
+    
+    # Add parent directory to path
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    
+    # Create directories
+    os.makedirs('images/mobs', exist_ok=True)
+    os.makedirs('images/bosses', exist_ok=True)
+    
+    print("🎨 Creazione immagini generiche per nemici...\n")
+    
+    mob_ok = create_mob_image()
+    boss_ok = create_boss_image()
+    
+    if mob_ok and boss_ok:
+        print("\n✅ Tutte le immagini sono state create con successo!")
+    else:
+        print("\n⚠️ Aggiungi manualmente le immagini se necessario.")
+

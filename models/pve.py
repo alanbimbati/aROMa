@@ -13,11 +13,19 @@ class Mob(Base):
     killer_id = Column(Integer, nullable=True) # Telegram ID of killer
     reward_claimed = Column(Boolean, default=False)
     
+    # Boss flag - if True, this is a boss (previously Raid)
+    is_boss = Column(Boolean, default=False)
+    
     # Combat attributes
     image_path = Column(String, nullable=True)
     attack_type = Column(String, default="physical")  # physical, magic, ranged, explosive
     attack_damage = Column(Integer, default=10)
     difficulty_tier = Column(Integer, default=1)  # 1-5
+    speed = Column(Integer, default=30)
+    mob_level = Column(Integer, default=1)
+    last_attack_time = Column(DateTime, nullable=True)
+    description = Column(String, nullable=True)  # For boss descriptions
+    resistance = Column(Integer, default=0) # Percentage damage reduction
 
 class Raid(Base):
     __tablename__ = "raid"
@@ -34,6 +42,7 @@ class Raid(Base):
     attack_type = Column(String, default="special")
     attack_damage = Column(Integer, default=50)
     description = Column(String, nullable=True)
+    speed = Column(Integer, default=70)
 
 class RaidParticipation(Base):
     __tablename__ = "raid_participation"

@@ -144,6 +144,11 @@ class ItemService:
         
         self.user_service.add_points(user, -COST)
         
+        return self.open_box_wumpa(user, cost_paid=COST)
+
+    def open_box_wumpa(self, user, cost_paid=0):
+        """Open a box wumpa (logic separated from buy)"""
+        # Normal item drop (always)
         items_data = self.load_items_from_csv()
         if not items_data:
             return False, "Errore nel caricamento degli oggetti.", None
@@ -154,20 +159,64 @@ class ItemService:
         item_name = item['nome']
         
         self.add_item(user.id_telegram, item_name)
-        return True, f"Hai trovato: {item_name} (Spesi {COST} 🍑)", item
+        
+        base_msg = f"Hai trovato: {item_name}"
+        
+        # 10% chance to ALSO get a random game (JACKPOT!)
+        if random.random() < 0.10:
+            # Try to get a random game from catalog
+            session = self.db.get_session()
+            from models.game import GameInfo
+            from sqlalchemy import func
+            
+            # Get a random unclaimed game
+            game = session.query(GameInfo).filter(GameInfo.preso_da == '').order_by(func.random()).first()
+            
+            if game:
+                # Assign game to user
+                game.preso_da = str(user.id_telegram)
+                session.commit()
+                session.close()
+                
+                jackpot_msg = f"🎮 **JACKPOT!** {base_msg}\n\n"
+                jackpot_msg += f"🎁 **BONUS:** Hai anche trovato un gioco!\n"
+                jackpot_msg += f"🎯 **{game.title}**\n"
+                jackpot_msg += f"🎮 Piattaforma: {game.platform}\n"
+                
+                if game.message_link:
+                    jackpot_msg += f"📩 Link: {game.message_link}\n"
+                
+                if cost_paid > 0:
+                    jackpot_msg += f"\n(Spesi {cost_paid} 🍑)"
+                
+                return True, jackpot_msg, item
+            
+            session.close()
+        
+        # Normal message (no jackpot)
+        if cost_paid > 0:
+            return True, f"{base_msg} (Spesi {cost_paid} 🍑)", item
+        else:
+            return True, base_msg, item
 
     def apply_effect(self, user, item_name, target_user=None):
         if item_name == "Turbo":
             # Logic: Next message has high luck
             # We need to store this state. Added luck_boost to Utente model.
             self.user_service.update_user(user.id_telegram, {'luck_boost': 1})
-            return "Turbo attivato! Avrai fortuna nel prossimo messaggio."
+            self.user_service.update_user(user.id_telegram, {'luck_boost': 1})
+            return "Turbo attivato! La tua fortuna è aumentata: troverai casse più frequentemente."
         
         elif item_name == "Aku Aku" or item_name == "Uka Uka":
             # Invincibility
-            until = datetime.datetime.now() + datetime.timedelta(minutes=10) # 10 mins invincibility
+            until = datetime.datetime.now() + datetime.timedelta(minutes=60) # 60 mins invincibility
             self.user_service.update_user(user.id_telegram, {'invincible_until': until})
-            return f"{item_name} attivato! Sei immortale per 10 minuti."
+            return f"{item_name} attivato! Sei immune a TNT e Nitro per 60 minuti."
+            
+        elif item_name == "Cassa":
+            wumpa = random.randint(5, 15)
+            self.user_service.add_points(user, wumpa)
+            return f"📦 Hai aperto la Cassa e trovato {wumpa} {PointsName}!"
         
         elif item_name == "Nitro":
             # Trap logic? Or self damage?
@@ -189,9 +238,23 @@ class ItemService:
                     self.user_service.add_points(target_user, -amount)
                     # Maybe give them to user?
                     self.user_service.add_points(user, amount)
+                if target_user.points >= amount:
+                    self.user_service.add_points(target_user, -amount)
+                    # Maybe give them to user?
+                    self.user_service.add_points(user, amount)
                     return f"Hai rubato {amount} {PointsName} a {target_user.username}!"
                 else:
                     return "Il bersaglio non ha abbastanza punti."
+        
+        elif item_name == "Colpisci un giocatore":
+            if target_user:
+                # Damage target (lose Wumpa, not Exp)
+                amount = random.randint(10, 30)
+                if target_user.points >= amount:
+                    self.user_service.add_points(target_user, -amount)
+                    return f"Hai colpito {target_user.username}! Ha perso {amount} {PointsName}."
+                else:
+                    return f"Hai colpito {target_user.username}, ma non aveva abbastanza {PointsName} da perdere."
             else:
                 return "Devi specificare un bersaglio."
 

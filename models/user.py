@@ -37,7 +37,11 @@ class Utente(Base):
     allocated_health = Column(Integer, default=0)
     allocated_mana = Column(Integer, default=0)
     allocated_damage = Column(Integer, default=0)
+    allocated_speed = Column(Integer, default=0)
+    allocated_resistance = Column(Integer, default=0)
+    allocated_crit_rate = Column(Integer, default=0)
     last_stat_reset = Column(DateTime, nullable=True)  # Track last reset for cooldown
+    last_attack_time = Column(DateTime, nullable=True)
     
     # Character ownership
     last_character_change = Column('last_character_change', DateTime, nullable=True)  # For weekly restriction

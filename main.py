@@ -7,6 +7,7 @@ import datetime
 import os
 from io import BytesIO
 
+
 # Image processing for grayscale conversion
 try:
     from PIL import Image, ImageEnhance
@@ -40,6 +41,8 @@ transformation_service = TransformationService()
 stats_service = StatsService()
 drop_service = DropService()
 
+# Track last viewed character for admins (for image upload feature)
+admin_last_viewed_character = {}
 
 @bot.message_handler(content_types=['left_chat_member'])
 def esciDalGruppo(message):
@@ -65,44 +68,45 @@ def get_start_markup(user_id):
     markup = types.ReplyKeyboardMarkup()
     markup.add('📦 Inventario', '📦 Compra Box Wumpa (50 🍑)')
     markup.add('🧪 Negozio Pozioni', '👤 Profilo')
-    markup.add('👤 Scegli il personaggio')
+    markup.add('👤 Scegli il personaggio', '💰 Listino & Guida')
     markup.add('📄 Classifica', '❓ Aiuto')
     return markup
 
 def get_character_image(character, is_locked=False):
-    """Get character image, converted to grayscale if locked"""
-    char_name_lower = character.nome.lower().replace(" ", "_")
-    image_path = f"images/characters/{char_name_lower}.png"
-    
-    if not os.path.exists(image_path):
+    """Helper to get character image from filesystem"""
+    if not character:
         return None
     
-    if not is_locked or not PIL_AVAILABLE:
-        # Return normal image
-        with open(image_path, 'rb') as f:
-            return f.read()
-    
-    # Convert to grayscale
     try:
-        img = Image.open(image_path)
-        # Convert to grayscale
-        grayscale = img.convert('L')
-        # Convert back to RGB for Telegram
-        grayscale_rgb = Image.merge('RGB', (grayscale, grayscale, grayscale))
-        # Reduce brightness slightly for locked effect
-        enhancer = ImageEnhance.Brightness(grayscale_rgb)
-        darkened = enhancer.enhance(0.7)
+        # Check if character is a dict (from CSV) or object (from DB)
+        if isinstance(character, dict):
+            char_name_lower = character['nome'].lower().replace(" ", "_")
+        else:
+            char_name_lower = character.nome.lower().replace(" ", "_")
         
-        # Save to BytesIO
-        output = BytesIO()
-        darkened.save(output, format='PNG')
-        output.seek(0)
-        return output.read()
+        # Try PNG first, then JPG
+        for ext in ['.png', '.jpg', '.jpeg']:
+            image_path = f"character_images/{char_name_lower}{ext}"
+            if os.path.exists(image_path):
+                with open(image_path, 'rb') as img:
+                    return img.read()
+        
+        # Try without saga suffix (e.g., "goku.png" instead of "goku_dragon_ball.png")
+        # This is for backward compatibility
+        if isinstance(character, dict):
+            base_name = character['nome'].split('-')[0].strip().lower().replace(" ", "_")
+        else:
+            base_name = character.nome.split('-')[0].strip().lower().replace(" ", "_")
+            
+        for ext in ['.png', '.jpg', '.jpeg']:
+            image_path = f"character_images/{base_name}{ext}"
+            if os.path.exists(image_path):
+                with open(image_path, 'rb') as img:
+                    return img.read()
     except Exception as e:
-        print(f"Error converting image to grayscale: {e}")
-        # Return normal image if conversion fails
-        with open(image_path, 'rb') as f:
-            return f.read()
+        print(f"Error loading character image: {e}")
+    
+    return None
 
 # Global handler function for character selection (to avoid generator issues with class methods)
 def process_character_selection(message):
@@ -139,11 +143,10 @@ def process_character_selection(message):
             bot.reply_to(message, "❌ Errore: utente non trovato", reply_markup=get_start_markup(chatid))
             return
         
-        session = user_service.db.get_session()
-        from models.system import Livello
-        livello = session.query(Livello).filter_by(nome=character_name).first()
-        print(f"[DEBUG] Character found in DB: {livello is not None}")
-        session.close()
+        from services.character_loader import get_character_loader
+        char_loader = get_character_loader()
+        livello = char_loader.get_character_by_name(character_name)
+        print(f"[DEBUG] Character found: {livello is not None}")
         
         if not livello:
             bot.reply_to(message, f"❌ Personaggio '{character_name}' non trovato nel database", reply_markup=get_start_markup(chatid))
@@ -152,16 +155,16 @@ def process_character_selection(message):
         # Verify availability again using service
         available = character_service.get_available_characters(utente)
         print(f"[DEBUG] Available characters count: {len(available)}")
-        print(f"[DEBUG] Checking if character id {livello.id} is in available list")
+        print(f"[DEBUG] Checking if character id {livello['id']} is in available list")
         
-        if any(c.id == livello.id for c in available):
+        if any(c['id'] == livello['id'] for c in available):
             print(f"[DEBUG] Character is available, updating user")
-            user_service.update_user(chatid, {'livello_selezionato': livello.id})
+            user_service.update_user(chatid, {'livello_selezionato': livello['id']})
             
             # Show info/image
             msg_text = f"✅ Personaggio {character_name} equipaggiato!\n"
-            if livello.special_attack_name:
-                msg_text += f"✨ Skill: {livello.special_attack_name} ({livello.special_attack_damage} DMG, {livello.special_attack_mana_cost} Mana)"
+            if livello.get('special_attack_name'):
+                msg_text += f"✨ Skill: {livello['special_attack_name']} ({livello['special_attack_damage']} DMG, {livello['special_attack_mana_cost']} Mana)"
             
             print(f"[DEBUG] Sending success message")
             bot.reply_to(message, msg_text, reply_markup=get_start_markup(chatid))
@@ -201,6 +204,7 @@ class BotCommands:
             "/help": self.handle_help,
             "aiuto": self.handle_help,
             "help": self.handle_help,
+            "💰 Listino & Guida": self.handle_guide_costs,
         }
 
         self.comandi_admin = {
@@ -211,6 +215,11 @@ class BotCommands:
             "backup": self.handle_backup,
             "broadcast": self.handle_broadcast,
             "/spawn": self.handle_spawn_mob,
+            "/boss": self.handle_spawn_boss,
+            "/kill": self.handle_kill_user,
+            "/kill": self.handle_kill_user,
+            "/killall": self.handle_kill_all_enemies,
+            "/missing_image": self.handle_find_missing_image,
         }
         
         self.comandi_generici = {
@@ -263,12 +272,45 @@ Ogni giorno appaiono mostri selvatici!
 - Il mostro contrattacca! Stai attento alla tua vita.
 - Ogni 10 minuti, il mostro attacca un utente a caso!
 - Usa `attacco speciale` per usare l'abilità del tuo personaggio (costa Mana).
-- La Domenica alle 20:00 appare un *RAID BOSS* molto potente!
+- La Domenica alle 20:00 appare un *BOSS* molto potente!
 
 🔹 *COMANDI UTILI*
 - `info`: Visualizza le tue statistiche.
 - `Nome in Game`: Imposta il tuo nickname di gioco.
 - `classifica`: Vedi la top 10.
+"""
+        self.bot.reply_to(self.message, msg, parse_mode='markdown')
+
+    def handle_guide_costs(self):
+        msg = """💰 *LISTINO & GUIDA ACQUISTI* 💰
+
+🎮 *COME COMPRARE GIOCHI*
+Per acquistare un gioco che vedi in un canale o gruppo:
+1. **Inoltra** il messaggio del gioco a questo bot.
+2. Il bot ti scalerà i punti e ti invierà il gioco (e i file successivi).
+
+💎 *COSTI*
+🔸 **Gioco da Canale/Inoltro**:
+   - Utenti Premium: **50** 🍑
+   - Utenti Normali: **150** 🍑
+
+🔸 **Steam Games (Gacha)**:
+   - 🥉 Bronze Coin: **200** 🍑 (10% chance)
+   - 🥈 Silver Coin: **400** 🍑 (50% chance)
+   - 🥇 Gold Coin: **600** 🍑 (100% chance)
+   - 🎖 Platinum Coin: **800** 🍑 (Gioco a scelta)
+
+🔸 **Altro**:
+   - 📦 Box Wumpa: **50** 🍑
+   - 👑 Premium (1 mese): **1000** 🍑
+   - 🔄 Reset Stats: **500** 🍑
+
+🌟 *VANTAGGI PREMIUM*
+✅ Sconto 50% su Pozioni
+✅ Sconto 50% su Personaggi
+✅ Sconto su acquisto giochi (50 invece di 150)
+✅ Accesso a personaggi esclusivi
+✅ Badge "Utente Premium" nel profilo
 """
         self.bot.reply_to(self.message, msg, parse_mode='markdown')
 
@@ -278,12 +320,285 @@ Ogni giorno appaiono mostri selvatici!
         if not user_service.is_admin(utente):
             return
             
-        mob_id = pve_service.spawn_daily_mob()
+        mob_id, attack_events = pve_service.spawn_daily_mob()
         if mob_id:
             mob = pve_service.get_current_mob_status()
-            self.bot.reply_to(self.message, f"⚠️ Un {mob['name']} selvatico è apparso! Salute: {mob['health']} HP. Scrivi 'attacca' per sconfiggerlo!")
+            if mob:
+                # Use new button format with specific mob ID
+                markup = types.InlineKeyboardMarkup()
+                markup.add(types.InlineKeyboardButton("⚔️ Attacca", callback_data=f"attack_enemy|mob|{mob_id}"))
+                markup.add(types.InlineKeyboardButton("✨ Attacco Speciale", callback_data=f"special_attack_enemy|mob|{mob_id}"))
+                
+                msg_text = f"⚠️ Un {mob['name']} selvatico è apparso!\n📊 Lv. {mob.get('level', 1)} | ⚡ Vel: {mob.get('speed', 30)} | 🛡️ Res: {mob.get('resistance', 0)}%\n❤️ Salute: {mob['health']}/{mob['max_health']} HP\n⚔️ Danno: {mob['attack']}"
+                
+                # Send with image if available
+                if mob.get('image') and os.path.exists(mob['image']):
+                    try:
+                        with open(mob['image'], 'rb') as photo:
+                            self.bot.reply_to(self.message, photo, caption=msg_text, reply_markup=markup, )
+                    except:
+                        self.bot.reply_to(self.message, msg_text, reply_markup=markup)
+                else:
+                    self.bot.reply_to(self.message, msg_text, reply_markup=markup)
+                
+                # Send immediate attack messages if any
+                if attack_events:
+                    for event in attack_events:
+                        msg = event['message']
+                        image_path = event['image']
+                        try:
+                            if image_path and os.path.exists(image_path):
+                                with open(image_path, 'rb') as photo:
+                                    self.bot.send_photo(self.message.chat.id, photo, caption=msg, reply_markup=markup, )
+                            else:
+                                self.bot.send_message(self.message.chat.id, msg, reply_markup=markup, )
+                        except:
+                            self.bot.send_message(self.message.chat.id, msg, reply_markup=markup, )
+            else:
+                self.bot.reply_to(self.message, "Mob spawnato ma impossibile recuperare i dettagli.")
         else:
-            self.bot.reply_to(self.message, "C'è già un mob attivo o errore nello spawn.")
+            self.bot.reply_to(self.message, "Errore nello spawn del mob.")
+    
+    def handle_spawn_boss(self):
+        """Admin command to manually spawn a boss (Mob with is_boss=True)"""
+        utente = user_service.get_user(self.chatid)
+        if not user_service.is_admin(utente):
+            return
+        
+        # Extract boss name from command if provided
+        # Expected format: /boss [boss_name]
+        text = self.message.text.strip()
+        parts = text.split(maxsplit=1)
+        boss_name = parts[1] if len(parts) > 1 else None
+        
+        success, msg, boss_id = pve_service.spawn_boss(boss_name)
+        if success and boss_id:
+            boss = pve_service.get_current_boss_status()
+            if boss:
+                # Create attack buttons
+                markup = types.InlineKeyboardMarkup()
+                markup.add(
+                    types.InlineKeyboardButton("⚔️ Attacca", callback_data=f"attack_enemy|mob|{boss_id}"),
+                    types.InlineKeyboardButton("✨ Attacco Speciale", callback_data=f"special_attack_enemy|mob|{boss_id}")
+                )
+                
+                msg_text = f"☠️ **IL BOSS {boss['name']} È ARRIVATO!**\n\n"
+                msg_text += f"📊 Lv. {boss.get('level', 5)} | ⚡ Vel: {boss.get('speed', 70)} | 🛡️ Res: {boss.get('resistance', 0)}%\n"
+                msg_text += f"❤️ Salute: {boss['health']}/{boss['max_health']} HP\n"
+                msg_text += f"⚔️ Danno: {boss['attack']}\n"
+                if boss['description']:
+                    msg_text += f"📜 {boss['description']}\n"
+                msg_text += "\nUNITI PER SCONFIGGERLO!"
+                
+                # Send with image if available
+                if boss.get('image') and os.path.exists(boss['image']):
+                    try:
+                        with open(boss['image'], 'rb') as photo:
+                            self.bot.reply_to(self.message, photo, caption=msg_text, reply_markup=markup, parse_mode='markdown')
+                    except:
+                        self.bot.reply_to(self.message, msg_text, reply_markup=markup, parse_mode='markdown')
+                else:
+                    self.bot.reply_to(self.message, msg_text, reply_markup=markup, parse_mode='markdown')
+        else:
+            self.bot.reply_to(self.message, f"❌ {msg}")
+    
+    def handle_kill_user(self):
+        """dmin command to kill user or enemy. Usage: /kill (reply to user) OR /kill mob|boss [id/name]"""
+        utente = user_service.get_user(self.chatid)
+        if not user_service.is_admin(utente):
+            return
+        
+        # Parse command
+        text = self.message.text.strip()
+        parts = text.split(maxsplit=2)
+        
+        # Check if killing enemy: /kill mob 123 or /kill boss N.Gin
+        if len(parts) >= 3:
+            target_type = parts[1].lower()
+            target_id_or_name = parts[2]
+            
+            if target_type == "mob":
+                from database import Database
+                from models.pve import Mob
+                db = Database()
+                session = db.get_session()
+                
+                try:
+                    mob_id = int(target_id_or_name)
+                    mob = session.query(Mob).filter_by(id=mob_id).first()
+                except ValueError:
+                    mob = session.query(Mob).filter_by(name=target_id_or_name, is_dead=False).first()
+                
+                if mob:
+                    mob.is_dead = True
+                    mob.health = 0
+                    session.commit()
+                    self.bot.reply_to(self.message, f"💀 Mob '{mob.name}' eliminato!")
+                else:
+                    self.bot.reply_to(self.message, "❌ Mob non trovato!")
+                session.close()
+                return
+                
+            elif target_type in ["boss", "raid"]:
+                from database import Database
+                from models.pve import Mob
+                db = Database()
+                session = db.get_session()
+                
+                try:
+                    mob_id = int(target_id_or_name)
+                    boss = session.query(Mob).filter_by(id=mob_id, is_boss=True).first()
+                except ValueError:
+                    boss = session.query(Mob).filter_by(name=target_id_or_name, is_boss=True, is_dead=False).first()
+                
+                if boss:
+                    boss.is_dead = True
+                    boss.health = 0
+                    session.commit()
+                    self.bot.reply_to(self.message, f"💀 Boss '{boss.name}' eliminato!")
+                else:
+                    self.bot.reply_to(self.message, "❌ Boss non trovato!")
+                session.close()
+                return
+        
+        # Original: reply to user message to kill user
+        if not self.message.reply_to_message:
+            self.bot.reply_to(self.message, "❌ Uso: /kill (rispondi ad utente) O /kill mob|boss [id/nome]")
+            return
+        
+        target_id = self.message.reply_to_message.from_user.id
+        target_user = user_service.get_user(target_id)
+        
+        if not target_user:
+            self.bot.reply_to(self.message, "❌ Utente non trovato!")
+            return
+        
+        user_service.update_user(target_id, {'health': 0})
+        self.bot.reply_to(self.message, f"💀 {target_user.nome} eliminato!")
+    
+    def handle_find_missing_image(self):
+        """Find a random character or mob without an image"""
+        utente = user_service.get_user(self.chatid)
+        if not user_service.is_admin(utente):
+            return
+
+        missing_images = []
+
+        # 1. Check Characters
+        all_chars = character_service.get_all_characters()
+        for char in all_chars:
+            # Check if image exists
+            found = False
+            # Check dict or object
+            if isinstance(char, dict):
+                char_name = char['nome']
+            else:
+                char_name = char.nome
+                
+            char_name_clean = char_name.lower().replace(" ", "_").replace("'", "")
+            
+            # Try standard extensions
+            for ext in ['.png', '.jpg', '.jpeg']:
+                if os.path.exists(f"images/characters/{char_name_clean}{ext}"):
+                    found = True
+                    break
+            
+            # Try without saga suffix
+            if not found:
+                base_name = char_name.split('-')[0].strip().lower().replace(" ", "_")
+                for ext in ['.png', '.jpg', '.jpeg']:
+                    if os.path.exists(f"images/characters/{base_name}{ext}"):
+                        found = True
+                        break
+            
+            if not found:
+                missing_images.append({'name': char_name, 'type': 'character'})
+
+        # 2. Check Mobs
+        try:
+            import csv
+            with open('data/mobs.csv', 'r') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    mob_name = row['nome']
+                    mob_name_clean = mob_name.lower().replace(" ", "_").replace("'", "")
+                    
+                    found = False
+                    for ext in ['.png', '.jpg', '.jpeg']:
+                        if os.path.exists(f"images/mobs/{mob_name_clean}{ext}"):
+                            found = True
+                            break
+                    
+                    if not found:
+                        missing_images.append({'name': mob_name, 'type': 'mob'})
+        except Exception as e:
+            print(f"Error checking mobs: {e}")
+
+        if not missing_images:
+            self.bot.reply_to(self.message, "✅ Tutti i personaggi e i mob hanno un'immagine!")
+            return
+
+        # Pick random missing
+        import random
+        target = random.choice(missing_images)
+        
+        # Track it
+        admin_last_viewed_character[self.chatid] = {
+            'character_name': target['name'],
+            'timestamp': datetime.datetime.now(),
+            'type': target['type']
+        }
+        
+        msg = f"🔍 **Immagine Mancante Trovata!**\n\n"
+        msg += f"Nome: **{target['name']}**\n"
+        msg += f"Tipo: **{target['type'].title()}**\n\n"
+        msg += f"📸 Invia una foto ORA per caricarla!"
+        
+        self.bot.reply_to(self.message, msg, parse_mode='markdown')
+
+    def handle_kill_all_enemies(self):
+        """Admin command to kill all active enemies"""
+        utente = user_service.get_user(self.chatid)
+        if not user_service.is_admin(utente):
+            return
+        
+        from database import Database
+        from models.pve import Mob
+        db = Database()
+        session = db.get_session()
+        
+        # Get all active enemies (not dead)
+        active_enemies = session.query(Mob).filter_by(is_dead=False).all()
+        
+        if not active_enemies:
+            session.close()
+            self.bot.reply_to(self.message, "✅ Nessun nemico attivo!")
+            return
+        
+        killed_count = 0
+        bosses_killed = 0
+        mobs_killed = 0
+        
+        for enemy in active_enemies:
+            enemy.is_dead = True
+            enemy.health = 0
+            killed_count += 1
+            if enemy.is_boss:
+                bosses_killed += 1
+            else:
+                mobs_killed += 1
+        
+        session.commit()
+        session.close()
+        
+        msg = f"💀 **Tutti i nemici eliminati!**\n\n"
+        msg += f"📊 Totale: {killed_count}\n"
+        if mobs_killed > 0:
+            msg += f"👹 Mob: {mobs_killed}\n"
+        if bosses_killed > 0:
+            msg += f"☠️ Boss: {bosses_killed}\n"
+        
+        self.bot.reply_to(self.message, msg, parse_mode='markdown')
 
     def handle_special_attack(self):
         utente = user_service.get_user(self.chatid)
@@ -315,21 +630,7 @@ Ogni giorno appaiono mostri selvatici!
         self.bot.reply_to(self.message, "✅ Ti ho dato tutte le 14 sfere del drago (7 Shenron + 7 Porunga) per testare!\n\nUsa /wish o vai in inventario per evocarli.")
 
     def handle_attack(self):
-        utente = user_service.get_user(self.chatid)
-        damage = random.randint(10, 30) # Base damage
-        
-        # Check for luck boost
-        if utente.luck_boost > 0:
-             damage *= 2
-             user_service.update_user(self.chatid, {'luck_boost': 0}) # Consume boost
-        
-        # Try attacking mob first
-        success, msg = pve_service.attack_mob(utente, damage)
-        if not success:
-            # Try attacking raid boss
-            success, msg = pve_service.attack_raid_boss(utente, damage)
-            
-        self.bot.reply_to(self.message, msg)
+        self.bot.reply_to(self.message, "❌ Per attaccare devi usare i pulsanti sotto il messaggio del mostro!")
 
     def handle_buy_box_wumpa(self):
         utente = user_service.get_user(self.chatid)
@@ -436,17 +737,17 @@ Ogni giorno appaiono mostri selvatici!
             msg += f"\n🎮 {utente.platform}: {utente.game_name}"
         
         # Check for character image
-        session = user_service.db.get_session()
-        from models.system import Livello
-        selected_level = session.query(Livello).filter_by(id=utente.livello_selezionato).first()
+        from services.character_loader import get_character_loader
+        char_loader = get_character_loader()
+        selected_level = char_loader.get_character_by_id(utente.livello_selezionato)
         
         image_sent = False
         if selected_level:
-            # Try using cached file_id first
-            if selected_level.telegram_file_id:
+            # Try using cached file_id first (not available in CSV, skip this)
+            # Character images would need separate handling
+            if False:  # Disabled telegram_file_id caching for CSV-based chars
                 try:
-                    self.bot.send_photo(self.chatid, selected_level.telegram_file_id, caption=msg, parse_mode='markdown', reply_markup=get_start_markup(self.chatid))
-                    session.close()
+                    pass
                     image_sent = True
                 except Exception as e:
                     print(f"Error sending cached image: {e}")
@@ -484,52 +785,24 @@ Ogni giorno appaiono mostri selvatici!
         if not image_sent:
             self.bot.reply_to(self.message, msg, parse_mode='markdown', reply_markup=get_start_markup(self.chatid))
 
-    def handle_profile(self):
+
+
+
+    def handle_profile(self, target_user=None):
         """Show comprehensive user profile with stats and transformations"""
-        utente = user_service.get_user(self.chatid)
+        if target_user:
+            utente = target_user
+        else:
+            utente = user_service.get_user(self.chatid)
         
-        # Check for expired transformations
-        # Transformation check removed - handled automatically
+        if not utente:
+            self.bot.reply_to(self.message, "Utente non trovato.")
+            return
         
         # Get character info
-        session = user_service.db.get_session()
-        from models.system import Livello
-        character = session.query(Livello).filter_by(id=utente.livello_selezionato).first()
-        
-        # Build new profile format
-        msg = ""
-        
-        # Premium status - ONLY show if user is actually premium
-        if utente.premium == 1:
-            msg += "🎖 Utente Premium\n"
-            if utente.abbonamento_attivo == 1:
-                # Calculate subscription end date
-                if hasattr(utente, 'scadenza_premium') and utente.scadenza_premium:
-                    msg += f"✅ Abbonamento attivo (fino al {utente.scadenza_premium.strftime('%Y-%m-%d')})\n"
-                else:
-                    msg += "✅ Abbonamento attivo\n"
-            else:
-                msg += "⏸️ Abbonamento in pausa\n"
-        
-        # Username, Wumpa, Exp, Level, Character
-        username = utente.username or utente.nome or "Utente"
-        msg += f"👤 {username}: {utente.points} Frutti Wumpa 🍑\n"
-        
-        # Calculate exp for next level using character's exp_required
-
-
-
-    def handle_profile(self):
-        """Show comprehensive user profile with stats and transformations"""
-        utente = user_service.get_user(self.chatid)
-        
-        # Check for expired transformations
-        # Transformation check removed - handled automatically in get_active_transformation
-        
-        # Get character info
-        session = user_service.db.get_session()
-        from models.system import Livello
-        character = session.query(Livello).filter_by(id=utente.livello_selezionato).first()
+        from services.character_loader import get_character_loader
+        char_loader = get_character_loader()
+        character = char_loader.get_character_by_id(utente.livello_selezionato)
         
         # Build new profile format
         msg = ""
@@ -545,19 +818,20 @@ Ogni giorno appaiono mostri selvatici!
         
         # Calculate next level exp
         next_lv_num = utente.livello + 1
-        next_lv_row = session.query(Livello).filter_by(livello=next_lv_num).first()
+        next_lv_row = char_loader.get_characters_by_level(next_lv_num)
+        next_lv_row = next_lv_row[0] if next_lv_row else None
         
         if next_lv_row:
-            exp_req = next_lv_row.exp_required if hasattr(next_lv_row, 'exp_required') else next_lv_row.exp_to_lv
+            exp_req = next_lv_row.get('exp_required', next_lv_row.get('exp_to_lv', 100))
         else:
             # Formula for levels beyond DB (e.g. up to 80)
             exp_req = 100 * (next_lv_num ** 2)
             
         msg += f"💪🏻 **Exp**: {utente.exp}/{exp_req}\n"
         # Character name with saga
-        char_display = character.nome if character else 'N/A'
-        if character and character.character_group:
-            char_display = f"{character.nome} - {character.character_group}"
+        char_display = character['nome'] if character else 'N/A'
+        if character and character.get('character_group'):
+            char_display = f"{character['nome']} - {character['character_group']}"
         msg += f"🎖 **Lv.** {utente.livello} - {char_display}\n"
         
         # RPG Stats
@@ -577,16 +851,16 @@ Ogni giorno appaiono mostri selvatici!
         if character:
             from services.skill_service import SkillService
             skill_service = SkillService()
-            abilities = skill_service.get_character_abilities(character.id)
+            abilities = skill_service.get_character_abilities(character['id'])
             
             if abilities:
                 msg += f"\n✨ **Abilità:**\n"
                 for ability in abilities:
                     msg += f"🔮 {ability['name']}: {ability['damage']} DMG, {ability['mana_cost']} Mana, Crit {ability['crit_chance']}% (x{ability['crit_multiplier']})\n"
-            elif character.special_attack_name:
+            elif character.get('special_attack_name'):
                 # Fallback to legacy special attack
-                msg += f"\n✨ **Attacco Speciale**: {character.special_attack_name}\n"
-                msg += f"  Danno: {character.special_attack_damage} | Mana: {character.special_attack_mana_cost}\n"
+                msg += f"\n✨ **Attacco Speciale**: {character['special_attack_name']}\n"
+                msg += f"  Danno: {character['special_attack_damage']} | Mana: {character['special_attack_mana_cost']}\n"
             
         # Transformations
         active_trans = transformation_service.get_active_transformation(utente)
@@ -598,30 +872,37 @@ Ogni giorno appaiono mostri selvatici!
                 msg += f"└ {active_trans['name']}\n"
                 msg += f"└ Scade tra: {hours_left}h\n\n"
         
-        # Inline buttons
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("📊 Alloca Statistiche", callback_data="stats_menu"))
-        markup.add(types.InlineKeyboardButton(f"🔄 Reset Stats (500 {PointsName})", callback_data="reset_stats_confirm"))
+        # Only show action buttons if viewing own profile
+        if not target_user or target_user.id_telegram == self.chatid:
+            markup.add(types.InlineKeyboardButton("📊 Alloca Statistiche", callback_data="stats_menu"))
+            markup.add(types.InlineKeyboardButton(f"🔄 Reset Stats (500 {PointsName})", callback_data="reset_stats_confirm"))
         if character:
             markup.add(types.InlineKeyboardButton("✨ Attacco Speciale", callback_data="special_attack_mob"))
+            
+            # Add transform button if transformations are available for this character
+            transforms = char_loader.get_transformation_chain(character['id'])
+            if transforms:
+                markup.add(types.InlineKeyboardButton("🔥 Trasformati", callback_data=f"transform_menu|{character['id']}"))
             
         # Try to send with character image
         image_sent = False
         if character:
             # Try using helper function
+            from services.character_loader import get_character_image
             image_data = get_character_image(character, is_locked=False)
             
             if image_data:
                 try:
-                    self.bot.send_photo(self.chatid, image_data, caption=msg, parse_mode='markdown', reply_markup=markup)
+                    self.bot.send_photo(self.message.chat.id, image_data, caption=msg, parse_mode='markdown', reply_markup=markup)
                     image_sent = True
                 except Exception as e:
                     print(f"Error sending character image: {e}")
         
-        session.close()
+
         
         if not image_sent:
-            self.bot.reply_to(self.message, msg, parse_mode='markdown', reply_markup=markup)
+            self.bot.send_message(self.message.chat.id, msg, parse_mode='markdown', reply_markup=markup)
 
 
     def handle_nome_in_game(self):
@@ -644,6 +925,23 @@ Ogni giorno appaiono mostri selvatici!
         gamename = message.text
         user_service.update_user(self.chatid, {'platform': platform, 'game_name': gamename})
         self.bot.reply_to(message, f"✅ Salvato! {platform}: {gamename}", reply_markup=get_start_markup(self.chatid))
+
+    def process_item_target(self, message, item_name):
+        """Handle target selection for items"""
+        target_username = message.text.strip()
+        target_user = user_service.get_user(target_username)
+        
+        if not target_user:
+            self.bot.reply_to(message, f"❌ Utente {target_username} non trovato. Operazione annullata.")
+            return
+            
+        # Use the item on the target
+        if item_service.use_item(self.chatid, item_name):
+            utente = user_service.get_user(self.chatid)
+            msg = item_service.apply_effect(utente, item_name, target_user)
+            self.bot.reply_to(message, msg)
+        else:
+            self.bot.reply_to(message, "❌ Non hai questo oggetto o è già stato usato.")
 
     def handle_inventario(self):
         inventario = item_service.get_inventory(self.chatid)
@@ -668,12 +966,29 @@ Ogni giorno appaiono mostri selvatici!
                 "Uka Uka": "😈",
                 "Nitro": "💣",
                 "Mira un giocatore": "🎯",
-                "Colpisci un giocatore": "💥"
+                "Colpisci un giocatore": "💥",
+                "Cassa": "📦"
             }
             
+            # Load potions to check which items are potions
+            from services.potion_service import PotionService
+            potion_service = PotionService()
+            all_potions = potion_service.get_all_potions()
+            potion_names = [p['nome'] for p in all_potions]
+            
             for oggetto in inventario:
-                # Only add button if item is usable
-                if oggetto.oggetto in item_emoji:
+                # Check if it's a potion
+                if oggetto.oggetto in potion_names:
+                    # Add potion button with appropriate emoji
+                    if 'Mana' in oggetto.oggetto:
+                        emoji = "💙"
+                    elif 'Elisir' in oggetto.oggetto:
+                        emoji = "✨"
+                    else:
+                        emoji = "💚"
+                    markup.add(types.InlineKeyboardButton(f"{emoji} Usa {oggetto.oggetto}", callback_data=f"use_potion|{oggetto.oggetto}"))
+                # Check if it's a regular item
+                elif oggetto.oggetto in item_emoji:
                     emoji = item_emoji.get(oggetto.oggetto, "🔹")
                     markup.add(types.InlineKeyboardButton(f"{emoji} Usa {oggetto.oggetto}", callback_data=f"use|{oggetto.oggetto}"))
             
@@ -747,8 +1062,33 @@ Ogni giorno appaiono mostri selvatici!
         pass
 
     def handle_plus_minus(self):
-        # Admin command to add/remove points
-        pass
+        """Admin command to add/remove points: +15 @username or -10 @username"""
+        utente = user_service.get_user(self.chatid)
+        if not user_service.is_admin(utente):
+            return
+
+        text = self.message.text.strip()
+        try:
+            parts = text.split()
+            if len(parts) < 2:
+                return
+            
+            amount_str = parts[0]
+            target_str = parts[1]
+            
+            amount = int(amount_str)
+            target_user = user_service.get_user(target_str)
+            
+            if target_user:
+                user_service.add_points(target_user, amount)
+                action = "aggiunti" if amount > 0 else "rimossi"
+                self.bot.reply_to(self.message, f"✅ {abs(amount)} {PointsName} {action} a {target_user.username or target_user.nome}!")
+            else:
+                self.bot.reply_to(self.message, f"❌ Utente {target_str} non trovato.")
+        except ValueError:
+            pass
+        except Exception as e:
+            print(f"Error in handle_plus_minus: {e}")
 
     def handle_restore(self):
         pass
@@ -763,10 +1103,24 @@ Ogni giorno appaiono mostri selvatici!
         pass
 
     def handle_me(self):
-        self.handle_info()
+        self.handle_profile()
 
     def handle_status(self):
-        pass
+        """Show profile of tagged user: !status @username"""
+        text = self.message.text.strip()
+        parts = text.split()
+        
+        if len(parts) < 2:
+            self.bot.reply_to(self.message, "❌ Uso: !status @username")
+            return
+            
+        target_username = parts[1]
+        target_user = user_service.get_user(target_username)
+        
+        if target_user:
+            self.handle_profile(target_user=target_user)
+        else:
+            self.bot.reply_to(self.message, f"❌ Utente {target_username} non trovato.")
 
     def handle_stats(self):
         pass
@@ -823,37 +1177,46 @@ Ogni giorno appaiono mostri selvatici!
         char_idx = 0
         char = level_chars[char_idx]
         
-        is_unlocked = character_service.is_character_unlocked(utente, char.id)
-        is_equipped = (utente.livello_selezionato == char.id)
+        # CSV returns dicts, so use dict access
+        char_id = char['id']
+        char_name = char['nome']
+        char_group = char.get('character_group', '')
+        char_element = char.get('elemental_type', '')
+        char_level = char['livello']
+        char_lv_premium = char.get('lv_premium', 0)
+        char_price = char.get('price', 0)
+        
+        is_unlocked = character_service.is_character_unlocked(utente, char_id)
+        is_equipped = (utente.livello_selezionato == char_id)
         
         # Format character card
         lock_icon = "" if is_unlocked else "🔒 "
-        saga_info = f" - {char.character_group}" if char.character_group else ""
-        type_info = f" ({char.elemental_type})" if char.elemental_type else ""
-        msg = f"**{lock_icon}{char.nome}{saga_info}{type_info}**"
+        saga_info = f" - {char_group}" if char_group else ""
+        type_info = f" ({char_element})" if char_element else ""
+        msg = f"**{lock_icon}{char_name}{saga_info}{type_info}**"
         
         if is_equipped:
             msg += " ⭐ *EQUIPAGGIATO*"
         
         msg += "\n\n"
-        msg += f"📊 Livello Richiesto: {char.livello}\n"
+        msg += f"📊 Livello Richiesto: {char_level}\n"
         
-        if char.lv_premium == 1:
+        if char_lv_premium == 1:
             msg += f"👑 Richiede Premium\n"
-        elif char.lv_premium == 2 and char.price > 0:
-            price = char.price
+        elif char_lv_premium == 2 and char_price > 0:
+            price = char_price
             if utente.premium == 1:
                 price = int(price * 0.5)
             msg += f"💰 Prezzo: {price} {PointsName}"
             if utente.premium == 1:
-                msg += f" ~~{char.price}~~"
+                msg += f" ~~{char_price}~~"
             msg += "\n"
         
         
         # Show skills with crit stats
         from services.skill_service import SkillService
         skill_service = SkillService()
-        abilities = skill_service.get_character_abilities(char.id)
+        abilities = skill_service.get_character_abilities(char_id)
         
         if abilities:
             msg += f"\n✨ **Abilità:**\n"
@@ -862,21 +1225,21 @@ Ogni giorno appaiono mostri selvatici!
                 msg += f"   ⚔️ Danno: {ability['damage']}\n"
                 msg += f"   💙 Mana: {ability['mana_cost']}\n"
                 msg += f"   🎯 Crit: {ability['crit_chance']}% (x{ability['crit_multiplier']})\n"
-        elif char.special_attack_name:
+        elif char.get('special_attack_name'):
             # Fallback to legacy special attack
             msg += f"\n✨ **Abilità Speciale:**\n"
-            msg += f"🔮 {char.special_attack_name}\n"
-            msg += f"⚔️ Danno: {char.special_attack_damage}\n"
-            msg += f"💙 Costo Mana: {char.special_attack_mana_cost}\n"
+            msg += f"🔮 {char.get('special_attack_name')}\n"
+            msg += f"⚔️ Danno: {char.get('special_attack_damage')}\n"
+            msg += f"💙 Costo Mana: {char.get('special_attack_mana_cost')}\n"
         
-        if char.description:
-            msg += f"\n📝 {char.description}\n"
+        if char.get('description'):
+            msg += f"\n📝 {char.get('description')}\n"
         
         if not is_unlocked:
             msg += "\n🔒 **PERSONAGGIO BLOCCATO**\n"
-            if char.livello > utente.livello:
-                msg += f"Raggiungi livello {char.livello} per sbloccarlo!\n"
-            elif char.lv_premium == 1:
+            if char_level > utente.livello:
+                msg += f"Raggiungi livello {char_level} per sbloccarlo!\n"
+            elif char_lv_premium == 1:
                 msg += "Richiede abbonamento Premium!\n"
         
         msg += f"\n📄 Livello {level_idx + 1}/{len(levels)} - Personaggio {char_idx + 1}/{len(level_chars)}"
@@ -951,16 +1314,32 @@ Ogni giorno appaiono mostri selvatici!
             
         markup.row(*nav_char_row)
         
+        # Row 3: Saga navigation button
+        saga_row = []
+        saga_row.append(types.InlineKeyboardButton(f"📚 {char_group}", callback_data=f"saga_nav|{char_group}|0"))
+        markup.row(*saga_row)
+        
         if is_unlocked:
             if not is_equipped:
-                markup.add(types.InlineKeyboardButton("✅ Equipaggia", callback_data=f"char_select|{char.id}"))
+                markup.add(types.InlineKeyboardButton("✅ Equipaggia", callback_data=f"char_select|{char_id}"))
             else:
                 markup.add(types.InlineKeyboardButton("⭐ Già Equipaggiato", callback_data="char_already_equipped"))
-        elif char.lv_premium == 2 and char.price > 0:
-             markup.add(types.InlineKeyboardButton(f"🛒 Compra ({price} 🍑)", callback_data=f"char_buy|{char.id}"))
+        elif char_lv_premium == 2 and char_price > 0:
+             markup.add(types.InlineKeyboardButton(f"🛒 Compra ({price} 🍑)", callback_data=f"char_buy|{char_id}"))
         
         # Send image if available
+        # Ensure get_character_image is imported or available
+        from services.character_loader import get_character_image
         image_data = get_character_image(char, is_locked=not is_unlocked)
+        
+        # Track this character for admin image upload feature
+        if user_service.is_admin(utente):
+            admin_last_viewed_character[self.chatid] = {
+                'character_id': char_id,
+                'character_name': char_name,
+                'timestamp': datetime.datetime.now()
+            }
+        
         if image_data:
             self.bot.send_photo(self.chatid, image_data, caption=msg, reply_markup=markup, parse_mode='markdown')
         else:
@@ -1001,29 +1380,78 @@ Ogni giorno appaiono mostri selvatici!
             char_name = text.split(" (")[0]
         else:
             char_name = text
-            
+        
         utente = user_service.get_user(self.chatid)
-        session = user_service.db.get_session()
-        from models.system import Livello
-        char = session.query(Livello).filter_by(nome=char_name).first()
-        session.close()
+        from services.character_loader import get_character_loader
+        char_loader = get_character_loader()
+        char = char_loader.get_character_by_name(char_name)
         
         if char:
-            success, msg = character_service.purchase_character(utente, char.id)
+            success, msg = character_service.purchase_character(utente, char['id'])
             if success:
                 self.bot.reply_to(message, f"🎉 {msg}", reply_markup=get_start_markup(self.chatid))
             else:
-                self.bot.reply_to(message, f"⛔ {msg}")
-                # Re-show shop
-                self.handle_shop_characters()
+                self.bot.reply_to(message, f"❌ {msg}", reply_markup=get_start_markup(self.chatid))
         else:
-            self.bot.reply_to(message, "Personaggio non trovato.")
+            self.bot.reply_to(message, "Personaggio non trovato.", reply_markup=get_start_markup(self.chatid))
             self.handle_shop_characters()
+
+    def handle_spawn(self):
+        utente = user_service.get_user(self.chatid)
+        if not user_service.is_admin(utente):
+            return
+
+        # Extract mob name if provided
+        # Command format: /spawn [mob_name]
+        parts = self.message.text.split(' ', 1)
+        mob_name = parts[1] if len(parts) > 1 else None
+        
+        success, msg, mob_id = pve_service.spawn_specific_mob(mob_name)
+        
+        if success:
+            # Announce spawn
+            mob = pve_service.get_current_mob_status()
+            if mob:
+                markup = types.InlineKeyboardMarkup()
+                markup.add(types.InlineKeyboardButton("⚔️ Attacca", callback_data=f"attack_enemy|mob|{mob_id}"), 
+                           types.InlineKeyboardButton("✨ Attacco Speciale", callback_data=f"special_attack_enemy|mob|{mob_id}"))
+                
+                msg_text = f"⚠️ Un {mob['name']} selvatico è apparso!\n📊 Lv. {mob.get('level', 1)} | ⚡ Vel: {mob.get('speed', 30)} | 🛡️ Res: {mob.get('resistance', 0)}%\n❤️ Salute: {mob['health']}/{mob['max_health']} HP\n⚔️ Danno: {mob['attack']}\n\nSconfiggilo per ottenere ricompense!"
+                
+                # Send with image if available
+                if mob.get('image') and os.path.exists(mob['image']):
+                    try:
+                        with open(mob['image'], 'rb') as photo:
+                            self.bot.send_photo(GRUPPO_AROMA, photo, caption=msg_text, reply_markup=markup, )
+                    except:
+                        self.bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup)
+                else:
+                    self.bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup)
+                
+                # Immediate attack
+                attack_events = pve_service.mob_random_attack(specific_mob_id=mob_id)
+                if attack_events:
+                    for event in attack_events:
+                        msg = event['message']
+                        image_path = event['image']
+                        try:
+                            if image_path and os.path.exists(image_path):
+                                with open(image_path, 'rb') as photo:
+                                    self.bot.send_photo(GRUPPO_AROMA, photo, caption=msg, reply_markup=markup, )
+                            else:
+                                self.bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, )
+                        except:
+                            self.bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, )
+        else:
+            self.bot.reply_to(self.message, f"❌ {msg}")
 
     def handle_all_commands(self):
         message = self.message
         utente = user_service.get_user(self.chatid)
         
+        if not message.text:
+            return
+            
         if message.chat.type == "private":
             for command, handler in self.comandi_privati.items():
                 if command.lower() in message.text.lower():
@@ -1031,6 +1459,20 @@ Ogni giorno appaiono mostri selvatici!
                     return
 
         if utente and user_service.is_admin(utente):
+            # Check specific commands first (to avoid partial matches)
+            if message.text.startswith("/killall"):
+                self.handle_kill_all_enemies()
+                return
+            if message.text.startswith("/spawn"):
+                self.handle_spawn()
+                return
+            if message.text.startswith("/boss"):
+                self.handle_spawn_boss()
+                return
+            if message.text.startswith("/kill"):
+                self.handle_kill_user()
+                return
+                
             for command, handler in self.comandi_admin.items():
                 if command.lower() in message.text.lower():
                     handler()
@@ -1043,16 +1485,128 @@ Ogni giorno appaiono mostri selvatici!
 
 @bot.message_handler(content_types=util.content_type_media)
 def any(message):
+    # Check if message is a forward (Game Purchase)
+    if message.forward_from_chat or message.forward_from:
+        utente = user_service.get_user(message.from_user.id)
+        if not utente:
+             user_service.create_user(message.from_user.id, message.from_user.username, message.from_user.first_name, message.from_user.last_name)
+             utente = user_service.get_user(message.from_user.id)
+             
+        # Determine cost
+        costo = 50 if utente.premium == 1 else 150
+        
+        if utente.points < costo:
+            bot.reply_to(message, f"❌ Non hai abbastanza {PointsName}! Ti servono {costo} {PointsName}.")
+            return
+
+        # Deduct points
+        user_service.add_points(utente, -costo)
+        bot.reply_to(message, f"✅ Gioco acquistato per {costo} {PointsName}!\nInizio download...")
+        
+        # Forwarding loop
+        try:
+            source_chat_id = message.forward_from_chat.id if message.forward_from_chat else message.forward_from.id
+            start_msg_id = message.forward_from_message_id
+            
+            # Forward the first message (the one user forwarded)
+            # Actually, the user already forwarded it, but we want to "download" it aka forward it back to them?
+            # Or does the user forward a message from a channel, and we continue forwarding from THAT channel?
+            # "In pratica deve andare sulla fonte originale, e far comprare il gioco, cioè inoltrare di nuovo quel messaggio e tutti quelli con id successivo"
+            
+            current_msg_id = start_msg_id
+            count = 0
+            max_messages = 20 # Safety limit
+            
+            while count < max_messages:
+                try:
+                    # Forward message from source to user
+                    fwd_msg = bot.forward_message(message.chat.id, source_chat_id, current_msg_id)
+                    
+                    # Check if sticker (Stop condition)
+                    if fwd_msg.sticker:
+                        break
+                        
+                    current_msg_id += 1
+                    count += 1
+                    time.sleep(0.5) # Avoid flood limits
+                except Exception as e:
+                    print(f"Error forwarding message {current_msg_id}: {e}")
+                    # If we can't forward a message (deleted?), maybe try next one?
+                    # But if we fail too many times, stop.
+                    current_msg_id += 1
+                    count += 1
+                    
+        except Exception as e:
+            bot.reply_to(message, f"⚠️ Errore durante il download: {e}")
+            
+        return
+
+    # Admin Character Image Upload Feature
+    if message.content_type == 'photo' and message.from_user:
+        user_id = message.from_user.id
+        utente = user_service.get_user(user_id)
+        
+        # Check if admin
+        if utente and user_service.is_admin(utente):
+            # Check if has recently viewed a character
+            if user_id in admin_last_viewed_character:
+                char_data = admin_last_viewed_character[user_id]
+                
+                # Check if view was recent (within last 5 minutes)
+                time_diff = datetime.datetime.now() - char_data['timestamp']
+                if time_diff.total_seconds() < 300:  # 5 minutes
+                    try:
+                        # Download the photo
+                        file_info = bot.get_file(message.photo[-1].file_id)
+                        downloaded_file = bot.download_file(file_info.file_path)
+                        
+                        # Save with character name
+                        char_name = char_data['character_name']
+                        char_type = char_data.get('type', 'character') # Default to character for backward compatibility
+                        
+                        file_name = char_name.lower().replace(' ', '_').replace("'", "") + ".png"
+                        
+                        if char_type == 'mob':
+                            # Ensure directory exists
+                            os.makedirs('images/mobs', exist_ok=True)
+                            file_path = os.path.join('images', 'mobs', file_name)
+                        else:
+                            file_path = os.path.join('images', 'characters', file_name)
+                        
+                        with open(file_path, 'wb') as f:
+                            f.write(downloaded_file)
+                        
+                        bot.reply_to(message, f"✅ Immagine aggiornata per {char_name}!\nSalvata in: {file_path}")
+                        
+                        # Clear the tracking
+                        del admin_last_viewed_character[user_id]
+                        return
+                    except Exception as e:
+                        bot.reply_to(message, f"❌ Errore nell'aggiornamento dell'immagine: {e}")
+                        return
+                else:
+                    bot.reply_to(message, f"⏱️ Tempo scaduto! Sono passati {int(time_diff.total_seconds())} secondi.\nVisualizza nuovamente il personaggio e riprova entro 5 minuti.")
+                    del admin_last_viewed_character[user_id]
+                    return
+            else:
+                # Only show info if it LOOKS like they might be trying to upload (e.g. caption contains character name?)
+                # Or just ignore if not tracking. 
+                # The user complaint was that forwarding a game triggered this.
+                # Now that we handle forwards above, this should be safe.
+                pass
+    
     # Check Sunday, etc.
     utente = user_service.get_user(message.from_user.id)
     if not utente:
         user_service.create_user(message.from_user.id, message.from_user.username, message.from_user.first_name, message.from_user.last_name)
         utente = user_service.get_user(message.from_user.id)
     
+    # Track activity
+    user_service.track_activity(message.from_user.id)
+    
     # Sunday reset removed - characters persist
     
     # Sunday bonus: 10 Wumpa when you write on Sunday
-    import datetime
     if datetime.datetime.today().weekday() == 6:  # Sunday
         session = user_service.db.get_session()
         from models.system import Domenica
@@ -1061,8 +1615,8 @@ def any(message):
         sunday_bonus = session.query(Domenica).filter_by(utente=utente.id_telegram).first()
         
         if not sunday_bonus or sunday_bonus.last_day != today:
-            # Give Sunday bonus
-            user_service.add_points(utente, 10)
+            # Give Sunday bonus - Box Wumpa
+            success, box_msg, item = item_service.open_box_wumpa(utente)
             
             # Update or create record
             if sunday_bonus:
@@ -1072,7 +1626,7 @@ def any(message):
                 session.add(sunday_bonus)
             
             session.commit()
-            bot.send_message(message.chat.id, "🎉 Bonus Domenicale! Hai ricevuto 10 🍑 Wumpa Fruits!")
+            bot.send_message(message.chat.id, f"🎉 **BUONA DOMENICA!**\nEcco il tuo regalo settimanale:\n\n{box_msg}")
         
         session.close()
     
@@ -1086,24 +1640,41 @@ def any(message):
         # Random drops: TNT, Nitro, Cassa
         drop_service.maybe_drop(utente, bot, message)
         
-        # Random Mob Spawn (0.5% chance per message)
-        if random.random() < 0.005:
-            mob_id = pve_service.spawn_daily_mob()
+        # Random Mob Spawn (5% chance per message)
+        if random.random() < 0.05:
+            mob_id, attack_events = pve_service.spawn_daily_mob()
             if mob_id:
                 mob = pve_service.get_current_mob_status()
                 if mob:
                     markup = types.InlineKeyboardMarkup()
-                    markup.add(types.InlineKeyboardButton("⚔️ Attacca", callback_data="attack_mob"), 
-                               types.InlineKeyboardButton("✨ Attacco Speciale", callback_data="special_attack_mob"))
+                    markup.add(types.InlineKeyboardButton("⚔️ Attacca", callback_data=f"attack_enemy|mob|{mob_id}"), 
+                               types.InlineKeyboardButton("✨ Attacco Speciale", callback_data=f"special_attack_enemy|mob|{mob_id}"))
                     
-                    bot.send_message(message.chat.id, f"⚠️ Un {mob['name']} selvatico è apparso!\n❤️ Salute: {mob['health']}/{mob['max_health']} HP\n⚔️ Danno: {mob['attack']}\n\nSconfiggilo per ottenere ricompense!", reply_markup=markup)
+                    msg_text = f"⚠️ Un {mob['name']} selvatico è apparso!\n📊 Lv. {mob.get('level', 1)} | ⚡ Vel: {mob.get('speed', 30)} | 🛡️ Res: {mob.get('resistance', 0)}%\n❤️ Salute: {mob['health']}/{mob['max_health']} HP\n⚔️ Danno: {mob['attack']}\n\nSconfiggilo per ottenere ricompense!"
                     
-                    # Immediate attack on the user who triggered it
-                    pve_service.mob_random_attack() # This picks random user, maybe should target 'utente'
-                    # Let's make it target the user who sent the message
-                    damage = mob['attack']
-                    user_service.damage_health(utente, damage)
-                    bot.send_message(message.chat.id, f"💥 {mob['name']} ha sorpreso @{utente.username if utente.username else utente.nome} infliggendo {damage} danni!")
+                    # Send with image if available
+                    if mob.get('image') and os.path.exists(mob['image']):
+                        try:
+                            with open(mob['image'], 'rb') as photo:
+                                bot.send_photo(message.chat.id, photo, caption=msg_text, reply_markup=markup, )
+                        except:
+                            bot.send_message(message.chat.id, msg_text, reply_markup=markup)
+                    else:
+                        bot.send_message(message.chat.id, msg_text, reply_markup=markup)
+                    
+                    # Send immediate attack messages if any
+                    if attack_events:
+                        for event in attack_events:
+                            msg = event['message']
+                            image_path = event['image']
+                            try:
+                                if image_path and os.path.exists(image_path):
+                                    with open(image_path, 'rb') as photo:
+                                        bot.send_photo(message.chat.id, photo, caption=msg, reply_markup=markup, )
+                                else:
+                                    bot.send_message(message.chat.id, msg, reply_markup=markup, )
+                            except:
+                                bot.send_message(message.chat.id, msg, reply_markup=markup, )
 
     bothandler = BotCommands(message, bot)
     bothandler.handle_all_commands()
@@ -1151,46 +1722,55 @@ def handle_inline_buttons(call):
         
         char = level_chars[char_idx]
         
-        is_unlocked = character_service.is_character_unlocked(utente, char.id)
-        is_equipped = (utente.livello_selezionato == char.id)
+        # CSV returns dicts, so use dict access
+        char_id = char['id']
+        char_name = char['nome']
+        char_group = char.get('character_group', '')
+        char_element = char.get('elemental_type', '')
+        char_level = char['livello']
+        char_lv_premium = char.get('lv_premium', 0)
+        char_price = char.get('price', 0)
+        
+        is_unlocked = character_service.is_character_unlocked(utente, char_id)
+        is_equipped = (utente.livello_selezionato == char_id)
         
         # Format character card
         lock_icon = "" if is_unlocked else "🔒 "
-        saga_info = f"[{char.character_group}] " if char.character_group else ""
-        type_info = f" ({char.elemental_type})" if char.elemental_type else ""
-        msg = f"**{lock_icon}{saga_info}{char.nome}{type_info}**"
+        saga_info = f"[{char_group}] " if char_group else ""
+        type_info = f" ({char_element})" if char_element else ""
+        msg = f"**{lock_icon}{saga_info}{char_name}{type_info}**"
         
         if is_equipped:
             msg += " ⭐ *EQUIPAGGIATO*"
         
         msg += "\n\n"
-        msg += f"📊 Livello Richiesto: {char.livello}\n"
+        msg += f"📊 Livello Richiesto: {char_level}\n"
         
-        if char.lv_premium == 1:
+        if char_lv_premium == 1:
             msg += f"👑 Richiede Premium\n"
-        elif char.lv_premium == 2 and char.price > 0:
-            price = char.price
+        elif char_lv_premium == 2 and char_price > 0:
+            price = char_price
             if utente.premium == 1:
                 price = int(price * 0.5)
             msg += f"💰 Prezzo: {price} {PointsName}"
             if utente.premium == 1:
-                msg += f" ~~{char.price}~~"
+                msg += f" ~~{char_price}~~"
             msg += "\n"
         
-        if char.special_attack_name:
+        if char.get('special_attack_name'):
             msg += f"\n✨ **Abilità Speciale:**\n"
-            msg += f"🔮 {char.special_attack_name}\n"
-            msg += f"⚔️ Danno: {char.special_attack_damage}\n"
-            msg += f"💙 Costo Mana: {char.special_attack_mana_cost}\n"
+            msg += f"🔮 {char.get('special_attack_name')}\n"
+            msg += f"⚔️ Danno: {char.get('special_attack_damage')}\n"
+            msg += f"💙 Costo Mana: {char.get('special_attack_mana_cost')}\n"
         
-        if char.description:
-            msg += f"\n📝 {char.description}\n"
+        if char.get('description'):
+            msg += f"\n📝 {char.get('description')}\n"
         
         if not is_unlocked:
             msg += "\n🔒 **PERSONAGGIO BLOCCATO**\n"
-            if char.livello > utente.livello:
-                msg += f"Raggiungi livello {char.livello} per sbloccarlo!\n"
-            elif char.lv_premium == 1:
+            if char_level > utente.livello:
+                msg += f"Raggiungi livello {char_level} per sbloccarlo!\n"
+            elif char_lv_premium == 1:
                 msg += "Richiede abbonamento Premium!\n"
         
         msg += f"\n📄 Livello {level_idx + 1}/{len(levels)} - Personaggio {char_idx + 1}/{len(level_chars)}"
@@ -1256,29 +1836,47 @@ def handle_inline_buttons(call):
             
         markup.row(*nav_char_row)
         
+        # Row 3: Saga navigation button
+        saga_row = []
+        saga_row.append(types.InlineKeyboardButton(f"📚 {char_group}", callback_data=f"saga_nav|{char_group}|0"))
+        markup.row(*saga_row)
+        
         if is_unlocked:
             if not is_equipped:
-                markup.add(types.InlineKeyboardButton("✅ Equipaggia", callback_data=f"char_select|{char.id}"))
+                markup.add(types.InlineKeyboardButton("✅ Equipaggia", callback_data=f"char_select|{char_id}"))
             else:
                 markup.add(types.InlineKeyboardButton("⭐ Già Equipaggiato", callback_data="char_already_equipped"))
-        elif char.lv_premium == 2 and char.price > 0:
-             markup.add(types.InlineKeyboardButton(f"🛒 Compra ({price} 🍑)", callback_data=f"char_buy|{char.id}"))
+        elif char_lv_premium == 2 and char_price > 0:
+             markup.add(types.InlineKeyboardButton(f"🛒 Compra ({price} 🍑)", callback_data=f"char_buy|{char_id}"))
         
         # Send image if available
+        # Ensure get_character_image is imported or available
+        from services.character_loader import get_character_image
         image_data = get_character_image(char, is_locked=not is_unlocked)
         
-        try:
-            if image_data:
-                media = types.InputMediaPhoto(image_data, caption=msg, parse_mode='markdown')
-                bot.edit_message_media(media=media, chat_id=user_id, message_id=call.message.message_id, reply_markup=markup)
-            else:
-                # Fallback if no image
-                bot.delete_message(user_id, call.message.message_id)
-                bot.send_message(user_id, msg, reply_markup=markup, parse_mode='markdown')
-                
-        except Exception as e:
-            print(f"Error editing message media: {e}")
+        # Track this character for admin image upload feature
+        if user_service.is_admin(utente):
+            admin_last_viewed_character[user_id] = {
+                'character_id': char_id,
+                'character_name': char_name,
+                'timestamp': datetime.datetime.now()
+            }
+        
+        if image_data:
             try:
+                # Use edit_message_media if possible, but for now we are editing text/caption
+                # If the previous message was a photo, we need edit_message_media
+                # If it was text, we might need to delete and send new photo
+                # For simplicity in this callback handler, let's try to edit the caption if it's a photo,
+                # or delete and resend if type changes.
+                
+                # Actually, standard practice for these menus is often deleting and resending 
+                # to avoid "message not modified" or type mismatch errors, 
+                # BUT that causes flickering.
+                
+                # Let's assume the previous message was a photo (since we send photos in handle_choose_character)
+                # We need to create an InputMediaPhoto
+                media = types.InputMediaPhoto(image_data, caption=msg, parse_mode='markdown')
                 bot.delete_message(user_id, call.message.message_id)
                 if image_data:
                      bot.send_photo(user_id, image_data, caption=msg, reply_markup=markup, parse_mode='markdown')
@@ -1287,6 +1885,149 @@ def handle_inline_buttons(call):
             except Exception as e2:
                 print(f"Error in fallback send: {e2}")
 
+        bot.answer_callback_query(call.id)
+        return
+    
+    elif action.startswith("saga_nav|"):
+        # saga_nav|saga_name|char_index
+        parts = action.split("|")
+        saga_name = parts[1]
+        char_idx = int(parts[2])
+        
+        utente = user_service.get_user(user_id)
+        is_admin = user_service.is_admin(utente)
+        
+        # Get character loader
+        from services.character_loader import get_character_loader, get_character_image
+        char_loader = get_character_loader()
+        
+        # Get all sagas for navigation
+        all_sagas = char_loader.get_all_sagas()
+        saga_idx = all_sagas.index(saga_name) if saga_name in all_sagas else 0
+        
+        # Get characters for this saga
+        saga_chars = char_loader.get_characters_by_saga(saga_name)
+        
+        if not saga_chars:
+            bot.answer_callback_query(call.id, f"Nessun personaggio nella saga {saga_name}!")
+            return
+        
+        # Filter by user access (unless admin)
+        if not is_admin:
+            saga_chars = [c for c in saga_chars if c['livello'] <= utente.livello or c['lv_premium'] == 2]
+        
+        if not saga_chars:
+            bot.answer_callback_query(call.id, f"Nessun personaggio sbloccato in {saga_name}!")
+            return
+        
+        # Validate char index
+        if char_idx < 0: char_idx = 0
+        if char_idx >= len(saga_chars): char_idx = len(saga_chars) - 1
+        
+        char = saga_chars[char_idx]
+        
+        # CSV returns dicts
+        char_id = char['id']
+        char_name = char['nome']
+        char_group = char.get('character_group', '')
+        char_element = char.get('elemental_type', '')
+        char_level = char['livello']
+        char_lv_premium = char.get('lv_premium', 0)
+        char_price = char.get('price', 0)
+        
+        is_unlocked = character_service.is_character_unlocked(utente, char_id)
+        is_equipped = (utente.livello_selezionato == char_id)
+        
+        # Format character card
+        lock_icon = "" if is_unlocked else "🔒 "
+        type_info = f" ({char_element})" if char_element else ""
+        msg = f"**{lock_icon}{char_name}{type_info}**"
+        
+        if is_equipped:
+            msg += " ⭐ *EQUIPAGGIATO*"
+        
+        msg += "\n\n"
+        msg += f"📊 Livello Richiesto: {char_level}\n"
+        
+        if char_lv_premium == 1:
+            msg += f"👑 Richiede Premium\n"
+        elif char_lv_premium == 2 and char_price > 0:
+            price = char_price
+            if utente.premium == 1:
+                price = int(price * 0.5)
+            msg += f"💰 Prezzo: {price} {PointsName}"
+            if utente.premium == 1:
+                msg += f" ~~{char_price}~~"
+            msg += "\n"
+        
+        if char.get('special_attack_name'):
+            msg += f"\n✨ **Abilità Speciale:**\n"
+            msg += f"🔮 {char.get('special_attack_name')}\n"
+            msg += f"⚔️ Danno: {char.get('special_attack_damage')}\n"
+            msg += f"💙 Costo Mana: {char.get('special_attack_mana_cost')}\n"
+        
+        if char.get('description'):
+            msg += f"\n📝 {char.get('description')}\n"
+        
+        if not is_unlocked:
+            msg += "\n🔒 **PERSONAGGIO BLOCCATO**\n"
+            if char_level > utente.livello:
+                msg += f"Raggiungi livello {char_level} per sbloccarlo!\n"
+            elif char_lv_premium == 1:
+                msg += "Richiede abbonamento Premium!\n"
+        
+        msg += f"\n📚 **{saga_name}** - {char_idx + 1}/{len(saga_chars)}"
+        
+        markup = types.InlineKeyboardMarkup()
+        
+        # Row 1: Saga navigation (prev/next saga)
+        saga_nav_row = []
+        if saga_idx > 0:
+            saga_nav_row.append(types.InlineKeyboardButton("⏮️", callback_data=f"saga_nav|{all_sagas[saga_idx-1]}|0"))
+        if saga_idx < len(all_sagas) - 1:
+            saga_nav_row.append(types.InlineKeyboardButton("⏭️", callback_data=f"saga_nav|{all_sagas[saga_idx+1]}|0"))
+        if saga_nav_row:
+            markup.row(*saga_nav_row)
+        
+        # Row 2: Character navigation within saga
+        char_nav_row = []
+        if char_idx > 0:
+            char_nav_row.append(types.InlineKeyboardButton("◀️", callback_data=f"saga_nav|{saga_name}|{char_idx-1}"))
+        else:
+            char_nav_row.append(types.InlineKeyboardButton("⏺️", callback_data="ignore"))
+            
+        char_nav_row.append(types.InlineKeyboardButton(f"📚 {saga_name[:12]}", callback_data="ignore"))
+        
+        if char_idx < len(saga_chars) - 1:
+            char_nav_row.append(types.InlineKeyboardButton("▶️", callback_data=f"saga_nav|{saga_name}|{char_idx+1}"))
+        else:
+            char_nav_row.append(types.InlineKeyboardButton("⏺️", callback_data="ignore"))
+            
+        markup.row(*char_nav_row)
+        
+        # Row 3: Back to level nav
+        markup.add(types.InlineKeyboardButton("🔙 Torna a Livelli", callback_data=f"char_nav|0|0"))
+        
+        if is_unlocked:
+            if not is_equipped:
+                markup.add(types.InlineKeyboardButton("✅ Equipaggia", callback_data=f"char_select|{char_id}"))
+            else:
+                markup.add(types.InlineKeyboardButton("⭐ Già Equipaggiato", callback_data="char_already_equipped"))
+        elif char_lv_premium == 2 and char_price > 0:
+             markup.add(types.InlineKeyboardButton(f"🛒 Compra ({price} 🍑)", callback_data=f"char_buy|{char_id}"))
+        
+        # Delete old message and send new with image
+        try:
+            bot.delete_message(user_id, call.message.message_id)
+            image_data = get_character_image(char, is_locked=not is_unlocked)
+            if image_data:
+                bot.send_photo(user_id, image_data, caption=msg, reply_markup=markup, parse_mode='markdown')
+            else:
+                bot.send_message(user_id, msg, reply_markup=markup, parse_mode='markdown')
+        except Exception as e:
+            print(f"Error in saga_nav: {e}")
+            bot.send_message(user_id, msg, reply_markup=markup, parse_mode='markdown')
+        
         bot.answer_callback_query(call.id)
         return
     
@@ -1391,30 +2132,32 @@ def handle_inline_buttons(call):
             # We can reuse the char_page logic to reload the current character card
             # Or just delete and resend the updated card
             try:
-                # Get character info again
-                session = user_service.db.get_session()
-                from models.system import Livello
-                char = session.query(Livello).filter_by(id=char_id).first()
-                session.close()
+                # Get character data from CSV
+                from services.character_loader import get_character_loader
+                char_loader = get_character_loader()
+                char = char_loader.get_character_by_id(char_id)
                 
                 if char:
                     # Construct unlocked message (simplified version of handle_inline_buttons logic)
                     lock_icon = "" 
-                    new_msg = f"**{lock_icon}{char.nome}**\n\n"
-                    new_msg += f"📊 Livello Richiesto: {char.livello}\n"
+                    char_name = char['nome']
+                    char_level = char['livello']
                     
-                    if char.special_attack_name:
-                        new_msg += f"\n✨ **Abilità Speciale:**\n🔮 {char.special_attack_name}\n⚔️ Danno: {char.special_attack_damage}\n💙 Costo Mana: {char.special_attack_mana_cost}\n"
+                    new_msg = f"**{lock_icon}{char_name}**\n\n"
+                    new_msg += f"📊 Livello Richiesto: {char_level}\n"
                     
-                    if char.description:
-                        new_msg += f"\n📝 {char.description}\n"
+                    if char.get('special_attack_name'):
+                        new_msg += f"\n✨ **Abilità Speciale:**\n🔮 {char.get('special_attack_name')}\n⚔️ Danno: {char.get('special_attack_damage')}\n💙 Costo Mana: {char.get('special_attack_mana_cost')}\n"
+                    
+                    if char.get('description'):
+                        new_msg += f"\n📝 {char.get('description')}\n"
                         
                     # Add navigation info if possible, or just leave it clean
                     # Ideally we should call the pagination logic again, but we don't have page info here easily
                     # So let's just show the card with "Equip" button
                     
                     markup = types.InlineKeyboardMarkup()
-                    markup.add(types.InlineKeyboardButton("✅ Equipaggia questo personaggio", callback_data=f"char_select|{char.id}"))
+                    markup.add(types.InlineKeyboardButton("✅ Equipaggia questo personaggio", callback_data=f"char_select|{char['id']}"))
                     markup.add(types.InlineKeyboardButton("🔙 Torna alla lista", callback_data="char_page|0|0")) # Reset to first page
                     
                     # Update the message
@@ -1443,6 +2186,42 @@ def handle_inline_buttons(call):
     elif action.startswith("char_select|"):
         char_id = int(action.split("|")[1])
         
+        # Check if this is a transformation
+        from services.character_loader import get_character_loader
+        char_loader = get_character_loader()
+        
+        if char_loader.is_transformation(char_id):
+            # Get base character info
+            char = char_loader.get_character_by_id(char_id)
+            base_char = char_loader.get_base_character(char_id)
+            
+            if base_char:
+                # Show message explaining transformation system
+                msg = f"🔄 **{char['nome']}** è una trasformazione!\n\n"
+                msg += f"Non puoi selezionarla direttamente.\n\n"
+                msg += f"📋 **Come funziona:**\n"
+                msg += f"1. Seleziona il personaggio base ({base_char['nome']})\n"
+                msg += f"2. Acquista la trasformazione nel profilo\n"
+                msg += f"3. Trasformati spendendo {char.get('transformation_mana_cost', 50)} mana\n\n"
+                
+                duration = char.get('transformation_duration_days', 0)
+                if duration > 0:
+                    msg += f"⏰ La trasformazione dura {duration} giorni\n"
+                else:
+                    msg += f"♾️ La trasformazione è permanente\n"
+                
+                markup = types.InlineKeyboardMarkup()
+                markup.add(types.InlineKeyboardButton(f"✅ Seleziona {base_char['nome']}", callback_data=f"char_select|{base_char['id']}"))
+                markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="char_nav|0|0"))
+                
+                try:
+                    bot.delete_message(user_id, call.message.message_id)
+                except:
+                    pass
+                bot.send_message(user_id, msg, reply_markup=markup, parse_mode='markdown')
+                bot.answer_callback_query(call.id)
+                return
+        
         success, msg = character_service.equip_character(utente, char_id)
         
         if success:
@@ -1450,6 +2229,139 @@ def handle_inline_buttons(call):
             bot.send_message(user_id, f"✅ {msg}", reply_markup=get_start_markup(user_id))
         else:
             bot.answer_callback_query(call.id, f"❌ {msg}")
+        return
+    
+    elif action.startswith("transform_menu|"):
+        base_char_id = int(action.split("|")[1])
+        
+        from services.character_loader import get_character_loader
+        char_loader = get_character_loader()
+        
+        # Get available transformations
+        transforms = char_loader.get_transformation_chain(base_char_id)
+        base_char = char_loader.get_character_by_id(base_char_id)
+        
+        if not transforms:
+            bot.answer_callback_query(call.id, "❌ Nessuna trasformazione disponibile!")
+            return
+        
+        # Check which ones user owns
+        from models.system import UserCharacter
+        session = user_service.db.get_session()
+        
+        msg = f"🔥 **TRASFORMAZIONI per {base_char['nome']}**\n\n"
+        msg += f"💙 Mana attuale: {utente.mana}/{utente.max_mana}\n\n"
+        msg += "📋 **Opzioni disponibili:**\n"
+        
+        markup = types.InlineKeyboardMarkup()
+        
+        for t in transforms:
+            owned = session.query(UserCharacter).filter_by(user_id=utente.id_telegram, character_id=t['id']).first()
+            is_free = t.get('lv_premium', 0) == 0
+            
+            mana_cost = t.get('transformation_mana_cost', 50)
+            duration = t.get('transformation_duration_days', 0)
+            duration_str = f"{duration}g" if duration > 0 else "♾️"
+            
+            # Add info to message text
+            status_icon = "✅" if owned or is_free else "🔒"
+            msg += f"{status_icon} **{t['nome']}**\n"
+            msg += f"   ├ Costo Mana: {mana_cost} 💙\n"
+            msg += f"   └ Durata: {duration_str}\n"
+            
+            if owned or is_free:
+                # Can transform
+                can_afford = utente.mana >= mana_cost
+                btn_text = f"🔥 Trasformati in {t['nome']}"
+                if can_afford:
+                    markup.add(types.InlineKeyboardButton(btn_text, callback_data=f"activate_transform|{t['id']}"))
+                else:
+                    markup.add(types.InlineKeyboardButton(f"❌ {t['nome']} (No Mana)", callback_data="no_mana"))
+            else:
+                # Need to buy
+                price = t.get('price', 0)
+                msg += f"   └ Prezzo: {price} 🍑\n"
+                markup.add(types.InlineKeyboardButton(f"🛒 Compra {t['nome']} ({price} 🍑)", callback_data=f"buy_transform|{t['id']}"))
+            
+            msg += "\n"
+        
+        session.close()
+        
+        markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="back_to_profile"))
+        
+        try:
+            bot.edit_message_text(msg, user_id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+        except:
+            bot.send_message(user_id, msg, reply_markup=markup, parse_mode='markdown')
+        bot.answer_callback_query(call.id)
+        return
+    
+    elif action.startswith("activate_transform|"):
+        trans_id = int(action.split("|")[1])
+        
+        from services.character_loader import get_character_loader
+        char_loader = get_character_loader()
+        
+        trans_char = char_loader.get_character_by_id(trans_id)
+        if not trans_char:
+            bot.answer_callback_query(call.id, "❌ Trasformazione non trovata!")
+            return
+        
+        mana_cost = trans_char.get('transformation_mana_cost', 50)
+        duration_days = trans_char.get('transformation_duration_days', 0)
+        
+        # Check mana
+        if utente.mana < mana_cost:
+            bot.answer_callback_query(call.id, f"❌ Mana insufficiente! Serve: {mana_cost}, hai: {utente.mana}")
+            return
+        
+        # Deduct mana and apply transformation
+        session = user_service.db.get_session()
+        from models.user import Utente
+        db_user = session.query(Utente).filter_by(id_telegram=user_id).first()
+        db_user.mana -= mana_cost
+        db_user.livello_selezionato = trans_id  # Change to transformed character
+        remaining_mana = db_user.mana  # Capture value before close
+        session.commit()
+        session.close()
+        
+        duration_str = f"per {duration_days} giorni" if duration_days > 0 else "permanentemente"
+        
+        msg = f"🔥 **TRASFORMAZIONE COMPLETATA!**\n\n"
+        msg += f"Ti sei trasformato in **{trans_char['nome']}** {duration_str}!\n"
+        msg += f"💙 Mana speso: {mana_cost}\n"
+        msg += f"💙 Mana rimanente: {remaining_mana}"
+        
+        bot.send_message(user_id, msg, reply_markup=get_start_markup(user_id), parse_mode='markdown')
+        bot.answer_callback_query(call.id, f"🔥 Trasformato in {trans_char['nome']}!")
+        return
+    
+    elif action.startswith("buy_transform|"):
+        trans_id = int(action.split("|")[1])
+        
+        # Use character_service to purchase
+        success, msg = character_service.purchase_character(utente, trans_id)
+        
+        if success:
+            bot.answer_callback_query(call.id, "✅ Trasformazione acquistata!")
+            bot.send_message(user_id, f"✅ {msg}\n\nOra puoi trasformarti dal profilo!", reply_markup=get_start_markup(user_id))
+        else:
+            bot.answer_callback_query(call.id, f"❌ {msg}")
+        return
+    
+    elif action == "no_mana":
+        bot.answer_callback_query(call.id, "❌ Non hai abbastanza mana! Rigenera +10 ogni ora.")
+        return
+    
+    elif action == "back_to_profile":
+        # Redirect to profile
+        bot.answer_callback_query(call.id)
+        try:
+            bot.delete_message(user_id, call.message.message_id)
+        except:
+            pass
+        # The user should use the profile button again
+        bot.send_message(user_id, "Usa il pulsante 👤 Profilo per vedere il tuo profilo.", reply_markup=get_start_markup(user_id))
         return
     
     elif action == "stats_menu":
@@ -1464,10 +2376,21 @@ def handle_inline_buttons(call):
             markup.add(types.InlineKeyboardButton(f"❤️ +Vita (+{stats_service.HEALTH_PER_POINT} HP max)", callback_data="stat_alloc|health"))
             markup.add(types.InlineKeyboardButton(f"💙 +Mana (+{stats_service.MANA_PER_POINT} mana max)", callback_data="stat_alloc|mana"))
             markup.add(types.InlineKeyboardButton(f"⚔️ +Danno (+{stats_service.DAMAGE_PER_POINT} danno)", callback_data="stat_alloc|damage"))
+            markup.add(types.InlineKeyboardButton(f"⚡ +Velocità (+{stats_service.SPEED_PER_POINT} vel)", callback_data="stat_alloc|speed"))
+            markup.add(types.InlineKeyboardButton(f"🛡️ +Resistenza (+{stats_service.RESISTANCE_PER_POINT}% res)", callback_data="stat_alloc|resistance"))
+            markup.add(types.InlineKeyboardButton(f"🎯 +Crit Rate (+{stats_service.CRIT_RATE_PER_POINT}% crit)", callback_data="stat_alloc|crit_rate"))
         else:
             msg += "\n\n⚠️ Non hai punti disponibili!"
         
-        bot.edit_message_text(msg, user_id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+        try:
+            bot.edit_message_text(msg, user_id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+        except Exception as e:
+            # If message can't be edited (e.g., it's an image), delete and send new one
+            try:
+                bot.delete_message(user_id, call.message.message_id)
+            except:
+                pass
+            bot.send_message(user_id, msg, reply_markup=markup, parse_mode='markdown')
         bot.answer_callback_query(call.id)
         return
     
@@ -1492,10 +2415,21 @@ def handle_inline_buttons(call):
                 markup.add(types.InlineKeyboardButton(f"❤️ +Vita (+{stats_service.HEALTH_PER_POINT} HP max)", callback_data="stat_alloc|health"))
                 markup.add(types.InlineKeyboardButton(f"💙 +Mana (+{stats_service.MANA_PER_POINT} mana max)", callback_data="stat_alloc|mana"))
                 markup.add(types.InlineKeyboardButton(f"⚔️ +Danno (+{stats_service.DAMAGE_PER_POINT} danno)", callback_data="stat_alloc|damage"))
+                markup.add(types.InlineKeyboardButton(f"⚡ +Velocità (+{stats_service.SPEED_PER_POINT} vel)", callback_data="stat_alloc|speed"))
+                markup.add(types.InlineKeyboardButton(f"🛡️ +Resistenza (+{stats_service.RESISTANCE_PER_POINT}% res)", callback_data="stat_alloc|resistance"))
+                markup.add(types.InlineKeyboardButton(f"🎯 +Crit Rate (+{stats_service.CRIT_RATE_PER_POINT}% crit)", callback_data="stat_alloc|crit_rate"))
             else:
                 msg += "\n\n⚠️ Non hai punti disponibili!"
             
-            bot.edit_message_text(msg, user_id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+            try:
+                bot.edit_message_text(msg, user_id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+            except Exception as e:
+                # If message can't be edited (e.g., it's an image), delete and send new one
+                try:
+                    bot.delete_message(user_id, call.message.message_id)
+                except:
+                    pass
+                bot.send_message(user_id, msg, reply_markup=markup, parse_mode='markdown')
         return
     
     elif action.startswith("reset_stats"):
@@ -1509,7 +2443,15 @@ def handle_inline_buttons(call):
             markup.add(types.InlineKeyboardButton("✅ Sì, Reset", callback_data="reset_stats_yes"))
             markup.add(types.InlineKeyboardButton("❌ Annulla", callback_data="reset_stats_no"))
             
-            bot.edit_message_text(msg, user_id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+            try:
+                bot.edit_message_text(msg, user_id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+            except Exception as e:
+                # If message can't be edited (e.g., it's an image), delete and send new one
+                try:
+                    bot.delete_message(user_id, call.message.message_id)
+                except:
+                    pass
+                bot.send_message(user_id, msg, reply_markup=markup, parse_mode='markdown')
             bot.answer_callback_query(call.id)
         
         elif action == "reset_stats_yes":
@@ -1568,6 +2510,25 @@ def handle_inline_buttons(call):
         bot.send_message(user_id, msg, parse_mode='markdown')
         return
     
+    
+    elif action.startswith("use_potion|"):
+        parts = action.split("|")
+        potion_name = parts[1]
+        
+        utente = user_service.get_user(user_id)
+        
+        from services.potion_service import PotionService
+        potion_service = PotionService()
+        
+        success, msg = potion_service.use_potion(utente, potion_name)
+        
+        if success:
+            bot.answer_callback_query(call.id, "✅ Pozione usata!")
+            bot.send_message(user_id, msg)
+        else:
+            bot.answer_callback_query(call.id, f"❌ {msg}", show_alert=True)
+        return
+    
     elif action.startswith("buy_potion|"):
         parts = action.split("|")
         potion_name = parts[1]
@@ -1586,7 +2547,18 @@ def handle_inline_buttons(call):
             bot.answer_callback_query(call.id, f"❌ {msg}", show_alert=True)
         return
 
-    elif action == "attack_mob":
+
+    elif action.startswith("attack_enemy|"):
+        # New unified attack system: attack_enemy|{type}|{id}
+        # Type can be 'mob' or 'raid'
+        parts = action.split("|")
+        if len(parts) != 3:
+            bot.answer_callback_query(call.id, "❌ Formato callback non valido", show_alert=True)
+            return
+        
+        enemy_type = parts[1]
+        enemy_id = int(parts[2])
+        
         utente = user_service.get_user(user_id)
         damage = random.randint(10, 30) + utente.base_damage
         
@@ -1595,77 +2567,272 @@ def handle_inline_buttons(call):
              damage *= 2
              user_service.update_user(user_id, {'luck_boost': 0})
         
-        success, msg = pve_service.attack_mob(utente, damage)
+        # Check if enemy is dead before attacking
+        from database import Database
+        from models.pve import Mob
+        db = Database()
+        session = db.get_session()
         
-        # Update message if possible, or send new one
-        # For simplicity, send new message or alert
-        if success:
-            bot.answer_callback_query(call.id, "⚔️ Attacco effettuato!")
-            
-            # Check if mob is dead to update the message properly
-            if "Hai ucciso" in msg:
-                 bot.send_message(call.message.chat.id, f"@{utente.username if utente.username else utente.nome} {msg}")
-            else:
-                 # Just show alert or small message to avoid spam
-                 # bot.send_message(call.message.chat.id, f"@{utente.username} {msg}")
-                 # Better: update the mob status message if we could track it, but for now just send text
-                 bot.send_message(call.message.chat.id, f"@{utente.username if utente.username else utente.nome} {msg}")
+        enemy_dead = False
+        if enemy_type == "mob":
+            mob = session.query(Mob).filter_by(id=enemy_id).first()
+            if not mob:
+                session.close()
+                bot.answer_callback_query(call.id, "❌ Nemico non trovato!", show_alert=True)
+                return
+            enemy_dead = mob.is_dead
         else:
-            bot.answer_callback_query(call.id, msg, show_alert=True)
+            session.close()
+            bot.answer_callback_query(call.id, "❌ Tipo nemico non valido", show_alert=True)
+            return
+        session.close()
+        
+        if enemy_dead:
+            bot.answer_callback_query(call.id, "💀 Questo nemico è già morto!", show_alert=True)
+            return
+        
+        # Attack the specific target (all are mobs now, bosses are just mobs with is_boss=True)
+        success, msg = pve_service.attack_mob(utente, damage, mob_id=enemy_id)
+        
+        # Send response
+        if success:
+            try:
+                bot.answer_callback_query(call.id, "⚔️ Attacco effettuato!")
+            except Exception:
+                pass
+            
+            # Check if enemy died
+            db = Database()
+            session = db.get_session()
+            mob = session.query(Mob).filter_by(id=enemy_id).first()
+            enemy_died = mob.is_dead if mob else True
+            session.close()
+            
+            if enemy_died:
+                # Enemy died - no buttons, just show death message
+                bot.send_message(call.message.chat.id, f"@{utente.username if utente.username else utente.nome}\n{msg}", )
+            else:
+                # Re-create markup to persist buttons
+                markup = types.InlineKeyboardMarkup()
+                markup.add(types.InlineKeyboardButton("⚔️ Attacca", callback_data=f"attack_enemy|{enemy_type}|{enemy_id}"))
+                markup.add(types.InlineKeyboardButton("✨ Attacco Speciale", callback_data=f"special_attack_enemy|{enemy_type}|{enemy_id}"))
+
+                # Always show the full message with damage
+                bot.send_message(call.message.chat.id, f"@{utente.username if utente.username else utente.nome}\n{msg}", reply_markup=markup, )
+        else:
+            try:
+                bot.answer_callback_query(call.id, msg, show_alert=True)
+            except Exception:
+                pass
         return
 
-    elif action == "special_attack_mob":
+    elif action.startswith("special_attack_enemy|"):
+        # Special attack on specific enemy: special_attack_enemy|{type}|{id}
+        parts = action.split("|")
+        if len(parts) != 3:
+            bot.answer_callback_query(call.id, "❌ Formato non valido", show_alert=True)
+            return
+        
+        enemy_type = parts[1]
+        enemy_id = int(parts[2])
         utente = user_service.get_user(user_id)
-        success, msg = pve_service.use_special_attack(utente, target_type="mob")
+        
+        # Get character
+        from services.character_loader import get_character_loader
+        char_loader = get_character_loader()
+        character = char_loader.get_character_by_id(utente.livello_selezionato)
+        
+        if not character:
+            bot.answer_callback_query(call.id, "❌ Personaggio non selezionato!", show_alert=True)
+            return
+        
+        # Check mana
+        mana_cost = character.get('special_attack_mana_cost', 0)
+        if utente.mana < mana_cost:
+            bot.answer_callback_query(call.id, f"❌ Mana insufficiente! Serve: {mana_cost}", show_alert=True)
+            return
+        
+        # Deduct mana and calculate damage
+        user_service.update_user(user_id, {'mana': utente.mana - mana_cost})
+        damage = character.get('special_attack_damage', 0) + utente.base_damage
+        
+        # Check if enemy is dead before attacking
+        from database import Database
+        from models.pve import Mob
+        db = Database()
+        session = db.get_session()
+        
+        enemy_dead = False
+        if enemy_type == "mob":
+            mob = session.query(Mob).filter_by(id=enemy_id).first()
+            if not mob:
+                session.close()
+                bot.answer_callback_query(call.id, "❌ Nemico non trovato!", show_alert=True)
+                return
+            enemy_dead = mob.is_dead
+        else:
+            session.close()
+            bot.answer_callback_query(call.id, "❌ Tipo non valido", show_alert=True)
+            return
+        session.close()
+        
+        if enemy_dead:
+            bot.answer_callback_query(call.id, "💀 Questo nemico è già morto!", show_alert=True)
+            return
+        
+        # Attack (all are mobs now, bosses are just mobs with is_boss=True)
+        success, msg = pve_service.attack_mob(utente, damage, use_special=True, mob_id=enemy_id)
         
         if success:
-            bot.answer_callback_query(call.id, "✨ Attacco Speciale effettuato!")
-            bot.send_message(call.message.chat.id, f"@{utente.username if utente.username else utente.nome} {msg}")
+            try:
+                bot.answer_callback_query(call.id, "✨ Attacco Speciale!")
+            except:
+                pass
+            
+            # Check if enemy died
+            db = Database()
+            session = db.get_session()
+            mob = session.query(Mob).filter_by(id=enemy_id).first()
+            enemy_died = mob.is_dead if mob else True
+            session.close()
+            
+            special_name = character.get('special_attack_name', 'Attacco Speciale')
+            msg = f"✨ **{special_name}!** ✨\n{msg}"
+            
+            if enemy_died:
+                # Enemy died - no buttons, just show death message
+                bot.send_message(call.message.chat.id, f"@{utente.username if utente.username else utente.nome}\n{msg}", )
+            else:
+                markup = types.InlineKeyboardMarkup()
+                markup.add(
+                    types.InlineKeyboardButton("⚔️ Attacca", callback_data=f"attack_enemy|{enemy_type}|{enemy_id}"),
+                    types.InlineKeyboardButton("✨ Attacco Speciale", callback_data=f"special_attack_enemy|{enemy_type}|{enemy_id}")
+                )
+                bot.send_message(call.message.chat.id, f"@{utente.username if utente.username else utente.nome}\n{msg}", reply_markup=markup, )
         else:
-            bot.answer_callback_query(call.id, msg, show_alert=True)
+            try:
+                bot.answer_callback_query(call.id, msg, show_alert=True)
+            except:
+                pass
         return
-    
-    elif action == "attack_raid":
+
+    # Legacy attack handlers - keeping for backward compatibility but should not be used
+    elif action == "attack_mob":
+        # Try to find any active mob to attack
         utente = user_service.get_user(user_id)
         damage = random.randint(10, 30) + utente.base_damage
         
+        # Check for luck boost
         if utente.luck_boost > 0:
              damage *= 2
              user_service.update_user(user_id, {'luck_boost': 0})
         
-        success, msg = pve_service.attack_raid_boss(utente, damage)
+        # Try attacking any active mob (no specific ID)
+        success, msg = pve_service.attack_mob(utente, damage)
         
         if success:
-            bot.answer_callback_query(call.id, "⚔️ Attacco Raid effettuato!")
-            if "sconfitto" in msg:
-                 bot.send_message(call.message.chat.id, f"@{utente.username if utente.username else utente.nome} {msg}")
+            try:
+                bot.answer_callback_query(call.id, "⚔️ Attacco effettuato!")
+            except Exception:
+                pass
+                
+            # Get current mob status to recreate buttons
+            mob = pve_service.get_current_mob_status()
+            if mob:
+                # Try to get mob ID from database
+                from database import Database
+                from models.pve import Mob
+                db = Database()
+                session = db.get_session()
+                active_mob = session.query(Mob).filter_by(name=mob['name'], is_dead=False).first()
+                mob_id = active_mob.id if active_mob else None
+                session.close()
+                
+                if mob_id:
+                    markup = types.InlineKeyboardMarkup()
+                    markup.add(types.InlineKeyboardButton("⚔️ Attacca", callback_data=f"attack_enemy|mob|{mob_id}"), 
+                               types.InlineKeyboardButton("✨ Attacco Speciale", callback_data=f"special_attack_enemy|mob|{mob_id}"))
+                else:
+                    markup = types.InlineKeyboardMarkup()
+                    markup.add(types.InlineKeyboardButton("⚔️ Attacca", callback_data="attack_mob"), 
+                               types.InlineKeyboardButton("✨ Attacco Speciale", callback_data="special_attack_mob"))
             else:
-                 # Optional: update message
-                 pass
+                markup = None
+
+            # Always show the full message with damage
+            bot.send_message(call.message.chat.id, f"@{utente.username if utente.username else utente.nome}\n{msg}", reply_markup=markup, )
         else:
-            bot.answer_callback_query(call.id, msg, show_alert=True)
+            try:
+                bot.answer_callback_query(call.id, msg, show_alert=True)
+            except Exception:
+                pass
         return
 
-    elif action == "special_attack_raid":
+    elif action == "special_attack_mob":
         utente = user_service.get_user(user_id)
-        success, msg = pve_service.use_special_attack(utente, target_type="raid")
+        
+        # Try special attack on any active mob
+        success, msg = pve_service.use_special_attack(utente)
         
         if success:
-            bot.answer_callback_query(call.id, "✨ Attacco Speciale Raid effettuato!")
-            bot.send_message(call.message.chat.id, f"@{utente.username if utente.username else utente.nome} {msg}")
+            try:
+                bot.answer_callback_query(call.id, "✨ Attacco Speciale effettuato!")
+            except Exception:
+                pass
+                
+            # Get current mob status to recreate buttons
+            mob = pve_service.get_current_mob_status()
+            if mob:
+                # Try to get mob ID from database
+                from database import Database
+                from models.pve import Mob
+                db = Database()
+                session = db.get_session()
+                active_mob = session.query(Mob).filter_by(name=mob['name'], is_dead=False).first()
+                mob_id = active_mob.id if active_mob else None
+                session.close()
+                
+                if mob_id:
+                    markup = types.InlineKeyboardMarkup()
+                    markup.add(types.InlineKeyboardButton("⚔️ Attacca", callback_data=f"attack_enemy|mob|{mob_id}"), 
+                               types.InlineKeyboardButton("✨ Attacco Speciale", callback_data=f"special_attack_enemy|mob|{mob_id}"))
+                else:
+                    markup = types.InlineKeyboardMarkup()
+                    markup.add(types.InlineKeyboardButton("⚔️ Attacca", callback_data="attack_mob"), 
+                               types.InlineKeyboardButton("✨ Attacco Speciale", callback_data="special_attack_mob"))
+            else:
+                markup = None
+                       
+            bot.send_message(call.message.chat.id, f"@{utente.username if utente.username else utente.nome}\n{msg}", reply_markup=markup, )
         else:
-            bot.answer_callback_query(call.id, msg, show_alert=True)
+            try:
+                bot.answer_callback_query(call.id, msg, show_alert=True)
+            except Exception:
+                pass
         return
+    
     
     # EXISTING HANDLERS BELOW
     if action.startswith("use|"):
         item_name = action.split("|")[1]
-        # Use item logic
+        
+        # Check if item requires a target
+        targeted_items = ["Colpisci un giocatore", "Mira un giocatore"]
+        
+        if item_name in targeted_items:
+            bot.answer_callback_query(call.id)
+            msg = bot.send_message(user_id, f"🎯 Hai scelto di usare **{item_name}**.\n\nScrivi il @username del giocatore che vuoi colpire:", parse_mode='markdown')
+            bot.register_next_step_handler(msg, self.process_item_target, item_name)
+            return
+            
+        # Use item logic (immediate effect)
         if item_service.use_item(user_id, item_name):
             msg = item_service.apply_effect(utente, item_name)
             bot.send_message(user_id, msg)
+            bot.answer_callback_query(call.id, "✅ Oggetto usato!")
         else:
             bot.send_message(user_id, "Non hai questo oggetto o è già stato usato.")
+            bot.answer_callback_query(call.id, "❌ Errore")
 
     elif action.startswith("sg|"):
         # Show game details / send game
@@ -1737,6 +2904,29 @@ def handle_inline_buttons(call):
 def bot_polling_thread():
     bot.infinity_polling()
 
+def regenerate_mana_job():
+    """Hourly job to regenerate mana for all users (+10 capped at max_mana)"""
+    try:
+        session = user_service.db.get_session()
+        from models.user import Utente
+        
+        # Get all users with mana < max_mana
+        users = session.query(Utente).filter(Utente.mana < Utente.max_mana).all()
+        
+        count = 0
+        for user in users:
+            new_mana = min(user.mana + 10, user.max_mana)
+            user.mana = new_mana
+            count += 1
+        
+        session.commit()
+        session.close()
+        
+        if count > 0:
+            print(f"[MANA REGEN] Restored +10 mana for {count} users")
+    except Exception as e:
+        print(f"[MANA REGEN ERROR] {e}")
+
 def spawn_daily_mob_job():
     # Random check to spawn between 9 and 18
     now = datetime.datetime.now()
@@ -1744,26 +2934,115 @@ def spawn_daily_mob_job():
         # 10% chance every check (if run every hour? or minute?)
         # Let's assume this runs every hour.
         if random.random() < 0.2: 
-            mob_id = pve_service.spawn_daily_mob()
+            mob_id, attack_events = pve_service.spawn_daily_mob()
             if mob_id:
-                mob = pve_service.get_current_mob_status()
+                mob = pve_service.get_current_mob_status() # This might get the wrong mob if multiple?
+                # Better to get by ID if possible, but get_current_mob_status gets the first one.
+                # Since we just spawned it, it should be fine or we can fetch by ID.
+                # But for the announcement message, we need mob details.
+                # Let's use get_mob_by_id if available or just rely on current status.
+                # Actually, pve_service.get_current_mob_status() returns the first non-dead mob.
+                # If we have multiple, it might return an old one.
+                # But let's assume for now it's okay or we should fetch by ID.
+                # pve_service doesn't have get_mob_by_id exposed easily in this context without session.
+                # Let's stick to get_current_mob_status() for now, or improve it later.
+                
                 if mob:
+                    # Get the actual mob ID from spawn_daily_mob return value
                     markup = types.InlineKeyboardMarkup()
-                    markup.add(types.InlineKeyboardButton("⚔️ Attacca", callback_data="attack_mob"), 
-                               types.InlineKeyboardButton("✨ Attacco Speciale", callback_data="special_attack_mob"))
+                    markup.add(types.InlineKeyboardButton("⚔️ Attacca", callback_data=f"attack_enemy|mob|{mob_id}"))
                     
-                    bot.send_message(GRUPPO_AROMA, f"⚠️ Un {mob['name']} selvatico è apparso!\n❤️ Salute: {mob['health']}/{mob['max_health']} HP\n⚔️ Danno: {mob['attack']}\n\nSconfiggilo per ottenere ricompense!", reply_markup=markup)
+                    msg_text = f"⚠️ Un {mob['name']} selvatico è apparso!\n📊 Lv. {mob.get('level', 1)} | ⚡ Vel: {mob.get('speed', 30)} | 🛡️ Res: {mob.get('resistance', 0)}%\n❤️ Salute: {mob['health']}/{mob['max_health']} HP\n⚔️ Danno: {mob['attack']}\n\nSconfiggilo per ottenere ricompense!"
+                    
+                    # Send with image if available
+                    if mob.get('image') and os.path.exists(mob['image']):
+                        try:
+                            with open(mob['image'], 'rb') as photo:
+                                bot.send_photo(GRUPPO_AROMA, photo, caption=msg_text, reply_markup=markup, )
+                        except:
+                            bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup)
+                    else:
+                        bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup)
+                    
+                    # Send immediate attack messages with buttons
+                    if attack_events:
+                        for event in attack_events:
+                            msg = event['message']
+                            image_path = event['image']
+                            try:
+                                if image_path and os.path.exists(image_path):
+                                    with open(image_path, 'rb') as photo:
+                                        bot.send_photo(GRUPPO_AROMA, photo, caption=msg, reply_markup=markup, )
+                                else:
+                                    bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, )
+                            except:
+                                bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, )
 
-def spawn_weekly_raid_job():
-    raid_id = pve_service.spawn_raid_boss()
-    if raid_id:
-        raid = pve_service.get_current_raid_status()
-        if raid:
+def spawn_weekly_boss_job():
+    success, msg, boss_id = pve_service.spawn_boss()
+    if success and boss_id:
+        boss = pve_service.get_current_boss_status()
+        if boss:
             markup = types.InlineKeyboardMarkup()
-            markup.add(types.InlineKeyboardButton("⚔️ Attacca Raid", callback_data="attack_raid"), 
-                       types.InlineKeyboardButton("✨ Attacco Speciale Raid", callback_data="special_attack_raid"))
+            markup.add(
+                types.InlineKeyboardButton("⚔️ Attacca", callback_data=f"attack_enemy|mob|{boss_id}"),
+                types.InlineKeyboardButton("✨ Attacco Speciale", callback_data=f"special_attack_enemy|mob|{boss_id}")
+            )
             
-            bot.send_message(GRUPPO_AROMA, f"☠️ **IL RAID BOSS {raid['name']} È ARRIVATO!**\n\n❤️ Salute: {raid['health']}/{raid['max_health']} HP\n⚔️ Danno: {raid['attack']}\n📜 {raid['description']}\n\nUNITI PER SCONFIGGERLO!", reply_markup=markup, parse_mode='markdown')
+            msg_text = f"☠️ **IL BOSS {boss['name']} È ARRIVATO!**\n\n"
+            msg_text += f"📊 Lv. {boss.get('level', 5)} | ⚡ Vel: {boss.get('speed', 70)} | 🛡️ Res: {boss.get('resistance', 0)}%\n"
+            msg_text += f"❤️ Salute: {boss['health']}/{boss['max_health']} HP\n"
+            msg_text += f"⚔️ Danno: {boss['attack']}\n"
+            if boss['description']:
+                msg_text += f"📜 {boss['description']}\n"
+            msg_text += "\nUNITI PER SCONFIGGERLO!"
+            
+            # Send with image if available
+            if boss.get('image') and os.path.exists(boss['image']):
+                try:
+                    with open(boss['image'], 'rb') as photo:
+                        bot.send_photo(GRUPPO_AROMA, photo, caption=msg_text, reply_markup=markup, parse_mode='markdown')
+                except:
+                    bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup, parse_mode='markdown')
+            else:
+                bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup, parse_mode='markdown')
+
+def mob_attack_job():
+    # Both mobs and bosses auto-attack periodically (all are Mob now, bosses have is_boss=True)
+    
+    # Process all enemy attacks (mobs and bosses)
+    from database import Database
+    from models.pve import Mob
+    db = Database()
+    session = db.get_session()
+    active_enemies = session.query(Mob).filter_by(is_dead=False).all()
+    session.close()
+    
+    if active_enemies:
+        for enemy in active_enemies:
+            attack_events = pve_service.mob_random_attack(specific_mob_id=enemy.id)
+            if attack_events:
+                markup = types.InlineKeyboardMarkup()
+                markup.add(
+                    types.InlineKeyboardButton("⚔️ Attacca", callback_data=f"attack_enemy|mob|{enemy.id}"),
+                    types.InlineKeyboardButton("✨ Attacco Speciale", callback_data=f"special_attack_enemy|mob|{enemy.id}")
+                )
+                
+                for event in attack_events:
+                    msg = event['message']
+                    image_path = event['image']
+                    try:
+                        if image_path and os.path.exists(image_path):
+                            with open(image_path, 'rb') as photo:
+                                bot.send_photo(GRUPPO_AROMA, photo, caption=msg, reply_markup=markup, )
+                        else:
+                            bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, )
+                    except Exception as e:
+                        print(f"Error sending enemy attack: {e}")
+                        try:
+                            bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup)
+                        except Exception as e2:
+                            print(f"Error sending enemy attack (no markdown): {e2}")
 
 if __name__ == "__main__":
     polling_thread = threading.Thread(target=bot_polling_thread)
@@ -1771,8 +3050,9 @@ if __name__ == "__main__":
     
     # Schedule jobs
     schedule.every().hour.do(spawn_daily_mob_job)
-    schedule.every(10).minutes.do(lambda: pve_service.mob_random_attack() if pve_service.get_current_mob_status() else None)
-    schedule.every().sunday.at("20:00").do(spawn_weekly_raid_job)
+    schedule.every().hour.do(regenerate_mana_job)  # +10 mana every hour for all users
+    schedule.every(10).seconds.do(mob_attack_job)
+    schedule.every().sunday.at("20:00").do(spawn_weekly_boss_job)
     
     # Sunday reset removed - characters persist permanently
     # Sunday reset removed - characters persist permanently

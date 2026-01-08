@@ -1,6 +1,6 @@
 from database import Database
 from models.user import Utente, Admin
-from models.system import Livello, Domenica
+from models.system import Livello
 from models.game import GiocoUtente
 from sqlalchemy import desc, asc
 import datetime
@@ -10,6 +10,20 @@ from settings import PointsName
 class UserService:
     def __init__(self):
         self.db = Database()
+        from collections import deque
+        self.recent_users = deque(maxlen=10)
+
+    def track_activity(self, user_id):
+        """Track user activity for mob targeting"""
+        # Remove if exists to move to end (most recent)
+        try:
+            self.recent_users.remove(user_id)
+        except ValueError:
+            pass
+        self.recent_users.append(user_id)
+        
+    def get_recent_users(self):
+        return list(self.recent_users)
 
     def get_user(self, target):
         session = self.db.get_session()
@@ -17,6 +31,7 @@ class UserService:
         target = str(target)
 
         if target.startswith('@'):
+            target = target[1:]
             utente = session.query(Utente).filter_by(username=target).first()
         else:
             chatid = int(target) if target.isdigit() else None
@@ -93,13 +108,20 @@ class UserService:
             return False
 
     def info_user(self, utente_sorgente):
+        """Get formatted user info string"""
         if not utente_sorgente:
             return "L'utente non esiste"
 
         utente = self.get_user(utente_sorgente.id_telegram)
+        from services.character_loader import get_character_loader
+        char_loader = get_character_loader()
+        
+        info_lv = char_loader.get_characters_by_level(utente.livello)
+        info_lv = info_lv[0] if info_lv else None
+        selected_level = char_loader.get_character_by_id(utente.livello_selezionato)
+        
+        # Get game names
         session = self.db.get_session()
-        info_lv = session.query(Livello).filter_by(livello=utente.livello).first()
-        selected_level = session.query(Livello).filter_by(id=utente.livello_selezionato).first()
         giochi_utente = session.query(GiocoUtente).filter_by(id_telegram=utente.id_telegram).all()
         session.close()
 
@@ -109,15 +131,28 @@ class UserService:
 
         if info_lv is not None:
             answer += f"*👤 {nome_utente}*: {utente.points} {PointsName}\n"
-            answer += f"*💪🏻 Exp*: {utente.exp}/{info_lv.exp_required if hasattr(info_lv, 'exp_required') else info_lv.exp_to_lv}\n"
-            answer += f"*🎖 Lv. *{utente.livello} - {selected_level.nome if selected_level else 'N/A'}\n"
+            
+            # Calculate next level exp
+            next_lv_num = utente.livello + 1
+            next_lv_row = char_loader.get_characters_by_level(next_lv_num)
+            next_lv_row = next_lv_row[0] if next_lv_row else None
+            
+            if next_lv_row:
+                exp_req = next_lv_row.get('exp_required', 100)
+            else:
+                # Formula for levels beyond DB
+                exp_req = 100 * (next_lv_num ** 2)
+            
+            answer += f"*💪🏻 Exp*: {utente.exp}/{exp_req}\n"
+            answer += f"*🎖 Lv. *{utente.livello} - {selected_level['nome'] if selected_level else 'N/A'}\n"
         else:
             answer += f"*👤 {nome_utente}*: {utente.points} {PointsName}\n"
             answer += f"*💪🏻 Exp*: {utente.exp}\n"
             answer += f"*🎖 Lv. *{utente.livello}\n"
         
         # RPG Stats
-        answer += f"\n*❤️ Vita*: {utente.health}/{utente.max_health}\n"
+        current_hp = utente.current_hp if hasattr(utente, 'current_hp') and utente.current_hp is not None else utente.health
+        answer += f"\n*❤️ Vita*: {current_hp}/{utente.max_health}\n"
         answer += f"*💙 Mana*: {utente.mana}/{utente.max_mana}\n"
         answer += f"*⚔️ Danno Base*: {utente.base_damage}\n"
         
@@ -128,46 +163,16 @@ class UserService:
         if self.check_fatigue(utente):
             answer += "\n⚠️ *SEI AFFATICATO!* Riposa per recuperare vita.\n"
         
-        # Special attack info
-        if selected_level and selected_level.special_attack_name:
-            answer += f"\n*✨ Attacco Speciale*: {selected_level.special_attack_name}\n"
-            answer += f"  Danno: {selected_level.special_attack_damage} | Mana: {selected_level.special_attack_mana_cost}\n"
+        # Special attack info  
+        if selected_level and selected_level.get('special_attack_name'):
+            answer += f"\n*✨ Attacco Speciale*: {selected_level['special_attack_name']}\n"
+            answer += f"  Danno: {selected_level['special_attack_damage']} | Mana: {selected_level['special_attack_mana_cost']}\n"
 
         if giochi_utente:
             answer += '\n\n👾 Nome in Game 👾\n'
             answer += '\n'.join(f"*🎮 {giocoutente.piattaforma}:* `{giocoutente.nome}`" for giocoutente in giochi_utente)
 
         return answer
-
-    def check_is_sunday(self, utente):
-        session = self.db.get_session()
-        chatid = utente.id_telegram
-        oggi = datetime.datetime.today().date()
-        is_sunday = False
-        
-        if oggi.strftime('%A') == 'Sunday':
-            exist = session.query(Domenica).filter_by(utente=chatid).first()
-            if exist is None:
-                try:
-                    domenica = Domenica()
-                    domenica.last_day = oggi
-                    domenica.utente = chatid
-                    session.add(domenica)
-                    session.commit()
-                    self.add_points(utente, 1)
-                    is_sunday = True
-                except:
-                    session.rollback()
-                finally:
-                    pass
-            elif exist.last_day != oggi:
-                exist.last_day = oggi
-                session.commit()
-                self.add_points(utente, 1)
-                is_sunday = True
-        
-        session.close()
-        return is_sunday
 
     def get_username_at_least_name(self, utente):
         if utente is not None:
@@ -209,17 +214,34 @@ class UserService:
         return False, 0
     
     def check_fatigue(self, utente):
-        """Check if user is fatigued (0 health = can't earn rewards)"""
+        """Check if user is fatigued (0 current_hp = can't fight)"""
+        # Check current_hp if available, fallback to health
+        if hasattr(utente, 'current_hp') and utente.current_hp is not None:
+            return utente.current_hp <= 0
         return utente.health <= 0
     
     def damage_health(self, utente, damage):
         """Reduce user health"""
+        # Use current_hp if available
+        if hasattr(utente, 'current_hp') and utente.current_hp is not None:
+            new_health = max(0, utente.current_hp - damage)
+            self.update_user(utente.id_telegram, {'current_hp': new_health})
+            return new_health
+            
+        # Fallback to old health
         new_health = max(0, utente.health - damage)
         self.update_user(utente.id_telegram, {'health': new_health})
         return new_health
     
     def restore_health(self, utente, amount):
         """Restore health (from items/etc)"""
+        # Use current_hp if available
+        if hasattr(utente, 'current_hp') and utente.current_hp is not None:
+            new_health = min(utente.current_hp + amount, utente.max_health)
+            self.update_user(utente.id_telegram, {'current_hp': new_health})
+            return new_health
+            
+        # Fallback to old health
         new_health = min(utente.health + amount, utente.max_health)
         self.update_user(utente.id_telegram, {'health': new_health})
         return new_health

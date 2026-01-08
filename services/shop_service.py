@@ -13,8 +13,8 @@ class ShopService:
         self.db = Database()
         self.user_service = UserService()
         self.game_service = GameService()
-        self.COSTO_PREMIUM = 250
-        self.COSTO_MANTENIMENTO = 50
+        self.COSTO_PREMIUM = 1000
+        self.COSTO_MANTENIMENTO = 200
 
     def buy_steam_game(self, user, coin_type):
         session = self.db.get_session()
@@ -26,16 +26,16 @@ class ShopService:
             probabilita = 0
             
             if coin_type == 'Bronze Coin':
-                costo = 50
+                costo = 200
                 probabilita = 10
             elif coin_type == 'Silver Coin':
-                costo = 100
+                costo = 400
                 probabilita = 50
             elif coin_type == 'Gold Coin':
-                costo = 150
+                costo = 600
                 probabilita = 100
             elif coin_type == 'Platinum Coin':
-                costo = 200
+                costo = 800
                 probabilita = 100 # Special case
             
             if user.points < costo:
@@ -79,7 +79,8 @@ class ShopService:
 
     def buy_game_from_channel(self, user, message_link):
         game = self.game_service.get_game_by_message_link(message_link)
-        costo = 0 if (game and game.premium == 1 and user.premium == 1) else (5 if user.premium == 1 else 15)
+        # Cost updated for inflation: 50 for premium, 150 for non-premium
+        costo = 50 if user.premium == 1 else 150
         
         if user.points < costo:
             return False, f"Ti servono {costo} {PointsName}."

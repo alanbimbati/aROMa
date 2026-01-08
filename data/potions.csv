@@ -1,10 +1,10 @@
 nome,tipo,effetto_valore,prezzo,descrizione,rarita
-Pozione Piccola,health_potion,30,50,Recupera 30 HP,3
-Pozione Media,health_potion,60,90,Recupera 60 HP,5
-Pozione Grande,health_potion,100,150,Recupera 100 HP,8
-Pozione Completa,health_potion,999,250,Recupera tutta la vita,15
-Pozione Mana Piccola,mana_potion,30,50,Recupera 30 Mana,3
-Pozione Mana Media,mana_potion,60,90,Recupera 60 Mana,5
-Pozione Mana Grande,mana_potion,100,150,Recupera 100 Mana,8
-Pozione Mana Completa,mana_potion,999,250,Recupera tutto il Mana,15
-Elisir,full_restore,999,300,Recupera HP e Mana completamente,20
+Pozione Piccola,health_potion,30,200,Recupera 30 HP,3
+Pozione Media,health_potion,60,360,Recupera 60 HP,5
+Pozione Grande,health_potion,100,600,Recupera 100 HP,8
+Pozione Completa,health_potion,999,1000,Recupera tutta la vita,15
+Pozione Mana Piccola,mana_potion,30,200,Recupera 30 Mana,3
+Pozione Mana Media,mana_potion,60,360,Recupera 60 Mana,5
+Pozione Mana Grande,mana_potion,100,600,Recupera 100 Mana,8
+Pozione Mana Completa,mana_potion,999,1000,Recupera tutto il Mana,15
+Elisir,full_restore,999,1200,Recupera HP e Mana completamente,20
