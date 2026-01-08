@@ -1,0 +1,11 @@
+version: "3.9"
+
+services:
+  aroma_bot:
+    build: .
+    container_name: aroma_bot
+    restart: unless-stopped
+    volumes:
+      - .:/app
+    env_file:
+      - .env
