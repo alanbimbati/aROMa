@@ -1487,6 +1487,26 @@ Per acquistare un gioco che vedi in un canale o gruppo:
 def any(message):
     # Check if message is a forward (Game Purchase)
     if message.forward_from_chat or message.forward_from:
+        # RESTRICTION: Only allow purchases in private chat
+        if message.chat.type != 'private':
+            return
+
+        # RESTRICTION: Check if forward source is valid (bot must be member)
+        # If forwarded from a user (no forward_from_chat), we block it
+        if not message.forward_from_chat:
+             return
+             
+        # Check membership in source channel
+        try:
+            # We need bot's ID. get_me() makes an API call, but it's acceptable here.
+            bot_user = bot.get_me()
+            member = bot.get_chat_member(message.forward_from_chat.id, bot_user.id)
+            if member.status not in ['member', 'administrator', 'creator']:
+                # Bot is not in the channel, so it's not an authorized channel
+                return
+        except Exception as e:
+            print(f"Error checking membership for source {message.forward_from_chat.id}: {e}")
+            return
         utente = user_service.get_user(message.from_user.id)
         if not utente:
              user_service.create_user(message.from_user.id, message.from_user.username, message.from_user.first_name, message.from_user.last_name)
