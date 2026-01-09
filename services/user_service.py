@@ -30,13 +30,32 @@ class UserService:
         utente = None
         target = str(target)
 
+        # Check if it's a digit (ID) first, but only if it doesn't start with @
+        # Because a username could potentially be all digits? Unlikely for Telegram but possible if not starting with @?
+        # Telegram usernames must have at least 5 chars and contain letters, numbers or underscores.
+        # IDs are integers.
+        
+        is_username_search = False
         if target.startswith('@'):
             target = target[1:]
-            utente = session.query(Utente).filter_by(username=target).first()
+            is_username_search = True
+        elif not target.isdigit():
+            is_username_search = True
+            
+        if is_username_search:
+            # Case-insensitive search, handling both "username" and "@username" in DB
+            from sqlalchemy import func, or_
+            target_lower = target.lower()
+            utente = session.query(Utente).filter(
+                or_(
+                    func.lower(Utente.username) == target_lower,
+                    func.lower(Utente.username) == f"@{target_lower}"
+                )
+            ).first()
         else:
-            chatid = int(target) if target.isdigit() else None
-            if chatid is not None:
-                utente = session.query(Utente).filter_by(id_telegram=chatid).first()
+            chatid = int(target)
+            utente = session.query(Utente).filter_by(id_telegram=chatid).first()
+            
         session.close()
         return utente
 
