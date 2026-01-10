@@ -17,6 +17,7 @@ class Season(Base):
     
     # Metadata
     description = Column(String, nullable=True)
+    theme = Column(String, nullable=True)  # e.g., 'Dragon Ball', 'Mario'
     final_reward_name = Column(String, nullable=True)  # Name of the ultimate skin/character
 
 class SeasonProgress(Base):

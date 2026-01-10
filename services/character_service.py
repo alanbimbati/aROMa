@@ -163,7 +163,7 @@ class CharacterService:
         db_user = session.query(Utente).filter_by(id_telegram=user.id_telegram).first()
         if db_user:
             db_user.livello_selezionato = char_id
-            db_user.last_character_change = datetime.datetime.now()
+            # last_character_change update removed to allow unlimited changes
         
         session.commit()
         
