@@ -83,6 +83,31 @@ class MobAI:
                     targets = MobAI.select_ability_targets(ability, active_players)
                     return {'action': 'ability', 'ability': ability, 'targets': targets}
         
+        elif behavior == 'boss':
+            # Boss behavior: High damage, AoE, and tactical
+            hp_percent = (mob.health / mob.max_health) * 100 if mob.max_health > 0 else 0
+            
+            # 40% chance to use AoE if many players
+            if len(active_players) >= 3 and random.random() < 0.4:
+                aoe_abilities = [a for a in available_abilities if getattr(a, 'target_type', 'single') == 'aoe']
+                if aoe_abilities:
+                    ability = random.choice(aoe_abilities)
+                    targets = MobAI.select_ability_targets(ability, active_players)
+                    return {'action': 'ability', 'ability': ability, 'targets': targets}
+            
+            # 60% chance to use strongest ability
+            if random.random() < 0.6:
+                strongest = max(available_abilities, key=lambda a: a.damage)
+                targets = MobAI.select_ability_targets(strongest, active_players)
+                return {'action': 'ability', 'ability': strongest, 'targets': targets}
+            
+            # 20% chance to heal/buff if low HP
+            if hp_percent < 30 and random.random() < 0.2:
+                defensive = [a for a in available_abilities if a.buff_type in ['defense', 'heal']]
+                if defensive:
+                    ability = random.choice(defensive)
+                    return {'action': 'ability', 'ability': ability, 'targets': [mob]}
+        
         # Default: basic attack
         target = MobAI.select_target(mob, active_players, 'random')
         return {'action': 'basic_attack', 'target': target}

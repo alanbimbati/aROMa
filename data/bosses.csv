@@ -1,11 +1,16 @@
-nome,hp,attack_damage,attack_type,series,description,loot_wumpa,loot_exp,speed
-Bowser,5000,50,physical,Mario,Il re dei Koopa,2000,500,70
-Ganondorf,7000,65,magic,Zelda,Il signore delle tenebre,2500,600,70
-Ender Dragon,10000,80,ranged,Minecraft,Il drago del End,3000,800,70
-Sephiroth,8000,75,magic,Final Fantasy,L'angelo dell'ala nera,2800,700,70
-Ridley,6500,70,physical,Metroid,Il drago spaziale,2300,550,70
-The Gravemind,9000,85,magic,Halo,La mente Flood,3200,750,70
-Cyberdemon,7500,90,ranged,Doom,Il demone cyborg,2600,650,70
-General RAAM,8500,80,physical,Gears of War,Il generale Locust,2900,720,70
-Alien Queen,9500,95,physical,Alien,La regina xenomorfa,3500,850,70
-Songbird,7200,75,ranged,Bioshock,Il guardiano alato,2400,580,70
+nome,hp,attack_damage,attack_type,series,description,loot_wumpa,loot_exp,speed,abilities,ai_behavior,phase_config,saga
+Bowser,5000,50,physical,Mario,Il re dei Koopa,2000,500,70,"[15]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Mario"
+Ganondorf,7000,65,magic,Zelda,Il signore delle tenebre,2500,600,70,"[26]","tactical","{""50"": ""phase2"", ""25"": ""phase3""}","Zelda"
+Ender Dragon,10000,80,ranged,Minecraft,Il drago del End,3000,800,70,"[28]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Minecraft"
+Sephiroth,8000,75,magic,Final Fantasy,L'angelo dell'ala nera,2800,700,70,"[32]","tactical","{""50"": ""phase2"", ""25"": ""phase3""}","Final Fantasy"
+Ridley,6500,70,physical,Metroid,Il drago spaziale,2300,550,70,"[27]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Metroid"
+The Gravemind,9000,85,magic,Halo,La mente Flood,3200,750,70,"[83]","tactical","{""50"": ""phase2"", ""25"": ""phase3""}","Halo"
+Cyberdemon,7500,90,ranged,Doom,Il demone cyborg,2600,650,70,"[84]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Doom"
+General RAAM,8500,80,physical,Gears of War,Il generale Locust,2900,720,70,"[77]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Gears of War"
+Alien Queen,9500,95,physical,Alien,La regina xenomorfa,3500,850,70,"[187]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Alien"
+Songbird,7200,75,ranged,Bioshock,Il guardiano alato,2400,580,70,"[128]","tactical","{""50"": ""phase2"", ""25"": ""phase3""}","Bioshock"
+Freezer,15000,120,magic,Dragon Ball,L'imperatore dell'universo,5000,1500,85,"[144, 145]","boss","{""70"": ""phase2"", ""30"": ""phase3""}","Dragon Ball"
+Cell,18000,130,physical,Dragon Ball,L'essere perfetto,6000,1800,90,"[146, 147]","boss","{""60"": ""phase2"", ""20"": ""phase3""}","Dragon Ball"
+Majin Buu,25000,110,magic,Dragon Ball,La minaccia rosa,8000,2500,80,"[150, 151]","boss","{""80"": ""phase2"", ""40"": ""phase3""}","Dragon Ball"
+Broly,30000,150,physical,Dragon Ball,Il leggendario Super Saiyan,10000,3000,100,"[152, 153]","boss","{""50"": ""phase2"", ""10"": ""phase3""}","Dragon Ball"
+Beerus,50000,200,magic,Dragon Ball,Il Dio della Distruzione,20000,5000,120,"[252, 255, 257]","boss","{""90"": ""phase2"", ""50"": ""phase3"", ""10"": ""phase4""}","Dragon Ball"

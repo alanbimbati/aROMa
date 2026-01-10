@@ -1,12 +1,17 @@
 from database import Database
 from models.pve import Mob
+from models.combat import CombatParticipation
 from models.system import Livello
 from services.user_service import UserService
 from services.item_service import ItemService
+from services.event_dispatcher import EventDispatcher
+from services.damage_calculator import DamageCalculator
+from services.status_effects import StatusEffect
 import datetime
 import random
 import csv
 import os
+import json
 from settings import PointsName
 
 class PvEService:
@@ -16,8 +21,24 @@ class PvEService:
         self.item_service = ItemService()
         from services.battle_service import BattleService
         self.battle_service = BattleService()
+        
+        # NEW: Enhanced combat services
+        self.event_dispatcher = EventDispatcher()
+        self.damage_calculator = DamageCalculator()
+        
+        # NEW: Achievement tracker
+        from services.achievement_tracker import AchievementTracker
+        from services.mob_ai import MobAI
+        from services.boss_phase_manager import BossPhaseManager
+        from services.season_manager import SeasonManager
+        self.achievement_tracker = AchievementTracker()
+        self.mob_ai = MobAI()
+        self.boss_phase_manager = BossPhaseManager()
+        self.season_manager = SeasonManager()
+        
         self.mob_data = self.load_mob_data()
         self.boss_data = self.load_boss_data()
+        self.recent_mobs = [] # Track last 5 spawned mobs to avoid repetition
 
     def load_mob_data(self):
         """Load mob data from CSV"""
@@ -138,6 +159,11 @@ class PvEService:
             session.close()
             return False, f"Troppi mob attivi ({active_mobs_count}/5)! Elimina alcuni nemici prima di spawnarne altri.", None
             
+        # Get current season theme
+        from models.seasons import Season
+        current_season = session.query(Season).filter_by(is_active=True).first()
+        theme = current_season.theme.strip().lower() if current_season and current_season.theme else None
+        
         mob_data = None
         if mob_name:
             # Find specific mob
@@ -146,11 +172,33 @@ class PvEService:
                 session.close()
                 return False, f"Mob '{mob_name}' non trovato."
         else:
-            # Random mob
+            # Random mob, 70% chance for themed mob if available
             if not self.mob_data:
                 session.close()
                 return False, "Nessun dato mob caricato."
-            mob_data = random.choice(self.mob_data)
+            
+            # Filter by theme if available (robust matching)
+            themed_mobs = [m for m in self.mob_data if theme and m.get('saga', '').strip().lower() == theme]
+            
+            # Repetition avoidance: filter out recent mobs if possible
+            def get_random_non_recent(pool):
+                if not pool: return None
+                available = [m for m in pool if m['nome'] not in self.recent_mobs]
+                if not available: # If all are recent, just pick any
+                    return random.choice(pool)
+                return random.choice(available)
+
+            if themed_mobs and random.random() < 0.7:
+                mob_data = get_random_non_recent(themed_mobs)
+            else:
+                # Fallback to any mob (30% chance or if no themed mobs)
+                mob_data = get_random_non_recent(self.mob_data)
+            
+        # Update recent mobs list
+        if mob_data:
+            self.recent_mobs.append(mob_data['nome'])
+            if len(self.recent_mobs) > 5:
+                self.recent_mobs.pop(0)
             
         # Create Mob
         # Ensure HP is correct
@@ -203,6 +251,11 @@ class PvEService:
             session.close()
             return False, f"C'è già un boss attivo: {active_boss.name}!", None
         
+        # Get current season theme
+        from models.seasons import Season
+        current_season = session.query(Season).filter_by(is_active=True).first()
+        theme = current_season.theme if current_season else None
+        
         boss_data = None
         if boss_name:
             # Find specific boss
@@ -211,11 +264,19 @@ class PvEService:
                 session.close()
                 return False, f"Boss '{boss_name}' non trovato.", None
         else:
-            # Random boss
+            # Random boss, 70% chance for themed boss if available
             if not self.boss_data:
                 session.close()
                 return False, "Nessun dato boss caricato.", None
-            boss_data = random.choice(self.boss_data)
+            
+            # Filter by theme if available
+            themed_bosses = [b for b in self.boss_data if theme and b.get('saga') == theme]
+            
+            if themed_bosses and random.random() < 0.7:
+                boss_data = random.choice(themed_bosses)
+            else:
+                # Fallback to any boss (30% chance or if no themed bosses)
+                boss_data = random.choice(self.boss_data)
         
         # Create Mob with is_boss=True
         hp = int(boss_data['hp'])
@@ -240,7 +301,11 @@ class PvEService:
             description=boss_data.get('description', ''),
             is_boss=True,
             mob_level=level,
-            last_attack_time=datetime.datetime.now()
+            last_attack_time=datetime.datetime.now(),
+            # NEW: Advanced mechanics from CSV
+            active_abilities=boss_data.get('abilities', '[]'),
+            ai_behavior=boss_data.get('ai_behavior', 'aggressive'),
+            phase_thresholds=boss_data.get('phase_config', '{}')
         )
         
         if hasattr(new_boss, 'mob_level'):
@@ -337,6 +402,19 @@ class PvEService:
         # Apply damage to mob (no counterattack)
         mob.health -= damage
         
+        # NEW: Update combat participation
+        self.update_participation(mob.id, user.id_telegram, damage, combat_result['is_crit'])
+        
+        # NEW: Log damage event
+        self.event_dispatcher.log_event('damage_dealt', user.id_telegram, {
+            'damage': damage,
+            'is_crit': combat_result['is_crit'],
+            'mob_id': mob.id,
+            'mob_name': mob.name,
+            'mob_level': getattr(mob, 'mob_level', 1),
+            'effectiveness': combat_result.get('effectiveness', 1.0)
+        }, mob_id=mob.id)
+        
         # Build message
         msg = ""
         if combat_result['is_crit']:
@@ -361,6 +439,21 @@ class PvEService:
             mob.killer_id = user.id_telegram
             msg += f"\n💀 **{mob.name} è stato sconfitto!**"
             
+            # NEW: Log mob kill event
+            participants = self.get_combat_participants(mob.id)
+            solo_kill = len(participants) == 1
+            participation = next((p for p in participants if p.user_id == user.id_telegram), None)
+            
+            self.event_dispatcher.log_event('mob_kill', user.id_telegram, {
+                'mob_name': mob.name,
+                'mob_level': getattr(mob, 'mob_level', 1),
+                'is_boss': mob.is_boss,
+                'damage_dealt': participation.damage_dealt if participation else damage,
+                'was_last_hit': True,
+                'solo_kill': solo_kill,
+                'player_level': user.livello
+            }, mob_id=mob.id)
+            
             # Rewards based on difficulty and level
             difficulty = mob.difficulty_tier if mob.difficulty_tier else 1
             level = mob.mob_level if hasattr(mob, 'mob_level') and mob.mob_level else 1
@@ -377,14 +470,26 @@ class PvEService:
                 self.distribute_boss_rewards(mob.id, user, damage)
                 msg += "\n🏆 Ricompense distribuite ai partecipanti!"
             else:
-                # Normal mob rewards
-                base_xp = random.randint(30, 60) * difficulty
-                base_wumpa = random.randint(15, 30) * difficulty
-                xp = int(base_xp * (1 + level * 0.3))
-                wumpa = int(base_wumpa * (1 + level * 0.3))
+                # Normal mob rewards distributed among participants
+                difficulty = mob.difficulty_tier if mob.difficulty_tier else 1
+                level = mob.mob_level if hasattr(mob, 'mob_level') and mob.mob_level else 1
                 
-                self.user_service.add_exp(user, xp)
-                self.user_service.add_points(user, wumpa)
+                # Total pool for the mob (~200 Wumpa as requested)
+                TOTAL_POOL_WUMPA = random.randint(150, 250) * difficulty
+                TOTAL_POOL_XP = random.randint(50, 100) * difficulty
+                
+                total_damage = sum(p.damage_dealt for p in participants)
+                for p in participants:
+                    share = p.damage_dealt / total_damage if total_damage > 0 else 1/len(participants)
+                    p_xp = int(TOTAL_POOL_XP * share * (1 + level * 0.3))
+                    p_wumpa = int(TOTAL_POOL_WUMPA * share * (1 + level * 0.3))
+                    
+                    # Add rewards
+                    self.user_service.add_exp_by_id(p.user_id, p_xp)
+                    self.user_service.add_points_by_id(p.user_id, p_wumpa)
+                    self.season_manager.add_seasonal_exp(p.user_id, p_xp)
+                
+                msg += f"\n💰 **RICOMPENSE DISTRIBUITE!** ({TOTAL_POOL_WUMPA} 🍑 totali)"
             
             # Item reward (2% chance for normal mobs, 10% for bosses)
             item_chance = 0.10 if mob.is_boss else 0.02
@@ -408,6 +513,10 @@ class PvEService:
 
         session.commit()
         session.close()
+        
+        # NEW: Process achievements
+        self.achievement_tracker.process_pending_events(limit=10)
+        
         return True, msg
 
     def mob_random_attack(self, specific_mob_id=None, chat_id=None):
@@ -597,10 +706,18 @@ class PvEService:
             TOTAL_POOL_WUMPA = random.randint(2000, 5000) * difficulty
             TOTAL_POOL_XP = random.randint(500, 1500) * difficulty
         
-        # For now, give all rewards to the killer
-        # In the future, we could track participation in a separate table
-        self.user_service.add_points(killer_user, TOTAL_POOL_WUMPA)
-        self.user_service.add_exp(killer_user, TOTAL_POOL_XP)
+        # Distribute rewards based on damage dealt
+        participants = self.get_combat_participants(mob_id)
+        total_damage = sum(p.damage_dealt for p in participants)
+        
+        for p in participants:
+            share = p.damage_dealt / total_damage if total_damage > 0 else 1/len(participants)
+            p_xp = int(TOTAL_POOL_XP * share)
+            p_wumpa = int(TOTAL_POOL_WUMPA * share)
+            
+            self.user_service.add_exp_by_id(p.user_id, p_xp)
+            self.user_service.add_points_by_id(p.user_id, p_wumpa)
+            self.season_manager.add_seasonal_exp(p.user_id, p_xp)
         
         session.close()
 
@@ -701,4 +818,60 @@ class PvEService:
             if not image_path and os.path.exists("images/mobs/default.png"):
                 image_path = "images/mobs/default.png"
         return image_path
+
+    # NEW: Combat Participation Tracking
+    def get_or_create_participation(self, mob_id, user_id):
+        """Get or create combat participation record"""
+        session = self.db.get_session()
+        try:
+            participation = session.query(CombatParticipation).filter_by(
+                mob_id=mob_id,
+                user_id=user_id
+            ).first()
+            
+            if not participation:
+                participation = CombatParticipation(
+                    mob_id=mob_id,
+                    user_id=user_id,
+                    damage_dealt=0,
+                    hits_landed=0,
+                    critical_hits=0,
+                    first_hit_time=datetime.datetime.now()
+                )
+                session.add(participation)
+                session.commit()
+            
+            return participation
+        finally:
+            session.close()
+    
+    def update_participation(self, mob_id, user_id, damage, is_crit=False):
+        """Update combat participation with damage dealt"""
+        session = self.db.get_session()
+        try:
+            participation = session.query(CombatParticipation).filter_by(
+                mob_id=mob_id,
+                user_id=user_id
+            ).first()
+            
+            if participation:
+                participation.damage_dealt += damage
+                participation.hits_landed += 1
+                if is_crit:
+                    participation.critical_hits += 1
+                participation.last_hit_time = datetime.datetime.now()
+                session.commit()
+        finally:
+            session.close()
+    
+    def get_combat_participants(self, mob_id):
+        """Get all participants for a mob fight"""
+        session = self.db.get_session()
+        try:
+            participants = session.query(CombatParticipation).filter_by(
+                mob_id=mob_id
+            ).all()
+            return participants
+        finally:
+            session.close()
 

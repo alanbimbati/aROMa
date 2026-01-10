@@ -58,25 +58,70 @@ class BossPhaseManager:
         if not mob.is_boss:
             return False, None, None
         
-        # Get boss phase config
-        boss_config = BossPhaseManager.BOSS_PHASES.get(mob.name)
-        if not boss_config:
+        # Get boss phase config from database column
+        phase_thresholds_raw = getattr(mob, 'phase_thresholds', '{}')
+        if not phase_thresholds_raw:
+            return False, None, None
+            
+        try:
+            phase_thresholds = json.loads(phase_thresholds_raw)
+        except:
+            return False, None, None
+            
+        if not phase_thresholds:
             return False, None, None
         
         # Calculate HP percentage
         hp_percent = (mob.health / mob.max_health) * 100 if mob.max_health > 0 else 0
         current_phase = getattr(mob, 'current_phase', 1)
         
-        # Check each phase
-        for phase_name, phase_config in boss_config.items():
+        # Check each phase in the thresholds
+        # Thresholds are { "70": "phase2", "30": "phase3" }
+        for threshold_str, phase_name in sorted(phase_thresholds.items(), key=lambda x: int(x[0]), reverse=True):
+            threshold = int(threshold_str)
             phase_num = int(phase_name.replace('phase', ''))
-            threshold = phase_config.get('hp_threshold', 0)
             
             # Transition if HP below threshold and not already in this phase
             if hp_percent <= threshold and current_phase < phase_num:
+                # Get generic phase config or specific if available
+                # For now, we'll use a generic config based on the phase number
+                # but we could also store full configs in the DB
+                phase_config = BossPhaseManager.get_default_phase_config(mob, phase_num)
                 return True, phase_name, phase_config
         
         return False, None, None
+
+    @staticmethod
+    def get_default_phase_config(mob, phase_num):
+        """Get default phase configuration based on phase number"""
+        if phase_num == 2:
+            return {
+                'announcement': f'🔥 {mob.name} entra nella FASE 2!',
+                'stat_changes': {
+                    'attack_damage_mult': 1.3,
+                    'speed_mult': 1.1
+                }
+            }
+        elif phase_num == 3:
+            return {
+                'announcement': f'💀 {mob.name} entra nella FASE 3! È FURIA!',
+                'stat_changes': {
+                    'attack_damage_mult': 1.6,
+                    'resistance_add': 15
+                },
+                'heal_percent': 0.15
+            }
+        elif phase_num >= 4:
+            return {
+                'announcement': f'⚡ {mob.name} ha raggiunto la sua FORMA FINALE!',
+                'stat_changes': {
+                    'attack_damage_mult': 2.0,
+                    'resistance_add': 25,
+                    'speed_mult': 1.3
+                },
+                'heal_percent': 0.25
+            }
+        return {}
     
     @staticmethod
     def apply_phase_transition(mob, phase_name, phase_config):
