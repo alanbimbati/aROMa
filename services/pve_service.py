@@ -2,6 +2,7 @@ from database import Database
 from models.pve import Mob
 from models.combat import CombatParticipation
 from models.system import Livello
+from models.user import Utente
 from services.user_service import UserService
 from services.item_service import ItemService
 from services.event_dispatcher import EventDispatcher
@@ -474,29 +475,32 @@ class PvEService:
                 difficulty = mob.difficulty_tier if mob.difficulty_tier else 1
                 level = mob.mob_level if hasattr(mob, 'mob_level') and mob.mob_level else 1
                 
-                # Total pool for the mob (~200 Wumpa as requested)
+                # Total pool for the mob
                 TOTAL_POOL_WUMPA = random.randint(150, 250) * difficulty
                 TOTAL_POOL_XP = random.randint(50, 100) * difficulty
                 
+                # Fetch participants again to ensure we have the latest data
+                participants = session.query(CombatParticipation).filter_by(mob_id=mob.id).all()
                 total_damage = sum(p.damage_dealt for p in participants)
-                xp = 0
-                wumpa = 0
+                
+                reward_details = []
                 for p in participants:
                     share = p.damage_dealt / total_damage if total_damage > 0 else 1/len(participants)
                     p_xp = int(TOTAL_POOL_XP * share * (1 + level * 0.3))
                     p_wumpa = int(TOTAL_POOL_WUMPA * share * (1 + level * 0.3))
                     
-                    # Store current user's share for the message
-                    if p.user_id == user.id:
-                        xp = p_xp
-                        wumpa = p_wumpa
-                    
                     # Add rewards
                     self.user_service.add_exp_by_id(p.user_id, p_xp)
                     self.user_service.add_points_by_id(p.user_id, p_wumpa)
                     self.season_manager.add_seasonal_exp(p.user_id, p_xp)
+                    
+                    # Get username for the message
+                    p_user = session.query(Utente).filter_by(id=p.user_id).first()
+                    p_name = p_user.game_name if p_user and p_user.game_name else f"User {p.user_id}"
+                    reward_details.append(f"👤 *{p_name}*: {p_xp} Exp, {p_wumpa} {PointsName}")
                 
-                msg += f"\n💰 **RICOMPENSE DISTRIBUITE!** ({TOTAL_POOL_WUMPA} 🍑 totali)"
+                msg += f"\n\n💰 **RICOMPENSE DISTRIBUITE!** ({TOTAL_POOL_WUMPA} {PointsName} totali)\n"
+                msg += "\n".join(reward_details)
             
             # Item reward (2% chance for normal mobs, 10% for bosses)
             item_chance = 0.10 if mob.is_boss else 0.02
@@ -506,14 +510,7 @@ class PvEService:
                     weights = [1/float(item['rarita']) for item in items_data]
                     reward_item = random.choices(items_data, weights=weights, k=1)[0]
                     self.item_service.add_item(user.id_telegram, reward_item['nome'])
-                    if not mob.is_boss:
-                        msg += f"\n🏆 Ricompensa: {xp} Exp, {wumpa} {PointsName}, {reward_item['nome']}!"
-                    else:
-                        msg += f"\n🎁 Oggetto raro: {reward_item['nome']}!"
-                elif not mob.is_boss:
-                    msg += f"\n🏆 Ricompensa: {xp} Exp, {wumpa} {PointsName}!"
-            elif not mob.is_boss:
-                msg += f"\n🏆 Ricompensa: {xp} Exp, {wumpa} {PointsName}!"
+                    msg += f"\n\n� **OGGETTO RARO TROVATO!**\nHai ottenuto: *{reward_item['nome']}*"
         else:
             msg += f"\n❤️ Vita rimanente: {mob.health}/{mob.max_health}"
             msg += f"\n⏳ Cooldown: {int(cooldown_seconds)}s"
