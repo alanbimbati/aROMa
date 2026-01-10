@@ -479,10 +479,17 @@ class PvEService:
                 TOTAL_POOL_XP = random.randint(50, 100) * difficulty
                 
                 total_damage = sum(p.damage_dealt for p in participants)
+                xp = 0
+                wumpa = 0
                 for p in participants:
                     share = p.damage_dealt / total_damage if total_damage > 0 else 1/len(participants)
                     p_xp = int(TOTAL_POOL_XP * share * (1 + level * 0.3))
                     p_wumpa = int(TOTAL_POOL_WUMPA * share * (1 + level * 0.3))
+                    
+                    # Store current user's share for the message
+                    if p.user_id == user.id:
+                        xp = p_xp
+                        wumpa = p_wumpa
                     
                     # Add rewards
                     self.user_service.add_exp_by_id(p.user_id, p_xp)
