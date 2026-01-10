@@ -1,4 +1,7 @@
 .venv/*
-points.db
+*.db
 settings.py
 *.pyc
+images/bosses/*.png
+images/characters/*.png
+images/mobs/*.png

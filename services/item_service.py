@@ -204,31 +204,26 @@ class ItemService:
             # Logic: Next message has high luck
             # We need to store this state. Added luck_boost to Utente model.
             self.user_service.update_user(user.id_telegram, {'luck_boost': 1})
-            self.user_service.update_user(user.id_telegram, {'luck_boost': 1})
-            return "Turbo attivato! La tua fortuna è aumentata: troverai casse più frequentemente."
+            return "Turbo attivato! La tua fortuna è aumentata: troverai casse più frequentemente.", None
         
         elif item_name == "Aku Aku" or item_name == "Uka Uka":
             # Invincibility
             until = datetime.datetime.now() + datetime.timedelta(minutes=60) # 60 mins invincibility
             self.user_service.update_user(user.id_telegram, {'invincible_until': until})
-            return f"{item_name} attivato! Sei immune a TNT e Nitro per 60 minuti."
+            return f"{item_name} attivato! Sei immune a TNT e Nitro per 60 minuti.", None
             
         elif item_name == "Cassa":
             wumpa = random.randint(5, 15)
             self.user_service.add_points(user, wumpa)
-            return f"📦 Hai aperto la Cassa e trovato {wumpa} {PointsName}!"
+            return f"📦 Hai aperto la Cassa e trovato {wumpa} {PointsName}!", None
         
         elif item_name == "Nitro":
-            # Trap logic? Or self damage?
-            # Prompt says: "Nitro: " (empty description), but usually Nitro explodes on contact.
-            # If used from inventory, maybe it places a trap?
-            # Let's assume it places a trap in the group.
-            # We need a way to store group state.
-            # For now, let's just say it explodes on the user if they use it (oops) or maybe it's passive?
-            # "Nitro: " in prompt.
-            # "Mira un giocatore: gli farai cadere Frutti Wumpa"
-            # "Colpisci un giocatore: il prossimo utente perderà exp"
-            pass
+            # Trap logic: Places a trap in the group
+            return "Nitro piazzata! Il prossimo che scrive esploderà!", {'type': 'trap', 'trap_type': 'Nitro'}
+        
+        elif item_name == "TNT":
+             # Trap logic: Places a trap in the group
+            return "TNT piazzata! Il prossimo che scrive dovrà correre!", {'type': 'trap', 'trap_type': 'TNT'}
         
         elif item_name == "Mira un giocatore":
             if target_user:
@@ -238,25 +233,22 @@ class ItemService:
                     self.user_service.add_points(target_user, -amount)
                     # Maybe give them to user?
                     self.user_service.add_points(user, amount)
-                if target_user.points >= amount:
-                    self.user_service.add_points(target_user, -amount)
-                    # Maybe give them to user?
-                    self.user_service.add_points(user, amount)
-                    return f"Hai rubato {amount} {PointsName} a {target_user.username}!"
+                    return f"Hai rubato {amount} {PointsName} a {target_user.username}!", None
                 else:
-                    return "Il bersaglio non ha abbastanza punti."
+                    return "Il bersaglio non ha abbastanza punti.", None
         
         elif item_name == "Colpisci un giocatore":
             if target_user:
-                # Damage target (lose Wumpa, not Exp)
+                # Damage target (lose Wumpa) and DROP them for others
                 amount = random.randint(10, 30)
                 if target_user.points >= amount:
                     self.user_service.add_points(target_user, -amount)
-                    return f"Hai colpito {target_user.username}! Ha perso {amount} {PointsName}."
+                    # Return data for buttons
+                    return f"Hai colpito {target_user.username}! Ha perso {amount} {PointsName} che sono caduti a terra!", {'type': 'wumpa_drop', 'amount': amount, 'target_name': target_user.username}
                 else:
-                    return f"Hai colpito {target_user.username}, ma non aveva abbastanza {PointsName} da perdere."
+                    return f"Hai colpito {target_user.username}, ma non aveva abbastanza {PointsName} da perdere.", None
             else:
-                return "Devi specificare un bersaglio."
+                return "Devi specificare un bersaglio.", None
 
-        return "Oggetto utilizzato."
+        return "Oggetto utilizzato.", None
 

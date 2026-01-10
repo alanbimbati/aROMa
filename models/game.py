@@ -14,6 +14,7 @@ class GameInfo(Base):
     region = Column(String, nullable=True)
     message_link = Column(String, nullable=False,unique=True)
     premium      = Column(Integer,nullable=True)
+    preso_da     = Column(String, nullable=True, default='')
 
 class Steam(Base):
     __tablename__ = "steam"

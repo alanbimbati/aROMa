@@ -11,19 +11,25 @@ class UserService:
     def __init__(self):
         self.db = Database()
         from collections import deque
-        self.recent_users = deque(maxlen=10)
+        self.recent_users = deque(maxlen=20)
 
-    def track_activity(self, user_id):
+    def track_activity(self, user_id, chat_id=None):
         """Track user activity for mob targeting"""
-        # Remove if exists to move to end (most recent)
+        # Remove if exists (by user_id)
+        # We need to find the item with this user_id
         try:
-            self.recent_users.remove(user_id)
+            existing = next((item for item in self.recent_users if item['user_id'] == user_id), None)
+            if existing:
+                self.recent_users.remove(existing)
         except ValueError:
             pass
-        self.recent_users.append(user_id)
+            
+        self.recent_users.append({'user_id': user_id, 'chat_id': chat_id})
         
-    def get_recent_users(self):
-        return list(self.recent_users)
+    def get_recent_users(self, chat_id=None):
+        if chat_id:
+            return [item['user_id'] for item in self.recent_users if item['chat_id'] == chat_id]
+        return [item['user_id'] for item in self.recent_users]
 
     def get_user(self, target):
         session = self.db.get_session()

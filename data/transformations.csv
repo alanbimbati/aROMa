@@ -1,10 +1,33 @@
 id,base_character_name,transformed_character_name,transformation_name,wumpa_cost,duration_days,health_bonus,mana_bonus,damage_bonus,is_progressive,previous_transformation_id,required_level
-1,Yugi,Yugi Ho,Yami Yugi,20000,3,50,30,40,0,,42
-2,Kurosaki Ichigo,Ichigo Bankai,Bankai,32000,3,80,40,60,0,,58
-3,Ichigo Bankai,Ichigo Vasto Lorde,Vasto Lorde,60000,2,150,60,100,1,2,65
-4,Goku,Goku SSJ,Super Saiyan,40000,3,100,50,80,0,,30
-5,Goku SSJ,Goku SSJ2,Super Saiyan 2,60000,3,120,60,100,1,4,40
-6,Goku SSJ2,Goku SSJ3,Super Saiyan 3,100000,3,150,80,130,1,5,50
-7,Vegeta,Vegeta SSJ,Super Saiyan,40000,3,100,50,80,0,,18
-8,Vegeta SSJ,Vegeta SSJ2,Super Saiyan 2,60000,3,120,60,100,1,7,25
-9,Vegeta SSJ2,Vegeta Blue,Super Saiyan Blue,120000,3,180,90,150,1,8,60
+1,Goku,Goku SSJ,Super Saiyan,40000,3,100,50,80,0,,20
+2,Goku SSJ,Goku SSJ2,Super Saiyan 2,60000,3,120,60,100,1,1,26
+3,Goku SSJ2,Goku SSJ3,Super Saiyan 3,100000,3,150,80,130,1,2,30
+4,Goku SSJ3,Goku SSJ4,Super Saiyan 4,150000,3,180,100,160,1,3,36
+5,Goku SSJ4,Goku SSJ Blue,Super Saiyan Blue,200000,3,220,120,200,1,4,40
+6,Goku SSJ Blue,Goku Ultra Instinct,Ultra Instinct,300000,2,300,150,250,1,5,48
+7,Vegeta,Vegeta SSJ,Super Saiyan,40000,3,100,50,80,0,,20
+8,Vegeta SSJ,Vegeta SSJ2,Super Saiyan 2,60000,3,120,60,100,1,7,26
+9,Vegeta SSJ2,Vegeta SSJ3,Super Saiyan 3,100000,3,150,80,130,1,8,30
+10,Vegeta SSJ3,Vegeta SSJ4,Super Saiyan 4,150000,3,180,100,160,1,9,36
+11,Vegeta SSJ4,Vegeta SSJ Blue,Super Saiyan Blue,200000,3,220,120,200,1,10,40
+12,Gohan SSJ,Gohan SSJ2,Super Saiyan 2,60000,3,120,60,100,0,,26
+13,Piccolo,Piccolo Orange,Orange Piccolo,250000,3,250,120,220,0,,50
+14,Charizard,Mega Charizard X,Mega Evolution X,50000,3,120,60,110,0,,50
+15,Charizard,Mega Charizard Y,Mega Evolution Y,50000,3,110,80,120,0,,50
+16,Blastoise,Mega Blastoise,Mega Evolution,50000,3,130,60,100,0,,50
+17,Venusaur,Mega Venusaur,Mega Evolution,50000,3,140,60,90,0,,50
+18,Mewtwo,Mega Mewtwo Y,Mega Evolution Y,100000,3,200,150,200,0,,70
+19,Mewtwo,Mega Mewtwo X,Mega Evolution X,100000,3,220,100,220,0,,70
+20,Rayquaza,Mega Rayquaza,Mega Evolution,150000,3,250,150,250,0,,75
+21,Groudon,Primal Groudon,Primal Reversion,150000,3,250,100,240,0,,75
+22,Kyogre,Primal Kyogre,Primal Reversion,150000,3,240,120,230,0,,75
+23,Sonic,Sonic Super,Super Sonic,165000,2,200,100,150,0,,59
+24,Shadow,Shadow Chaos,Chaos Shadow,165000,2,200,100,150,0,,59
+25,Crash Bandicoot,Crash Bandicoot Evolved,Evolved,155000,2,180,90,140,0,,57
+26,Spyro,Spyro Elder,Elder Dragon,160000,2,190,95,145,0,,58
+27,Dante,Dante Devil Trigger,Devil Trigger,100000,3,150,80,130,0,,40
+28,Vergil,Vergil Devil Trigger,Devil Trigger,100000,3,150,80,130,0,,40
+29,Nero,Nero Devil Trigger,Devil Trigger,100000,3,150,80,130,0,,40
+30,Kratos,Kratos Rage,Spartan Rage,120000,3,180,50,160,0,,45
+31,Cloud,Cloud Limit,Limit Break,80000,3,120,60,110,0,,30
+32,Sephiroth,Sephiroth One Wing,One Winged Angel,120000,3,180,100,150,0,,50

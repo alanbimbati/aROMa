@@ -86,172 +86,16 @@ class PvEService:
             
         return success, msg
 
-    def mob_random_attack(self, specific_mob_id=None):
-        """Mobs attack random users. If specific_mob_id is provided, only that mob attacks."""
-        session = self.db.get_session()
-        
-        if specific_mob_id:
-            mobs = session.query(Mob).filter_by(id=specific_mob_id).all()
-        else:
-            mobs = session.query(Mob).filter_by(is_dead=False).all()
-            
-        session.close() # Close read session immediately
-        
-        if not mobs:
-            return None
-            
-        attack_events = []
-        
-        for mob in mobs:
-            # Check mob cooldown based on speed (skip check if specific_mob_id is set - immediate attack)
-            if not specific_mob_id:
-                mob_speed = mob.speed if mob.speed else 30
-                cooldown_seconds = 60 / (1 + mob_speed * 0.05)
-                
-                last_attack = mob.last_attack_time
-                if last_attack:
-                    elapsed = (datetime.datetime.now() - last_attack).total_seconds()
-                    if elapsed < cooldown_seconds:
-                        continue # This mob is on cooldown
-            
-            # AoE Logic: Bosses have 85% chance, normal mobs have 20% if difficulty >= 3
-            is_aoe = False
-            difficulty = mob.difficulty_tier if mob.difficulty_tier else 1
-            if mob.is_boss:
-                # Bosses have high AoE chance
-                if random.random() < 0.85:
-                    is_aoe = True
-            elif difficulty >= 3 and random.random() < 0.20:
-                is_aoe = True
-            
-            # Get targets
-            recent_users = self.user_service.get_recent_users()
-            targets = []
-            
-            if is_aoe and recent_users:
-                # Attack 2-10 recent users
-                target_count = random.randint(2, min(10, len(recent_users)))
-                target_ids = random.sample(recent_users, target_count)
-                for tid in target_ids:
-                    t = self.user_service.get_user(tid)
-                    if t: targets.append(t)
-            else:
-                # Single target
-                target = None
-                if recent_users:
-                    target_id = random.choice(recent_users)
-                    target = self.user_service.get_user(target_id)
-                
-                # Fallback to random DB user
-                if not target:
-                    session = self.db.get_session()
-                    from sqlalchemy.sql.expression import func
-                    from models.user import Utente
-                    target = session.query(Utente).order_by(func.random()).first()
-                    session.close()
-                
-                if target:
-                    targets.append(target)
-            
-            if not targets:
-                continue
-                
-            base_damage = mob.attack_damage if mob.attack_damage else 10
-            
-            # Collect damage info for each target
-            damage_results = []
-            for target in targets:
-                # Add damage variance (±20%)
-                damage = int(base_damage * random.uniform(0.8, 1.2))
-                
-                # Apply Target Resistance
-                user_res = getattr(target, 'allocated_resistance', 0)
-                if user_res > 0:
-                    reduction_factor = 100 / (100 + user_res)
-                    damage = int(damage * reduction_factor)
-                
-                self.user_service.damage_health(target, damage)
-                
-                # Fix double @ issue
-                username = target.username.lstrip('@') if target.username else None
-                tag = f"@{username}" if username else target.nome
-                
-                damage_results.append({'tag': tag, 'damage': damage})
-            
-            # Create consolidated message
-            if mob.is_boss:
-                # Boss messages
-                boss_name_escaped = mob.name.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace(']', '\\]').replace('(', '\\(').replace(')', '\\)')
-                if is_aoe:
-                    tags = ", ".join([r['tag'] for r in damage_results])
-                    avg_damage = sum([r['damage'] for r in damage_results]) // len(damage_results)
-                    msg = f"☠️ **BOSS ATTACK!**\n**{boss_name_escaped}** ha scatenato un attacco ad area!\n🎯 Colpiti: {tags}\n💥 Danni inflitti: **{avg_damage}** (media)"
-                else:
-                    tag = damage_results[0]['tag']
-                    damage = damage_results[0]['damage']
-                    msg = f"☠️ **BOSS ATTACK!**\n**{boss_name_escaped}** ha attaccato {tag}\n💥 Danni inflitti: **{damage}**"
-            else:
-                # Normal mob messages
-                if is_aoe:
-                    tags = ", ".join([r['tag'] for r in damage_results])
-                    avg_damage = sum([r['damage'] for r in damage_results]) // len(damage_results)
-                    msg = f"🔥 **ATTACCO AD AREA!**\n**{mob.name}** ha colpito: {tags}\n💥 Danni inflitti: **{avg_damage}** (media)"
-                else:
-                    tag = damage_results[0]['tag']
-                    damage = damage_results[0]['damage']
-                    msg = f"⚠️ **{mob.name}** ha attaccato {tag}\n💥 Danni inflitti: **{damage}**"
-            
-            # Find mob/boss image
-            image_path = None
-            safe_name = mob.name.lower().replace(" ", "_")
-            if mob.is_boss:
-                # Boss images in images/bosses/
-                for ext in ['.png', '.jpg', '.jpeg']:
-                    path = f"images/bosses/{safe_name}{ext}"
-                    if os.path.exists(path):
-                        image_path = path
-                        break
-                # Fallback to default boss image if specific not found
-                if not image_path and os.path.exists("images/bosses/default.png"):
-                    image_path = "images/bosses/default.png"
-            else:
-                # Normal mob images in images/mobs/
-                mob_info = next((m for m in self.mob_data if m['nome'] == mob.name), None)
-                if mob_info:
-                    for ext in ['.png', '.jpg', '.jpeg']:
-                        path = f"images/mobs/{safe_name}{ext}"
-                        if os.path.exists(path):
-                            image_path = path
-                            break
-                # Fallback to default mob image if specific not found
-                if not image_path and os.path.exists("images/mobs/default.png"):
-                    image_path = "images/mobs/default.png"
-            
-            # Single event per mob (not per target)
-            attack_events.append({
-                'message': msg,
-                'image': image_path,
-                'mob_name': mob.name
-            })
-            
-            # Update mob last attack
-            session = self.db.get_session()
-            mob_to_update = session.query(Mob).filter_by(id=mob.id).first()
-            if mob_to_update:
-                mob_to_update.last_attack_time = datetime.datetime.now()
-                session.commit()
-            session.close()
-            
-        return attack_events
 
 
-    def spawn_daily_mob(self):
+
+    def spawn_daily_mob(self, chat_id=None):
         """Spawn a random daily mob and immediately attack"""
         # Check if we can spawn (limit check is in spawn_specific_mob)
         success, msg, mob_id = self.spawn_specific_mob()
         if success and mob_id:
             # Immediate attack
-            attack_events = self.mob_random_attack(specific_mob_id=mob_id)
+            attack_events = self.mob_random_attack(specific_mob_id=mob_id, chat_id=chat_id)
             return mob_id, attack_events
         # Return None if spawn failed (e.g., too many mobs)
         return None, None
@@ -566,7 +410,7 @@ class PvEService:
         session.close()
         return True, msg
 
-    def mob_random_attack(self, specific_mob_id=None):
+    def mob_random_attack(self, specific_mob_id=None, chat_id=None):
         """Mobs attack random users. If specific_mob_id is provided, only that mob attacks."""
         session = self.db.get_session()
         
@@ -608,12 +452,22 @@ class PvEService:
                 is_aoe = True
             
             # Get targets
-            recent_users = self.user_service.get_recent_users()
+            # RESTRICTION: Only attack users in the current chat
+            recent_users = self.user_service.get_recent_users(chat_id=chat_id)
             targets = []
             
+            if not recent_users:
+                # No active users in this chat to attack
+                continue
+
             if is_aoe and recent_users:
                 # Attack 2-10 recent users
-                target_count = random.randint(2, min(10, len(recent_users)))
+                max_targets = min(10, len(recent_users))
+                if max_targets < 2:
+                    target_count = 1
+                else:
+                    target_count = random.randint(2, max_targets)
+                
                 target_ids = random.sample(recent_users, target_count)
                 for tid in target_ids:
                     t = self.user_service.get_user(tid)
@@ -625,13 +479,8 @@ class PvEService:
                     target_id = random.choice(recent_users)
                     target = self.user_service.get_user(target_id)
                 
-                # Fallback to random DB user
-                if not target:
-                    session = self.db.get_session()
-                    from sqlalchemy.sql.expression import func
-                    from models.user import Utente
-                    target = session.query(Utente).order_by(func.random()).first()
-                    session.close()
+                # REMOVED FALLBACK TO RANDOM DB USER
+                # We only want to attack people in the group
                 
                 if target:
                     targets.append(target)
