@@ -304,18 +304,27 @@ class CharacterService:
             session.close()
             return False
         
-        # Check level unlock
-        if character['livello'] <= user.livello:
-            # Check premium requirement
-            if character['lv_premium'] == 1 and user.premium == 0:
-                session.close()
-                return False
-            # Level-unlocked or free character
-            if character['lv_premium'] == 0 or (character['lv_premium'] == 1 and user.premium == 1):
+        # CRITICAL: Always enforce level requirement
+        if character['livello'] > user.livello:
+            session.close()
+            return False
+            
+        # Check level unlock (for free/premium level-based characters)
+        # Check premium requirement
+        if character['lv_premium'] == 1:
+            if user.premium == 1:
                 session.close()
                 return True
+            else:
+                session.close()
+                return False
         
-        # Check if purchased
+        # If it's a standard level-unlocked character (lv_premium == 0)
+        if character['lv_premium'] == 0:
+            session.close()
+            return True
+            
+        # Check if purchased or seasonal (lv_premium == 2)
         purchased = session.query(UserCharacter).filter_by(
             user_id=user.id_telegram,
             character_id=char_id

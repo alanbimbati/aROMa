@@ -13,7 +13,31 @@ class DropService:
         self.db = Database()
         self.user_service = UserService()
         self.item_service = ItemService()
-    
+        self.active_traps = {} # {chat_id: {'type': 'TNT'/'Nitro', 'owner_id': user_id}}
+
+    def set_trap(self, chat_id, trap_type, owner_id):
+        """Set a trap in the chat"""
+        self.active_traps[chat_id] = {'type': trap_type, 'owner_id': owner_id}
+
+    def check_traps(self, user, bot, message):
+        """Check if message triggers a trap"""
+        chat_id = message.chat.id
+        if chat_id in self.active_traps:
+            trap = self.active_traps.pop(chat_id)
+            trap_type = trap['type']
+            owner_id = trap['owner_id']
+            
+            # Don't trigger own trap? Or yes? User said "il prossimo a scrivere".
+            # Usually own traps don't trigger, but "il prossimo" implies anyone.
+            # Let's assume anyone including self if they write next.
+            
+            if trap_type == 'TNT':
+                self.handle_tnt(user, bot, message)
+            elif trap_type == 'Nitro':
+                self.handle_nitro(user, bot, message)
+            return True
+        return False
+
     def maybe_drop(self, user, bot, message):
         """
         Random chance to drop TNT, Nitro, or Cassa while writing in chat
@@ -22,8 +46,11 @@ class DropService:
         if message.chat.type not in ['group', 'supergroup']:
             return
             
-        # Global drop chance (e.g., 5% per message) to reduce frequency
-        if random.random() > 0.05:
+        # DISABLE RANDOM DROPS - Only Monsters spawn now
+        return
+        
+        # Global drop chance (e.g., 15% per message) to reduce frequency
+        if random.random() > 0.15:
             return
         
         # Load items from CSV

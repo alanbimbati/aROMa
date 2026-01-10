@@ -29,6 +29,7 @@ class Utente(Base):
     current_hp = Column(Integer, nullable=True)  # Current HP for combat tracking
     mana = Column(Integer, default=50)
     max_mana = Column(Integer, default=50)
+    current_mana = Column(Integer, default=50)  # Current mana for combat tracking
     base_damage = Column(Integer, default=10)
     stat_points = Column(Integer, default=0)
     last_health_restore = Column(DateTime, nullable=True)
@@ -42,6 +43,13 @@ class Utente(Base):
     allocated_crit_rate = Column(Integer, default=0)
     last_stat_reset = Column(DateTime, nullable=True)  # Track last reset for cooldown
     last_attack_time = Column(DateTime, nullable=True)
+    
+    # Status Effects
+    active_status_effects = Column(String, nullable=True)  # JSON: [{effect, duration, stacks}]
+    
+    # Achievement Title
+    title = Column(String, nullable=True)  # Current equipped title from achievements
+    titles = Column(String, nullable=True)  # JSON list of all earned titles
     
     # Character ownership
     last_character_change = Column('last_character_change', DateTime, nullable=True)  # For weekly restriction

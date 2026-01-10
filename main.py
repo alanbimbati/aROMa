@@ -5,6 +5,8 @@ import time
 import threading
 import datetime
 import os
+import random
+import socket
 from io import BytesIO
 
 
@@ -64,11 +66,192 @@ def start(message):
     user_service.create_user(message.from_user.id, message.from_user.username, message.from_user.first_name, message.from_user.last_name)
     bot.reply_to(message, "Cosa vuoi fare?", reply_markup=get_start_markup(message.from_user.id))
 
+@bot.message_handler(commands=['achievements', 'ach'])
+def handle_achievements_cmd(message, page=0):
+    """Show user achievements with pagination"""
+    user_id = message.from_user.id
+    
+    from services.achievement_tracker import AchievementTracker
+    tracker = AchievementTracker()
+    
+    stats = tracker.get_achievement_stats(user_id)
+    all_achievements = tracker.get_all_achievements_with_progress(user_id)
+    
+    # Sort: Unlocked first, then by tier, then by name
+    tier_map = {'bronze': 1, 'silver': 2, 'gold': 3, 'platinum': 4}
+    all_achievements.sort(key=lambda x: (not x['is_completed'], -tier_map.get(x['achievement'].tier, 0), x['achievement'].name))
+    
+    ITEMS_PER_PAGE = 5
+    total_pages = (len(all_achievements) + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE
+    
+    if total_pages == 0:
+        bot.reply_to(message, "Nessun achievement disponibile.")
+        return
+
+    if page >= total_pages: page = total_pages - 1
+    if page < 0: page = 0
+    
+    start_idx = page * ITEMS_PER_PAGE
+    end_idx = start_idx + ITEMS_PER_PAGE
+    page_items = all_achievements[start_idx:end_idx]
+    
+    msg = f"🏆 **I TUOI ACHIEVEMENT** ({stats['completed']}/{stats['total_achievements']})\n"
+    msg += f"📊 Progresso: `{stats['completion_rate']:.1f}%` | Punti: `{stats['points_earned']}`\n\n"
+    
+    for item in page_items:
+        a = item['achievement']
+        unlocked = item['is_completed']
+        progress = item['progress']
+        max_progress = a.max_progress
+        
+        status_emoji = "✅" if unlocked else "🔒"
+        tier_emoji = {'bronze': '🥉', 'silver': '🥈', 'gold': '🥇', 'platinum': '💎'}.get(a.tier, "🏆")
+        
+        msg += f"{status_emoji} {tier_emoji} **{a.name}**\n"
+        msg += f"_{a.description}_\n"
+        
+        if not unlocked:
+            # Progress bar
+            percent = int((progress / max_progress) * 10) if max_progress > 0 else 0
+            bar = "▰" * percent + "▱" * (10 - percent)
+            msg += f"[{bar}] `{progress}/{max_progress}`\n"
+            msg += f"🎯 *Obiettivo:* {a.description}\n"
+        else:
+            msg += "✨ *Completato!*\n"
+        msg += "\n"
+        
+    msg += f"📄 Pagina {page + 1} di {total_pages}"
+    
+    markup = types.InlineKeyboardMarkup()
+    buttons = []
+    if page > 0:
+        buttons.append(types.InlineKeyboardButton("⬅️ Indietro", callback_data=f"ach_page|{page-1}"))
+    if page < total_pages - 1:
+        buttons.append(types.InlineKeyboardButton("Avanti ➡️", callback_data=f"ach_page|{page+1}"))
+    
+    if buttons:
+        markup.row(*buttons)
+        
+    # Check if it's a callback or a command
+    if hasattr(message, 'message_id') and not hasattr(message, 'text'): # Likely a callback
+        bot.edit_message_text(msg, message.chat.id, message.message_id, reply_markup=markup, parse_mode='markdown')
+    else:
+        bot.reply_to(message, msg, reply_markup=markup, parse_mode='markdown')
+
+@bot.message_handler(commands=['titles', 'titoli'])
+def handle_titles_cmd(message):
+    """Show user earned titles and allow selection"""
+    user_id = message.from_user.id
+    utente = user_service.get_user(user_id)
+    
+    if not utente:
+        bot.reply_to(message, "Utente non trovato. Usa /start prima.")
+        return
+    
+    import json
+    titles = []
+    if hasattr(utente, 'titles') and utente.titles:
+        try:
+            titles = json.loads(utente.titles)
+        except:
+            titles = []
+    
+    if not titles:
+        bot.reply_to(message, "Non hai ancora guadagnato nessun titolo! Sblocca achievement per ottenerne.")
+        return
+    
+    msg = "👑 **I TUOI TITOLI**\n\nSeleziona un titolo da mostrare nel tuo profilo:"
+    markup = types.InlineKeyboardMarkup()
+    
+    for title in titles:
+        is_active = (utente.title == title)
+        label = f"⭐ {title}" if is_active else title
+        markup.add(types.InlineKeyboardButton(label, callback_data=f"set_title|{title}"))
+    
+    bot.reply_to(message, msg, reply_markup=markup, parse_mode='markdown')
+
+@bot.message_handler(commands=['stagione', 'season', 'pass'])
+def handle_season_cmd(message, page=0):
+    """Show seasonal progression and rewards with pagination"""
+    user_id = message.from_user.id
+    
+    try:
+        from services.season_manager import SeasonManager
+        manager = SeasonManager()
+        
+        status = manager.get_season_status(user_id)
+        if not status:
+            bot.reply_to(message, "Nessuna stagione attiva al momento.")
+            return
+            
+        # Get active season to get all rewards
+        season = manager.get_active_season()
+        all_rewards = manager.get_all_season_rewards(season.id)
+        
+        ITEMS_PER_PAGE = 5
+        total_pages = (len(all_rewards) + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE
+        
+        if page >= total_pages: page = total_pages - 1
+        if page < 0: page = 0
+        
+        start_idx = page * ITEMS_PER_PAGE
+        end_idx = start_idx + ITEMS_PER_PAGE
+        page_rewards = all_rewards[start_idx:end_idx]
+        
+        progress = status['progress']
+        msg = f"🏆 **{status['season_name']}**\n"
+        msg += f"⏰ Scade il: {status['end_date'].strftime('%d/%m/%Y')}\n\n"
+        
+        msg += f"⭐ **Livello {progress['level']}**\n"
+        
+        # Progress bar
+        exp_per_lv = status['exp_per_level']
+        percent = int((progress['exp'] / exp_per_lv) * 10)
+        bar = "▰" * percent + "▱" * (10 - percent)
+        msg += f"[{bar}] {progress['exp']}/{exp_per_lv} EXP\n\n"
+        
+        if progress['has_premium']:
+            msg += "👑 **Pass Premium Attivo**\n\n"
+        else:
+            msg += "🆓 **Pass Gratuito** (Usa /premium per sbloccare tutto!)\n\n"
+            
+        msg += f"🎁 **RICOMPENSE (Pagina {page+1}/{total_pages}):**\n"
+        for r in page_rewards:
+            type_icon = r.icon or '🎁'
+            status_icon = "✅" if progress['level'] >= r.level_required else "🔒"
+            premium_tag = "👑 [PREMIUM]" if r.is_premium else "🆓 [FREE]"
+            msg += f"{status_icon} • Lv {r.level_required}: {premium_tag} {type_icon} {r.reward_name}\n"
+            
+        markup = types.InlineKeyboardMarkup()
+        
+        # Navigation buttons
+        nav_buttons = []
+        if page > 0:
+            nav_buttons.append(types.InlineKeyboardButton("⬅️ Indietro", callback_data=f"season_page|{page-1}"))
+        if page < total_pages - 1:
+            nav_buttons.append(types.InlineKeyboardButton("Avanti ➡️", callback_data=f"season_page|{page+1}"))
+        
+        if nav_buttons:
+            markup.row(*nav_buttons)
+            
+        if not progress['has_premium']:
+            markup.add(types.InlineKeyboardButton("🛒 Acquista Season Pass (1000 🍑)", callback_data="buy_season_pass"))
+        
+        if hasattr(message, 'message_id') and not hasattr(message, 'text'): # Callback
+            bot.edit_message_text(msg, message.chat.id, message.message_id, reply_markup=markup, parse_mode='markdown')
+        else:
+            bot.reply_to(message, msg, reply_markup=markup, parse_mode='markdown')
+            
+    except Exception as e:
+        print(f"Error showing season: {e}")
+        bot.reply_to(message, "❌ Errore nel caricamento della stagione.")
+
 def get_start_markup(user_id):
-    markup = types.ReplyKeyboardMarkup()
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add('📦 Inventario', '📦 Compra Box Wumpa (50 🍑)')
     markup.add('🧪 Negozio Pozioni', '👤 Profilo')
     markup.add('👤 Scegli il personaggio', '💰 Listino & Guida')
+    markup.add('🏆 Achievement', '🌟 Stagione')
     markup.add('📄 Classifica', '❓ Aiuto')
     return markup
 
@@ -205,6 +388,10 @@ class BotCommands:
             "aiuto": self.handle_help,
             "help": self.handle_help,
             "💰 Listino & Guida": self.handle_guide_costs,
+            "🏆 Achievement": self.handle_achievements,
+            "🌟 Stagione": self.handle_season,
+            "🌐 Dashboard Web": self.handle_web_dashboard,
+            "📄 Classifica": self.handle_classifica,
         }
 
         self.comandi_admin = {
@@ -785,8 +972,25 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         if not image_sent:
             self.bot.reply_to(self.message, msg, parse_mode='markdown', reply_markup=get_start_markup(self.chatid))
 
+    def handle_achievements(self):
+        """Show user achievements via button"""
+        handle_achievements_cmd(self.message)
 
+    def handle_season(self):
+        """Show seasonal progression via button"""
+        handle_season_cmd(self.message)
 
+    def handle_web_dashboard(self):
+        """Show link to web dashboard via button"""
+        user_id = self.chatid
+        dashboard_url = f"{DASHBOARD_BASE_URL}/?user_id={user_id}"
+        msg = "🌐 **DASHBOARD WEB**\n\nAccedi alla tua dashboard personale per vedere achievement, statistiche e progressi stagionali con una grafica avanzata!"
+        
+        from telebot import types
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("🌐 Apri Dashboard Web", url=dashboard_url))
+        
+        self.bot.reply_to(self.message, msg, reply_markup=markup, parse_mode='markdown')
 
     def handle_profile(self, target_user=None):
         """Show comprehensive user profile with stats and transformations"""
@@ -815,6 +1019,10 @@ Per acquistare un gioco che vedi in un canale o gruppo:
             
         nome_utente = utente.nome if utente.username is None else utente.username
         msg += f"👤 **{nome_utente}**: {utente.points} {PointsName}\n"
+        
+        # Show title if user has one
+        if hasattr(utente, 'title') and utente.title:
+            msg += f"👑 **{utente.title}**\n"
         
         # Calculate next level exp
         next_lv_num = utente.livello + 1
@@ -938,8 +1146,30 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         # Use the item on the target
         if item_service.use_item(self.chatid, item_name):
             utente = user_service.get_user(self.chatid)
-            msg = item_service.apply_effect(utente, item_name, target_user)
-            self.bot.reply_to(message, msg)
+            msg, data = item_service.apply_effect(utente, item_name, target_user)
+            
+            if data and data.get('type') == 'wumpa_drop':
+                # Create buttons for stealing
+                amount = data['amount']
+                markup = types.InlineKeyboardMarkup()
+                buttons = []
+                import uuid
+                for i in range(amount):
+                    uid = str(uuid.uuid4())[:8]
+                    buttons.append(types.InlineKeyboardButton("🍑", callback_data=f"steal|{uid}"))
+                
+                # Add rows of 5
+                for i in range(0, len(buttons), 5):
+                    markup.row(*buttons[i:i+5])
+                
+                # Send to GROUP if possible
+                try:
+                    self.bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup)
+                    self.bot.reply_to(message, "Oggetto usato! Controlla il gruppo.")
+                except:
+                    self.bot.reply_to(message, msg, reply_markup=markup)
+            else:
+                self.bot.reply_to(message, msg)
         else:
             self.bot.reply_to(message, "❌ Non hai questo oggetto o è già stato usato.")
 
@@ -1042,12 +1272,33 @@ Per acquistare un gioco che vedi in un canale o gruppo:
 
     def handle_classifica(self):
         users = user_service.get_users()
-        # Sort logic
-        users.sort(key=lambda x: x.points, reverse=True)
-        msg = "🏆 Classifica 🏆\n\n"
-        for i, u in enumerate(users[:10]):
-            msg += f"{i+1}. {u.username or u.nome}: {u.points} {PointsName}\n"
-        self.bot.reply_to(self.message, msg)
+        # Sort logic: EXP (descending)
+        users.sort(key=lambda x: x.exp, reverse=True)
+        
+        msg = "🏆 **CLASSIFICA** 🏆\n\n"
+        
+        # Pre-load character data to avoid N queries
+        from services.character_loader import get_character_loader
+        char_loader = get_character_loader()
+        
+        for i, u in enumerate(users[:15]): # Show top 15
+            # Get character name
+            char_name = "N/A"
+            if u.livello_selezionato:
+                char = char_loader.get_character_by_id(u.livello_selezionato)
+                if char:
+                    char_name = char['nome']
+            
+            nome_display = u.username if u.username else u.nome
+            # Escape markdown in name
+            if nome_display:
+                nome_display = nome_display.replace("_", "\\_").replace("*", "\\*").replace("[", "\\[")
+            
+            msg += f"{i+1}. **{nome_display}**\n"
+            msg += f"   Lv. {u.livello} - {char_name}\n"
+            msg += f"   ✨ EXP: {u.exp} | 🍑 {u.points}\n\n"
+            
+        self.bot.reply_to(self.message, msg, parse_mode='markdown')
 
     def handle_nome_in_game(self):
         # Logic for game names
@@ -1483,6 +1734,7 @@ Per acquistare un gioco che vedi in un canale o gruppo:
                 handler()
                 return
 
+
 @bot.message_handler(content_types=util.content_type_media)
 def any(message):
     # Check if message is a forward (Game Purchase)
@@ -1622,7 +1874,7 @@ def any(message):
         utente = user_service.get_user(message.from_user.id)
     
     # Track activity
-    user_service.track_activity(message.from_user.id)
+    user_service.track_activity(message.from_user.id, message.chat.id)
     
     # Sunday reset removed - characters persist
     
@@ -1657,12 +1909,16 @@ def any(message):
         # Check TNT timer first (if user is avoiding TNT)
         drop_service.check_tnt_timer(utente, bot, message)
         
+        # Check for active traps (TNT/Nitro placed by users)
+        if drop_service.check_traps(utente, bot, message):
+            return # Trap triggered, stop processing drops/spawns
+
         # Random drops: TNT, Nitro, Cassa
         drop_service.maybe_drop(utente, bot, message)
         
         # Random Mob Spawn (5% chance per message)
         if random.random() < 0.05:
-            mob_id, attack_events = pve_service.spawn_daily_mob()
+            mob_id, attack_events = pve_service.spawn_daily_mob(chat_id=message.chat.id)
             if mob_id:
                 mob = pve_service.get_current_mob_status()
                 if mob:
@@ -1680,7 +1936,7 @@ def any(message):
                         except:
                             bot.send_message(message.chat.id, msg_text, reply_markup=markup)
                     else:
-                        bot.send_message(message.chat.id, msg_text, reply_markup=markup)
+                        bot.send_message(message.chat.id, msg_text, reply_markup=markup, parse_mode='markdown')
                     
                     # Send immediate attack messages if any
                     if attack_events:
@@ -1694,7 +1950,7 @@ def any(message):
                                 else:
                                     bot.send_message(message.chat.id, msg, reply_markup=markup, )
                             except:
-                                bot.send_message(message.chat.id, msg, reply_markup=markup, )
+                                bot.send_message(message.chat.id, msg, reply_markup=markup, parse_mode='markdown')
 
     bothandler = BotCommands(message, bot)
     bothandler.handle_all_commands()
@@ -1705,6 +1961,32 @@ def handle_inline_buttons(call):
     user_id = call.from_user.id
     utente = user_service.get_user(user_id)
     
+    # TITLE SELECTION
+    if action.startswith("set_title|"):
+        new_title = action.split("|")[1]
+        
+        from database import Database
+        from models.user import Utente
+        db = Database()
+        session = db.get_session()
+        
+        try:
+            db_user = session.query(Utente).filter_by(id_telegram=user_id).first()
+            if db_user:
+                db_user.title = new_title
+                session.commit()
+                bot.answer_callback_query(call.id, f"✅ Titolo impostato: {new_title}")
+                bot.edit_message_text(f"✅ Titolo impostato con successo: **{new_title}**", user_id, call.message.message_id, parse_mode='markdown')
+            else:
+                bot.answer_callback_query(call.id, "❌ Utente non trovato")
+        except Exception as e:
+            session.rollback()
+            print(f"Error setting title in callback: {e}")
+            bot.answer_callback_query(call.id, "❌ Errore nel salvataggio")
+        finally:
+            session.close()
+        return
+
     # NEW HANDLERS - Character Selection & Stats
     if action.startswith("char_nav|"):
         parts = action.split("|")
@@ -2153,7 +2435,7 @@ def handle_inline_buttons(call):
             # Or just delete and resend the updated card
             try:
                 # Get character data from CSV
-                from services.character_loader import get_character_loader
+                from services.character_loader import get_character_loader, get_character_image
                 char_loader = get_character_loader()
                 char = char_loader.get_character_by_id(char_id)
                 
@@ -2842,17 +3124,51 @@ def handle_inline_buttons(call):
         if item_name in targeted_items:
             bot.answer_callback_query(call.id)
             msg = bot.send_message(user_id, f"🎯 Hai scelto di usare **{item_name}**.\n\nScrivi il @username del giocatore che vuoi colpire:", parse_mode='markdown')
-            bot.register_next_step_handler(msg, self.process_item_target, item_name)
+            
+            # Instantiate BotCommands to use its method
+            cmd_handler = BotCommands(call.message, bot)
+            bot.register_next_step_handler(msg, cmd_handler.process_item_target, item_name)
             return
             
         # Use item logic (immediate effect)
         if item_service.use_item(user_id, item_name):
-            msg = item_service.apply_effect(utente, item_name)
+            msg, data = item_service.apply_effect(utente, item_name)
+            
+            if data and data.get('type') == 'trap':
+                # Set trap in the chat
+                drop_service.set_trap(call.message.chat.id, data['trap_type'], user_id)
+                
             bot.send_message(user_id, msg)
             bot.answer_callback_query(call.id, "✅ Oggetto usato!")
         else:
             bot.send_message(user_id, "Non hai questo oggetto o è già stato usato.")
             bot.answer_callback_query(call.id, "❌ Errore")
+
+    elif action.startswith("steal|"):
+        # Give 1 wumpa
+        user_service.add_points(utente, 1)
+        bot.answer_callback_query(call.id, "Hai rubato 1 Wumpa!")
+        
+        # Remove the button
+        current_markup = call.message.reply_markup
+        new_markup = types.InlineKeyboardMarkup()
+        
+        buttons_left = 0
+        if current_markup and current_markup.keyboard:
+            for row in current_markup.keyboard:
+                new_row = []
+                for btn in row:
+                    if btn.callback_data != action:
+                        new_row.append(btn)
+                        buttons_left += 1
+                if new_row:
+                    new_markup.row(*new_row)
+        
+        if buttons_left == 0:
+            bot.edit_message_text(f"{call.message.text}\n\n(Tutti i Wumpa sono stati rubati!)", call.message.chat.id, call.message.message_id, reply_markup=None)
+        else:
+            bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=new_markup)
+        return
 
     elif action.startswith("sg|"):
         # Show game details / send game
@@ -2920,6 +3236,36 @@ def handle_inline_buttons(call):
             bot.send_message(user_id, f"{msg}\n\n🐲 PORUNGA HA ESAUDITO I TUOI 3 DESIDERI!")
         
         bot.answer_callback_query(call.id)
+        return
+
+    # ACHIEVEMENT PAGINATION
+    elif action.startswith("ach_page|"):
+        page = int(action.split("|")[1])
+        handle_achievements_cmd(call.message, page=page)
+        bot.answer_callback_query(call.id)
+        return
+
+    # SEASON PAGINATION
+    elif action.startswith("season_page|"):
+        page = int(action.split("|")[1])
+        handle_season_cmd(call.message, page=page)
+        bot.answer_callback_query(call.id)
+        return
+
+    # SEASON PASS PURCHASE
+    elif action == "buy_season_pass":
+        from services.season_manager import SeasonManager
+        manager = SeasonManager()
+        success, msg = manager.purchase_season_pass(user_id)
+        
+        if success:
+            bot.answer_callback_query(call.id, "✅ Acquisto completato!")
+            # Update the season message to show the new status
+            handle_season_cmd(call.message)
+        else:
+            bot.answer_callback_query(call.id, "❌ Errore")
+            bot.send_message(user_id, msg, parse_mode='markdown')
+        return
 
 def bot_polling_thread():
     bot.infinity_polling()
@@ -2954,7 +3300,7 @@ def spawn_daily_mob_job():
         # 10% chance every check (if run every hour? or minute?)
         # Let's assume this runs every hour.
         if random.random() < 0.2: 
-            mob_id, attack_events = pve_service.spawn_daily_mob()
+            mob_id, attack_events = pve_service.spawn_daily_mob(chat_id=GRUPPO_AROMA)
             if mob_id:
                 mob = pve_service.get_current_mob_status() # This might get the wrong mob if multiple?
                 # Better to get by ID if possible, but get_current_mob_status gets the first one.
@@ -2982,7 +3328,7 @@ def spawn_daily_mob_job():
                         except:
                             bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup)
                     else:
-                        bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup)
+                        bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup, parse_mode='markdown')
                     
                     # Send immediate attack messages with buttons
                     if attack_events:
@@ -2996,7 +3342,7 @@ def spawn_daily_mob_job():
                                 else:
                                     bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, )
                             except:
-                                bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, )
+                                bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, parse_mode='markdown')
 
 def spawn_weekly_boss_job():
     success, msg, boss_id = pve_service.spawn_boss()

@@ -26,6 +26,16 @@ class Mob(Base):
     last_attack_time = Column(DateTime, nullable=True)
     description = Column(String, nullable=True)  # For boss descriptions
     resistance = Column(Integer, default=0) # Percentage damage reduction
+    
+    # Advanced Mechanics
+    passive_abilities = Column(String, nullable=True)  # JSON array of ability IDs
+    active_abilities = Column(String, nullable=True)   # JSON array of ability IDs
+    ai_behavior = Column(String, default="aggressive")  # aggressive, defensive, tactical
+    phase_thresholds = Column(String, nullable=True)   # JSON: {50: "phase2", 25: "phase3"}
+    current_phase = Column(Integer, default=1)
+    
+    # Buffs/Debuffs
+    active_buffs = Column(String, nullable=True)  # JSON: [{buff_type, value, duration}]
 
 class Raid(Base):
     __tablename__ = "raid"
