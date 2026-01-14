@@ -7,6 +7,7 @@ from services.user_service import UserService
 from services.item_service import ItemService
 import random
 from settings import PointsName
+from models.seasons import Season
 
 class DropService:
     def __init__(self):
@@ -44,17 +45,26 @@ class DropService:
 
     def maybe_drop(self, user, bot, message):
         """
-        Random chance to drop TNT, Nitro, or Cassa while writing in chat
+        Random chance to drop Dragon Balls while writing in chat.
+        Drop rate increases during Dragon Ball season.
         """
         # Only in groups
         if message.chat.type not in ['group', 'supergroup']:
             return
             
-        # DISABLE RANDOM DROPS - Only Monsters spawn now
-        return
-        
-        # Global drop chance (e.g., 15% per message) to reduce frequency
-        if random.random() > 0.15:
+        # Get active season theme
+        session = self.db.get_session()
+        active_season = session.query(Season).filter_by(is_active=True).first()
+        theme = active_season.theme if active_season else None
+        session.close()
+
+        # Base drop chance (e.g., 1% per message)
+        # If theme is Dragon Ball, increase to 5%
+        drop_chance = 0.01
+        if theme == 'Dragon Ball':
+            drop_chance = 0.05
+            
+        if random.random() > drop_chance:
             return
         
         # Load items from CSV
@@ -62,40 +72,26 @@ class DropService:
         if not items_data:
             return
         
-        # Check each item for drop
-        for item in items_data:
-            # Calculate drop chance (1 in rarity)
-            if random.randint(1, item['rarita']) == item['rarita']:
-                # Item dropped!
-                item_name = item['nome']
-                
-                # Send sticker if available
-                try:
-                    sticker_path = f"Stickers/{item['sticker']}"
-                    with open(sticker_path, 'rb') as sti:
-                        bot.send_sticker(message.chat.id, sti)
-                except:
-                    pass
-                
-                # Handle special items
-                if item_name == 'TNT':
-                    self.handle_tnt(user, bot, message)
-                    return  # Only one drop per message
-                    
-                elif item_name == 'Nitro':
-                    self.handle_nitro(user, bot, message)
-                    return
-                    
-                elif item_name == 'Cassa':
-                    self.handle_cassa(user, bot, message)
-                    return
-                    
-                else:
-                    # Normal item drop - STRICTLY 1 item
-                    quantita = 1
-                    self.item_service.add_item(user.id_telegram, item_name, quantita)
-                    bot.reply_to(message, f"✨ Hai trovato: {item_name}!")
-                    return
+        # Filter for Dragon Balls
+        dragon_balls = [item for item in items_data if "Sfera del Drago" in item['nome']]
+        if not dragon_balls:
+            return
+            
+        # Pick a random Dragon Ball
+        item = random.choice(dragon_balls)
+        item_name = item['nome']
+        
+        # Send sticker if available
+        try:
+            sticker_path = f"Stickers/{item['sticker']}"
+            with open(sticker_path, 'rb') as sti:
+                bot.send_sticker(message.chat.id, sti)
+        except:
+            pass
+        
+        # Add item
+        self.item_service.add_item(user.id_telegram, item_name, 1)
+        bot.reply_to(message, f"✨ Hai trovato: {item_name}!")
     
     def handle_tnt(self, user, bot, message):
         """

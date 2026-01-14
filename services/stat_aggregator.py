@@ -102,6 +102,17 @@ class StatAggregator:
         elif event_type == 'point_gain':
             self._increment_stat(session, user_id, 'total_wumpa_earned', value)
 
+        elif event_type == 'item_gain':
+            item_name = context.get('item_name', '')
+            if "Sfera del Drago" in item_name:
+                self._increment_stat(session, user_id, 'dragon_balls_collected', value)
+        
+        elif event_type == 'shenron_summoned':
+            self._increment_stat(session, user_id, 'shenron_summons', 1)
+            
+        elif event_type == 'porunga_summoned':
+            self._increment_stat(session, user_id, 'porunga_summons', 1)
+
         elif event_type == 'character_unlock':
             char_name = context.get('char_name')
             if char_name:
