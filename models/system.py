@@ -9,7 +9,7 @@ class Livello(Base):
     livello = Column(Integer, nullable=False)  # Level requirement to unlock
     nome = Column(String, nullable=False)
     lv_premium = Column(Integer, default=0) # 0=Free, 1=Premium Only, 2=Purchasable
-    exp_required = Column(Integer, nullable=False)
+    exp_required = Column(Integer, nullable=True)  # Temporaneamente nullable per compatibilità
     price = Column(Integer, default=0)
     
     # Combat Stats

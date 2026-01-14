@@ -1,4 +1,8 @@
 import csv
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+
 from database import Database
 from models.system import Livello
 from sqlalchemy import text
@@ -24,10 +28,19 @@ def update_exp():
     # Check if exp_required column exists, if not add it
     try:
         session.execute(text("SELECT exp_required FROM livello LIMIT 1"))
+        print("Column 'exp_required' already exists.")
     except Exception:
         print("Adding exp_required column...")
-        session.execute(text("ALTER TABLE livello ADD COLUMN exp_required INTEGER DEFAULT 100"))
-        session.commit()
+        session.rollback()  # Clear any error state
+        try:
+            session.execute(text("ALTER TABLE livello ADD COLUMN exp_required INTEGER DEFAULT 100"))
+            session.commit()
+            print("Column 'exp_required' added successfully.")
+        except Exception as e:
+            print(f"Error adding column: {e}")
+            session.rollback()
+            session.close()
+            return
     
     print("Updating exp levels...")
     for level, exp in exp_table.items():

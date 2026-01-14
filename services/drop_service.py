@@ -21,6 +21,10 @@ class DropService:
 
     def check_traps(self, user, bot, message):
         """Check if message triggers a trap"""
+        # Check invincibility
+        if self.user_service.is_invincible(user):
+            return False
+
         chat_id = message.chat.id
         if chat_id in self.active_traps:
             trap = self.active_traps.pop(chat_id)

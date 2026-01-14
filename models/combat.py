@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Float
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Float, UniqueConstraint
 from database import Base
 import datetime
 
@@ -65,3 +65,6 @@ class CombatParticipation(Base):
     # Timestamps
     first_hit_time = Column(DateTime, nullable=True)
     last_hit_time = Column(DateTime, nullable=True)
+    
+    # Unique constraint: one record per user per mob
+    __table_args__ = (UniqueConstraint('mob_id', 'user_id', name='_mob_user_uc'),)

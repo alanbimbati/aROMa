@@ -5,11 +5,13 @@ from services.user_service import UserService
 import datetime
 import random
 from settings import PointsName
+from services.event_dispatcher import EventDispatcher
 
 class ItemService:
     def __init__(self):
         self.db = Database()
         self.user_service = UserService()
+        self.event_dispatcher = EventDispatcher()
 
     def get_inventory(self, id_telegram):
         session = self.db.get_session()
@@ -199,31 +201,63 @@ class ItemService:
         else:
             return True, base_msg, item
 
-    def apply_effect(self, user, item_name, target_user=None):
+    def apply_effect(self, user, item_name, target_user=None, target_mob=None):
+        import json
+        
         if item_name == "Turbo":
-            # Logic: Next message has high luck
-            # We need to store this state. Added luck_boost to Utente model.
-            self.user_service.update_user(user.id_telegram, {'luck_boost': 1})
-            return "Turbo attivato! La tua fortuna è aumentata: troverai casse più frequentemente.", None
+            # Logic: +20% EXP for 30 minutes
+            # Update active_status_effects
+            effects = []
+            if user.active_status_effects:
+                try:
+                    effects = json.loads(user.active_status_effects)
+                except:
+                    effects = []
+            
+            # Remove existing turbo if any
+            effects = [e for e in effects if e.get('id') != 'turbo']
+            
+            # Add new turbo
+            effects.append({
+                'id': 'turbo',
+                'expires': (datetime.datetime.now() + datetime.timedelta(minutes=30)).isoformat()
+            })
+            
+            self.user_service.update_user(user.id_telegram, {'active_status_effects': json.dumps(effects)})
+            return "Turbo attivato! Guadagnerai +20% EXP per 30 minuti.", None
         
         elif item_name == "Aku Aku" or item_name == "Uka Uka":
             # Invincibility
-            until = datetime.datetime.now() + datetime.timedelta(minutes=60) # 60 mins invincibility
+            until = datetime.datetime.now() + datetime.timedelta(minutes=10) # 10 mins invincibility
             self.user_service.update_user(user.id_telegram, {'invincible_until': until})
-            return f"{item_name} attivato! Sei immune a TNT e Nitro per 60 minuti.", None
+            return f"✨ {item_name} attivato! Sei INVINCIBILE per 10 minuti! Non subirai danni da mob o trappole.", None
             
         elif item_name == "Cassa":
             wumpa = random.randint(5, 15)
             self.user_service.add_points(user, wumpa)
             return f"📦 Hai aperto la Cassa e trovato {wumpa} {PointsName}!", None
         
-        elif item_name == "Nitro":
-            # Trap logic: Places a trap in the group
-            return "Nitro piazzata! Il prossimo che scrive esploderà!", {'type': 'trap', 'trap_type': 'Nitro'}
-        
-        elif item_name == "TNT":
-             # Trap logic: Places a trap in the group
-            return "TNT piazzata! Il prossimo che scrive dovrà correre!", {'type': 'trap', 'trap_type': 'TNT'}
+        elif item_name == "Nitro" or item_name == "TNT":
+            # Can be used as Trap (no target) or Weapon (target)
+            if target_mob:
+                # Vs Mob: Drop 5% of Wumpa pool
+                # We need to calculate this. 
+                # Since we don't have the mob instance here easily with full loot info, 
+                # we will return a special instruction and handle the drop in main.py or pve_service
+                return f"Hai lanciato {item_name} contro {target_mob.name}!", {'type': 'mob_drop', 'percent': 0.05, 'mob_id': target_mob.id}
+            
+            elif target_user:
+                # Vs Player: Drop 1-50 Wumpa
+                amount = random.randint(1, 50)
+                if target_user.points >= amount:
+                    self.user_service.add_points(target_user, -amount)
+                    return f"Hai lanciato {item_name} contro {target_user.username}! Ha perso {amount} {PointsName}!", {'type': 'wumpa_drop', 'amount': amount, 'target_name': target_user.username}
+                else:
+                    return f"Hai lanciato {item_name} contro {target_user.username}, ma non ha abbastanza {PointsName}.", None
+            
+            else:
+                # Trap logic: Places a trap in the group
+                return f"{item_name} piazzata! Il prossimo che scrive esploderà!", {'type': 'trap', 'trap_type': item_name}
         
         elif item_name == "Mira un giocatore":
             if target_user:
@@ -249,6 +283,18 @@ class ItemService:
                     return f"Hai colpito {target_user.username}, ma non aveva abbastanza {PointsName} da perdere.", None
             else:
                 return "Devi specificare un bersaglio.", None
+
+        # NEW: Log item usage event
+        self.event_dispatcher.log_event(
+            event_type='item_used',
+            user_id=user.id_telegram,
+            value=1,
+            context={
+                'item_name': item_name,
+                'target_user_id': target_user.id_telegram if target_user else None,
+                'target_mob_id': target_mob.id if target_mob else None
+            }
+        )
 
         return "Oggetto utilizzato.", None
 

@@ -19,29 +19,29 @@ class CharacterLoader:
         if self._cache is not None:
             return self._cache
         
+        # Helper to safely convert to int
+        def safe_int(value, default=0):
+            if not value or value.strip() == '':
+                return default
+            try:
+                return int(value)
+            except ValueError:
+                return default
+        
+        # Helper to safely convert to float
+        def safe_float(value, default=0.0):
+            if not value or value.strip() == '':
+                return default
+            try:
+                return float(value)
+            except ValueError:
+                return default
+
         characters = []
         try:
             with open('data/characters.csv', 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    # Helper to safely convert to int
-                    def safe_int(value, default=0):
-                        if not value or value.strip() == '':
-                            return default
-                        try:
-                            return int(value)
-                        except ValueError:
-                            return default
-                    
-                    # Helper to safely convert to float
-                    def safe_float(value, default=0.0):
-                        if not value or value.strip() == '':
-                            return default
-                        try:
-                            return float(value)
-                        except ValueError:
-                            return default
-                    
                     char = {
                         'id': safe_int(row.get('id')),
                         'nome': row.get('nome', ''),

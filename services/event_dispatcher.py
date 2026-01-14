@@ -13,49 +13,57 @@ class EventDispatcher:
     def __init__(self):
         self.db = Database()
     
-    def log_event(self, event_type, user_id, event_data, mob_id=None, combat_id=None):
+    def log_event(self, event_type, user_id, value=0.0, context=None, session=None):
         """
         Log a game event for achievement tracking
         
         Args:
-            event_type: Type of event (mob_kill, damage_dealt, critical_hit, etc.)
+            event_type: Type of event (mob_kill, damage_dealt, etc.)
             user_id: Telegram ID of user
-            event_data: Dictionary with event-specific data
-            mob_id: Optional mob ID
-            combat_id: Optional combat ID
+            value: Primary metric (damage amount, exp gained, etc.)
+            context: Dictionary with event-specific context
+            session: Optional existing SQLAlchemy session to use
             
         Returns:
             Event ID
         """
-        session = self.db.get_session()
+        local_session = False
+        if session is None:
+            session = self.db.get_session()
+            local_session = True
+            
         try:
             event = GameEvent(
                 event_type=event_type,
                 user_id=user_id,
-                event_data=json.dumps(event_data),
-                mob_id=mob_id,
-                combat_id=combat_id,
+                value=value,
+                context=json.dumps(context) if context else None,
                 timestamp=datetime.datetime.now(),
-                processed_for_achievements=False
+                processed=False
             )
             
             session.add(event)
-            session.commit()
+            if local_session:
+                session.commit()
+            else:
+                session.flush() # Ensure ID is generated but don't commit yet
             
             return event.id
         except Exception as e:
-            session.rollback()
+            if local_session:
+                session.rollback()
             print(f"Error logging event: {e}")
             return None
         finally:
-            session.close()
+            if local_session:
+                session.close()
     
     def get_unprocessed_events(self, limit=100):
         """Get events that haven't been processed for achievements"""
         session = self.db.get_session()
         try:
             events = session.query(GameEvent).filter(
-                GameEvent.processed_for_achievements == False
+                GameEvent.processed == False
             ).limit(limit).all()
             return events
         finally:
@@ -67,7 +75,7 @@ class EventDispatcher:
         try:
             event = session.query(GameEvent).filter(GameEvent.id == event_id).first()
             if event:
-                event.processed_for_achievements = True
+                event.processed = True
                 session.commit()
                 return True
             return False

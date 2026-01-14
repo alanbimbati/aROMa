@@ -3,36 +3,31 @@ from database import Base
 import datetime
 
 class Achievement(Base):
-    """Defines available achievements"""
+    """Defines available achievements (Declarative Rules)"""
     __tablename__ = "achievement"
     
     id = Column(Integer, primary_key=True)
-    achievement_key = Column(String, unique=True, nullable=False)  # e.g., "first_blood"
+    achievement_key = Column(String, unique=True, nullable=False)  # e.g., "butcher"
     name = Column(String, nullable=False)
     description = Column(String, nullable=False)
     
-    # Category
-    category = Column(String, nullable=False)  # combat, damage, support, meme, special
+    # Logic
+    stat_key = Column(String(50), nullable=False)   # The stat from UserStat to observe
+    condition_type = Column(String(20), default='>=') # '>=', '==', '<='
     
-    # Progression
-    tier = Column(String, default="bronze")  # bronze, silver, gold, platinum
-    is_progressive = Column(Boolean, default=False)  # Can be earned multiple times
-    max_progress = Column(Integer, default=1)  # For progressive achievements
+    # Progression (JSON)
+    # Structure: {
+    #   "bronze": {"threshold": 100, "rewards": {"exp": 100, "title": "Novice"}},
+    #   "silver": {"threshold": 500, "rewards": {"exp": 500, "title": "Apprentice"}},
+    #   "gold":   {"threshold": 1000, "rewards": {"exp": 1000, "title": "Master"}}
+    # }
+    tiers = Column(String, nullable=False) # JSON string
     
-    # Trigger
-    trigger_event = Column(String, nullable=False)  # mob_kill, damage_dealt, crit_hit
-    trigger_condition = Column(String, nullable=True)  # JSON: {min_damage: 1000}
+    category = Column(String(20)) # 'combat', 'social', 'dungeon', 'collection'
     
-    # Rewards
-    reward_points = Column(Integer, default=0)
-    reward_title = Column(String, nullable=True)
-    cosmetic_reward = Column(String, nullable=True)  # Badge, icon, etc.
-    
-    # Display
+    # Legacy / Optional fields (kept for compatibility or display)
     icon = Column(String, nullable=True)
-    hidden = Column(Boolean, default=False)  # Hidden until unlocked
-    
-    # Flavor
+    hidden = Column(Boolean, default=False)
     flavor_text = Column(String, nullable=True)
 
 
@@ -40,37 +35,27 @@ class UserAchievement(Base):
     """Tracks user achievement progress"""
     __tablename__ = "user_achievement"
     
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, nullable=False)  # id_telegram
-    achievement_id = Column(Integer, ForeignKey('achievement.id'))
+    user_id = Column(Integer, primary_key=True)  # id_telegram
+    achievement_key = Column(String(50), primary_key=True) # Changed to use key as PK part
     
-    # Progress
-    current_progress = Column(Integer, default=0)
-    is_completed = Column(Boolean, default=False)
-    completion_date = Column(DateTime, nullable=True)
+    current_tier = Column(String(20), nullable=True) # NULL, 'bronze', 'silver', 'gold', 'platinum'
+    progress_value = Column(Float, default=0.0) # Snapshot of the stat value at last check
+    unlocked_at = Column(DateTime, nullable=True)
     
     # Metadata
-    times_earned = Column(Integer, default=0)  # For repeatable achievements
     last_progress_update = Column(DateTime, default=datetime.datetime.now)
 
 
 class GameEvent(Base):
-    """Logs all significant game events for achievement tracking"""
+    """Logs all significant game events for achievement tracking (Fact Table)"""
     __tablename__ = "game_event"
     
     id = Column(Integer, primary_key=True)
-    event_type = Column(String, nullable=False)  # mob_kill, damage_dealt, crit_hit, etc.
-    user_id = Column(Integer, nullable=True)  # Can be null for system events
+    user_id = Column(Integer, nullable=False)
+    event_type = Column(String(50), nullable=False)  # mob_kill, damage_dealt, etc.
     
-    # Event Data
-    event_data = Column(String, nullable=True)  # JSON with event-specific data
+    value = Column(Float, default=0.0)            # The primary metric
+    context = Column(String, nullable=True)       # JSON: {dungeon_id, mob_level, ...}
     
-    # Context
-    mob_id = Column(Integer, nullable=True)
-    combat_id = Column(Integer, nullable=True)
-    
-    # Timestamp
     timestamp = Column(DateTime, default=datetime.datetime.now)
-    
-    # Processing
-    processed_for_achievements = Column(Boolean, default=False)
+    processed = Column(Boolean, default=False)  # For async stat aggregation
