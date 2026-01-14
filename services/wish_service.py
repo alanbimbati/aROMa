@@ -37,13 +37,33 @@ class WishService:
             elif wish_type == "exp":
                 amount = random.randint(300, 500)
                 self.user_service.add_exp(user, amount)
-                return f"🐉 SHENRON HA ESAUDITO IL TUO DESIDERIO!\n\n⭐ HAI OTTENUTO {amount} EXP!"
+                # Log event for achievements
+            from services.event_dispatcher import EventDispatcher
+            dispatcher = EventDispatcher()
+            dispatcher.log_event(
+                event_type='shenron_summoned',
+                user_id=user.id_telegram,
+                value=1,
+                context={}
+            )
+            
+            return f"🐉 SHENRON HA ESAUDITO IL TUO DESIDERIO!\n\n⭐ HAI OTTENUTO {amount} EXP!"
                 
         else:
             # Porunga: Will handle 3 wishes via callbacks
             # For now just consume the spheres
             for i in range(1, 8):
                 self.item_service.use_item(user.id_telegram, f"La Sfera del Drago Porunga {i}")
+            
+            # Log event for achievements
+            from services.event_dispatcher import EventDispatcher
+            dispatcher = EventDispatcher()
+            dispatcher.log_event(
+                event_type='porunga_summoned',
+                user_id=user.id_telegram,
+                value=1,
+                context={}
+            )
                 
             # This shouldn't be called directly for Porunga, handled via callbacks
             if wish_type == "wumpa":

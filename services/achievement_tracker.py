@@ -282,13 +282,16 @@ class AchievementTracker:
         finally:
             session.close()
 
-    def get_all_achievements_with_progress(self, user_id):
+    def get_all_achievements_with_progress(self, user_id, category=None):
         """
         Get all available achievements with user progress, adapted for main.py UI.
         """
         session = self.db.get_session()
         try:
-            all_ach = session.query(Achievement).all()
+            query = session.query(Achievement)
+            if category:
+                query = query.filter_by(category=category)
+            all_ach = query.all()
             user_ach_map = {ua.achievement_key: ua for ua in session.query(UserAchievement).filter_by(user_id=user_id).all()}
             
             result = []

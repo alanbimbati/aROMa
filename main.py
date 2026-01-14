@@ -78,16 +78,29 @@ def start(message):
     bot.reply_to(message, "Cosa vuoi fare?", reply_markup=get_start_markup(message.from_user.id))
 
 @bot.message_handler(commands=['achievements', 'ach'])
-def handle_achievements_cmd(message, page=0, user_id=None):
+def handle_achievements_cmd(message, page=0, user_id=None, category=None):
     """Show user achievements with pagination"""
     if user_id is None:
         user_id = message.from_user.id
     
+    if category is None or category == "menu":
+        markup = types.InlineKeyboardMarkup()
+        markup.row(
+            types.InlineKeyboardButton("🐉 Dragon Ball", callback_data="ach_cat|dragon_ball"),
+            types.InlineKeyboardButton("🏆 Classici", callback_data="ach_cat|classici")
+        )
+        msg = "🏆 **I TUOI ACHIEVEMENT**\n\nSeleziona una categoria per visualizzare i tuoi progressi:"
+        if hasattr(message, 'message_id') and not hasattr(message, 'text'):
+            bot.edit_message_text(msg, message.chat.id, message.message_id, reply_markup=markup, parse_mode='markdown')
+        else:
+            bot.reply_to(message, msg, reply_markup=markup, parse_mode='markdown')
+        return
+
     from services.achievement_tracker import AchievementTracker
     tracker = AchievementTracker()
     
     stats = tracker.get_achievement_stats(user_id)
-    all_achievements = tracker.get_all_achievements_with_progress(user_id)
+    all_achievements = tracker.get_all_achievements_with_progress(user_id, category=category)
     
     # Sort: Unlocked first, then by tier, then by name
     tier_map = {'bronze': 1, 'silver': 2, 'gold': 3, 'platinum': 4, 'diamond': 5, 'legendary': 6}
@@ -97,7 +110,9 @@ def handle_achievements_cmd(message, page=0, user_id=None):
     total_pages = (len(all_achievements) + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE
     
     if total_pages == 0:
-        bot.reply_to(message, "Nessun achievement disponibile.")
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="ach_cat|menu"))
+        bot.edit_message_text("Nessun achievement disponibile in questa categoria.", message.chat.id, message.message_id, reply_markup=markup) if hasattr(message, 'message_id') and not hasattr(message, 'text') else bot.reply_to(message, "Nessun achievement disponibile in questa categoria.", reply_markup=markup)
         return
 
     if page >= total_pages: page = total_pages - 1
@@ -107,8 +122,9 @@ def handle_achievements_cmd(message, page=0, user_id=None):
     end_idx = start_idx + ITEMS_PER_PAGE
     page_items = all_achievements[start_idx:end_idx]
     
-    msg = f"🏆 **I TUOI ACHIEVEMENT** ({stats['completed']}/{stats['total_achievements']})\n"
-    msg += f"📊 Progresso: `{stats['completion_rate']:.1f}%` | Punti: `{stats['points_earned']}`\n\n"
+    cat_name = "DRAGON BALL 🐉" if category == "dragon_ball" else "CLASSICI 🏆"
+    msg = f"🏆 **ACHIEVEMENT: {cat_name}**\n"
+    msg += f"📊 Progresso Totale: `{stats['completed']}/{stats['total_achievements']}`\n\n"
     
     for item in page_items:
         a = item['achievement']
@@ -135,7 +151,6 @@ def handle_achievements_cmd(message, page=0, user_id=None):
             percent = int((progress / max_p) * 10)
             bar = "▰" * percent + "▱" * (10 - percent)
             msg += f"[{bar}] `{progress}/{max_progress}`\n"
-            msg += f"🎯 *Obiettivo:* {a.description}\n"
         else:
             msg += "✨ *Completato!*\n"
         msg += "\n"
@@ -143,14 +158,16 @@ def handle_achievements_cmd(message, page=0, user_id=None):
     msg += f"📄 Pagina {page + 1} di {total_pages}"
     
     markup = types.InlineKeyboardMarkup()
-    buttons = []
+    nav_buttons = []
     if page > 0:
-        buttons.append(types.InlineKeyboardButton("⬅️ Indietro", callback_data=f"ach_page|{page-1}"))
+        nav_buttons.append(types.InlineKeyboardButton("⬅️ Indietro", callback_data=f"ach_page|{category}|{page-1}"))
     if page < total_pages - 1:
-        buttons.append(types.InlineKeyboardButton("Avanti ➡️", callback_data=f"ach_page|{page+1}"))
+        nav_buttons.append(types.InlineKeyboardButton("Avanti ➡️", callback_data=f"ach_page|{category}|{page+1}"))
     
-    if buttons:
-        markup.row(*buttons)
+    if nav_buttons:
+        markup.row(*nav_buttons)
+    
+    markup.row(types.InlineKeyboardButton("🔙 Menu Achievement", callback_data="ach_cat|menu"))
         
     # Check if it's a callback or a command
     if hasattr(message, 'message_id') and not hasattr(message, 'text'): # Likely a callback
@@ -3385,8 +3402,21 @@ def handle_inline_buttons(call):
 
     # ACHIEVEMENT PAGINATION
     elif action.startswith("ach_page|"):
-        page = int(action.split("|")[1])
-        handle_achievements_cmd(call.message, page=page, user_id=user_id)
+        parts = action.split("|")
+        if len(parts) == 3:
+            category = parts[1]
+            page = int(parts[2])
+            handle_achievements_cmd(call.message, page=page, user_id=user_id, category=category)
+        else:
+            page = int(parts[1])
+            handle_achievements_cmd(call.message, page=page, user_id=user_id)
+        bot.answer_callback_query(call.id)
+        return
+
+    # ACHIEVEMENT CATEGORY
+    elif action.startswith("ach_cat|"):
+        category = action.split("|")[1]
+        handle_achievements_cmd(call.message, category=category, user_id=user_id)
         bot.answer_callback_query(call.id)
         return
 

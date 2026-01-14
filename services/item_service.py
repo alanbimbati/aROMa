@@ -79,6 +79,15 @@ class ItemService:
                  session.add(c)
             
             session.commit()
+            
+            # Log event for achievements
+            self.event_dispatcher.log_event(
+                event_type='item_gain',
+                user_id=int(id_telegram),
+                value=quantita,
+                context={'item_name': item}
+            )
+            
             return True
         except Exception as e:
             print(e)
