@@ -2,34 +2,118 @@ from database import Database
 from models.user import Utente, Admin
 from models.system import Livello
 from models.game import GiocoUtente
-from sqlalchemy import desc, asc
+from sqlalchemy import desc, asc, text, inspect
+from sqlalchemy.orm import defer
 import datetime
 from dateutil.relativedelta import relativedelta
 from settings import PointsName
+from services.event_dispatcher import EventDispatcher
 
 class UserService:
+    # Class-level dictionary to track activity with timestamps
+    # Format: {(user_id, chat_id): timestamp}
+    _recent_activities = {}
+    _exp_required_column_exists = None  # Cache per verificare se la colonna esiste
+
     def __init__(self):
         self.db = Database()
-        from collections import deque
-        self.recent_users = deque(maxlen=20)
+        self.recent_activities = UserService._recent_activities
+        self.event_dispatcher = EventDispatcher()
+    
+    def _check_exp_required_column(self):
+        """Verifica se la colonna exp_required esiste nel database"""
+        if UserService._exp_required_column_exists is not None:
+            return UserService._exp_required_column_exists
+        
+        try:
+            inspector = inspect(self.db.engine)
+            columns = [col['name'] for col in inspector.get_columns('livello')]
+            UserService._exp_required_column_exists = 'exp_required' in columns
+            return UserService._exp_required_column_exists
+        except Exception:
+            # In caso di errore, assumiamo che non esista
+            UserService._exp_required_column_exists = False
+            return False
+    
+    def _get_livello_by_level(self, session, livello_num):
+        """Ottiene un Livello per numero, gestendo l'assenza di exp_required"""
+        if self._check_exp_required_column():
+            # La colonna esiste, usa la query normale
+            try:
+                return session.query(Livello).filter_by(livello=livello_num).first()
+            except Exception:
+                # Se fallisce, ricarica la cache e riprova
+                UserService._exp_required_column_exists = None
+                return self._get_livello_by_level(session, livello_num)
+        else:
+            # La colonna non esiste, usa una query raw SQL che non la include
+            try:
+                # Query che seleziona solo le colonne che esistono (escludendo exp_required)
+                result = session.execute(
+                    text("""
+                        SELECT id, livello, nome, lv_premium, price, 
+                               COALESCE(elemental_type, 'Normal') as elemental_type,
+                               COALESCE(crit_chance, 5) as crit_chance,
+                               COALESCE(crit_multiplier, 1.5) as crit_multiplier,
+                               required_character_id, special_attack_name, 
+                               COALESCE(special_attack_damage, 0) as special_attack_damage,
+                               COALESCE(special_attack_mana_cost, 0) as special_attack_mana_cost,
+                               image_path, telegram_file_id, description, 
+                               COALESCE(character_group, 'General') as character_group
+                        FROM livello 
+                        WHERE livello = :livello 
+                        LIMIT 1
+                    """),
+                    {"livello": livello_num}
+                ).first()
+                
+                if result:
+                    # Crea un oggetto Livello con i dati ottenuti
+                    livello = Livello()
+                    livello.id = result[0]
+                    livello.livello = result[1]
+                    livello.nome = result[2]
+                    livello.lv_premium = result[3] if result[3] is not None else 0
+                    livello.price = result[4] if result[4] is not None else 0
+                    livello.elemental_type = result[5]
+                    livello.crit_chance = result[6]
+                    livello.crit_multiplier = result[7]
+                    livello.required_character_id = result[8]
+                    livello.special_attack_name = result[9]
+                    livello.special_attack_damage = result[10]
+                    livello.special_attack_mana_cost = result[11]
+                    livello.image_path = result[12]
+                    livello.telegram_file_id = result[13]
+                    livello.description = result[14]
+                    livello.character_group = result[15]
+                    livello.exp_required = None  # Non esiste ancora, verrà calcolato con formula
+                    return livello
+            except Exception as e:
+                # Se anche la query raw fallisce, ritorna None
+                print(f"Errore nel recupero del livello: {e}")
+            return None
 
     def track_activity(self, user_id, chat_id=None):
-        """Track user activity for mob targeting"""
-        # Remove if exists (by user_id)
-        # We need to find the item with this user_id
-        try:
-            existing = next((item for item in self.recent_users if item['user_id'] == user_id), None)
-            if existing:
-                self.recent_users.remove(existing)
-        except ValueError:
-            pass
-            
-        self.recent_users.append({'user_id': user_id, 'chat_id': chat_id})
+        """Track user activity for mob targeting with timestamp"""
+        import datetime
+        key = (user_id, chat_id)
+        self.recent_activities[key] = datetime.datetime.now()
         
-    def get_recent_users(self, chat_id=None):
-        if chat_id:
-            return [item['user_id'] for item in self.recent_users if item['chat_id'] == chat_id]
-        return [item['user_id'] for item in self.recent_users]
+    def get_recent_users(self, chat_id=None, minutes=30):
+        """Get users active within the last N minutes, sorted by recency (most recent first)"""
+        import datetime
+        cutoff = datetime.datetime.now() - datetime.timedelta(minutes=minutes)
+        
+        # Filter by chat_id and time, then sort by timestamp (most recent first)
+        recent = []
+        for (uid, cid), timestamp in self.recent_activities.items():
+            if timestamp >= cutoff:
+                if chat_id is None or cid == chat_id:
+                    recent.append((uid, timestamp))
+        
+        # Sort by timestamp descending (most recent first)
+        recent.sort(key=lambda x: x[1], reverse=True)
+        return [uid for uid, _ in recent]
 
     def get_user(self, target):
         session = self.db.get_session()
@@ -119,8 +203,137 @@ class UserService:
         except Exception as e:
             print(e)
 
+    def check_daily_reset(self, utente):
+        """Check if daily limits need to be reset"""
+        now = datetime.datetime.now()
+        last_reset = utente.last_wumpa_reset
+        
+        # If last reset was not today (or never), reset
+        if not last_reset or last_reset.date() < now.date():
+            utente.daily_wumpa_earned = 0
+            utente.last_wumpa_reset = now
+            return True
+        return False
+
+    def add_points_by_id(self, user_id, points, is_drop=False):
+        """
+        Add points to a user by their Telegram ID
+        Args:
+            user_id: Telegram ID
+            points: Amount of Wumpa to add
+            is_drop: If True, counts towards daily cap
+        """
+        session = self.db.get_session()
+        utente = session.query(Utente).filter_by(id_telegram=user_id).first()
+        if utente:
+            # Check for daily reset
+            self.check_daily_reset(utente)
+            
+            # Add points
+            utente.points = int(utente.points) + int(points)
+            
+            # Track daily earnings if it's a drop
+            if is_drop:
+                utente.daily_wumpa_earned = (utente.daily_wumpa_earned or 0) + int(points)
+            
+            session.commit()
+            
+            # NEW: Log point gain event
+            self.event_dispatcher.log_event(
+                event_type='point_gain',
+                user_id=user_id,
+                value=points,
+                context={'is_drop': is_drop, 'new_total': utente.points}
+            )
+        session.close()
+
     def add_exp(self, utente, exp):
         self.update_user(utente.id_telegram, {'exp': utente.exp + exp})
+
+    def add_chat_exp(self, user_id, amount):
+        """Add chat EXP to user and return new total"""
+        session = self.db.get_session()
+        utente = session.query(Utente).filter_by(id_telegram=user_id).first()
+        new_total = 0
+        if utente:
+            utente.chat_exp = (utente.chat_exp or 0) + amount
+            new_total = utente.chat_exp
+            session.commit()
+        session.close()
+        return new_total
+
+    def add_exp_by_id(self, user_id, exp):
+        """Add experience to a user by their Telegram ID and check for level-up"""
+        session = self.db.get_session()
+        utente = session.query(Utente).filter_by(id_telegram=user_id).first()
+        leveled_up = False
+        new_level = None
+        next_level_exp = None
+        
+        if utente:
+            utente.exp = int(utente.exp) + int(exp)
+            
+            # Check for level-up usando il metodo helper che gestisce l'assenza di exp_required
+            current_level_data = self._get_livello_by_level(session, utente.livello)
+            
+            if current_level_data:
+                # Check if exp exceeds requirement for next level
+                next_level_data = self._get_livello_by_level(session, utente.livello + 1)
+                
+                # Gestisci il caso in cui exp_required non esiste ancora nel database
+                # Usa una formula di fallback se la colonna non è presente
+                def get_exp_required(level_data):
+                    if level_data and hasattr(level_data, 'exp_required') and level_data.exp_required is not None:
+                        return level_data.exp_required
+                    # Formula di fallback: 100 * livello^2
+                    if level_data:
+                        return 100 * (level_data.livello ** 2)
+                    return None
+                
+                next_exp_req = get_exp_required(next_level_data)
+                while next_level_data and next_exp_req is not None and utente.exp >= next_exp_req:
+                    # Level up!
+                    utente.livello += 1
+                    
+                    # Stat Points Logic
+                    # Levels 1-79: 2 points
+                    # Levels 80+: 5 points
+                    points_to_add = 5 if utente.livello >= 80 else 2
+                    utente.stat_points += points_to_add
+                    
+                    # Increase base stats
+                    utente.max_health += 10
+                    utente.max_mana += 10  # Increased from 2 to 10
+                    utente.base_damage += 2
+                    
+                    leveled_up = True
+                    new_level = utente.livello
+                    
+                    # NEW: Log level up event
+                    self.event_dispatcher.log_event(
+                        event_type='level_up',
+                        user_id=user_id,
+                        value=new_level,
+                        context={'exp': utente.exp},
+                        session=session
+                    )
+                    
+                    # Check for next level
+                    next_level_data = self._get_livello_by_level(session, utente.livello + 1)
+                    next_exp_req = get_exp_required(next_level_data)
+                
+                # Get next level exp requirement for display
+                if next_level_data:
+                    next_level_exp = get_exp_required(next_level_data)
+            
+            session.commit()
+        session.close()
+        
+        return {
+            'leveled_up': leveled_up,
+            'new_level': new_level,
+            'next_level_exp': next_level_exp
+        }
 
     def is_admin(self, utente):
         session = self.db.get_session()
@@ -238,6 +451,12 @@ class UserService:
         session.close()
         return False, 0
     
+    def is_invincible(self, user):
+        """Check if user is currently invincible"""
+        if not user or not user.invincible_until:
+            return False
+        return datetime.datetime.now() < user.invincible_until
+
     def check_fatigue(self, utente):
         """Check if user is fatigued (0 current_hp = can't fight)"""
         # Check current_hp if available, fallback to health
@@ -246,17 +465,22 @@ class UserService:
         return utente.health <= 0
     
     def damage_health(self, utente, damage):
-        """Reduce user health"""
+        """Reduce user health. Returns (new_health, died)"""
+        # Check invincibility
+        if self.is_invincible(utente):
+            current_hp = utente.current_hp if hasattr(utente, 'current_hp') and utente.current_hp is not None else utente.health
+            return current_hp, False
+
         # Use current_hp if available
         if hasattr(utente, 'current_hp') and utente.current_hp is not None:
             new_health = max(0, utente.current_hp - damage)
             self.update_user(utente.id_telegram, {'current_hp': new_health})
-            return new_health
+            return new_health, new_health <= 0
             
         # Fallback to old health
         new_health = max(0, utente.health - damage)
         self.update_user(utente.id_telegram, {'health': new_health})
-        return new_health
+        return new_health, new_health <= 0
     
     def restore_health(self, utente, amount):
         """Restore health (from items/etc)"""

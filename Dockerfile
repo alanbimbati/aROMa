@@ -6,11 +6,11 @@ FROM python:3.10-slim
 # Imposta la directory di lavoro all'interno del container
 WORKDIR /app
 
-# Copia la cartella 'aROMa' nel container
-COPY aROMa /app/aROMa
+# Copia i file nel container
+COPY . /app
 
-# Cambia directory nella cartella 'aROMa'
-WORKDIR /app/aROMa
+# Imposta la directory di lavoro
+WORKDIR /app
 
 # Installa le dipendenze
 RUN pip install --no-cache-dir -r requirements.txt

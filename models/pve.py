@@ -15,6 +15,7 @@ class Mob(Base):
     
     # Boss flag - if True, this is a boss (previously Raid)
     is_boss = Column(Boolean, default=False)
+    chat_id = Column(Integer, nullable=True) # Group where mob was spawned
     
     # Combat attributes
     image_path = Column(String, nullable=True)
@@ -36,6 +37,12 @@ class Mob(Base):
     
     # Buffs/Debuffs
     active_buffs = Column(String, nullable=True)  # JSON: [{buff_type, value, duration}]
+    
+    # Targeting variety
+    last_target_id = Column(Integer, nullable=True)
+    
+    # Dungeon integration
+    dungeon_id = Column(Integer, ForeignKey('dungeon.id'), nullable=True)
 
 class Raid(Base):
     __tablename__ = "raid"

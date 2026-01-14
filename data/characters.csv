@@ -78,7 +78,7 @@ id,nome,livello,lv_premium,exp_required,special_attack_name,special_attack_damag
 77,Connor,25,2,27400,Tomahawk Throw,228,99,4810,L'assassino nativo,Assassin's Creed,1,0,Normal,5,1.5,,75,0,,,
 78,Goku SSJ,26,2,29575,Super Kamehameha,250,108,5200,Goku Super Saiyan (Premium),Dragon Ball,1,0,Normal,5,1.5,,76,1,60,50,2
 79,Vegeta SSJ,26,2,29575,Big Bang Attack,245,106,5200,Vegeta Super Saiyan,Dragon Ball,1,0,Normal,5,1.5,,76,1,61,50,2
-80,Gohan SSJ,26,2,29575,Masenko,242,105,5200,Il figlio di Goku,Dragon Ball,1,0,Normal,5,1.5,,76,1,62,50,2
+80,Gohan SSJ,26,2,29575,Masenko,242,105,5200,Il figlio di Goku,Dragon Ball,1,0,Normal,5,1.5,,76,1,281,50,2
 81,Master Chief,27,1,31885,Spartan Laser,260,112,5610,Lo Spartan-117 (Premium),Halo,1,0,Normal,5,1.5,,77,0,,,
 82,Arbiter,27,2,31885,Energy Sword,255,110,5610,L'elite Sangheili,Halo,1,0,Normal,5,1.5,,77,0,,,
 83,Cortana,27,2,31885,AI Hack,252,109,5610,L'intelligenza artificiale,Halo,1,0,Normal,5,1.5,,77,0,,,
@@ -273,3 +273,14 @@ id,nome,livello,lv_premium,exp_required,special_attack_name,special_attack_damag
 272,Majin Buu (Grasso),55,2,150000,Innocence Cannon,640,295,23530,Il demone rosa,Dragon Ball,1,0,Normal,5,1.5,,105,0,,,
 273,Super Buu,60,2,160000,Vice Shout,740,335,28810,Buu dopo l'assorbimento,Dragon Ball,1,0,Normal,5,1.5,,110,0,,,
 274,Kid Buu,65,1,190000,Planet Burst,850,385,33010,La forma pura di Buu (Premium),Dragon Ball,1,0,Normal,5,1.5,,115,0,,,
+276,Homer Simpson,1,0,100,Donut Smash,20,10,0,D'oh!,For Fun,-1,0,Normal,5,1.5,,51,0,,,
+277,Bart Simpson,1,0,100,Slingshot,22,12,0,Ciucciami il calzino!,For Fun,-1,0,Normal,5,1.5,,51,0,,,
+278,Daffy Duck,1,0,100,Duck Season,20,10,0,Sei spregevole!,For Fun,-1,0,Normal,5,1.5,,51,0,,,
+279,Bugs Bunny,1,0,100,Carrot Crunch,22,12,0,Che succede amico?,For Fun,-1,0,Normal,5,1.5,,51,0,,,
+280,Wile E. Coyote,1,0,100,ACME Trap,25,15,0,Super Genio!,For Fun,-1,0,Normal,5,1.5,,51,0,,,
+281,Gohan Base,10,0,4575,Masenko,100,45,0,Il giovane figlio di Goku,Dragon Ball,-1,0,Normal,5,1.5,,60,0,,,
+282,Gohan Beast,55,2,150000,Special Beam Cannon (Beast),700,320,23530,La forma definitiva di Gohan,Dragon Ball,1,0,Normal,10,2.0,,110,1,92,200,2
+283,Orange Piccolo,55,2,150000,Apocalyptic Burst,680,310,23530,La forma definitiva di Piccolo,Dragon Ball,1,0,Normal,8,1.8,,105,1,62,180,2
+284,Trunks Base,15,0,10075,Burning Attack,140,60,0,Il figlio di Vegeta dal futuro,Dragon Ball,-1,0,Normal,5,1.5,,65,0,,,
+285,Trunks SSJ,26,2,29575,Shining Sword Attack,245,106,5200,Trunks Super Saiyan,Dragon Ball,1,0,Normal,5,1.5,,76,1,284,50,2
+286,Vegeta Ultra Ego,55,2,150000,Hakai,720,330,23530,La forma distruttrice di Vegeta,Dragon Ball,1,0,Normal,12,2.2,,115,1,145,250,2

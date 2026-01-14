@@ -48,18 +48,26 @@ class Utente(Base):
     active_status_effects = Column(String, nullable=True)  # JSON: [{effect, duration, stacks}]
     
     # Achievement Title
-    title = Column(String, nullable=True)  # Current equipped title from achievements
-    titles = Column(String, nullable=True)  # JSON list of all earned titles
+    title = Column(String, nullable=True)  # Currently equipped title
+    titles = Column(String, nullable=True)  # JSON: List of unlocked titles
     
-    # Character ownership
-    last_character_change = Column('last_character_change', DateTime, nullable=True)  # For weekly restriction
+    # Last character change timestamp
+    last_character_change = Column(DateTime, nullable=True)
 
-    # Game Info
-    platform = Column(String(50), nullable=True)
-    game_name = Column(String(100), nullable=True)
+    # Platform (iOS, Android, Web)
+    platform = Column(String, nullable=True)
+    
+    # Game name (custom display name)
+    game_name = Column(String, nullable=True)
+    
+    # Chat EXP tracking (for achievements)
+    chat_exp = Column(Integer, default=0)  # Total EXP gained from chatting
+    
+    # Economy / Anti-Inflation
+    daily_wumpa_earned = Column(Integer, default=0)
+    last_wumpa_reset = Column(DateTime, nullable=True)
 
 class Admin(Base):
     __tablename__ = "admin"
     id = Column(Integer, primary_key=True)
     id_telegram = Column('id_telegram',Integer)
-

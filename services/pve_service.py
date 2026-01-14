@@ -39,7 +39,7 @@ class PvEService:
         
         self.mob_data = self.load_mob_data()
         self.boss_data = self.load_boss_data()
-        self.recent_mobs = [] # Track last 5 spawned mobs to avoid repetition
+        self.recent_mobs = [] # Track last 10 spawned mobs to avoid repetition
 
     def load_mob_data(self):
         """Load mob data from CSV"""
@@ -114,7 +114,7 @@ class PvEService:
     def spawn_daily_mob(self, chat_id=None):
         """Spawn a random daily mob and immediately attack"""
         # Check if we can spawn (limit check is in spawn_specific_mob)
-        success, msg, mob_id = self.spawn_specific_mob()
+        success, msg, mob_id = self.spawn_specific_mob(chat_id=chat_id)
         if success and mob_id:
             # Immediate attack
             attack_events = self.mob_random_attack(specific_mob_id=mob_id, chat_id=chat_id)
@@ -122,43 +122,50 @@ class PvEService:
         # Return None if spawn failed (e.g., too many mobs)
         return None, None
 
-    def _allocate_mob_stats(self, level, is_boss=False):
+    def _allocate_mob_stats(self, level, difficulty, is_boss=False):
         """
-        Allocate stats based on level.
-        Mobs: Speed 1-20
-        Bosses: Speed 20-50
+        Allocate stats based on level and difficulty using a point-based system.
+        Each level gives 1 point to allocate.
         """
         # Base stats
-        if is_boss:
-            base_points = 50 + (level * 10)
-            min_speed = 20
-            max_speed = 50
-        else:
-            base_points = 20 + (level * 5)
-            min_speed = 1
-            max_speed = 20
-            
-        # Allocate Speed first (random within range)
-        speed = random.randint(min_speed, max_speed)
+        base_speed = 20 if is_boss else 10
+        base_resistance = 0
+        base_hp_bonus = 0
+        base_dmg_bonus = 0
         
-        # Allocate Resistance (0-50%)
-        # Higher level -> higher resistance chance and value
-        resistance = 0
-        if random.random() < 0.5 + (level * 0.01):
-            max_res = min(50, level * 2)
-            resistance = random.randint(0, max_res)
+        # Points to allocate
+        points = level
+        
+        # Stats to distribute points into
+        stats = ['hp', 'dmg', 'speed', 'res']
+        allocation = {s: 0 for s in stats}
+        
+        for _ in range(points):
+            stat = random.choice(stats)
+            allocation[stat] += 1
             
-        return speed, resistance
+        # Scaling per point
+        # HP: +20 per point
+        # DMG: +5 per point
+        # Speed: +5 per point
+        # Res: +5% per point (capped at 50%)
+        
+        hp_bonus = allocation['hp'] * 20
+        dmg_bonus = allocation['dmg'] * 5
+        speed = base_speed + (allocation['speed'] * 5)
+        resistance = min(50, base_resistance + (allocation['res'] * 5))
+            
+        return speed, resistance, hp_bonus, dmg_bonus
 
-    def spawn_specific_mob(self, mob_name=None):
-        """Spawn a specific mob or random if None. Returns (success, msg, mob_id)"""
+    def spawn_specific_mob(self, mob_name=None, chat_id=None):
+        """Spawn a specific mob by name or a random one if None. Returns (success, msg, mob_id)"""
         session = self.db.get_session()
         
-        # Limit: max 5 active mobs at once (to prevent spam)
+        # Limit: max 10 active mobs total (to prevent spam)
         active_mobs_count = session.query(Mob).filter_by(is_dead=False, is_boss=False).count()
-        if active_mobs_count >= 5:
+        if active_mobs_count >= 10:
             session.close()
-            return False, f"Troppi mob attivi ({active_mobs_count}/5)! Elimina alcuni nemici prima di spawnarne altri.", None
+            return False, f"Troppi mob attivi ({active_mobs_count}/10)! Elimina alcuni nemici prima di spawnarne altri.", None
             
         # Get current season theme
         from models.seasons import Season
@@ -179,13 +186,13 @@ class PvEService:
                 return False, "Nessun dato mob caricato."
             
             # Filter by theme if available (robust matching)
-            themed_mobs = [m for m in self.mob_data if theme and m.get('saga', '').strip().lower() == theme]
+            themed_mobs = [m for m in self.mob_data if theme and theme in m.get('saga', '').strip().lower()]
             
             # Repetition avoidance: filter out recent mobs if possible
             def get_random_non_recent(pool):
                 if not pool: return None
                 available = [m for m in pool if m['nome'] not in self.recent_mobs]
-                if not available: # If all are recent, just pick any
+                if not available or len(available) < 2: # If too few non-recent, just pick any to ensure randomness
                     return random.choice(pool)
                 return random.choice(available)
 
@@ -198,23 +205,23 @@ class PvEService:
         # Update recent mobs list
         if mob_data:
             self.recent_mobs.append(mob_data['nome'])
-            if len(self.recent_mobs) > 5:
+            if len(self.recent_mobs) > 10:
                 self.recent_mobs.pop(0)
             
         # Create Mob
         # Ensure HP is correct
-        hp = int(mob_data['hp'])
-        
-        # Determine level (default 1 if not specified)
-        level = int(mob_data.get('level', mob_data.get('difficulty', 1)))
+        # Determine level based on difficulty: difficulty * random(1, 5)
+        difficulty = int(mob_data.get('difficulty', 1))
+        level = difficulty * random.randint(1, 5)
         
         # Allocate dynamic stats
-        speed, resistance = self._allocate_mob_stats(level, is_boss=False)
+        speed, resistance, hp_bonus, dmg_bonus = self._allocate_mob_stats(level, difficulty, is_boss=False)
         
-        # Adjust HP and Damage based on level slightly (if not already scaled in CSV)
-        # Assuming CSV has base values, we can scale them a bit
-        hp = int(hp * (1 + level * 0.1))
-        damage = int(int(mob_data['attack_damage']) * (1 + level * 0.05))
+        # Adjust HP and Damage based on level proportionally
+        # HP: base + (level * 15) + hp_bonus
+        # Damage: base + (level * 3) + dmg_bonus
+        hp = int(mob_data['hp']) + (level * 15) + hp_bonus
+        damage = int(mob_data['attack_damage']) + (level * 3) + dmg_bonus
         
         new_mob = Mob(
             name=mob_data['nome'],
@@ -226,7 +233,8 @@ class PvEService:
             speed=speed,
             resistance=resistance,
             is_boss=False,  # Normal mobs are not bosses
-            last_attack_time=datetime.datetime.now() # Just spawned
+            chat_id=chat_id,
+            last_attack_time=datetime.datetime.now() - datetime.timedelta(hours=1) # Allow immediate attack
         )
         
         if hasattr(new_mob, 'mob_level'):
@@ -242,15 +250,15 @@ class PvEService:
         session.close()
         return True, f"Un {mob_name} (Lv. {level}) è apparso! (Vel: {speed}, Res: {resistance}%)", mob_id
 
-    def spawn_boss(self, boss_name=None):
+    def spawn_boss(self, boss_name=None, chat_id=None):
         """Spawn a boss (Mob with is_boss=True). Returns (success, msg, mob_id)"""
         session = self.db.get_session()
         
-        # Check if there's already an active boss
-        active_boss = session.query(Mob).filter_by(is_boss=True, is_dead=False).first()
-        if active_boss:
+        # Limit: max 3 active bosses total
+        active_boss_count = session.query(Mob).filter_by(is_boss=True, is_dead=False).count()
+        if active_boss_count >= 3:
             session.close()
-            return False, f"C'è già un boss attivo: {active_boss.name}!", None
+            return False, f"Troppi boss attivi ({active_boss_count}/3)!", None
         
         # Get current season theme
         from models.seasons import Season
@@ -271,7 +279,7 @@ class PvEService:
                 return False, "Nessun dato boss caricato.", None
             
             # Filter by theme if available
-            themed_bosses = [b for b in self.boss_data if theme and b.get('saga') == theme]
+            themed_bosses = [b for b in self.boss_data if theme and theme in b.get('saga', '').strip().lower()]
             
             if themed_bosses and random.random() < 0.7:
                 boss_data = random.choice(themed_bosses)
@@ -280,15 +288,20 @@ class PvEService:
                 boss_data = random.choice(self.boss_data)
         
         # Create Mob with is_boss=True
-        hp = int(boss_data['hp'])
-        level = int(boss_data.get('level', boss_data.get('difficulty', 5))) # Bosses default high level
+        hp_base = int(boss_data['hp'])
+        difficulty = int(boss_data.get('difficulty', 5))
+        
+        # Boss level: difficulty * random(5, 10) for extra challenge
+        level = difficulty * random.randint(5, 10)
         
         # Allocate dynamic stats
-        speed, resistance = self._allocate_mob_stats(level, is_boss=True)
+        speed, resistance, hp_bonus, dmg_bonus = self._allocate_mob_stats(level, difficulty, is_boss=True)
         
         # Scale HP and Damage
-        hp = int(hp * (1 + level * 0.15))
-        damage = int(int(boss_data['attack_damage']) * (1 + level * 0.08))
+        # HP: base + (level * 50) + hp_bonus
+        # Damage: base + (level * 10) + dmg_bonus
+        hp = hp_base + (level * 50) + hp_bonus
+        damage = int(boss_data['attack_damage']) + (level * 10) + dmg_bonus
         
         new_boss = Mob(
             name=boss_data['nome'],
@@ -301,8 +314,8 @@ class PvEService:
             resistance=resistance,
             description=boss_data.get('description', ''),
             is_boss=True,
-            mob_level=level,
-            last_attack_time=datetime.datetime.now(),
+            chat_id=chat_id,
+            last_attack_time=datetime.datetime.now() - datetime.timedelta(hours=1), # Allow immediate attack
             # NEW: Advanced mechanics from CSV
             active_abilities=boss_data.get('abilities', '[]'),
             ai_behavior=boss_data.get('ai_behavior', 'aggressive'),
@@ -401,25 +414,31 @@ class PvEService:
             combat_result['resistance_applied'] = mob.resistance
         
         # Apply damage to mob (no counterattack)
+        actual_damage_dealt = max(0, min(damage, mob.health))
         mob.health -= damage
         
-        # NEW: Update combat participation
-        self.update_participation(mob.id, user.id_telegram, damage, combat_result['is_crit'])
+        # NEW: Update combat participation with capped damage
+        self.update_participation(mob.id, user.id_telegram, actual_damage_dealt, combat_result['is_crit'])
         
         # NEW: Log damage event
-        self.event_dispatcher.log_event('damage_dealt', user.id_telegram, {
-            'damage': damage,
-            'is_crit': combat_result['is_crit'],
-            'mob_id': mob.id,
-            'mob_name': mob.name,
-            'mob_level': getattr(mob, 'mob_level', 1),
-            'effectiveness': combat_result.get('effectiveness', 1.0)
-        }, mob_id=mob.id)
+        # NEW: Log damage event
+        self.event_dispatcher.log_event(
+            event_type='damage_dealt', 
+            user_id=user.id_telegram, 
+            value=damage,
+            context={
+                'is_crit': combat_result['is_crit'],
+                'mob_id': mob.id,
+                'mob_name': mob.name,
+                'mob_level': getattr(mob, 'mob_level', 1),
+                'effectiveness': combat_result.get('effectiveness', 1.0)
+            }
+        )
         
         # Build message
         msg = ""
         if combat_result['is_crit']:
-            msg += "🔥 **CRITICO!** "
+            msg += "🔥 **Critico!** "
         
         eff = combat_result['effectiveness']
         if eff > 1:
@@ -440,77 +459,221 @@ class PvEService:
             mob.killer_id = user.id_telegram
             msg += f"\n💀 **{mob.name} è stato sconfitto!**"
             
-            # NEW: Log mob kill event
-            participants = self.get_combat_participants(mob.id)
-            solo_kill = len(participants) == 1
-            participation = next((p for p in participants if p.user_id == user.id_telegram), None)
-            
-            self.event_dispatcher.log_event('mob_kill', user.id_telegram, {
-                'mob_name': mob.name,
-                'mob_level': getattr(mob, 'mob_level', 1),
-                'is_boss': mob.is_boss,
-                'damage_dealt': participation.damage_dealt if participation else damage,
-                'was_last_hit': True,
-                'solo_kill': solo_kill,
-                'player_level': user.livello
-            }, mob_id=mob.id)
-            
-            # Rewards based on difficulty and level
+            # Capture data for rewards before closing session
+            mob_id = mob.id
+            mob_name = mob.name
+            mob_max_health = mob.max_health
+            is_boss = mob.is_boss
+            dungeon_id = mob.dungeon_id
             difficulty = mob.difficulty_tier if mob.difficulty_tier else 1
             level = mob.mob_level if hasattr(mob, 'mob_level') and mob.mob_level else 1
+            user_id = user.id_telegram
+            user_level = user.livello
+            
+            # NEW: Log mob kill event
+            participants = self.get_combat_participants(mob_id)
+            solo_kill = len(participants) == 1
+            participation = next((p for p in participants if p.user_id == user_id), None)
+            
+            self.event_dispatcher.log_event(
+                event_type='mob_kill', 
+                user_id=user_id, 
+                value=1,
+                context={
+                    'mob_name': mob_name,
+                    'mob_level': level,
+                    'is_boss': is_boss,
+                    'damage_dealt': participation.damage_dealt if participation else damage,
+                    'was_last_hit': True,
+                    'solo_kill': solo_kill,
+                    'player_level': user_level
+                }
+            )
+            
+            # COMMIT AND CLOSE SESSION BEFORE REWARDS
+            session.commit()
+            session.close()
+            
+            # Rewards based on difficulty and level (already captured)
+            
+            reward_details = []
             
             # Bosses give much better rewards
-            if mob.is_boss:
-                # Boss rewards are much higher
-                base_xp = random.randint(200, 400) * difficulty
-                base_wumpa = random.randint(100, 200) * difficulty
-                xp = int(base_xp * (1 + level * 0.5))
-                wumpa = int(base_wumpa * (1 + level * 0.5))
-                
-                # Distribute rewards to all participants if it's a boss
-                self.distribute_boss_rewards(mob.id, user, damage)
-                msg += "\n🏆 Ricompense distribuite ai partecipanti!"
+            if is_boss:
+                reward_details, total_wumpa, total_xp = self.distribute_boss_rewards(mob_id, user, damage)
+                msg += f"\n\n🏆 **Ricompense Boss Distribuite!** ({total_wumpa} {PointsName} totali)\n"
             else:
                 # Normal mob rewards distributed among participants
-                difficulty = mob.difficulty_tier if mob.difficulty_tier else 1
-                level = mob.mob_level if hasattr(mob, 'mob_level') and mob.mob_level else 1
+                # TOTAL_POOL_WUMPA = random.randint(50, 150) * difficulty  <-- OLD
+                # TOTAL_POOL_XP = random.randint(500, 1000) * difficulty   <-- OLD
                 
-                # Total pool for the mob
-                TOTAL_POOL_WUMPA = random.randint(150, 250) * difficulty
-                TOTAL_POOL_XP = random.randint(50, 100) * difficulty
-                
-                # Fetch participants again to ensure we have the latest data
-                participants = session.query(CombatParticipation).filter_by(mob_id=mob.id).all()
+                # Fetch participants using a fresh session
+                participants = self.get_combat_participants(mob_id)
                 total_damage = sum(p.damage_dealt for p in participants)
                 
-                reward_details = []
-                for p in participants:
-                    share = p.damage_dealt / total_damage if total_damage > 0 else 1/len(participants)
-                    p_xp = int(TOTAL_POOL_XP * share * (1 + level * 0.3))
-                    p_wumpa = int(TOTAL_POOL_WUMPA * share * (1 + level * 0.3))
-                    
-                    # Add rewards
-                    self.user_service.add_exp_by_id(p.user_id, p_xp)
-                    self.user_service.add_points_by_id(p.user_id, p_wumpa)
-                    self.season_manager.add_seasonal_exp(p.user_id, p_xp)
-                    
-                    # Get username for the message
-                    p_user = session.query(Utente).filter_by(id=p.user_id).first()
-                    p_name = p_user.game_name if p_user and p_user.game_name else f"User {p.user_id}"
-                    reward_details.append(f"👤 *{p_name}*: {p_xp} Exp, {p_wumpa} {PointsName}")
+                actual_total_wumpa = 0
+                actual_total_xp = 0
                 
-                msg += f"\n\n💰 **RICOMPENSE DISTRIBUITE!** ({TOTAL_POOL_WUMPA} {PointsName} totali)\n"
-                msg += "\n".join(reward_details)
+                # PHASE 1: READ DATA (Collect all info needed for rewards)
+                rewards_to_distribute = []
+                
+                temp_session = self.db.get_session()
+                try:
+                    for p in participants:
+                        share = p.damage_dealt / total_damage if total_damage > 0 else 1/len(participants)
+                        
+                        # --- NEW REWARD LOGIC ---
+                        # 1. Determine Mob Tier & Base Drops
+                        # Tier 1 (Trash): Diff 1, HP < 50 -> 1-3 Wumpa, 10-15 EXP
+                        # Tier 2 (Easy): Diff 1-2, HP < 100 -> 3-6 Wumpa, 20-30 EXP
+                        # Tier 3 (Medium): Diff 3 -> 8-15 Wumpa, 50-80 EXP
+                        # Tier 4 (Hard): Diff 4 -> 20-40 Wumpa, 150-250 EXP
+                        
+                        # Tier 4 (Hard): Diff 4 -> 20-40 Wumpa, 150-250 EXP
+                        
+                        mob_hp = mob_max_health if mob_max_health else 30
+                        # difficulty is already captured above
+                        
+                        base_wumpa = 0
+                        base_exp = 0
+                        
+                        if difficulty >= 4: # Hard
+                            base_wumpa = random.randint(150, 300)
+                            base_exp = random.randint(700, 1000)
+                        elif difficulty == 3: # Medium
+                            base_wumpa = random.randint(30, 200)
+                            base_exp = random.randint(300, 700)
+                        elif difficulty <= 2 and mob_hp >= 50: # Easy
+                            base_wumpa = random.randint(10, 50)
+                            base_exp = random.randint(150, 400)
+                        else: # Trash
+                            base_wumpa = random.randint(1, 10)
+                            base_exp = random.randint(50, 300)
+                            
+                        # 2. Apply Level Penalty
+                        # If Player Level > Mob Level + 10 -> Reduced rewards
+                        # Assuming Mob Level ~ Difficulty * 10 for now if not set
+                        mob_level = level if level else (difficulty * 5)
+                        
+                        # Fetch user to get level
+                        u_part = temp_session.query(Utente).filter_by(id_telegram=p.user_id).first()
+                        user_level = u_part.livello if u_part else 1
+                        
+                        penalty_factor_xp = 1.0
+                        penalty_factor_wumpa = 1.0
+                        
+                        if user_level > mob_level + 10:
+                            penalty_factor_xp = 0.5
+                            penalty_factor_wumpa = 0.25
+                        
+                        # 3. Calculate Individual Reward
+                        p_xp = int(base_exp * share * penalty_factor_xp)
+                        p_wumpa = int(base_wumpa * share * penalty_factor_wumpa)
+                        
+                        # 4. Daily Limit: "Fatigue" (Affaticamento)
+                        p_user_check = temp_session.query(Utente).filter_by(id_telegram=p.user_id).first()
+                        
+                        # Check Status Effects
+                        is_stunned = False
+                        has_turbo = False
+                        
+                        if p_user_check:
+                            if p_user_check.active_status_effects:
+                                try:
+                                    effects = json.loads(p_user_check.active_status_effects)
+                                    for effect in effects:
+                                        if effect.get('id') == 'stunned':
+                                            is_stunned = True
+                                        elif effect.get('id') == 'turbo':
+                                            has_turbo = True
+                                except:
+                                    pass
+    
+                            # Check fatigue (Read-only check here, update happens in add_points)
+                            # We can't easily check daily reset here without writing, so we rely on current value
+                            # Ideally check_daily_reset should be separated, but for now we read raw value
+                            if (p_user_check.daily_wumpa_earned or 0) >= 300:
+                                # Fatigue: 10% reduction (90% efficiency)
+                                p_wumpa = int(p_wumpa * 0.9)
+                        
+                        # Apply Item Effects
+                        if is_stunned:
+                            p_xp = 0
+                            p_wumpa = 0
+                        
+                        if has_turbo:
+                            p_xp = int(p_xp * 1.2)
+                        
+                        # Ensure minimums (unless capped to 0)
+                        if p_xp < 1 and not is_stunned: p_xp = 1
+                        
+                        # Get username for the message
+                        p_name = f"User {p.user_id}"
+                        if p_user_check:
+                            p_name = p_user_check.game_name if p_user_check.game_name else (p_user_check.nome if p_user_check.nome else (p_user_check.username if p_user_check.username else f"User {p.user_id}"))
+                        
+                        rewards_to_distribute.append({
+                            'user_id': p.user_id,
+                            'p_xp': p_xp,
+                            'p_wumpa': p_wumpa,
+                            'p_name': p_name,
+                            'damage_dealt': p.damage_dealt
+                        })
+                        
+                        actual_total_wumpa += p_wumpa
+                        actual_total_xp += p_xp
+                        
+                finally:
+                    temp_session.close()
+                
+                # PHASE 2: WRITE DATA (Apply updates sequentially)
+                for reward in rewards_to_distribute:
+                    user_id = reward['user_id']
+                    p_xp = reward['p_xp']
+                    p_wumpa = reward['p_wumpa']
+                    p_name = reward['p_name']
+                    damage_dealt = reward['damage_dealt']
+                    
+                    # Add rewards and check for level-up
+                    # These methods handle their own sessions, so they are safe to call now
+                    level_up_info = self.user_service.add_exp_by_id(user_id, p_xp)
+                    self.user_service.add_points_by_id(user_id, p_wumpa, is_drop=True)
+                    self.season_manager.add_seasonal_exp(user_id, p_xp)
+                    
+                    # Format: User: [Damage]/[Max HP] dmg -> [Rewards]
+                    display_damage = min(damage_dealt, mob_max_health)
+                    reward_line = f"👤 **{p_name}**: {display_damage}/{mob_max_health} dmg -> {p_xp} Exp, {p_wumpa} {PointsName}"
+                    
+                    # Add level-up notification if applicable
+                    if level_up_info['leveled_up']:
+                        reward_line += f"\n   🎉 **LEVEL UP!** Ora sei livello {level_up_info['new_level']}!"
+                        if level_up_info['next_level_exp']:
+                            reward_line += f" (Prossimo livello: {level_up_info['next_level_exp']} Exp)"
+                        reward_line += f" (+2 punti statistica)"
+                    
+                    reward_details.append(reward_line)
+                
+                msg += f"\n\n💰 **Ricompense Distribuite!** ({actual_total_wumpa} {PointsName} totali)\n"
+            
+            msg += "\n".join(reward_details)
             
             # Item reward (2% chance for normal mobs, 10% for bosses)
-            item_chance = 0.10 if mob.is_boss else 0.02
+            item_chance = 0.10 if is_boss else 0.02
             if random.random() < item_chance:
                 items_data = self.item_service.load_items_from_csv()
                 if items_data:
                     weights = [1/float(item['rarita']) for item in items_data]
                     reward_item = random.choices(items_data, weights=weights, k=1)[0]
-                    self.item_service.add_item(user.id_telegram, reward_item['nome'])
-                    msg += f"\n\n� **OGGETTO RARO TROVATO!**\nHai ottenuto: *{reward_item['nome']}*"
+                    self.item_service.add_item(user_id, reward_item['nome'])
+                    msg += f"\n\n✨ **Oggetto Raro Trovato!**\nHai ottenuto: **{reward_item['nome']}**"
+            
+            # NEW: Advance dungeon if applicable
+            if dungeon_id:
+                from services.dungeon_service import DungeonService
+                ds = DungeonService()
+                dungeon_msg = ds.advance_dungeon(dungeon_id)
+                if dungeon_msg:
+                    msg += f"\n\n{dungeon_msg}"
         else:
             msg += f"\n❤️ Vita rimanente: {mob.health}/{mob.max_health}"
             msg += f"\n⏳ Cooldown: {int(cooldown_seconds)}s"
@@ -538,6 +701,7 @@ class PvEService:
             return None
             
         attack_events = []
+        print(f"[DEBUG] mob_random_attack called for {len(mobs)} mobs. Chat ID: {chat_id}")
         
         for mob in mobs:
             # Check mob cooldown based on speed
@@ -567,36 +731,74 @@ class PvEService:
             # Get targets
             # RESTRICTION: Only attack users in the current chat
             recent_users = self.user_service.get_recent_users(chat_id=chat_id)
+            
+            # Filter: Only alive users
+            alive_users = []
+            for uid in recent_users:
+                u = self.user_service.get_user(uid)
+                if u and not self.user_service.check_fatigue(u):
+                    alive_users.append(uid)
+            
+            # Filter: If dungeon mob, only attack participants
+            if mob.dungeon_id:
+                from services.dungeon_service import DungeonService
+                ds = DungeonService()
+                participants = ds.get_participants(mob.dungeon_id)
+                # Intersection of alive users and participants
+                targets_pool = [uid for uid in alive_users if uid in participants]
+            else:
+                targets_pool = alive_users
+
             targets = []
             
-            if not recent_users:
-                # No active users in this chat to attack
+            if not targets_pool:
+                print(f"[DEBUG] No valid targets found for mob {mob.id} (chat {chat_id})")
                 continue
+            print(f"[DEBUG] Found {len(targets_pool)} valid targets for mob {mob.id}")
 
-            if is_aoe and recent_users:
-                # Attack 2-10 recent users
-                max_targets = min(10, len(recent_users))
+            if is_aoe:
+                # Attack 2-10 targets
+                max_targets = min(10, len(targets_pool))
                 if max_targets < 2:
                     target_count = 1
                 else:
                     target_count = random.randint(2, max_targets)
                 
-                target_ids = random.sample(recent_users, target_count)
+                target_ids = random.sample(targets_pool, target_count)
                 for tid in target_ids:
                     t = self.user_service.get_user(tid)
                     if t: targets.append(t)
             else:
                 # Single target
                 target = None
-                if recent_users:
-                    target_id = random.choice(recent_users)
-                    target = self.user_service.get_user(target_id)
+                # Avoid last target if possible
+                available_users = [uid for uid in targets_pool if uid != mob.last_target_id]
+                if not available_users:
+                    available_users = targets_pool # Fallback if only one user active
                 
-                # REMOVED FALLBACK TO RANDOM DB USER
-                # We only want to attack people in the group
+                # Prioritize most recent users among available
+                # If we have at least 2 users, prioritize the last 3 (most recent)
+                if len(available_users) >= 2:
+                    recent_pool = available_users[-3:]
+                    # 80% chance to pick from the most recent pool, 20% from the rest
+                    if random.random() < 0.8:
+                        target_id = random.choice(recent_pool)
+                    else:
+                        target_id = random.choice(available_users)
+                else:
+                    target_id = random.choice(available_users)
+                
+                target = self.user_service.get_user(target_id)
                 
                 if target:
                     targets.append(target)
+                    # Update last target ID in DB
+                    session = self.db.get_session()
+                    mob_db = session.query(Mob).filter_by(id=mob.id).first()
+                    if mob_db:
+                        mob_db.last_target_id = target.id_telegram
+                        session.commit()
+                    session.close()
             
             if not targets:
                 continue
@@ -605,9 +807,15 @@ class PvEService:
             
             # Collect damage info for each target
             damage_results = []
+            death_messages = []
             for target in targets:
+                # Scale damage based on player level to prevent one-shotting high-level players
+                # Reduce damage by 50% and add level-based scaling
+                level_factor = 1 + (target.livello * 0.02)  # 2% per level
+                adjusted_damage = int((base_damage * 0.5) / level_factor)
+                
                 # Add damage variance (±20%)
-                damage = int(base_damage * random.uniform(0.8, 1.2))
+                damage = int(adjusted_damage * random.uniform(0.8, 1.2))
                 
                 # Apply Target Resistance
                 user_res = getattr(target, 'allocated_resistance', 0)
@@ -615,13 +823,30 @@ class PvEService:
                     reduction_factor = 100 / (100 + user_res)
                     damage = int(damage * reduction_factor)
                 
-                self.user_service.damage_health(target, damage)
+                new_hp, died = self.user_service.damage_health(target, damage)
+                
+                # NEW: Log damage received event
+                self.event_dispatcher.log_event(
+                    event_type='damage_received',
+                    user_id=target.id_telegram,
+                    value=damage,
+                    context={
+                        'mob_name': mob.name,
+                        'mob_id': mob.id,
+                        'is_boss': mob.is_boss,
+                        'new_hp': new_hp,
+                        'died': died
+                    }
+                )
                 
                 # Fix double @ issue
                 username = target.username.lstrip('@') if target.username else None
                 tag = f"@{username}" if username else target.nome
                 
                 damage_results.append({'tag': tag, 'damage': damage})
+                
+                if died:
+                    death_messages.append(f"💀 **{tag}** è caduto in battaglia!")
             
             # Create consolidated message
             if mob.is_boss:
@@ -630,21 +855,25 @@ class PvEService:
                 if is_aoe:
                     tags = ", ".join([r['tag'] for r in damage_results])
                     avg_damage = sum([r['damage'] for r in damage_results]) // len(damage_results)
-                    msg = f"☠️ **BOSS ATTACK!**\n**{boss_name_escaped}** ha scatenato un attacco ad area!\n🎯 Colpiti: {tags}\n💥 Danni inflitti: **{avg_damage}** (media)"
+                    msg = f"☠️ **Attacco del Boss!**\n**{boss_name_escaped}** ha scatenato un attacco ad area!\n🎯 Colpiti: {tags}\n💥 Danni inflitti: **{avg_damage}** (media)"
                 else:
                     tag = damage_results[0]['tag']
                     damage = damage_results[0]['damage']
-                    msg = f"☠️ **BOSS ATTACK!**\n**{boss_name_escaped}** ha attaccato {tag}\n💥 Danni inflitti: **{damage}**"
+                    msg = f"☠️ **Attacco del Boss!**\n**{boss_name_escaped}** ha attaccato {tag}\n💥 Danni inflitti: **{damage}**"
             else:
                 # Normal mob messages
                 if is_aoe:
                     tags = ", ".join([r['tag'] for r in damage_results])
                     avg_damage = sum([r['damage'] for r in damage_results]) // len(damage_results)
-                    msg = f"🔥 **ATTACCO AD AREA!**\n**{mob.name}** ha colpito: {tags}\n💥 Danni inflitti: **{avg_damage}** (media)"
+                    msg = f"🔥 **Attacco ad Area!**\n**{mob.name}** ha colpito: {tags}\n💥 Danni inflitti: **{avg_damage}** (media)"
                 else:
                     tag = damage_results[0]['tag']
                     damage = damage_results[0]['damage']
                     msg = f"⚠️ **{mob.name}** ha attaccato {tag}\n💥 Danni inflitti: **{damage}**"
+            
+            # Add death messages if any
+            if death_messages:
+                msg += "\n\n" + "\n".join(death_messages)
             
             # Find mob/boss image
             image_path = None
@@ -696,34 +925,152 @@ class PvEService:
         
         if not boss or not boss.is_boss:
             session.close()
-            return
+            return []
         
         # Get boss loot from data
         boss_info = next((b for b in self.boss_data if b['nome'] == boss.name), None)
         if boss_info:
             TOTAL_POOL_WUMPA = int(boss_info.get('loot_wumpa', 5000))
-            TOTAL_POOL_XP = int(boss_info.get('loot_exp', 1000))
+            TOTAL_POOL_XP = int(boss_info.get('loot_exp', 10000))  # 10x boost
         else:
             # Default boss rewards
             difficulty = boss.difficulty_tier if boss.difficulty_tier else 5
             level = boss.mob_level if hasattr(boss, 'mob_level') and boss.mob_level else 1
-            TOTAL_POOL_WUMPA = random.randint(2000, 5000) * difficulty
-            TOTAL_POOL_XP = random.randint(500, 1500) * difficulty
+            TOTAL_POOL_WUMPA = random.randint(300, 1000)
+            TOTAL_POOL_XP = random.randint(15000, 25000) # Updated to ~1 level up for lvl 10
         
         # Distribute rewards based on damage dealt
         participants = self.get_combat_participants(mob_id)
         total_damage = sum(p.damage_dealt for p in participants)
         
+        reward_details = []
+        actual_total_wumpa = 0
+        actual_total_xp = 0
+        
+        # Track redirected rewards from stunned users
+        redirected_rewards = {} # {target_id: {'xp': 0, 'wumpa': 0}}
+            
         for p in participants:
             share = p.damage_dealt / total_damage if total_damage > 0 else 1/len(participants)
-            p_xp = int(TOTAL_POOL_XP * share)
-            p_wumpa = int(TOTAL_POOL_WUMPA * share)
+            # --- NEW REWARD LOGIC (BOSS) ---
+            # Bosses have fixed pools but we apply penalties
             
-            self.user_service.add_exp_by_id(p.user_id, p_xp)
-            self.user_service.add_points_by_id(p.user_id, p_wumpa)
+            # 1. Level Penalty
+            mob_level = boss.mob_level if hasattr(boss, 'mob_level') and boss.mob_level else 50
+            user_level = p.user_level or 1
+            
+            penalty_factor_xp = 1.0
+            penalty_factor_wumpa = 1.0
+            
+            if user_level > mob_level + 10:
+                penalty_factor_xp = 0.5
+                penalty_factor_wumpa = 0.25
+            
+            p_xp = int(TOTAL_POOL_XP * share * penalty_factor_xp)
+            p_wumpa = int(TOTAL_POOL_WUMPA * share * penalty_factor_wumpa)
+            
+            # 2. Daily Limit: "Fatigue" (Affaticamento)
+            # After 300 Wumpa, rewards are 10% harder to obtain (10% reduction)
+            p_user_check = session.query(Utente).filter_by(id_telegram=p.user_id).first()
+            
+            # Check Status Effects
+            is_stunned = False
+            stun_attacker_id = None
+            has_turbo = False
+            
+            if p_user_check:
+                # Parse active effects
+                if p_user_check.active_status_effects:
+                    try:
+                        effects = json.loads(p_user_check.active_status_effects)
+                        for effect in effects:
+                            if effect.get('id') == 'stunned':
+                                is_stunned = True
+                                stun_attacker_id = effect.get('source_id')
+                            elif effect.get('id') == 'turbo':
+                                has_turbo = True
+                    except:
+                        pass
+                
+                self.user_service.check_daily_reset(p_user_check)
+                if (p_user_check.daily_wumpa_earned or 0) >= 300:
+                    # Fatigue: 10% reduction (90% efficiency)
+                    p_wumpa = int(p_wumpa * 0.9)
+            
+            # Apply Item Effects
+            if is_stunned:
+                # Redirect rewards
+                if stun_attacker_id:
+                    if stun_attacker_id not in redirected_rewards:
+                        redirected_rewards[stun_attacker_id] = {'xp': 0, 'wumpa': 0}
+                    redirected_rewards[stun_attacker_id]['xp'] += p_xp
+                    redirected_rewards[stun_attacker_id]['wumpa'] += p_wumpa
+                
+                p_xp = 0
+                p_wumpa = 0
+            
+            if has_turbo:
+                p_xp = int(p_xp * 1.2)
+            
+            actual_total_wumpa += p_wumpa
+            actual_total_xp += p_xp
+            
+            # Add redirected rewards if this user was a stunner
+            if p.user_id in redirected_rewards:
+                p_xp += redirected_rewards[p.user_id]['xp']
+                p_wumpa += redirected_rewards[p.user_id]['wumpa']
+                # Note: We don't add to actual_total_wumpa/xp again because it was already counted (just redirected)
+            
+            # Add rewards and check for level-up
+            level_up_info = self.user_service.add_exp_by_id(p.user_id, p_xp)
+            self.user_service.add_points_by_id(p.user_id, p_wumpa, is_drop=True)
             self.season_manager.add_seasonal_exp(p.user_id, p_xp)
+            
+            # Get username for the message
+            p_user = session.query(Utente).filter_by(id_telegram=p.user_id).first()
+            if p_user:
+                p_name = p_user.game_name if p_user.game_name else (p_user.nome if p_user.nome else (p_user.username if p_user.username else f"User {p.user_id}"))
+            else:
+                p_name = f"User {p.user_id}"
+            
+            # Format: User: [Damage]/[Max HP] dmg -> [Rewards]
+            # Cap displayed damage at mob's max HP to avoid confusion
+            display_damage = min(p.damage_dealt, boss.max_health)
+            reward_line = f"👤 **{p_name}**: {display_damage}/{boss.max_health} dmg -> {p_xp} Exp, {p_wumpa} {PointsName}"
+            
+            # Add level-up notification if applicable
+            if level_up_info['leveled_up']:
+                reward_line += f"\n   🎉 **LEVEL UP!** Ora sei livello {level_up_info['new_level']}!"
+                if level_up_info['next_level_exp']:
+                    reward_line += f" (Prossimo livello: {level_up_info['next_level_exp']} Exp)"
+                reward_line += f" (+2 punti statistica)"
+            
+            reward_details.append(reward_line)
         
         session.close()
+        return reward_details, actual_total_wumpa, actual_total_xp
+
+    def get_mob_status_by_id(self, mob_id):
+        """Get specific mob info for display by ID"""
+        session = self.db.get_session()
+        mob = session.query(Mob).filter_by(id=mob_id).first()
+        session.close()
+        
+        if not mob:
+            return None
+        
+        return {
+            'name': mob.name,
+            'health': mob.health,
+            'max_health': mob.max_health,
+            'attack': mob.attack_damage,
+            'type': mob.attack_type,
+            'level': mob.mob_level if hasattr(mob, 'mob_level') and mob.mob_level else 1,
+            'speed': mob.speed if hasattr(mob, 'speed') else 30,
+            'resistance': mob.resistance if hasattr(mob, 'resistance') else 0,
+            'image': self.get_enemy_image_path(mob),
+            'is_boss': mob.is_boss
+        }
 
     def get_current_mob_status(self):
         """Get current mob info for display"""
@@ -850,7 +1197,7 @@ class PvEService:
             session.close()
     
     def update_participation(self, mob_id, user_id, damage, is_crit=False):
-        """Update combat participation with damage dealt"""
+        """Update combat participation with damage dealt (creates if missing)"""
         session = self.db.get_session()
         try:
             participation = session.query(CombatParticipation).filter_by(
@@ -858,15 +1205,59 @@ class PvEService:
                 user_id=user_id
             ).first()
             
-            if participation:
-                participation.damage_dealt += damage
-                participation.hits_landed += 1
-                if is_crit:
-                    participation.critical_hits += 1
-                participation.last_hit_time = datetime.datetime.now()
-                session.commit()
+            if not participation:
+                participation = CombatParticipation(
+                    mob_id=mob_id,
+                    user_id=user_id,
+                    damage_dealt=0,
+                    hits_landed=0,
+                    critical_hits=0,
+                    first_hit_time=datetime.datetime.now()
+                )
+                session.add(participation)
+            
+            participation.damage_dealt += damage
+            participation.hits_landed += 1
+            if is_crit:
+                participation.critical_hits += 1
+            participation.last_hit_time = datetime.datetime.now()
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            print(f"Error updating participation: {e}")
         finally:
             session.close()
+
+    def force_mob_drop(self, mob_id, percent):
+        """Force a mob to drop a percentage of its potential Wumpa loot"""
+        session = self.db.get_session()
+        mob = session.query(Mob).filter_by(id=mob_id).first()
+        
+        if not mob:
+            session.close()
+            return 0
+            
+        # Calculate potential loot based on difficulty
+        difficulty = mob.difficulty_tier if mob.difficulty_tier else 1
+        
+        # Use the max of the range as the "pool" reference
+        if difficulty >= 4: # Hard
+            pool = 300
+        elif difficulty == 3: # Medium
+            pool = 200
+        elif difficulty <= 2: # Easy
+            pool = 50
+        else: # Trash
+            pool = 10
+            
+        if mob.is_boss:
+             pool = 1000
+             
+        drop_amount = int(pool * percent)
+        if drop_amount < 1: drop_amount = 1
+        
+        session.close()
+        return drop_amount
     
     def get_combat_participants(self, mob_id):
         """Get all participants for a mob fight"""
@@ -878,4 +1269,3 @@ class PvEService:
             return participants
         finally:
             session.close()
-

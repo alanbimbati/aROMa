@@ -3,368 +3,360 @@ Achievement Tracker Service - Tracks and awards achievements based on game event
 """
 
 from database import Database
-from models.achievements import Achievement, UserAchievement, GameEvent
+from models.achievements import Achievement, UserAchievement
+from models.stats import UserStat
 from services.event_dispatcher import EventDispatcher
-from services.user_service import UserService
-import datetime
+from services.stat_aggregator import StatAggregator
 import json
+import datetime
 
 class AchievementTracker:
-    """Tracks and awards achievements based on game events"""
+    """
+    Manages achievement checks and unlocks based on UserStats.
+    """
     
     def __init__(self):
         self.db = Database()
         self.event_dispatcher = EventDispatcher()
-        self.user_service = UserService()
-    
-    def process_pending_events(self, limit=50):
+        self.stat_aggregator = StatAggregator()
+        
+    def process_pending_events(self, limit=100):
         """
-        Process unprocessed events and check for achievement triggers
-        
-        Args:
-            limit: Maximum number of events to process
+        Main loop:
+        1. Fetch unprocessed events
+        2. Aggregate them into UserStats
+        3. Check for new achievement unlocks
         """
-        events = self.event_dispatcher.get_unprocessed_events(limit=limit)
+        # 1. Fetch
+        events = self.event_dispatcher.get_unprocessed_events(limit)
+        if not events:
+            return
+            
+        # 2. Aggregate
+        self.stat_aggregator.process_events(events)
         
-        for event in events:
-            self.process_event(event)
-            self.event_dispatcher.mark_processed(event.id)
-    
-    def process_event(self, event):
+        # 3. Check Achievements for affected users
+        affected_user_ids = set(e.user_id for e in events)
+        for user_id in affected_user_ids:
+            self.check_achievements(user_id)
+
+    def check_achievements(self, user_id):
         """
-        Process a single game event and check for achievement triggers
-        
-        Args:
-            event: GameEvent object
+        Check all achievements for a user against their current stats.
         """
-        if not event.user_id:
-            return  # Skip system events
-        
-        event_type = event.event_type
-        user_id = event.user_id
-        event_data = json.loads(event.event_data) if event.event_data else {}
-        
         session = self.db.get_session()
+        rewards_to_award = []
         try:
-            # Get all achievements that match this event type
-            matching_achievements = session.query(Achievement).filter(
-                Achievement.trigger_event == event_type
-            ).all()
+            # Get all achievements
+            all_achievements = session.query(Achievement).all()
             
-            for achievement in matching_achievements:
-                # Check if user already has this achievement
-                user_achievement = session.query(UserAchievement).filter(
-                    UserAchievement.user_id == user_id,
-                    UserAchievement.achievement_id == achievement.id
-                ).first()
-                
-                # Skip if completed and not progressive
-                if user_achievement and user_achievement.is_completed and not achievement.is_progressive:
-                    continue
-                
-                # Check trigger conditions
-                if self.check_conditions(achievement, event_data):
-                    self.award_achievement(user_id, achievement, event_data, session)
-        
-        finally:
-            session.close()
-    
-    def check_conditions(self, achievement, event_data):
-        """
-        Check if event data matches achievement conditions
-        
-        Args:
-            achievement: Achievement object
-            event_data: Dictionary with event data
+            # Get user stats (cache in dict for performance)
+            user_stats = session.query(UserStat).filter_by(user_id=user_id).all()
+            stats_map = {s.stat_key: s.value for s in user_stats}
             
-        Returns:
-            Boolean indicating if conditions are met
-        """
-        if not achievement.trigger_condition:
-            return True
-        
-        try:
-            conditions = json.loads(achievement.trigger_condition)
-        except:
-            return True
-        
-        for key, value in conditions.items():
-            if key.startswith('min_'):
-                # Minimum value check
-                data_key = key[4:]  # Remove 'min_' prefix
-                if event_data.get(data_key, 0) < value:
-                    return False
-            
-            elif key.startswith('max_'):
-                # Maximum value check
-                data_key = key[4:]  # Remove 'max_' prefix
-                if event_data.get(data_key, float('inf')) > value:
-                    return False
-            
-            elif key == 'count':
-                # Special case for first achievement
-                # This is handled by checking if user_achievement exists
-                continue
-            
-            else:
-                # Exact match
-                if event_data.get(key) != value:
-                    return False
-        
-        return True
-    
-    def award_achievement(self, user_id, achievement, event_data, session=None):
-        """
-        Award achievement to user
-        
-        Args:
-            user_id: Telegram ID of user
-            achievement: Achievement object
-            event_data: Dictionary with event data
-            session: Database session (optional)
-        """
-        close_session = False
-        if not session:
-            session = self.db.get_session()
-            close_session = True
-        
-        try:
-            user_achievement = session.query(UserAchievement).filter(
-                UserAchievement.user_id == user_id,
-                UserAchievement.achievement_id == achievement.id
-            ).first()
-            
-            if not user_achievement:
-                user_achievement = UserAchievement(
-                    user_id=user_id,
-                    achievement_id=achievement.id,
-                    current_progress=0
-                )
-                session.add(user_achievement)
-            
-            # Update progress
-            if achievement.is_progressive:
-                increment = event_data.get('progress_increment', 1)
-                user_achievement.current_progress += increment
-                user_achievement.last_progress_update = datetime.datetime.now()
-                
-                if user_achievement.current_progress >= achievement.max_progress:
-                    if not user_achievement.is_completed:
-                        user_achievement.is_completed = True
-                        user_achievement.completion_date = datetime.datetime.now()
-                        user_achievement.times_earned += 1
-                        
-                        # Award rewards
-                        self.give_rewards(user_id, achievement)
-                        
-                        # Notify user
-                        self.notify_achievement_unlocked(user_id, achievement)
-            else:
-                if not user_achievement.is_completed:
-                    user_achievement.is_completed = True
-                    user_achievement.completion_date = datetime.datetime.now()
-                    user_achievement.times_earned = 1
-                    user_achievement.current_progress = achievement.max_progress
-                    
-                    # Award rewards
-                    self.give_rewards(user_id, achievement)
-                    
-                    # Notify user
-                    self.notify_achievement_unlocked(user_id, achievement)
+            for achievement in all_achievements:
+                self._check_single_achievement(session, user_id, achievement, stats_map, rewards_to_award)
             
             session.commit()
-            
         except Exception as e:
+            print(f"[ERROR] Achievement check failed for user {user_id}: {e}")
             session.rollback()
-            print(f"Error awarding achievement: {e}")
         finally:
-            if close_session:
-                session.close()
-    
-    def give_rewards(self, user_id, achievement):
-        """
-        Give achievement rewards to user
-        
-        Args:
-            user_id: Telegram ID of user
-            achievement: Achievement object
-        """
-        user = self.user_service.get_user(user_id)
-        if not user:
-            return
-        
-        # Award points
-        if achievement.reward_points:
-            self.user_service.add_points(user, achievement.reward_points)
-        
-        # Award title
-        if achievement.reward_title:
-            session = self.db.get_session()
-            try:
-                from models.user import Utente
-                db_user = session.query(Utente).filter_by(id_telegram=user_id).first()
-                if db_user:
-                    # Update titles list
-                    current_titles = []
-                    if db_user.titles:
-                        try:
-                            current_titles = json.loads(db_user.titles)
-                        except:
-                            current_titles = []
-                    
-                    if achievement.reward_title not in current_titles:
-                        current_titles.append(achievement.reward_title)
-                        db_user.titles = json.dumps(current_titles)
-                    
-                    # Set as active title if user doesn't have one, or this is a higher tier
-                    if not db_user.title or achievement.tier in ['platinum', 'gold']:
-                        db_user.title = achievement.reward_title
-                    
-                    session.commit()
-            except Exception as e:
-                session.rollback()
-                print(f"Error setting title: {e}")
-            finally:
-                session.close()
-    
-    def notify_achievement_unlocked(self, user_id, achievement):
-        """
-        Send notification to user about unlocked achievement
-        
-        Args:
-            user_id: Telegram ID of user
-            achievement: Achievement object
-        """
-        tier_emoji = {
-            'bronze': '🥉',
-            'silver': '🥈',
-            'gold': '🥇',
-            'platinum': '💎'
-        }
-        
-        message = f"""
-🎉 **ACHIEVEMENT SBLOCCATO!** 🎉
+            session.close()
+            
+        # Apply rewards AFTER session is closed to avoid locks
+        for reward_data in rewards_to_award:
+            self._apply_reward(user_id, reward_data)
 
-{tier_emoji.get(achievement.tier, '🏆')} **{achievement.name}**
-_{achievement.description}_
-
-{achievement.flavor_text or ''}
-
-**Ricompense:**
-"""
+    def _check_single_achievement(self, session, user_id, achievement, stats_map, rewards_to_award):
+        """
+        Check if a specific achievement should be unlocked or upgraded.
+        """
+        current_val = stats_map.get(achievement.stat_key, 0)
         
-        if achievement.reward_points:
-            message += f"\n💰 +{achievement.reward_points} Wumpa Coins"
+        # Get user's current progress
+        user_ach = session.query(UserAchievement).filter_by(
+            user_id=user_id, 
+            achievement_key=achievement.achievement_key
+        ).first()
         
-        if achievement.reward_title:
-            message += f"\n👑 Titolo: {achievement.reward_title}"
+        if not user_ach:
+            user_ach = UserAchievement(
+                user_id=user_id,
+                achievement_key=achievement.achievement_key,
+                current_tier=None,
+                progress_value=current_val
+            )
+            session.add(user_ach)
         
-        if achievement.cosmetic_reward:
-            message += f"\n✨ {achievement.cosmetic_reward}"
+        # Update progress snapshot
+        user_ach.progress_value = current_val
+        user_ach.last_progress_update = datetime.datetime.now()
         
-        # Send via Telegram bot
+        # Check Tiers
         try:
-            # Import bot instance from main
+            tiers = json.loads(achievement.tiers)
+        except:
+            tiers = {}
+            
+        unlocked_tier = user_ach.current_tier
+        
+        # Define tier order for comparison
+        tier_order = ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'legendary']
+        
+        for tier_name in tier_order:
+            if tier_name not in tiers:
+                continue
+                
+            tier_data = tiers[tier_name]
+            threshold = tier_data.get('threshold', 0)
+            
+            # Check condition
+            is_met = False
+            if achievement.condition_type == '>=':
+                is_met = current_val >= threshold
+            elif achievement.condition_type == '<=':
+                is_met = current_val <= threshold
+            elif achievement.condition_type == '==':
+                is_met = current_val == threshold
+                
+            if is_met:
+                # If this tier is higher than current, unlock it
+                if self._is_higher_tier(tier_name, unlocked_tier, tier_order):
+                    unlocked_tier = tier_name
+                    # Collect reward data
+                    rewards_to_award.append({
+                        'achievement_name': achievement.name,
+                        'achievement_description': achievement.description,
+                        'tier_name': tier_name,
+                        'tier_data': tier_data
+                    })
+        
+        if unlocked_tier != user_ach.current_tier:
+            user_ach.current_tier = unlocked_tier
+            user_ach.unlocked_at = datetime.datetime.now()
+
+    def _is_higher_tier(self, new_tier, current_tier, order):
+        if current_tier is None:
+            return True
+        try:
+            return order.index(new_tier) > order.index(current_tier)
+        except ValueError:
+            return False
+
+    def _apply_reward(self, user_id, reward_data):
+        """
+        Grant rewards and notify user.
+        """
+        achievement_name = reward_data['achievement_name']
+        achievement_description = reward_data['achievement_description']
+        tier_name = reward_data['tier_name']
+        tier_data = reward_data['tier_data']
+        rewards = tier_data.get('rewards', {})
+        
+        # Notification message
+        msg = f"🏆 **Achievement Sbloccato!**\n\n"
+        msg += f"**{achievement_name}** ({tier_name.capitalize()})\n"
+        msg += f"_{achievement_description}_\n\n"
+        
+        if 'exp' in rewards:
+            exp_amount = rewards['exp']
+            msg += f"➕ {exp_amount} EXP\n"
+            try:
+                from services.user_service import UserService
+                user_service = UserService()
+                user_service.add_exp_by_id(user_id, exp_amount)
+            except Exception as e:
+                print(f"[ERROR] Failed to award achievement EXP: {e}")
+            
+        if 'title' in rewards:
+            msg += f"🏷️ Titolo: **{rewards['title']}**\n"
+            
+        # Send notification (using main.bot via import inside function to avoid circular dep)
+        try:
             import main
             if hasattr(main, 'bot'):
-                main.bot.send_message(user_id, message, parse_mode='markdown')
-            else:
-                print(f"Achievement notification for user {user_id}:")
-                print(message)
+                main.bot.send_message(user_id, msg, parse_mode='markdown')
         except Exception as e:
-            print(f"Error sending achievement notification: {e}")
-            print(f"Achievement notification for user {user_id}:")
-            print(message)
-    
+            print(f"[WARNING] Could not send notification: {e}")
+
+    def on_chat_exp(self, user_id: int, total_chat_exp: int, increment: int = 0):
+        value = increment if increment > 0 else total_chat_exp
+        context = {"total_chat_exp": total_chat_exp}
+        
+        self.event_dispatcher.log_event(
+            event_type="chat_exp",
+            user_id=user_id,
+            value=value,
+            context=context
+        )
+
     def get_user_achievements(self, user_id):
         """
-        Get all achievements for a user
-        
-        Args:
-            user_id: Telegram ID of user
-            
-        Returns:
-            List of dictionaries with achievement data
+        Get all achievements for a user (Adapted for new schema)
         """
         session = self.db.get_session()
         try:
+            # Join on achievement_key
             user_achievements = session.query(UserAchievement, Achievement).join(
-                Achievement, UserAchievement.achievement_id == Achievement.id
+                Achievement, UserAchievement.achievement_key == Achievement.achievement_key
             ).filter(
                 UserAchievement.user_id == user_id
             ).all()
             
             result = []
             for user_ach, ach in user_achievements:
+                try:
+                    tiers = json.loads(ach.tiers)
+                except:
+                    tiers = {}
+                
+                # Determine next tier threshold
+                current_tier = user_ach.current_tier
+                next_tier = 'bronze'
+                if current_tier == 'bronze': next_tier = 'silver'
+                elif current_tier == 'silver': next_tier = 'gold'
+                elif current_tier == 'gold': next_tier = None
+                
+                max_prog = 0
+                if next_tier and next_tier in tiers:
+                    max_prog = tiers[next_tier].get('threshold', 0)
+                
                 result.append({
-                    'achievement': ach,
-                    'progress': user_ach.current_progress,
-                    'max_progress': ach.max_progress,
-                    'is_completed': user_ach.is_completed,
-                    'completion_date': user_ach.completion_date,
-                    'times_earned': user_ach.times_earned
+                    'key': ach.achievement_key,
+                    'name': ach.name,
+                    'description': ach.description,
+                    'current_tier': user_ach.current_tier,
+                    'progress': user_ach.progress_value,
+                    'next_threshold': max_prog,
+                    'unlocked_at': user_ach.unlocked_at
                 })
-            
             return result
+        finally:
+            session.close()
+
+    def get_achievement_stats(self, user_id):
+        """
+        Get achievement statistics for a user
+        """
+        session = self.db.get_session()
+        try:
+            total_achievements = session.query(Achievement).count()
+            
+            # Count unlocked achievements (at least bronze)
+            user_achievements = session.query(UserAchievement, Achievement).join(
+                Achievement, UserAchievement.achievement_key == Achievement.achievement_key
+            ).filter(
+                UserAchievement.user_id == user_id,
+                UserAchievement.current_tier != None
+            ).all()
+            
+            user_unlocked = len(user_achievements)
+            
+            # Calculate points earned
+            # Bronze: 10, Silver: 25, Gold: 50, Platinum: 100, Diamond: 250, Legendary: 500
+            tier_points = {
+                'bronze': 10, 'silver': 25, 'gold': 50, 
+                'platinum': 100, 'diamond': 250, 'legendary': 500
+            }
+            
+            points_earned = 0
+            tier_order = ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'legendary']
+            
+            for ua, ach in user_achievements:
+                if ua.current_tier in tier_points:
+                    # Sum points for all tiers up to the current one
+                    try:
+                        idx = tier_order.index(ua.current_tier)
+                        for i in range(idx + 1):
+                            points_earned += tier_points[tier_order[i]]
+                    except ValueError:
+                        points_earned += tier_points.get(ua.current_tier, 0)
+
+            return {
+                'total_achievements': total_achievements,
+                'completed': user_unlocked,
+                'points_earned': points_earned,
+                'completion_rate': (user_unlocked / total_achievements * 100) if total_achievements > 0 else 0
+            }
         finally:
             session.close()
 
     def get_all_achievements_with_progress(self, user_id):
         """
-        Get all available achievements with user progress if any
+        Get all available achievements with user progress, adapted for main.py UI.
         """
         session = self.db.get_session()
         try:
             all_ach = session.query(Achievement).all()
-            user_ach = {ua.achievement_id: ua for ua in session.query(UserAchievement).filter_by(user_id=user_id).all()}
+            user_ach_map = {ua.achievement_key: ua for ua in session.query(UserAchievement).filter_by(user_id=user_id).all()}
             
             result = []
+            tier_order = ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'legendary']
+            
             for ach in all_ach:
-                ua = user_ach.get(ach.id)
+                ua = user_ach_map.get(ach.achievement_key)
+                
+                # Parse tiers
+                try:
+                    tiers = json.loads(ach.tiers)
+                except:
+                    tiers = {}
+                
+                current_tier = ua.current_tier if ua else None
+                current_progress = ua.progress_value if ua else 0
+                
+                # Determine target tier (the next one to unlock)
+                target_tier = 'bronze'
+                if current_tier:
+                    try:
+                        curr_idx = tier_order.index(current_tier)
+                        # Find the first tier in tier_order that is AFTER current_tier AND exists in tiers
+                        found_next = False
+                        for i in range(curr_idx + 1, len(tier_order)):
+                            t_name = tier_order[i]
+                            if t_name in tiers:
+                                target_tier = t_name
+                                found_next = True
+                                break
+                        
+                        if not found_next:
+                            target_tier = current_tier # Truly maxed
+                    except ValueError:
+                        target_tier = 'bronze'
+                else:
+                    # If no tier unlocked, find the first available tier in tier_order
+                    for t_name in tier_order:
+                        if t_name in tiers:
+                            target_tier = t_name
+                            break
+                
+                # Check if fully completed (Max tier unlocked)
+                is_maxed = False
+                if current_tier == target_tier and current_tier in tiers:
+                    # We are at the target, check if there is a next one
+                    # Actually logic above sets target=current if maxed
+                    # So if target == current, we are likely maxed, UNLESS we are at None (start)
+                    if current_tier is not None:
+                        is_maxed = True
+                
+                # Set attributes for main.py compatibility
+                # We modify the object instance - this is safe as long as we don't commit
+                ach.tier = target_tier
+                ach.max_progress = tiers.get(target_tier, {}).get('threshold', 1)
+                
+                # If maxed, we want to show as completed
+                is_completed = is_maxed
+                
+                # If not maxed, we are working towards target_tier
+                # main.py uses is_completed to decide whether to show progress bar
+                
                 result.append({
                     'achievement': ach,
-                    'progress': ua.current_progress if ua else 0,
-                    'max_progress': ach.max_progress,
-                    'is_completed': ua.is_completed if ua else False,
-                    'completion_date': ua.completion_date if ua else None,
-                    'times_earned': ua.times_earned if ua else 0
+                    'is_completed': is_completed,
+                    'progress': current_progress
                 })
+                
             return result
-        finally:
-            session.close()
-    
-    def get_achievement_stats(self, user_id):
-        """
-        Get achievement statistics for a user
-        
-        Args:
-            user_id: Telegram ID of user
-            
-        Returns:
-            Dictionary with stats
-        """
-        session = self.db.get_session()
-        try:
-            total_achievements = session.query(Achievement).count()
-            user_completed = session.query(UserAchievement).filter(
-                UserAchievement.user_id == user_id,
-                UserAchievement.is_completed == True
-            ).count()
-            
-            total_points = session.query(Achievement).join(
-                UserAchievement, Achievement.id == UserAchievement.achievement_id
-            ).filter(
-                UserAchievement.user_id == user_id,
-                UserAchievement.is_completed == True
-            ).with_entities(Achievement.reward_points).all()
-            
-            points_earned = sum(p[0] or 0 for p in total_points)
-            
-            return {
-                'total_achievements': total_achievements,
-                'completed': user_completed,
-                'completion_rate': (user_completed / total_achievements * 100) if total_achievements > 0 else 0,
-                'points_earned': points_earned
-            }
         finally:
             session.close()

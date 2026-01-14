@@ -4,6 +4,7 @@ from models.character_ownership import CharacterOwnership
 from models.user import Utente
 from services.user_service import UserService
 from services.character_loader import get_character_loader
+from services.event_dispatcher import EventDispatcher
 from settings import PointsName
 import datetime
 
@@ -12,6 +13,7 @@ class CharacterService:
         self.db = Database()
         self.user_service = UserService()
         self.char_loader = get_character_loader()
+        self.event_dispatcher = EventDispatcher()
     
     def get_available_characters(self, user):
         """Get characters user can select (unlocked by level or purchased)"""
@@ -111,8 +113,14 @@ class CharacterService:
         char_name = character['nome']
         char_price = character['price']
         
-        session.close()
-        premium_msg = f" (Sconto Premium 50%: {char_price} → {price} {PointsName})" if user.premium == 1 else ""
+        # Log character unlock event
+        self.event_dispatcher.log_event(
+            event_type='character_unlock',
+            user_id=user.id_telegram,
+            value=1,
+            context={'char_id': char_id, 'char_name': char_name}
+        )
+        
         return True, f"Hai acquistato {char_name} per {price} {PointsName}!{premium_msg}"
     
     def equip_character(self, user, char_id):
@@ -170,7 +178,13 @@ class CharacterService:
         # Extract name again just in case
         char_name = character['nome']
         
-        session.close()
+        # Log character equip event
+        self.event_dispatcher.log_event(
+            event_type='character_equip',
+            user_id=user.id_telegram,
+            value=1,
+            context={'char_id': char_id, 'char_name': char_name}
+        )
         
         return True, f"Hai equipaggiato {char_name}!"
     

@@ -8,7 +8,16 @@ import os
 import random
 import socket
 from io import BytesIO
+from database import Database
+from models.user import Utente
 
+def escape_markdown(text):
+    """Helper to escape markdown characters for Telegram"""
+    if not text:
+        return ""
+    # Characters to escape for Markdown (V1)
+    # _, *, [, `
+    return str(text).replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("`", "\\`")
 
 # Image processing for grayscale conversion
 try:
@@ -29,7 +38,8 @@ from services.character_service import CharacterService
 from services.transformation_service import TransformationService
 from services.stats_service import StatsService
 from services.drop_service import DropService
-import random
+from services.dungeon_service import DungeonService
+from services.achievement_tracker import AchievementTracker
 
 # Initialize Services
 user_service = UserService()
@@ -42,6 +52,7 @@ character_service = CharacterService()
 transformation_service = TransformationService()
 stats_service = StatsService()
 drop_service = DropService()
+dungeon_service = DungeonService()
 
 # Track last viewed character for admins (for image upload feature)
 admin_last_viewed_character = {}
@@ -67,9 +78,10 @@ def start(message):
     bot.reply_to(message, "Cosa vuoi fare?", reply_markup=get_start_markup(message.from_user.id))
 
 @bot.message_handler(commands=['achievements', 'ach'])
-def handle_achievements_cmd(message, page=0):
+def handle_achievements_cmd(message, page=0, user_id=None):
     """Show user achievements with pagination"""
-    user_id = message.from_user.id
+    if user_id is None:
+        user_id = message.from_user.id
     
     from services.achievement_tracker import AchievementTracker
     tracker = AchievementTracker()
@@ -78,7 +90,7 @@ def handle_achievements_cmd(message, page=0):
     all_achievements = tracker.get_all_achievements_with_progress(user_id)
     
     # Sort: Unlocked first, then by tier, then by name
-    tier_map = {'bronze': 1, 'silver': 2, 'gold': 3, 'platinum': 4}
+    tier_map = {'bronze': 1, 'silver': 2, 'gold': 3, 'platinum': 4, 'diamond': 5, 'legendary': 6}
     all_achievements.sort(key=lambda x: (not x['is_completed'], -tier_map.get(x['achievement'].tier, 0), x['achievement'].name))
     
     ITEMS_PER_PAGE = 5
@@ -105,14 +117,22 @@ def handle_achievements_cmd(message, page=0):
         max_progress = a.max_progress
         
         status_emoji = "✅" if unlocked else "🔒"
-        tier_emoji = {'bronze': '🥉', 'silver': '🥈', 'gold': '🥇', 'platinum': '💎'}.get(a.tier, "🏆")
+        tier_emoji = {
+            'bronze': '🥉', 
+            'silver': '🥈', 
+            'gold': '🥇', 
+            'platinum': '🏅', 
+            'diamond': '💎', 
+            'legendary': '👑'
+        }.get(a.tier, "🏆")
         
         msg += f"{status_emoji} {tier_emoji} **{a.name}**\n"
         msg += f"_{a.description}_\n"
         
         if not unlocked:
             # Progress bar
-            percent = int((progress / max_progress) * 10) if max_progress > 0 else 0
+            max_p = max_progress if max_progress and max_progress > 0 else 1
+            percent = int((progress / max_p) * 10)
             bar = "▰" * percent + "▱" * (10 - percent)
             msg += f"[{bar}] `{progress}/{max_progress}`\n"
             msg += f"🎯 *Obiettivo:* {a.description}\n"
@@ -407,6 +427,8 @@ class BotCommands:
             "/kill": self.handle_kill_user,
             "/killall": self.handle_kill_all_enemies,
             "/missing_image": self.handle_find_missing_image,
+            "/dungeon": self.handle_dungeon,
+            "/start_dungeon": self.handle_start_dungeon,
         }
         
         self.comandi_generici = {
@@ -432,6 +454,7 @@ class BotCommands:
             "🔮 attacco speciale": self.handle_special_attack,
             "/help": self.handle_help,
             "!help": self.handle_help,
+            "/join": self.handle_join_dungeon,
         }
 
     def handle_help(self):
@@ -507,9 +530,9 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         if not user_service.is_admin(utente):
             return
             
-        mob_id, attack_events = pve_service.spawn_daily_mob()
+        mob_id, attack_events = pve_service.spawn_daily_mob(chat_id=self.chatid)
         if mob_id:
-            mob = pve_service.get_current_mob_status()
+            mob = pve_service.get_mob_status_by_id(mob_id)
             if mob:
                 # Use new button format with specific mob ID
                 markup = types.InlineKeyboardMarkup()
@@ -522,11 +545,11 @@ Per acquistare un gioco che vedi in un canale o gruppo:
                 if mob.get('image') and os.path.exists(mob['image']):
                     try:
                         with open(mob['image'], 'rb') as photo:
-                            self.bot.reply_to(self.message, photo, caption=msg_text, reply_markup=markup, )
+                            self.bot.reply_to(self.message, photo, caption=msg_text, reply_markup=markup, parse_mode='markdown')
                     except:
-                        self.bot.reply_to(self.message, msg_text, reply_markup=markup)
+                        self.bot.reply_to(self.message, msg_text, reply_markup=markup, parse_mode='markdown')
                 else:
-                    self.bot.reply_to(self.message, msg_text, reply_markup=markup)
+                    self.bot.reply_to(self.message, msg_text, reply_markup=markup, parse_mode='markdown')
                 
                 # Send immediate attack messages if any
                 if attack_events:
@@ -536,11 +559,11 @@ Per acquistare un gioco che vedi in un canale o gruppo:
                         try:
                             if image_path and os.path.exists(image_path):
                                 with open(image_path, 'rb') as photo:
-                                    self.bot.send_photo(self.message.chat.id, photo, caption=msg, reply_markup=markup, )
+                                    self.bot.send_photo(self.chatid, photo, caption=msg, reply_markup=markup, )
                             else:
-                                self.bot.send_message(self.message.chat.id, msg, reply_markup=markup, )
+                                self.bot.send_message(self.chatid, msg, reply_markup=markup, )
                         except:
-                            self.bot.send_message(self.message.chat.id, msg, reply_markup=markup, )
+                            self.bot.send_message(self.chatid, msg, reply_markup=markup)
             else:
                 self.bot.reply_to(self.message, "Mob spawnato ma impossibile recuperare i dettagli.")
         else:
@@ -558,9 +581,9 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         parts = text.split(maxsplit=1)
         boss_name = parts[1] if len(parts) > 1 else None
         
-        success, msg, boss_id = pve_service.spawn_boss(boss_name)
+        success, msg, boss_id = pve_service.spawn_boss(boss_name, chat_id=self.chatid)
         if success and boss_id:
-            boss = pve_service.get_current_boss_status()
+            boss = pve_service.get_mob_status_by_id(boss_id)
             if boss:
                 # Create attack buttons
                 markup = types.InlineKeyboardMarkup()
@@ -586,8 +609,54 @@ Per acquistare un gioco che vedi in un canale o gruppo:
                         self.bot.reply_to(self.message, msg_text, reply_markup=markup, parse_mode='markdown')
                 else:
                     self.bot.reply_to(self.message, msg_text, reply_markup=markup, parse_mode='markdown')
+
+                # Send immediate attack messages if any (bosses might also attack immediately)
+                # Note: spawn_boss doesn't currently return attack_events, but let's be consistent
+                # Actually, pve_service.spawn_boss only returns success, msg, boss_id.
+                # If we want bosses to attack immediately, we should call mob_random_attack.
+                attack_events = pve_service.mob_random_attack(specific_mob_id=boss_id, chat_id=self.chatid)
+                if attack_events:
+                    for event in attack_events:
+                        msg = event['message']
+                        image_path = event['image']
+                        try:
+                            if image_path and os.path.exists(image_path):
+                                with open(image_path, 'rb') as photo:
+                                    self.bot.send_photo(self.chatid, photo, caption=msg, reply_markup=markup, parse_mode='markdown')
+                            else:
+                                self.bot.send_message(self.chatid, msg, reply_markup=markup, parse_mode='markdown')
+                        except:
+                            self.bot.send_message(self.chatid, msg, reply_markup=markup, parse_mode='markdown')
         else:
             self.bot.reply_to(self.message, f"❌ {msg}")
+
+    def handle_dungeon(self):
+        """Admin command to start dungeon registration"""
+        utente = user_service.get_user(self.chatid)
+        if not user_service.is_admin(utente):
+            return
+            
+        # Parse name if provided
+        text = self.message.text.strip()
+        parts = text.split(maxsplit=1)
+        name = parts[1] if len(parts) > 1 else "Dungeon Oscuro"
+        
+        d_id, msg = dungeon_service.create_dungeon(self.message.chat.id, name)
+        self.bot.send_message(self.message.chat.id, msg, parse_mode='markdown')
+
+    def handle_join_dungeon(self):
+        """User command to join current dungeon registration"""
+        success, msg = dungeon_service.join_dungeon(self.message.chat.id, self.chatid)
+        self.bot.reply_to(self.message, msg)
+
+    def handle_start_dungeon(self):
+        """Admin command to start the dungeon"""
+        utente = user_service.get_user(self.chatid)
+        if not user_service.is_admin(utente):
+            return
+            
+        success, msg = dungeon_service.start_dungeon(self.message.chat.id)
+        self.bot.send_message(self.message.chat.id, msg, parse_mode='markdown')
     
     def handle_kill_user(self):
         """dmin command to kill user or enemy. Usage: /kill (reply to user) OR /kill mob|boss [id/name]"""
@@ -1110,6 +1179,10 @@ Per acquistare un gioco che vedi in un canale o gruppo:
 
         
         if not image_sent:
+            # Escape markdown in username
+            username = utente.username if utente.username else utente.nome
+            username = escape_markdown(username)
+            
             self.bot.send_message(self.message.chat.id, msg, parse_mode='markdown', reply_markup=markup)
 
 
@@ -1136,17 +1209,35 @@ Per acquistare un gioco che vedi in un canale o gruppo:
 
     def process_item_target(self, message, item_name):
         """Handle target selection for items"""
-        target_username = message.text.strip()
-        target_user = user_service.get_user(target_username)
+        target_input = message.text.strip()
+        
+        # Check if target is a User
+        target_user = user_service.get_user(target_input)
+        target_mob = None
         
         if not target_user:
-            self.bot.reply_to(message, f"❌ Utente {target_username} non trovato. Operazione annullata.")
-            return
+            # Check if target is a Mob (by name)
+            # We need to find an active mob with this name
+            from database import Database
+            from models.pve import Mob
+            db = Database()
+            session = db.get_session()
+            # Find active mob with matching name (case insensitive)
+            target_mob = session.query(Mob).filter(Mob.name.ilike(target_input), Mob.is_dead == False).first()
+            session.close()
             
+            if not target_mob:
+                # If item is TNT/Nitro, allow "Terra" or empty to place trap
+                if item_name in ["TNT", "Nitro"] and (target_input.lower() in ["terra", "ground", "nessuno"] or target_input == ""):
+                    target_user = None # Explicitly None to trigger trap logic
+                else:
+                    self.bot.reply_to(message, f"❌ Bersaglio '{target_input}' non trovato (né Utente né Mob). Operazione annullata.")
+                    return
+        
         # Use the item on the target
         if item_service.use_item(self.chatid, item_name):
             utente = user_service.get_user(self.chatid)
-            msg, data = item_service.apply_effect(utente, item_name, target_user)
+            msg, data = item_service.apply_effect(utente, item_name, target_user, target_mob)
             
             if data and data.get('type') == 'wumpa_drop':
                 # Create buttons for stealing
@@ -1168,6 +1259,45 @@ Per acquistare un gioco che vedi in un canale o gruppo:
                     self.bot.reply_to(message, "Oggetto usato! Controlla il gruppo.")
                 except:
                     self.bot.reply_to(message, msg, reply_markup=markup)
+            
+            elif data and data.get('type') == 'mob_drop':
+                # Mob drops Wumpa!
+                percent = data['percent']
+                mob_id = data['mob_id']
+                
+                # Execute drop logic in PvEService
+                dropped_amount = pve_service.force_mob_drop(mob_id, percent)
+                
+                if dropped_amount > 0:
+                    # Create buttons for stealing the dropped wumpa
+                    markup = types.InlineKeyboardMarkup()
+                    buttons = []
+                    import uuid
+                    # Cap visual buttons to 50 to avoid limits, but amount is real
+                    visual_amount = min(dropped_amount, 50)
+                    for i in range(visual_amount):
+                        uid = str(uuid.uuid4())[:8]
+                        buttons.append(types.InlineKeyboardButton("🍑", callback_data=f"steal|{uid}"))
+                    
+                    # Add rows of 5
+                    for i in range(0, len(buttons), 5):
+                        markup.row(*buttons[i:i+5])
+                        
+                    msg += f"\n\n💰 Il Mob ha perso {dropped_amount} Wumpa!"
+                    
+                    try:
+                        self.bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup)
+                        self.bot.reply_to(message, "Oggetto usato! Controlla il gruppo.")
+                    except:
+                        self.bot.reply_to(message, msg, reply_markup=markup)
+                else:
+                    self.bot.reply_to(message, f"{msg}\n(Ma non ha droppato nulla!)")
+
+            elif data and data.get('type') == 'trap':
+                # Set trap in the chat
+                drop_service.set_trap(message.chat.id, data['trap_type'], self.chatid)
+                self.bot.reply_to(message, msg)
+                
             else:
                 self.bot.reply_to(message, msg)
         else:
@@ -1673,11 +1803,11 @@ Per acquistare un gioco che vedi in un canale o gruppo:
                 if mob.get('image') and os.path.exists(mob['image']):
                     try:
                         with open(mob['image'], 'rb') as photo:
-                            self.bot.send_photo(GRUPPO_AROMA, photo, caption=msg_text, reply_markup=markup, )
+                            self.bot.send_photo(GRUPPO_AROMA, photo, caption=msg_text, reply_markup=markup, parse_mode='markdown')
                     except:
-                        self.bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup)
+                        self.bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup, parse_mode='markdown')
                 else:
-                    self.bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup)
+                    self.bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup, parse_mode='markdown')
                 
                 # Immediate attack
                 attack_events = pve_service.mob_random_attack(specific_mob_id=mob_id)
@@ -1688,11 +1818,11 @@ Per acquistare un gioco che vedi in un canale o gruppo:
                         try:
                             if image_path and os.path.exists(image_path):
                                 with open(image_path, 'rb') as photo:
-                                    self.bot.send_photo(GRUPPO_AROMA, photo, caption=msg, reply_markup=markup, )
+                                    self.bot.send_photo(GRUPPO_AROMA, photo, caption=msg, reply_markup=markup, parse_mode='markdown')
                             else:
-                                self.bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, )
+                                self.bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, parse_mode='markdown')
                         except:
-                            self.bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, )
+                            self.bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, parse_mode='markdown')
         else:
             self.bot.reply_to(self.message, f"❌ {msg}")
 
@@ -1735,7 +1865,7 @@ Per acquistare un gioco che vedi in un canale o gruppo:
                 return
 
 
-@bot.message_handler(content_types=util.content_type_media)
+@bot.message_handler(content_types=['text'] + util.content_type_media)
 def any(message):
     # Check if message is a forward (Game Purchase)
     if message.forward_from_chat or message.forward_from:
@@ -1874,9 +2004,24 @@ def any(message):
         utente = user_service.get_user(message.from_user.id)
     
     # Track activity
+    print(f"[DEBUG] Received message from {message.from_user.id} in chat {message.chat.id}. Tracking activity...")
     user_service.track_activity(message.from_user.id, message.chat.id)
     
-    # Sunday reset removed - characters persist
+    # Passive EXP gain: 1-10 EXP per message (silent, no notification)
+    passive_exp = random.randint(1, 10)
+    level_up_info = user_service.add_exp_by_id(message.from_user.id, passive_exp)
+    
+    # Track chat EXP for achievements
+    new_chat_exp_total = user_service.add_chat_exp(message.from_user.id, passive_exp)
+    
+    achievement_tracker = AchievementTracker()
+    achievement_tracker.on_chat_exp(
+        message.from_user.id,
+        new_chat_exp_total,
+        increment=passive_exp
+    )
+    # Process achievements immediately
+    achievement_tracker.process_pending_events(limit=5)
     
     # Sunday bonus: 10 Wumpa when you write on Sunday
     if datetime.datetime.today().weekday() == 6:  # Sunday
@@ -1898,7 +2043,7 @@ def any(message):
                 session.add(sunday_bonus)
             
             session.commit()
-            bot.send_message(message.chat.id, f"🎉 **BUONA DOMENICA!**\nEcco il tuo regalo settimanale:\n\n{box_msg}")
+            bot.send_message(message.chat.id, f"🎉 **Buona Domenica!**\nEcco il tuo regalo settimanale:\n\n{box_msg}", parse_mode='Markdown')
         
         session.close()
     
@@ -1917,8 +2062,9 @@ def any(message):
         drop_service.maybe_drop(utente, bot, message)
         
         # Random Mob Spawn (5% chance per message)
+        attack_events = []
         if random.random() < 0.05:
-            mob_id, attack_events = pve_service.spawn_daily_mob(chat_id=message.chat.id)
+            success, msg, mob_id = pve_service.spawn_specific_mob(chat_id=message.chat.id)
             if mob_id:
                 mob = pve_service.get_current_mob_status()
                 if mob:
@@ -1932,9 +2078,9 @@ def any(message):
                     if mob.get('image') and os.path.exists(mob['image']):
                         try:
                             with open(mob['image'], 'rb') as photo:
-                                bot.send_photo(message.chat.id, photo, caption=msg_text, reply_markup=markup, )
+                                bot.send_photo(message.chat.id, photo, caption=msg_text, reply_markup=markup, parse_mode='markdown')
                         except:
-                            bot.send_message(message.chat.id, msg_text, reply_markup=markup)
+                            bot.send_message(message.chat.id, msg_text, reply_markup=markup, parse_mode='markdown')
                     else:
                         bot.send_message(message.chat.id, msg_text, reply_markup=markup, parse_mode='markdown')
                     
@@ -1946,9 +2092,9 @@ def any(message):
                             try:
                                 if image_path and os.path.exists(image_path):
                                     with open(image_path, 'rb') as photo:
-                                        bot.send_photo(message.chat.id, photo, caption=msg, reply_markup=markup, )
+                                        bot.send_photo(message.chat.id, photo, caption=msg, reply_markup=markup, parse_mode='markdown')
                                 else:
-                                    bot.send_message(message.chat.id, msg, reply_markup=markup, )
+                                    bot.send_message(message.chat.id, msg, reply_markup=markup, parse_mode='markdown')
                             except:
                                 bot.send_message(message.chat.id, msg, reply_markup=markup, parse_mode='markdown')
 
@@ -1961,30 +2107,21 @@ def handle_inline_buttons(call):
     user_id = call.from_user.id
     utente = user_service.get_user(user_id)
     
+    # Track activity for mob targeting
+    user_service.track_activity(user_id, call.message.chat.id)
+    
     # TITLE SELECTION
     if action.startswith("set_title|"):
         new_title = action.split("|")[1]
         
-        from database import Database
-        from models.user import Utente
-        db = Database()
-        session = db.get_session()
-        
+
         try:
-            db_user = session.query(Utente).filter_by(id_telegram=user_id).first()
-            if db_user:
-                db_user.title = new_title
-                session.commit()
-                bot.answer_callback_query(call.id, f"✅ Titolo impostato: {new_title}")
-                bot.edit_message_text(f"✅ Titolo impostato con successo: **{new_title}**", user_id, call.message.message_id, parse_mode='markdown')
-            else:
-                bot.answer_callback_query(call.id, "❌ Utente non trovato")
+            user_service.update_user(user_id, {'title': new_title})
+            bot.answer_callback_query(call.id, f"✅ Titolo impostato: {new_title}")
+            bot.edit_message_text(f"✅ Titolo impostato con successo: **{new_title}**", user_id, call.message.message_id, parse_mode='markdown')
         except Exception as e:
-            session.rollback()
             print(f"Error setting title in callback: {e}")
             bot.answer_callback_query(call.id, "❌ Errore nel salvataggio")
-        finally:
-            session.close()
         return
 
     # NEW HANDLERS - Character Selection & Stats
@@ -2619,7 +2756,7 @@ def handle_inline_buttons(call):
         
         # Deduct mana and apply transformation
         session = user_service.db.get_session()
-        from models.user import Utente
+        
         db_user = session.query(Utente).filter_by(id_telegram=user_id).first()
         db_user.mana -= mana_cost
         db_user.livello_selezionato = trans_id  # Change to transformed character
@@ -2912,15 +3049,18 @@ def handle_inline_buttons(call):
             
             if enemy_died:
                 # Enemy died - no buttons, just show death message
-                bot.send_message(call.message.chat.id, f"@{utente.username if utente.username else utente.nome}\n{msg}", )
+                username = escape_markdown(utente.username if utente.username else utente.nome)
+                bot.send_message(call.message.chat.id, f"@{username}\n{msg}", parse_mode='markdown')
             else:
                 # Re-create markup to persist buttons
                 markup = types.InlineKeyboardMarkup()
                 markup.add(types.InlineKeyboardButton("⚔️ Attacca", callback_data=f"attack_enemy|{enemy_type}|{enemy_id}"))
                 markup.add(types.InlineKeyboardButton("✨ Attacco Speciale", callback_data=f"special_attack_enemy|{enemy_type}|{enemy_id}"))
 
+                # Escape markdown in username
+                username = escape_markdown(utente.username if utente.username else utente.nome)
                 # Always show the full message with damage
-                bot.send_message(call.message.chat.id, f"@{utente.username if utente.username else utente.nome}\n{msg}", reply_markup=markup, )
+                bot.send_message(call.message.chat.id, f"@{username}\n{msg}", reply_markup=markup, parse_mode='markdown')
         else:
             try:
                 bot.answer_callback_query(call.id, msg, show_alert=True)
@@ -3003,14 +3143,16 @@ def handle_inline_buttons(call):
             
             if enemy_died:
                 # Enemy died - no buttons, just show death message
-                bot.send_message(call.message.chat.id, f"@{utente.username if utente.username else utente.nome}\n{msg}", )
+                username = escape_markdown(utente.username if utente.username else utente.nome)
+                bot.send_message(call.message.chat.id, f"@{username}\n{msg}", parse_mode='markdown')
             else:
                 markup = types.InlineKeyboardMarkup()
                 markup.add(
                     types.InlineKeyboardButton("⚔️ Attacca", callback_data=f"attack_enemy|{enemy_type}|{enemy_id}"),
                     types.InlineKeyboardButton("✨ Attacco Speciale", callback_data=f"special_attack_enemy|{enemy_type}|{enemy_id}")
                 )
-                bot.send_message(call.message.chat.id, f"@{utente.username if utente.username else utente.nome}\n{msg}", reply_markup=markup, )
+                username = escape_markdown(utente.username if utente.username else utente.nome)
+                bot.send_message(call.message.chat.id, f"@{username}\n{msg}", reply_markup=markup, parse_mode='markdown')
         else:
             try:
                 bot.answer_callback_query(call.id, msg, show_alert=True)
@@ -3062,7 +3204,8 @@ def handle_inline_buttons(call):
                 markup = None
 
             # Always show the full message with damage
-            bot.send_message(call.message.chat.id, f"@{utente.username if utente.username else utente.nome}\n{msg}", reply_markup=markup, )
+            username = escape_markdown(utente.username if utente.username else utente.nome)
+            bot.send_message(call.message.chat.id, f"@{username}\n{msg}", reply_markup=markup, parse_mode='markdown')
         else:
             try:
                 bot.answer_callback_query(call.id, msg, show_alert=True)
@@ -3105,7 +3248,8 @@ def handle_inline_buttons(call):
             else:
                 markup = None
                        
-            bot.send_message(call.message.chat.id, f"@{utente.username if utente.username else utente.nome}\n{msg}", reply_markup=markup, )
+            username = escape_markdown(utente.username if utente.username else utente.nome)
+            bot.send_message(call.message.chat.id, f"@{username}\n{msg}", reply_markup=markup, parse_mode='markdown')
         else:
             try:
                 bot.answer_callback_query(call.id, msg, show_alert=True)
@@ -3127,6 +3271,7 @@ def handle_inline_buttons(call):
             
             # Instantiate BotCommands to use its method
             cmd_handler = BotCommands(call.message, bot)
+            cmd_handler.chatid = user_id
             bot.register_next_step_handler(msg, cmd_handler.process_item_target, item_name)
             return
             
@@ -3241,7 +3386,7 @@ def handle_inline_buttons(call):
     # ACHIEVEMENT PAGINATION
     elif action.startswith("ach_page|"):
         page = int(action.split("|")[1])
-        handle_achievements_cmd(call.message, page=page)
+        handle_achievements_cmd(call.message, page=page, user_id=user_id)
         bot.answer_callback_query(call.id)
         return
 
@@ -3274,7 +3419,6 @@ def regenerate_mana_job():
     """Hourly job to regenerate mana for all users (+10 capped at max_mana)"""
     try:
         session = user_service.db.get_session()
-        from models.user import Utente
         
         # Get all users with mana < max_mana
         users = session.query(Utente).filter(Utente.mana < Utente.max_mana).all()
@@ -3300,7 +3444,7 @@ def spawn_daily_mob_job():
         # 10% chance every check (if run every hour? or minute?)
         # Let's assume this runs every hour.
         if random.random() < 0.2: 
-            mob_id, attack_events = pve_service.spawn_daily_mob(chat_id=GRUPPO_AROMA)
+            success, msg, mob_id = pve_service.spawn_specific_mob(chat_id=GRUPPO_AROMA)
             if mob_id:
                 mob = pve_service.get_current_mob_status() # This might get the wrong mob if multiple?
                 # Better to get by ID if possible, but get_current_mob_status gets the first one.
@@ -3345,7 +3489,7 @@ def spawn_daily_mob_job():
                                 bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, parse_mode='markdown')
 
 def spawn_weekly_boss_job():
-    success, msg, boss_id = pve_service.spawn_boss()
+    success, msg, boss_id = pve_service.spawn_boss(chat_id=GRUPPO_AROMA)
     if success and boss_id:
         boss = pve_service.get_current_boss_status()
         if boss:
@@ -3385,8 +3529,11 @@ def mob_attack_job():
     session.close()
     
     if active_enemies:
+        print(f"[DEBUG] Found {len(active_enemies)} active enemies. Processing attacks...")
         for enemy in active_enemies:
-            attack_events = pve_service.mob_random_attack(specific_mob_id=enemy.id)
+            # Pass the chat_id where the enemy is located
+            chat_id = enemy.chat_id if enemy.chat_id else GRUPPO_AROMA
+            attack_events = pve_service.mob_random_attack(specific_mob_id=enemy.id, chat_id=chat_id)
             if attack_events:
                 markup = types.InlineKeyboardMarkup()
                 markup.add(
@@ -3400,13 +3547,13 @@ def mob_attack_job():
                     try:
                         if image_path and os.path.exists(image_path):
                             with open(image_path, 'rb') as photo:
-                                bot.send_photo(GRUPPO_AROMA, photo, caption=msg, reply_markup=markup, )
+                                bot.send_photo(chat_id, photo, caption=msg, reply_markup=markup, parse_mode='markdown')
                         else:
-                            bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, )
+                            bot.send_message(chat_id, msg, reply_markup=markup, parse_mode='markdown')
                     except Exception as e:
                         print(f"Error sending enemy attack: {e}")
                         try:
-                            bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup)
+                            bot.send_message(chat_id, msg, reply_markup=markup)
                         except Exception as e2:
                             print(f"Error sending enemy attack (no markdown): {e2}")
 
@@ -3418,7 +3565,7 @@ if __name__ == "__main__":
     schedule.every().hour.do(spawn_daily_mob_job)
     schedule.every().hour.do(regenerate_mana_job)  # +10 mana every hour for all users
     schedule.every(10).seconds.do(mob_attack_job)
-    schedule.every().sunday.at("20:00").do(spawn_weekly_boss_job)
+    # schedule.every().sunday.at("20:00").do(spawn_weekly_boss_job) # Disabled as per user request
     
     # Sunday reset removed - characters persist permanently
     # Sunday reset removed - characters persist permanently
