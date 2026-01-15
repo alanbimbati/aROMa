@@ -239,7 +239,7 @@ def handle_season_cmd(message, page=0):
         msg = f"🏆 **{status['season_name']}**\n"
         msg += f"⏰ Scade il: {status['end_date'].strftime('%d/%m/%Y')}\n\n"
         
-        msg += f"⭐ **Livello {progress['level']}**\n"
+        msg += f"⭐ **Grado {progress['level']}**\n"
         
         # Progress bar
         exp_per_lv = status['exp_per_level']
@@ -257,7 +257,7 @@ def handle_season_cmd(message, page=0):
             type_icon = r.icon or '🎁'
             status_icon = "✅" if progress['level'] >= r.level_required else "🔒"
             premium_tag = "👑 [PREMIUM]" if r.is_premium else "🆓 [FREE]"
-            msg += f"{status_icon} • Lv {r.level_required}: {premium_tag} {type_icon} {r.reward_name}\n"
+            msg += f"{status_icon} • Grado {r.level_required}: {premium_tag} {type_icon} {r.reward_name}\n"
             
         markup = types.InlineKeyboardMarkup()
         
@@ -475,38 +475,8 @@ class BotCommands:
         }
 
     def handle_help(self):
-        msg = """📚 *GUIDA AROMA BOT* 📚
-
-🔹 *GENERALE*
-Guadagna *Frutti Wumpa* (🍑) e *EXP* scrivendo in chat!
-Ogni messaggio ti dà punti. Sali di livello per sbloccare nuovi personaggi.
-
-🔹 *PERSONAGGI*
-Usa '👤 Scegli il personaggio' per equipaggiare un eroe.
-Ogni personaggio ha abilità uniche e statistiche diverse.
-Alcuni personaggi si sbloccano livellando, altri si comprano nel '🛒 Negozio Personaggi'.
-
-🔹 *INVENTARIO & OGGETTI*
-Usa '📦 Inventario' per vedere i tuoi oggetti.
-- *Aku Aku / Uka Uka*: Ti rendono immune a TNT e Nitro per 60 minuti.
-- *Turbo*: Aumenta la fortuna (trovi più casse wumpa).
-- *Nitro / Colpisci*: Danneggia un altro giocatore (toglie Wumpa).
-- *Sfere del Drago*: Raccogline 7 per esprimere un desiderio!
-
-🔹 *COMBATTIMENTO (PvE)*
-Ogni giorno appaiono mostri selvatici!
-- Scrivi `attacca` per colpire il mostro.
-- Il mostro contrattacca! Stai attento alla tua vita.
-- Ogni 10 minuti, il mostro attacca un utente a caso!
-- Usa `attacco speciale` per usare l'abilità del tuo personaggio (costa Mana).
-- La Domenica alle 20:00 appare un *BOSS* molto potente!
-
-🔹 *COMANDI UTILI*
-- `info`: Visualizza le tue statistiche.
-- `Nome in Game`: Imposta il tuo nickname di gioco.
-- `classifica`: Vedi la top 10.
-"""
-        self.bot.reply_to(self.message, msg, parse_mode='markdown')
+        # Redirect to improved guide system
+        self.handle_guide()
 
     def handle_guide_costs(self):
         msg = """💰 *LISTINO & GUIDA ACQUISTI* 💰
@@ -1134,8 +1104,17 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         msg += f"💙 **Mana**: {utente.mana}/{utente.max_mana}\n"
         msg += f"⚔️ **Danno Base**: {utente.base_damage}\n"
         
+        # Advanced Stats (always show)
+        user_resistance = getattr(utente, 'resistance', 0) or 0
+        user_crit = getattr(utente, 'crit_chance', 0) or 0
+        user_speed = getattr(utente, 'speed', 0) or 0
+        
+        msg += f"🛡️ **Resistenza**: {user_resistance}% (MAX 75%)\n"
+        msg += f"💥 **Critico**: {user_crit}%\n"
+        msg += f"⚡ **Velocità**: {user_speed}\n"
+        
         if utente.stat_points > 0:
-            msg += f"📊 **Punti Stat**: {utente.stat_points} (usa /stats)\n"
+            msg += f"\n📊 **Punti Stat**: {utente.stat_points} (usa /stats)\n"
             
         # Check fatigue
         if user_service.check_fatigue(utente):
@@ -1717,6 +1696,11 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         saga_row.append(types.InlineKeyboardButton(f"📚 {char_group}", callback_data=f"saga_nav|{char_group}|0"))
         markup.row(*saga_row)
         
+        # Row 4: Season Filter Button (Dragon Ball)
+        season_row = []
+        season_row.append(types.InlineKeyboardButton("🐉 Personaggi della Stagione", callback_data="saga_nav|Dragon Ball|0"))
+        markup.row(*season_row)
+        
         if is_unlocked:
             if not is_equipped:
                 markup.add(types.InlineKeyboardButton("✅ Equipaggia", callback_data=f"char_select|{char_id}"))
@@ -1793,6 +1777,23 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         else:
             self.bot.reply_to(message, "Personaggio non trovato.", reply_markup=get_start_markup(self.chatid))
             self.handle_shop_characters()
+            
+    def handle_guide(self):
+        """Show guide menu"""
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        markup.add(
+            types.InlineKeyboardButton("⚔️ Sistema di Combattimento", callback_data="guide|fight_system"),
+            types.InlineKeyboardButton("🏰 Dungeon", callback_data="guide|dungeons"),
+            types.InlineKeyboardButton("📊 Allocazione Statistiche", callback_data="guide|stats_allocation"),
+            types.InlineKeyboardButton("🍂 Sistema Stagionale", callback_data="guide|season_system"),
+            types.InlineKeyboardButton("🏆 Achievements", callback_data="guide|achievements")
+        )
+        
+        msg = "📚 **GUIDE DI GIOCO** 📚\n\n"
+        msg += "Benvenuto nella sezione guide! Qui puoi imparare tutto su aROMa RPG.\n"
+        msg += "Seleziona un argomento per leggere la guida completa:"
+        
+        self.bot.reply_to(self.message, msg, reply_markup=markup, parse_mode='markdown')
 
     def handle_spawn(self):
         utente = user_service.get_user(self.chatid)
@@ -1880,6 +1881,11 @@ Per acquistare un gioco che vedi in un canale o gruppo:
             if command.lower() in message.text.lower():
                 handler()
                 return
+        
+        # Check for guide command explicitly if not in dict (or add to dict)
+        if message.text.lower().startswith("/guida") or message.text.lower().startswith("/guide"):
+            self.handle_guide()
+            return
 
 
 @bot.message_handler(content_types=['text'] + util.content_type_media)
@@ -2025,20 +2031,22 @@ def any(message):
     user_service.track_activity(message.from_user.id, message.chat.id)
     
     # Passive EXP gain: 1-10 EXP per message (silent, no notification)
-    passive_exp = random.randint(1, 10)
-    level_up_info = user_service.add_exp_by_id(message.from_user.id, passive_exp)
-    
-    # Track chat EXP for achievements
-    new_chat_exp_total = user_service.add_chat_exp(message.from_user.id, passive_exp)
-    
-    achievement_tracker = AchievementTracker()
-    achievement_tracker.on_chat_exp(
-        message.from_user.id,
-        new_chat_exp_total,
-        increment=passive_exp
-    )
-    # Process achievements immediately
-    achievement_tracker.process_pending_events(limit=5)
+    # ONLY IN OFFICIAL GROUP
+    if message.chat.id == GRUPPO_AROMA:
+        passive_exp = random.randint(1, 10)
+        level_up_info = user_service.add_exp_by_id(message.from_user.id, passive_exp)
+        
+        # Track chat EXP for achievements
+        new_chat_exp_total = user_service.add_chat_exp(message.from_user.id, passive_exp)
+        
+        achievement_tracker = AchievementTracker()
+        achievement_tracker.on_chat_exp(
+            message.from_user.id,
+            new_chat_exp_total,
+            increment=passive_exp
+        )
+        # Process achievements immediately
+        achievement_tracker.process_pending_events(limit=5)
     
     # Sunday bonus: 10 Wumpa when you write on Sunday
     if datetime.datetime.today().weekday() == 6:  # Sunday
@@ -2296,6 +2304,11 @@ def handle_inline_buttons(call):
         saga_row = []
         saga_row.append(types.InlineKeyboardButton(f"📚 {char_group}", callback_data=f"saga_nav|{char_group}|0"))
         markup.row(*saga_row)
+        
+        # Row 4: Season Filter Button (Dragon Ball)
+        season_row = []
+        season_row.append(types.InlineKeyboardButton("🐉 Personaggi della Stagione", callback_data="saga_nav|Dragon Ball|0"))
+        markup.row(*season_row)
         
         if is_unlocked:
             if not is_equipped:
@@ -3379,6 +3392,31 @@ def handle_inline_buttons(call):
         parts = action.split("|")
         wish_number = int(parts[1])
         wish_choice = parts[2]
+        
+    elif action.startswith("guide|"):
+        # Show specific guide
+        guide_name = action.split("|")[1]
+        
+        try:
+            file_path = os.path.join("guides", f"{guide_name}.md")
+            if os.path.exists(file_path):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                
+                # Split content if too long (Telegram limit 4096)
+                if len(content) > 4000:
+                    parts = [content[i:i+4000] for i in range(0, len(content), 4000)]
+                    for part in parts:
+                        bot.send_message(user_id, part, parse_mode='markdown')
+                else:
+                    bot.send_message(user_id, content, parse_mode='markdown')
+                    
+                bot.answer_callback_query(call.id, "📖 Guida aperta!")
+            else:
+                bot.answer_callback_query(call.id, "❌ Guida non trovata!", show_alert=True)
+        except Exception as e:
+            print(f"Error showing guide: {e}")
+            bot.answer_callback_query(call.id, "❌ Errore nell'apertura della guida", show_alert=True)
         
         # Grant this wish
         msg = wish_service.grant_porunga_wish(utente, wish_choice, wish_number)

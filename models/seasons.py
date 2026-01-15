@@ -21,7 +21,7 @@ class Season(Base):
     final_reward_name = Column(String, nullable=True)  # Name of the ultimate skin/character
 
 class SeasonProgress(Base):
-    """Tracks user progress in a specific season"""
+    """Tracks user progress in a specific season (Gradi)"""
     __tablename__ = "season_progress"
     
     id = Column(Integer, primary_key=True)
@@ -29,7 +29,7 @@ class SeasonProgress(Base):
     season_id = Column(Integer, ForeignKey('season.id'))
     
     current_exp = Column(Integer, default=0)
-    current_level = Column(Integer, default=1)
+    current_level = Column(Integer, default=1)  # This is the "Grado"
     
     # Track if user has purchased the premium pass for this season
     has_premium_pass = Column(Boolean, default=False)
@@ -37,13 +37,13 @@ class SeasonProgress(Base):
     last_update = Column(DateTime, default=datetime.datetime.now)
 
 class SeasonReward(Base):
-    """Defines rewards for seasonal levels"""
+    """Defines rewards for seasonal ranks (Gradi)"""
     __tablename__ = "season_reward"
     
     id = Column(Integer, primary_key=True)
     season_id = Column(Integer, ForeignKey('season.id'))
     
-    level_required = Column(Integer, nullable=False)
+    level_required = Column(Integer, nullable=False)  # Grado required
     reward_type = Column(String, nullable=False)  # skin, character, points, item
     reward_value = Column(String, nullable=False)  # ID or amount
     reward_name = Column(String, nullable=False)  # Display name

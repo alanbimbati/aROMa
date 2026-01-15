@@ -34,13 +34,18 @@ class Utente(Base):
     stat_points = Column(Integer, default=0)
     last_health_restore = Column(DateTime, nullable=True)
     
+    # Advanced Stats
+    resistance = Column(Integer, default=0)  # Damage reduction %
+    crit_chance = Column(Integer, default=0)  # Critical hit chance %
+    speed = Column(Integer, default=0)  # Turn order / attack frequency
+    
     # Stat allocations (tracked separately for reset)
     allocated_health = Column(Integer, default=0)
     allocated_mana = Column(Integer, default=0)
     allocated_damage = Column(Integer, default=0)
     allocated_speed = Column(Integer, default=0)
     allocated_resistance = Column(Integer, default=0)
-    allocated_crit_rate = Column(Integer, default=0)
+    allocated_crit = Column(Integer, default=0)
     last_stat_reset = Column(DateTime, nullable=True)  # Track last reset for cooldown
     last_attack_time = Column(DateTime, nullable=True)
     

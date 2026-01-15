@@ -510,7 +510,7 @@ class UserService:
         return new_mana
     
     def allocate_stat_point(self, utente, stat_type):
-        """Allocate a stat point to HP, Mana, or Damage"""
+        """Allocate a stat point to HP, Mana, Damage, Resistance, Crit, or Speed"""
         if utente.stat_points <= 0:
             return False, "Non hai punti statistica disponibili!"
         
@@ -528,6 +528,22 @@ class UserService:
             updates['base_damage'] = utente.base_damage + 2
             updates['allocated_damage'] = utente.allocated_damage + 1
             msg = "Base Damage +2!"
+        elif stat_type == "resistance":
+            # Cap resistance at 75% to prevent immortality
+            current_resistance = getattr(utente, 'resistance', 0) or 0
+            if current_resistance >= 75:
+                return False, "⚠️ Resistenza massima raggiunta (75%)!"
+            updates['resistance'] = current_resistance + 1
+            updates['allocated_resistance'] = (utente.allocated_resistance or 0) + 1
+            msg = "Resistenza +1%!"
+        elif stat_type == "crit":
+            updates['crit_chance'] = (utente.crit_chance or 0) + 1
+            updates['allocated_crit'] = (utente.allocated_crit or 0) + 1
+            msg = "Critico +1%!"
+        elif stat_type == "speed":
+            updates['speed'] = (utente.speed or 0) + 5
+            updates['allocated_speed'] = (utente.allocated_speed or 0) + 1
+            msg = "Velocità +5!"
         else:
             return False, "Statistica non valida!"
         
@@ -541,8 +557,15 @@ class UserService:
         if paid and utente.points < RESET_COST:
             return False, f"Non hai abbastanza {PointsName}! Costo: {RESET_COST}"
         
-        # Calculate stats to refund
-        points_to_refund = utente.allocated_health + utente.allocated_mana + utente.allocated_damage
+        # Calculate stats to refund (including new stats)
+        points_to_refund = (
+            (utente.allocated_health or 0) + 
+            (utente.allocated_mana or 0) + 
+            (utente.allocated_damage or 0) +
+            (utente.allocated_resistance or 0) +
+            (utente.allocated_crit or 0) +
+            (utente.allocated_speed or 0)
+        )
         
         # Reset to base values
         updates = {
@@ -552,6 +575,12 @@ class UserService:
             'allocated_health': 0,
             'allocated_mana': 0,
             'allocated_damage': 0,
+            'allocated_resistance': 0,
+            'allocated_crit': 0,
+            'allocated_speed': 0,
+            'resistance': 0,
+            'crit_chance': 0,
+            'speed': 0,
             'stat_points': utente.stat_points + points_to_refund
         }
         
