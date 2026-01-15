@@ -9,7 +9,7 @@ from services.character_service import CharacterService
 class SeasonManager:
     """Manages seasonal progression and rewards"""
     
-    EXP_PER_LEVEL = 1000  # EXP needed for each seasonal level
+    MAX_RANK = 100        # Maximum seasonal rank
     
     def __init__(self):
         self.db = Database()
@@ -39,18 +39,29 @@ class SeasonManager:
             ).first()
             
             if not progress:
+                # Check if user is premium globally
+                user = self.user_service.get_user(user_id)
+                is_premium = user.premium == 1 if user else False
+                
                 progress = SeasonProgress(
                     user_id=user_id,
                     season_id=season_id,
                     current_exp=0,
                     current_level=1,
-                    has_premium_pass=False,
+                    has_premium_pass=is_premium, # Auto-grant if premium
                     last_update=datetime.datetime.now()
                 )
                 session.add(progress)
                 session.commit()
                 # Refresh to get ID
                 session.refresh(progress)
+            else:
+                # Sync premium status if not already set
+                if not progress.has_premium_pass:
+                    user = self.user_service.get_user(user_id)
+                    if user and user.premium == 1:
+                        progress.has_premium_pass = True
+                        session.commit()
                 
             return progress
         finally:
@@ -86,12 +97,24 @@ class SeasonManager:
             
             # Check for level up
             leveled_up = False
-            # Level up logic: each level requires EXP_PER_LEVEL
-            while progress.current_exp >= self.EXP_PER_LEVEL:
-                progress.current_exp -= self.EXP_PER_LEVEL
+            
+            # Dynamic EXP Curve: 100 * (current_rank ** 2)
+            def get_exp_required(rank):
+                return 100 * (rank ** 2)
+                
+            next_rank_exp = get_exp_required(progress.current_level)
+            
+            while progress.current_level < self.MAX_RANK and progress.current_exp >= next_rank_exp:
+                progress.current_exp -= next_rank_exp
                 progress.current_level += 1
                 leveled_up = True
-                print(f"User {user_id} leveled up to seasonal level {progress.current_level}")
+                print(f"User {user_id} reached seasonal Grado {progress.current_level}")
+                # Update requirement for next loop
+                next_rank_exp = get_exp_required(progress.current_level)
+            
+            # If at max rank, cap EXP
+            if progress.current_level >= self.MAX_RANK:
+                progress.current_exp = 0
                 
             session.commit()
             
@@ -107,7 +130,7 @@ class SeasonManager:
             session.close()
             
     def check_and_award_rewards(self, user_id, season_id, current_level):
-        """Check and award rewards up to current level"""
+        """Check and award rewards up to current Grado"""
         session = self.db.get_session()
         try:
             progress = session.query(SeasonProgress).filter_by(
@@ -118,7 +141,7 @@ class SeasonManager:
             if not progress:
                 return []
                 
-            # Get all rewards for this season up to current level
+            # Get all rewards for this season up to current rank
             rewards = session.query(SeasonReward).filter(
                 SeasonReward.season_id == season_id,
                 SeasonReward.level_required <= current_level
@@ -243,6 +266,12 @@ class SeasonManager:
                     'has_premium': progress.has_premium_pass
                 }
                 
+                # Double check sync (visual only here, DB update happens in get_or_create or purchase)
+                if not progress_data['has_premium']:
+                     user = self.user_service.get_user(user_id)
+                     if user and user.premium == 1:
+                         progress_data['has_premium'] = True
+                
             # Get next rewards
             next_rewards = session.query(SeasonReward).filter(
                 SeasonReward.season_id == season.id,
@@ -254,7 +283,7 @@ class SeasonManager:
                 'end_date': season.end_date,
                 'progress': progress_data,
                 'next_rewards': next_rewards,
-                'exp_per_level': self.EXP_PER_LEVEL
+                'exp_per_level': 100 * (progress_data['level'] ** 2) # Dynamic requirement for current rank
             }
         finally:
             session.close()

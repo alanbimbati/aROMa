@@ -176,7 +176,23 @@ class AchievementTracker:
         try:
             import main
             if hasattr(main, 'bot'):
+                # Private notification
                 main.bot.send_message(user_id, msg, parse_mode='markdown')
+                
+                # Public announcement in official group
+                # Get user name
+                from services.user_service import UserService
+                user_service = UserService()
+                user = user_service.get_user(user_id)
+                username = user.username if user and user.username else (user.nome if user else "Un utente")
+                
+                public_msg = f"🏆 **ACHIEVEMENT SBLOCCATO!** 🏆\n\n"
+                public_msg += f"👤 **{username}** ha sbloccato:\n"
+                public_msg += f"✨ **{achievement_name}** ({tier_name.capitalize()})\n"
+                public_msg += f"_{achievement_description}_"
+                
+                from settings import GRUPPO_AROMA
+                main.bot.send_message(GRUPPO_AROMA, public_msg, parse_mode='markdown')
         except Exception as e:
             print(f"[WARNING] Could not send notification: {e}")
 

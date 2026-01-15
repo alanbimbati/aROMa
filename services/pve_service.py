@@ -388,7 +388,7 @@ class PvEService:
                 
                 # Base crit from char + allocated crit rate
                 char_crit = char.get('crit_chance', 5) if char else 5
-                allocated_crit = getattr(user, 'allocated_crit_rate', 0)
+                allocated_crit = getattr(user, 'allocated_crit', 0)
                 self.crit_chance = char_crit + allocated_crit
                 
                 self.crit_multiplier = char.get('crit_multiplier', 1.5) if char else 1.5

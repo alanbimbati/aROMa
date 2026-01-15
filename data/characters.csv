@@ -1,286 +1,286 @@
-id,nome,livello,lv_premium,exp_required,special_attack_name,special_attack_damage,special_attack_mana_cost,price,description,character_group,max_concurrent_owners,is_pokemon,elemental_type,crit_chance,crit_multiplier,required_character_id,speed,is_transformation,base_character_id,transformation_mana_cost,transformation_duration_days
-1,Chocobo,1,0,100,Beak Peck,20,10,0,Il chocobo di Final Fantasy,Final Fantasy,-1,0,Normal,5,1.5,,51,0,,,
-2,Pichu,1,2,100,Thunder Shock,22,12,200,Il baby Pokemon elettrico,Pokemon,3,1,Normal,5,1.5,,51,0,,,
-3,Slime,1,2,100,Bounce,18,8,200,Lo slime di Dragon Quest,Dragon Quest,3,0,Normal,5,1.5,,51,0,,,
-4,Pikachu,2,2,235,Thunderbolt,35,15,210,Il Pokemon simbolo,Pokemon,3,1,Normal,5,1.5,,52,1,2,80,0
-5,Bulbasaur,2,2,235,Vine Whip,32,14,210,Lo starter erba,Pokemon,3,1,Normal,5,1.5,,52,0,,,
-6,Squirtle,2,2,235,Water Gun,32,14,210,Lo starter acqua,Pokemon,3,1,Normal,5,1.5,,52,0,,,
-7,Charmander,2,2,235,Ember,32,14,210,Lo starter fuoco,Pokemon,3,1,Normal,5,1.5,,52,0,,,
-8,Crash Bandicoot,3,0,505,Spin Attack,45,18,230,L'eroe marsupiale,Crash Bandicoot,1,0,Normal,5,1.5,,53,0,,,
-9,Spyro,3,2,505,Flame Breath,48,20,230,Il draghetto viola,Spyro,1,0,Normal,5,1.5,,53,0,,,
-10,Sonic,3,1,505,Sonic Spin,50,22,230,Il riccio blu veloce (Premium),Sonic,1,0,Normal,5,1.5,,83,0,,,
-11,Raichu,4,2,810,Thunder,55,25,270,L'evoluzione di Pikachu,Pokemon,3,1,Normal,5,1.5,,54,1,4,120,0
-12,Ivysaur,4,2,810,Razor Leaf,52,23,270,L'evoluzione di Bulbasaur,Pokemon,3,1,Normal,5,1.5,,54,1,5,100,0
-13,Wartortle,4,2,810,Bubble Beam,52,23,270,L'evoluzione di Squirtle,Pokemon,3,1,Normal,5,1.5,,54,1,6,100,0
-14,Charmeleon,4,2,810,Flamethrower,52,23,270,Il Pokemon fuoco evoluto,Pokemon,3,1,Normal,5,1.5,,54,1,7,100,0
-15,Mario,5,1,1250,Fire Ball,60,28,330,L'idraulico italiano (Premium),Super Mario,1,0,Normal,5,1.5,,65,0,,,
-16,Luigi,5,2,1250,Thunder Hand,58,26,330,Il fratello di Mario,Super Mario,1,0,Normal,5,1.5,,65,0,,,
-17,Yoshi,5,2,1250,Egg Throw,55,24,330,Il dinosauro verde,Super Mario,1,0,Normal,5,1.5,,65,0,,,
-18,Tails,6,2,1725,Tail Swipe,65,30,400,La volpe a due code,Sonic,1,0,Normal,5,1.5,,86,0,,,
-19,Knuckles,6,2,1725,Power Punch,68,32,400,L'echidna rosso,Sonic,1,0,Normal,5,1.5,,86,0,,,
-20,Shadow,6,1,1725,Chaos Spear,75,35,400,Il riccio nero (Premium),Sonic,1,0,Normal,5,1.5,,86,0,,,
-21,Venusaur,7,2,2335,Solar Beam,80,38,490,Il Pokemon erba finale,Pokemon,3,1,Normal,5,1.5,,57,1,12,150,0
-22,Blastoise,7,2,2335,Hydro Pump,80,38,490,Il Pokemon acqua finale,Pokemon,3,1,Normal,5,1.5,,57,1,13,150,0
-23,Charizard,7,2,2335,Fire Blast,85,40,490,Il drago di fuoco (Premium),Pokemon,3,1,Normal,5,1.5,,57,1,14,150,0
-24,Link,8,1,2980,Master Sword,90,42,590,L'eroe di Hyrule (Premium),Zelda,1,0,Normal,5,1.5,,58,0,,,
-25,Zelda,8,2,2980,Light Arrow,85,40,590,La principessa di Hyrule,Zelda,1,0,Normal,5,1.5,,58,0,,,
-26,Ganondorf,8,2,2980,Dark Magic,88,41,590,Il re del male,Zelda,1,0,Normal,5,1.5,,48,0,,,
-27,Samus,9,1,3760,Charge Beam,95,45,710,La cacciatrice galattica (Premium),Metroid,1,0,Normal,5,1.5,,59,0,,,
-28,Ridley,9,2,3760,Plasma Breath,92,43,710,Il drago spaziale,Metroid,1,0,Normal,5,1.5,,59,0,,,
-29,Dark Samus,9,2,3760,Phazon Beam,90,42,710,Il clone oscuro,Metroid,1,0,Normal,5,1.5,,59,0,,,
-30,Cloud,10,1,4575,Omnislash,105,50,850,Il soldato SOLDIER (Premium),Final Fantasy,1,0,Normal,5,1.5,,60,0,,,
-31,Tifa,10,2,4575,Final Heaven,100,48,850,La lottatrice di FFVII,Final Fantasy,1,0,Normal,5,1.5,,60,0,,,
-32,Sephiroth,10,2,4575,Octaslash,102,49,850,L'angelo monoala,Final Fantasy,1,0,Normal,5,1.5,,60,0,,,
-33,Squall,11,2,5525,Renzokuken,110,52,1000,Il SeeD di FFVIII,Final Fantasy,1,0,Normal,5,1.5,,61,0,,,
-34,Rinoa,11,2,5525,Angel Wing,108,51,1000,La strega di FFVIII,Final Fantasy,1,0,Normal,5,1.5,,61,0,,,
-35,Seifer,11,2,5525,No Mercy,105,50,1000,Il rivale di Squall,Final Fantasy,1,0,Normal,5,1.5,,61,0,,,
-36,Tidus,12,1,6510,Blitz Ace,120,55,1170,L'eroe di FFX (Premium),Final Fantasy,1,0,Normal,5,1.5,,62,0,,,
-37,Yuna,12,2,6510,Grand Summon,115,53,1170,L'evocatrice di FFX,Final Fantasy,1,0,Normal,5,1.5,,62,0,,,
-38,Auron,12,2,6510,Tornado,118,54,1170,Il guardiano leggendario,Final Fantasy,1,0,Normal,5,1.5,,62,0,,,
-39,Dante,13,1,7630,Devil Trigger,130,58,1350,Il cacciatore di demoni (Premium),Devil May Cry,1,0,Normal,5,1.5,,63,0,,,
-40,Vergil,13,2,7630,Judgement Cut,125,56,1350,Il fratello di Dante,Devil May Cry,1,0,Normal,5,1.5,,63,0,,,
-41,Nero,13,2,7630,Devil Bringer,122,55,1350,Il giovane cacciatore,Devil May Cry,1,0,Normal,5,1.5,,63,0,,,
-42,Kratos,14,1,8785,Spartan Rage,140,62,1550,Il dio della guerra (Premium),God of War,1,0,Normal,5,1.5,,64,0,,,
-43,Atreus,14,2,8785,Runic Summon,132,59,1550,Il figlio di Kratos,God of War,1,0,Normal,5,1.5,,64,0,,,
-44,Freya,14,2,8785,Vanir Magic,135,60,1550,La dea Vanir,God of War,1,0,Normal,5,1.5,,64,0,,,
-45,Ryu,15,2,10075,Hadouken,145,65,1770,Il guerriero del drago,Street Fighter,1,0,Normal,5,1.5,,65,0,,,
-46,Ken,15,2,10075,Shoryuken,143,64,1770,Il maestro del drago,Street Fighter,1,0,Normal,5,1.5,,65,0,,,
-47,Akuma,15,1,10075,Raging Demon,155,68,1770,Il demone furioso (Premium),Street Fighter,1,0,Normal,5,1.5,,65,0,,,
-48,Scorpion,16,2,11400,Spear Strike,150,66,2000,Il ninja spettro,Mortal Kombat,1,0,Normal,5,1.5,,66,0,,,
-49,Sub-Zero,16,2,11400,Ice Ball,148,65,2000,Il ninja del ghiaccio,Mortal Kombat,1,0,Normal,5,1.5,,66,0,,,
-50,Raiden,16,1,11400,Lightning Strike,160,70,2000,Il dio del tuono (Premium),Mortal Kombat,1,0,Normal,5,1.5,,66,0,,,
-51,Solid Snake,17,1,12860,Rocket Launcher,165,72,2250,Il soldato leggendario (Premium),Metal Gear,1,0,Normal,5,1.5,,67,0,,,
-52,Big Boss,17,2,12860,CQC Master,162,71,2250,Il padre dei soldati,Metal Gear,1,0,Normal,5,1.5,,67,0,,,
-53,Raiden MGS,17,2,12860,High Frequency Blade,160,70,2250,Il cyborg ninja,Metal Gear,1,0,Normal,5,1.5,,67,0,,,
-54,Mega Man,18,2,14355,Mega Buster,170,75,2510,Il robot blu,Mega Man,1,0,Normal,5,1.5,,68,0,,,
-55,Zero,18,2,14355,Z-Saber,168,74,2510,Il maverick hunter rosso,Mega Man,1,0,Normal,5,1.5,,68,0,,,
-56,X,18,1,14355,Charged Shot,180,78,2510,Il reploid blu (Premium),Mega Man,1,0,Normal,5,1.5,,68,0,,,
-57,Ratchet,19,2,15985,RYNO,175,77,2790,Il lombax meccanico,Ratchet & Clank,1,0,Normal,5,1.5,,69,0,,,
-58,Clank,19,2,15985,Time Bomb,172,76,2790,Il robot assistente,Ratchet & Clank,1,0,Normal,5,1.5,,69,0,,,
-59,Dr. Nefarious,19,1,15985,Annihilator,185,80,2790,Lo scienziato pazzo (Premium),Ratchet & Clank,1,0,Normal,5,1.5,,69,0,,,
-60,Goku,20,1,17650,Kamehameha,190,82,3090,Il Saiyan della Terra (Premium),Dragon Ball,1,0,Normal,5,1.5,,70,0,,,
-61,Vegeta,20,2,17650,Galick Gun,185,80,3090,Il principe dei Saiyan,Dragon Ball,1,0,Normal,5,1.5,,70,0,,,
-62,Piccolo,20,2,17650,Special Beam Cannon,182,79,3090,Il Namecciano guerriero,Dragon Ball,1,0,Normal,5,1.5,,70,0,,,
-63,Nathan Drake,21,2,19450,Grenade Launcher,195,85,3400,Il cacciatore di tesori,Uncharted,1,0,Normal,5,1.5,,71,0,,,
-64,Chloe Frazer,21,2,19450,Sniper Shot,192,84,3400,La cacciatrice australiana,Uncharted,1,0,Normal,5,1.5,,71,0,,,
-65,Victor Sullivan,21,1,19450,Cigar Bomb,200,87,3400,Il mentore veterano (Premium),Uncharted,1,0,Normal,5,1.5,,71,0,,,
-66,Aloy,22,1,21285,Triple Shot,205,90,3730,La cacciatrice di macchine (Premium),Horizon,1,0,Normal,5,1.5,,72,0,,,
-67,Erend,22,2,21285,Hammer Slam,200,88,3730,Il guerriero Oseram,Horizon,1,0,Normal,5,1.5,,72,0,,,
-68,Varl,22,2,21285,Spear Thrust,198,87,3730,Il cacciatore Nora,Horizon,1,0,Normal,5,1.5,,72,0,,,
-69,Joel,23,2,23255,Molotov,210,92,4070,Il sopravvissuto,The Last of Us,1,0,Normal,5,1.5,,73,0,,,
-70,Ellie,23,2,23255,Bow Shot,208,91,4070,La ragazza immune,The Last of Us,1,0,Normal,5,1.5,,73,0,,,
-71,Abby,23,1,23255,Pipe Swing,220,95,4070,La soldato WLF (Premium),The Last of Us,1,0,Normal,5,1.5,,73,0,,,
-72,Geralt,24,1,25260,Igni,225,98,4430,Lo strigo di Rivia (Premium),The Witcher,1,0,Normal,5,1.5,,74,0,,,
-73,Ciri,24,2,25260,Blink Strike,220,96,4430,La principessa di Cintra,The Witcher,1,0,Normal,5,1.5,,74,0,,,
-74,Yennefer,24,2,25260,Lightning Bolt,218,95,4430,La maga di Vengerberg,The Witcher,1,0,Normal,5,1.5,,74,0,,,
-75,Ezio,25,1,27400,Hidden Blade,235,102,4810,L'assassino italiano (Premium),Assassin's Creed,1,0,Normal,5,1.5,,75,0,,,
-76,Altair,25,2,27400,Eagle Strike,230,100,4810,Il primo assassino,Assassin's Creed,1,0,Normal,5,1.5,,75,0,,,
-77,Connor,25,2,27400,Tomahawk Throw,228,99,4810,L'assassino nativo,Assassin's Creed,1,0,Normal,5,1.5,,75,0,,,
-78,Goku SSJ,26,2,29575,Super Kamehameha,250,108,5200,Goku Super Saiyan (Premium),Dragon Ball,1,0,Normal,5,1.5,,76,1,60,50,2
-79,Vegeta SSJ,26,2,29575,Big Bang Attack,245,106,5200,Vegeta Super Saiyan,Dragon Ball,1,0,Normal,5,1.5,,76,1,61,50,2
-80,Gohan SSJ,26,2,29575,Masenko,242,105,5200,Il figlio di Goku,Dragon Ball,1,0,Normal,5,1.5,,76,1,281,50,2
-81,Master Chief,27,1,31885,Spartan Laser,260,112,5610,Lo Spartan-117 (Premium),Halo,1,0,Normal,5,1.5,,77,0,,,
-82,Arbiter,27,2,31885,Energy Sword,255,110,5610,L'elite Sangheili,Halo,1,0,Normal,5,1.5,,77,0,,,
-83,Cortana,27,2,31885,AI Hack,252,109,5610,L'intelligenza artificiale,Halo,1,0,Normal,5,1.5,,77,0,,,
-84,Doom Slayer,28,1,34230,BFG 9000,275,118,6030,Il massacratore (Premium),Doom,1,0,Normal,5,1.5,,78,0,,,
-85,Samuel Hayden,28,2,34230,Argent Beam,268,115,6030,Il direttore cyborg,Doom,1,0,Normal,5,1.5,,78,0,,,
-86,Vega,28,2,34230,Data Surge,265,114,6030,L'IA di Marte,Doom,1,0,Normal,5,1.5,,78,0,,,
-87,Shepard,29,2,36710,Biotic Charge,280,122,6470,Il comandante N7,Mass Effect,1,0,Normal,5,1.5,,79,0,,,
-88,Garrus,29,2,36710,Sniper Calibration,278,121,6470,Il Turian tiratore,Mass Effect,1,0,Normal,5,1.5,,79,0,,,
-89,Liara,29,1,36710,Singularity,290,125,6470,L'Asari archeologa (Premium),Mass Effect,1,0,Normal,5,1.5,,79,0,,,
-90,Goku SSJ2,30,2,39225,Super Kamehameha x2,300,130,6930,Goku Super Saiyan 2 (Premium),Dragon Ball,1,0,Normal,5,1.5,,80,1,78,80,2
-91,Vegeta SSJ2,30,2,39225,Final Flash,295,128,6930,Vegeta Super Saiyan 2,Dragon Ball,1,0,Normal,5,1.5,,80,1,79,80,2
-92,Gohan SSJ2,30,2,39225,Father-Son Kamehameha,292,127,6930,Gohan adolescente,Dragon Ball,1,0,Normal,5,1.5,,80,1,80,80,2
-93,Kirby,31,2,41875,Inhale,305,133,7400,La palla rosa,Kirby,1,0,Normal,5,1.5,,81,0,,,
-94,Meta Knight,31,2,41875,Galaxia Darkness,308,134,7400,Il cavaliere mascherato,Kirby,1,0,Normal,5,1.5,,81,0,,,
-95,King Dedede,31,1,41875,Waddle Dee Army,315,137,7400,Il re autoproclamato (Premium),Kirby,1,0,Normal,5,1.5,,81,0,,,
-96,Fox McCloud,32,1,44560,Landmaster,320,140,7890,Il pilota della Star Fox (Premium),Star Fox,1,0,Normal,5,1.5,,82,0,,,
-97,Falco,32,2,44560,Arwing Strike,315,138,7890,Il pilota asso,Star Fox,1,0,Normal,5,1.5,,82,0,,,
-98,Wolf,32,2,44560,Wolfen Assault,312,137,7890,Il rivale mercenario,Star Fox,1,0,Normal,5,1.5,,82,0,,,
-99,Sora,33,1,47380,Ragnarok,330,145,8390,Il portachiavi (Premium),Kingdom Hearts,1,0,Normal,5,1.5,,83,0,,,
-100,Riku,33,2,47380,Dark Aura,325,143,8390,L'amico oscuro,Kingdom Hearts,1,0,Normal,5,1.5,,83,0,,,
-101,Kairi,33,2,47380,Light Burst,322,142,8390,La principessa del cuore,Kingdom Hearts,1,0,Normal,5,1.5,,83,0,,,
-102,Jak,34,2,50235,Morph Gun,335,148,8910,L'eroe eco,Jak and Daxter,1,0,Normal,5,1.5,,84,0,,,
-103,Daxter,34,2,50235,Bug Spray,332,147,8910,L'ottsel parlante,Jak and Daxter,1,0,Normal,5,1.5,,84,0,,,
-104,Torn,34,1,50235,Scatter Gun,345,152,8910,Il comandante della resistenza (Premium),Jak and Daxter,1,0,Normal,5,1.5,,84,0,,,
-105,Banjo,35,2,53225,Breegull Bash,350,155,9450,L'orso avventuriero,Banjo-Kazooie,1,0,Normal,5,1.5,,85,0,,,
-106,Kazooie,35,2,53225,Egg Shot,348,154,9450,L'uccello sarcastico,Banjo-Kazooie,1,0,Normal,5,1.5,,85,0,,,
-107,Mumbo Jumbo,35,1,53225,Transformation Magic,360,158,9450,Lo sciamano (Premium),Banjo-Kazooie,1,0,Normal,5,1.5,,85,0,,,
-108,Goku SSJ3,36,2,56250,Dragon Fist,370,162,10000,Goku Super Saiyan 3 (Premium),Dragon Ball,1,0,Normal,5,1.5,,86,1,90,120,2
-109,Vegeta SSJ3,36,2,56250,Final Shine Attack,365,160,10000,Vegeta Super Saiyan 3,Dragon Ball,1,0,Normal,5,1.5,,86,1,91,120,2
-110,Gotenks SSJ3,36,2,56250,Super Ghost Kamikaze,362,159,10000,La fusione di Goten e Trunks,Dragon Ball,1,0,Normal,5,1.5,,86,1,92,120,2
-111,Rayman,37,2,59410,Lockjaw,375,165,10570,L'eroe senza braccia,Rayman,1,0,Normal,5,1.5,,87,0,,,
-112,Globox,37,2,59410,Rain Dance,372,164,10570,L'amico blu,Rayman,1,0,Normal,5,1.5,,87,0,,,
-113,Barbara,37,1,59410,Berserker Spin,385,168,10570,La guerriera vichinga (Premium),Rayman,1,0,Normal,5,1.5,,87,0,,,
-114,Lara Croft,38,1,62605,Dual Pistols,390,172,11150,L'archeologa avventuriera (Premium),Tomb Raider,1,0,Normal,5,1.5,,88,0,,,
-115,Sam Nishimura,38,2,62605,Climbing Axe,385,170,11150,L'amica documentarista,Tomb Raider,1,0,Normal,5,1.5,,88,0,,,
-116,Jonah Maiava,38,2,62605,Heavy Rifle,382,169,11150,Il compagno fidato,Tomb Raider,1,0,Normal,5,1.5,,88,0,,,
-117,Bayonetta,39,1,65935,Wicked Weave,400,178,11750,La strega Umbra (Premium),Bayonetta,1,0,Normal,5,1.5,,89,0,,,
-118,Jeanne,39,2,65935,All 4 One,395,176,11750,La rivale Umbra,Bayonetta,1,0,Normal,5,1.5,,89,0,,,
-119,Rodin,39,2,65935,Demon Summon,392,175,11750,Il fabbro demoniaco,Bayonetta,1,0,Normal,5,1.5,,89,0,,,
-120,Goku SSJ4,40,2,70000,10x Kamehameha,420,185,12370,Goku Super Saiyan 4 (Premium),Dragon Ball,1,0,Normal,5,1.5,,90,1,108,150,2
-121,Vegeta SSJ4,40,2,70000,Final Shine,415,183,12370,Vegeta Super Saiyan 4,Dragon Ball,1,0,Normal,5,1.5,,90,1,109,150,2
-122,Gogeta SSJ4,40,2,70000,Big Bang Kamehameha,412,182,12370,La fusione Saiyan,Dragon Ball,1,0,Normal,5,1.5,,90,0,,,
-123,Ness,41,2,75000,PK Thunder,425,188,13000,Il ragazzo PSI,Earthbound,1,0,Normal,5,1.5,,91,0,,,
-124,Lucas,41,2,75000,PK Love,422,187,13000,Il ragazzo sensitivo,Earthbound,1,0,Normal,5,1.5,,91,0,,,
-125,Porky,41,1,75000,Mech Assault,435,192,13000,L'antagonista grasso (Premium),Earthbound,1,0,Normal,5,1.5,,91,0,,,
-126,Pit,42,2,80000,Palutena Bow,440,195,13650,L'angelo di Skyworld,Kid Icarus,1,0,Normal,5,1.5,,92,0,,,
-127,Dark Pit,42,2,80000,Silver Bow,438,194,13650,L'angelo oscuro,Kid Icarus,1,0,Normal,5,1.5,,92,0,,,
-128,Palutena,42,1,80000,Divine Light,450,198,13650,La dea della luce (Premium),Kid Icarus,1,0,Normal,5,1.5,,92,0,,,
-129,Shulk,43,1,85000,Monado Buster,460,205,14310,Il visionario (Premium),Xenoblade,1,0,Normal,5,1.5,,93,0,,,
-130,Reyn,43,2,85000,Sword Drive,455,203,14310,Il difensore,Xenoblade,1,0,Normal,5,1.5,,93,0,,,
-131,Fiora,43,2,85000,Lock-On,452,202,14310,La meccanica,Xenoblade,1,0,Normal,5,1.5,,93,0,,,
-132,Isaac,44,2,90000,Move,465,208,14990,L'adepto di Venere,Golden Sun,1,0,Normal,5,1.5,,94,0,,,
-133,Garet,44,2,90000,Blast,462,207,14990,L'adepto di Marte,Golden Sun,1,0,Normal,5,1.5,,94,0,,,
-134,Ivan,44,1,90000,Plasma,475,212,14990,L'adepto di Giove (Premium),Golden Sun,1,0,Normal,5,1.5,,94,0,,,
-135,Marth,45,2,95000,Critical Hit,480,215,15690,Il principe di Altea,Fire Emblem,1,0,Normal,5,1.5,,95,0,,,
-136,Roy,45,2,95000,Blazer,478,214,15690,Il giovane leone,Fire Emblem,1,0,Normal,5,1.5,,95,0,,,
-137,Ike,45,1,95000,Aether,490,218,15690,L'eroe radiant (Premium),Fire Emblem,1,0,Normal,5,1.5,,95,0,,,
-138,Chrom,46,2,100000,Awakening,495,222,16400,Il principe esaltato,Fire Emblem,1,0,Normal,5,1.5,,96,0,,,
-139,Lucina,46,2,100000,Future Vision,492,221,16400,La principessa del futuro,Fire Emblem,1,0,Normal,5,1.5,,96,0,,,
-140,Robin,46,1,100000,Thoron,505,225,16400,Il tattico (Premium),Fire Emblem,1,0,Normal,5,1.5,,96,0,,,
-141,Corrin,47,2,105000,Dragon Fang,510,228,17130,Il principe drago,Fire Emblem,1,0,Normal,5,1.5,,97,0,,,
-142,Byleth,47,2,105000,Sublime Heaven,508,227,17130,Il professore,Fire Emblem,1,0,Normal,5,1.5,,97,0,,,
-143,Edelgard,47,1,105000,Raging Storm,520,232,17130,L'imperatrice (Premium),Fire Emblem,1,0,Normal,5,1.5,,97,0,,,
-144,Goku SSJ Blue,48,2,110000,God Kamehameha,530,238,17870,Goku Super Saiyan Blue (Premium),Dragon Ball,1,0,Normal,5,1.5,,98,1,120,200,2
-145,Vegeta SSJ Blue,48,2,110000,Final Explosion,525,236,17870,Vegeta Super Saiyan Blue,Dragon Ball,1,0,Normal,5,1.5,,98,1,121,200,2
-146,Vegito Blue,48,2,110000,Final Kamehameha,522,235,17870,La fusione Potara,Dragon Ball,1,0,Normal,5,1.5,,98,0,,,
-147,Captain Falcon,49,1,115000,Falcon Punch,540,245,18630,Il pilota F-Zero (Premium),F-Zero,1,0,Normal,5,1.5,,99,0,,,
-148,Samurai Goroh,49,2,115000,Katana Slash,535,243,18630,Il samurai rivale,F-Zero,1,0,Normal,5,1.5,,99,0,,,
-149,Black Shadow,49,2,115000,Dark Strike,532,242,18630,L'imperatore oscuro,F-Zero,1,0,Normal,5,1.5,,99,0,,,
-150,Goku Ultra Instinct,50,2,120000,Autonomous Ultra,560,255,19410,Goku Ultra Istinto (Premium),Dragon Ball,1,0,Normal,5,1.5,,100,1,144,300,2
-151,Jiren,50,2,120000,Power Impact,555,253,19410,Il Pride Trooper,Dragon Ball,1,0,Normal,5,1.5,,100,0,,,
-152,Broly,50,2,120000,Gigantic Roar,552,252,19410,Il Saiyan leggendario,Dragon Ball,1,0,Normal,5,1.5,,100,0,,,
-153,Olimar,51,2,125000,Pikmin Army,565,258,20200,Il capitano Pikmin,Pikmin,1,0,Normal,5,1.5,,101,0,,,
-154,Louie,51,2,125000,Purple Pikmin,562,257,20200,Il secondo capitano,Pikmin,1,0,Normal,5,1.5,,101,0,,,
-155,Alph,51,1,125000,Rock Pikmin,575,262,20200,Il giovane esploratore (Premium),Pikmin,1,0,Normal,5,1.5,,101,0,,,
-156,Villager,52,2,130000,Pocket,580,265,21010,L'abitante,Animal Crossing,1,0,Normal,5,1.5,,102,0,,,
-157,Isabelle,52,2,130000,Fishing Rod,578,264,21010,L'assistente canina,Animal Crossing,1,0,Normal,5,1.5,,102,0,,,
-158,Tom Nook,52,1,130000,Bell Bag,590,268,21010,Il procione mercante (Premium),Animal Crossing,1,0,Normal,5,1.5,,102,0,,,
-159,Inkling,53,2,135000,Splat Roller,595,272,21830,Il ragazzo calamaro,Splatoon,1,0,Normal,5,1.5,,103,0,,,
-160,Octoling,53,2,135000,Octo Shot,592,271,21830,La ragazza polpo,Splatoon,1,0,Normal,5,1.5,,103,0,,,
-161,Agent 3,53,1,135000,Splashdown,605,275,21830,L'agente speciale (Premium),Splatoon,1,0,Normal,5,1.5,,103,0,,,
-162,Steve,54,2,140000,Diamond Sword,610,278,22670,Il minatore,Minecraft,1,0,Normal,5,1.5,,104,0,,,
-163,Alex,54,2,140000,TNT Blast,608,277,22670,La costruttrice,Minecraft,1,0,Normal,5,1.5,,104,0,,,
-164,Herobrine,54,1,140000,Nether Portal,620,282,22670,La leggenda oscura (Premium),Minecraft,1,0,Normal,5,1.5,,104,0,,,
-165,Ryu Hayabusa,55,1,145000,Izuna Drop,630,288,23530,Il ninja drago (Premium),Ninja Gaiden,1,0,Normal,5,1.5,,105,0,,,
-166,Ayane,55,2,145000,Art of the Raging Mountain God,625,286,23530,La kunoichi viola,Ninja Gaiden,1,0,Normal,5,1.5,,105,0,,,
-167,Kasumi,55,2,145000,Tearing Wind Combo,622,285,23530,La kunoichi fuggitiva,Ninja Gaiden,1,0,Normal,5,1.5,,105,0,,,
-168,Sackboy,56,2,150000,Create Platform,635,292,24400,Il pupazzo di stoffa,LittleBigPlanet,1,0,Normal,5,1.5,,106,0,,,
-169,Oddsock,56,2,150000,Speed Dash,632,291,24400,Il cane veloce,LittleBigPlanet,1,0,Normal,5,1.5,,106,0,,,
-170,Toggle,56,1,150000,Size Change,645,295,24400,Il robot trasformista (Premium),LittleBigPlanet,1,0,Normal,5,1.5,,106,0,,,
-171,Crash Bandicoot Evolved,57,2,155000,Mega Spin,650,298,25290,Crash potenziato,Crash Bandicoot,1,0,Normal,5,1.5,,107,1,8,80,0
-172,Coco Bandicoot,57,2,155000,Laptop Hack,648,297,25290,La sorella genio,Crash Bandicoot,1,0,Normal,5,1.5,,107,1,171,100,0
-173,Aku Aku Spirit,57,2,155000,Ancient Protection,660,302,25290,Lo spirito protettore (Premium),Crash Bandicoot,1,0,Normal,5,1.5,,107,1,172,150,0
-174,Spyro Elder,58,2,160000,Elder Fire,665,305,26190,Spyro adulto,Spyro,1,0,Normal,5,1.5,,108,1,9,80,0
-175,Cynder,58,2,160000,Shadow Strike,662,304,26190,La dragonessa oscura,Spyro,1,0,Normal,5,1.5,,108,1,174,100,0
-176,Malefor,58,2,160000,Dark Master Beam,675,308,26190,Il maestro oscuro (Premium),Spyro,1,0,Normal,5,1.5,,108,1,175,150,0
-177,Sonic Super,59,2,165000,Super Sonic Boost,680,312,27110,Sonic trasformato,Sonic,1,0,Normal,5,1.5,,139,1,20,100,2
-178,Shadow Chaos,59,2,165000,Chaos Blast,678,311,27110,Shadow con Chaos Emeralds,Sonic,1,0,Normal,5,1.5,,139,1,177,150,2
-179,Silver Psychic,59,2,165000,Psychokinesis,690,315,27110,Silver potenziato (Premium),Sonic,1,0,Normal,5,1.5,,139,1,178,200,2
-180,Hungarian Horntail,60,2,170000,Dragon Fire,700,320,28050,Il drago ungherese,Harry Potter Dragons,1,0,Normal,5,1.5,,110,0,,,
-181,Chinese Fireball,60,2,170000,Fireball Breath,698,319,28050,Il drago cinese,Harry Potter Dragons,1,0,Normal,5,1.5,,110,0,,,
-182,Swedish Short-Snout,60,1,170000,Ice Flame,710,323,28050,Il drago svedese (Premium),Harry Potter Dragons,1,0,Normal,5,1.5,,110,0,,,
-183,Common Welsh Green,61,2,175000,Emerald Flame,715,327,29000,Il drago gallese,Harry Potter Dragons,1,0,Normal,5,1.5,,111,0,,,
-184,Hebridean Black,61,2,175000,Dark Fire,712,326,29000,Il drago scozzese,Harry Potter Dragons,1,0,Normal,5,1.5,,111,0,,,
-185,Norwegian Ridgeback,61,1,175000,Ridge Spike,725,330,29000,Il drago norvegese (Premium),Harry Potter Dragons,1,0,Normal,5,1.5,,111,0,,,
-186,Romanian Longhorn,62,2,180000,Horn Charge,730,334,29970,Il drago rumeno,Harry Potter Dragons,1,0,Normal,5,1.5,,112,0,,,
-187,Peruvian Vipertooth,62,2,180000,Venom Fang,728,333,29970,Il drago peruviano,Harry Potter Dragons,1,0,Normal,5,1.5,,112,0,,,
-188,Antipodean Opaleye,62,1,180000,Opal Beam,740,337,29970,Il drago neozelandese (Premium),Harry Potter Dragons,1,0,Normal,5,1.5,,112,0,,,
-189,Ukrainian Ironbelly,63,2,185000,Iron Scale,745,341,30950,Il drago ucraino,Harry Potter Dragons,1,0,Normal,5,1.5,,113,0,,,
-190,Catalonian Fireball,63,2,185000,Catalan Inferno,742,340,30950,Il drago catalano,Harry Potter Dragons,1,0,Normal,5,1.5,,113,0,,,
-191,Portuguese Long-Snout,63,1,185000,Flame Snout,755,344,30950,Il drago portoghese (Premium),Harry Potter Dragons,1,0,Normal,5,1.5,,113,0,,,
-192,Gringotts Dragon,64,1,190000,Blind Fury,770,350,31950,Il drago di Gringotts (Premium),Harry Potter Dragons,1,0,Normal,5,1.5,,114,0,,,
-193,Norbert,64,2,190000,Baby Fire,765,348,31950,Il drago di Hagrid,Harry Potter Dragons,1,0,Normal,5,1.5,,114,0,,,
-194,Dragon Keeper,64,2,190000,Dragon Command,762,347,31950,Il domatore di draghi,Harry Potter Dragons,1,0,Normal,5,1.5,,114,0,,,
-195,Bahamut,65,1,195000,Mega Flare,800,365,32970,Il re dei draghi (Premium),Final Fantasy,1,0,Normal,5,1.5,,115,0,,,
-196,Tiamat,65,2,195000,Five Heads,795,363,32970,Il drago a cinque teste,Final Fantasy,1,0,Normal,5,1.5,,115,0,,,
-197,Leviathan,65,2,195000,Tidal Wave,792,362,32970,Il serpente marino,Final Fantasy,1,0,Normal,5,1.5,,115,0,,,
-198,Ifrit,66,2,200000,Hellfire,810,370,34000,L'invocazione del fuoco,Final Fantasy,1,0,Normal,5,1.5,,116,0,,,
-199,Shiva,66,2,200000,Diamond Dust,808,369,34000,L'invocazione del ghiaccio,Final Fantasy,1,0,Normal,5,1.5,,116,0,,,
-200,Ramuh,66,1,200000,Judgment Bolt,820,373,34000,L'invocazione del fulmine (Premium),Final Fantasy,1,0,Normal,5,1.5,,116,0,,,
-201,Odin,67,2,205000,Zantetsuken,825,377,35050,Il cavaliere oscuro,Final Fantasy,1,0,Normal,5,1.5,,117,0,,,
-202,Alexander,67,2,205000,Divine Judgment,822,376,35050,La fortezza sacra,Final Fantasy,1,0,Normal,5,1.5,,117,0,,,
-203,Phoenix,67,1,205000,Rebirth Flame,835,380,35050,L'uccello immortale (Premium),Final Fantasy,1,0,Normal,5,1.5,,117,0,,,
-204,Knights of the Round,68,1,210000,Ultimate End,860,390,36110,I cavalieri della tavola rotonda (Premium),Final Fantasy,1,0,Normal,5,1.5,,118,0,,,
-205,Yojimbo,68,2,210000,Zanmato,855,388,36110,Il samurai mercenario,Final Fantasy,1,0,Normal,5,1.5,,118,0,,,
-206,Anima,68,2,210000,Oblivion,852,387,36110,L'invocazione oscura,Final Fantasy,1,0,Normal,5,1.5,,118,0,,,
-207,Ark,69,2,215000,Eternal Breath,870,395,37190,L'arca divina,Final Fantasy,1,0,Normal,5,1.5,,119,0,,,
-208,Eden,69,2,215000,Eternal Breath,868,394,37190,Il guardiano GF,Final Fantasy,1,0,Normal,5,1.5,,119,0,,,
-209,Doomtrain,69,1,215000,Runaway Train,880,398,37190,Il treno infernale (Premium),Final Fantasy,1,0,Normal,5,1.5,,119,0,,,
-210,Zodiark,70,1,220000,Final Eclipse,900,405,38290,L'Esper oscuro (Premium),Final Fantasy,1,0,Normal,5,1.5,,120,0,,,
-211,Ultima,70,2,220000,Redemption,895,403,38290,L'angelo supremo,Final Fantasy,1,0,Normal,5,1.5,,120,0,,,
-212,Exodus,70,2,220000,Meteor,892,402,38290,Il giudice divino,Final Fantasy,1,0,Normal,5,1.5,,120,0,,,
-213,Arceus,75,1,245000,Judgment,950,430,44010,Il dio Pokemon (Premium),Pokemon,1,1,Normal,5,1.5,,125,0,,,
-214,Dialga,75,2,245000,Roar of Time,945,428,44010,Il dio del tempo,Pokemon,1,1,Normal,5,1.5,,125,0,,,
-215,Palkia,75,2,245000,Spacial Rend,942,427,44010,Il dio dello spazio,Pokemon,1,1,Normal,5,1.5,,125,0,,,
-216,Giratina,76,2,250000,Shadow Force,960,435,45200,Il dio dell'antimateria,Pokemon,1,1,Normal,5,1.5,,126,0,,,
-217,Rayquaza,76,2,250000,Dragon Ascent,958,434,45200,Il drago del cielo,Pokemon,1,1,Normal,5,1.5,,126,0,,,
-218,Groudon,76,1,250000,Precipice Blades,970,438,45200,Il dio della terra (Premium),Pokemon,1,1,Normal,5,1.5,,126,0,,,
-219,Kyogre,77,2,255000,Origin Pulse,975,442,46410,Il dio del mare,Pokemon,1,1,Normal,5,1.5,,127,0,,,
-220,Mewtwo,77,2,255000,Psystrike,972,441,46410,Il Pokemon genetico,Pokemon,1,1,Normal,5,1.5,,127,0,,,
-221,Lugia,77,1,255000,Aeroblast,985,445,46410,Il guardiano del mare (Premium),Pokemon,1,1,Normal,5,1.5,,127,0,,,
-222,Ho-Oh,78,2,260000,Sacred Fire,990,448,47630,L'uccello arcobaleno,Pokemon,1,1,Normal,5,1.5,,128,0,,,
-223,Celebi,78,2,260000,Time Travel,988,447,47630,Il viaggiatore del tempo,Pokemon,1,1,Normal,5,1.5,,128,0,,,
-224,Jirachi,78,1,260000,Doom Desire,1000,452,47630,Il Pokemon dei desideri (Premium),Pokemon,1,1,Normal,5,1.5,,128,0,,,
-225,Shenron,80,1,270000,Eternal Dragon,1050,470,50130,Il drago dei desideri (Premium),Dragon Ball,1,0,Normal,5,1.5,,130,0,,,
-226,Porunga,80,2,270000,Three Wishes,1045,468,50130,Il drago Namecciano,Dragon Ball,1,0,Normal,5,1.5,,130,0,,,
-227,Super Shenron,80,2,270000,Divine Wish,1042,467,50130,Il drago divino,Dragon Ball,1,0,Normal,5,1.5,,130,0,,,
-228,Zeus,85,1,295000,Lightning Bolt,1150,510,56650,Il re degli dei greci (Premium),Mitologia,1,0,Normal,5,1.5,,135,0,,,
-229,Poseidon,85,2,295000,Tidal Fury,1145,508,56650,Il dio del mare greco,Mitologia,1,0,Normal,5,1.5,,135,0,,,
-230,Hades,85,2,295000,Underworld Flame,1142,507,56650,Il dio degli inferi greco,Mitologia,1,0,Normal,5,1.5,,135,0,,,
-231,Athena,86,2,300000,Wisdom Strike,1160,515,58000,La dea della saggezza,Mitologia,1,0,Normal,5,1.5,,136,0,,,
-232,Ares,86,2,300000,War Cry,1158,514,58000,Il dio della guerra greco,Mitologia,1,0,Normal,5,1.5,,136,0,,,
-233,Apollo,86,1,300000,Sun Arrow,1170,518,58000,Il dio del sole greco (Premium),Mitologia,1,0,Normal,5,1.5,,136,0,,,
-234,Artemis,87,2,305000,Moon Bow,1175,522,59370,La dea della caccia,Mitologia,1,0,Normal,5,1.5,,137,0,,,
-235,Hera,87,2,305000,Queen's Wrath,1172,521,59370,La regina degli dei,Mitologia,1,0,Normal,5,1.5,,137,0,,,
-236,Hermes,87,1,305000,Divine Speed,1185,525,59370,Il messaggero degli dei (Premium),Mitologia,1,0,Normal,5,1.5,,137,0,,,
-237,Odin,90,1,320000,Gungnir Strike,1250,550,63570,Il padre di tutti (Premium),Mitologia,1,0,Normal,5,1.5,,140,0,,,
-238,Thor,90,2,320000,Mjolnir Thunder,1245,548,63570,Il dio del tuono nordico,Mitologia,1,0,Normal,5,1.5,,140,0,,,
-239,Loki,90,2,320000,Trickster Magic,1242,547,63570,Il dio dell'inganno,Mitologia,1,0,Normal,5,1.5,,140,0,,,
-240,Freya,91,2,325000,Valkyrie Strike,1260,555,65000,La dea dell'amore nordica,Mitologia,1,0,Normal,5,1.5,,141,0,,,
-241,Tyr,91,2,325000,Justice Blade,1258,554,65000,Il dio della guerra nordico,Mitologia,1,0,Normal,5,1.5,,141,0,,,
-242,Heimdall,91,1,325000,Bifrost Beam,1270,558,65000,Il guardiano del Bifrost (Premium),Mitologia,1,0,Normal,5,1.5,,141,0,,,
-243,Ra,95,1,345000,Solar Flare,1350,590,70890,Il dio del sole egizio (Premium),Mitologia,1,0,Normal,5,1.5,,145,0,,,
-244,Anubis,95,2,345000,Death Judgment,1345,588,70890,Il dio della morte egizio,Mitologia,1,0,Normal,5,1.5,,145,0,,,
-245,Osiris,95,2,345000,Resurrection,1342,587,70890,Il dio dell'aldilà egizio,Mitologia,1,0,Normal,5,1.5,,145,0,,,
-246,Horus,96,2,350000,Sky Attack,1360,595,72400,Il dio falco egizio,Mitologia,1,0,Normal,5,1.5,,146,0,,,
-247,Set,96,2,350000,Chaos Storm,1358,594,72400,Il dio del caos egizio,Mitologia,1,0,Normal,5,1.5,,146,0,,,
-248,Isis,96,1,350000,Divine Magic,1370,598,72400,La dea della magia egizia (Premium),Mitologia,1,0,Normal,5,1.5,,146,0,,,
-249,Amaterasu,98,1,360000,Divine Sun,1450,620,75470,La dea del sole giapponese (Premium),Mitologia,1,0,Normal,5,1.5,,148,0,,,
-250,Susanoo,98,2,360000,Storm Blade,1445,618,75470,Il dio della tempesta giapponese,Mitologia,1,0,Normal,5,1.5,,148,0,,,
-251,Tsukuyomi,98,2,360000,Moon Illusion,1442,617,75470,Il dio della luna giapponese,Mitologia,1,0,Normal,5,1.5,,148,0,,,
-252,The One Above All,100,1,370000,Omnipotence,1600,700,78610,L'essere supremo (Premium),Mitologia,1,0,Normal,5,1.5,,150,0,,,
-253,Brahma,100,2,370000,Creation,1595,698,78610,Il creatore induista,Mitologia,1,0,Normal,5,1.5,,150,0,,,
-254,Vishnu,100,2,370000,Preservation,1592,697,78610,Il preservatore induista,Mitologia,1,0,Normal,5,1.5,,150,0,,,
-255,Shiva,100,2,370000,Destruction,1589,696,78610,Il distruttore induista,Mitologia,1,0,Normal,5,1.5,,150,0,,,
-256,Parvati,100,2,370000,Divine Love,1586,695,78610,La dea della magia indiana,Mitologia,1,0,Normal,5,1.5,,150,0,,,
-257,Kali,100,2,370000,Divine Wrath,1583,694,78610,La dea della guerra indiana,Mitologia,1,0,Normal,5,1.5,,150,0,,,
-258,Ganesha,100,2,370000,Divine Wisdom,1580,693,78610,Il dio della scienza indiana,Mitologia,1,0,Normal,5,1.5,,150,0,,,
-259,Lakshmi,100,2,370000,Divine Wealth,1578,692,78610,La dea della ricchezza indiana,Mitologia,1,,Normal,5,1.5,,150,0,,,
-260,C16,25,2,27400,Hell Flash,240,105,4810,L'androide gentile,Dragon Ball,1,0,Normal,5,1.5,,75,0,,,
-261,C17,25,2,27400,Barrier,235,102,4810,L'androide ribelle,Dragon Ball,1,0,Normal,5,1.5,,75,0,,,
-262,C18,25,2,27400,Energy Blast,235,102,4810,La bellissima androide,Dragon Ball,1,0,Normal,5,1.5,,75,0,,,
-263,Freezer (Prima Forma),30,2,39225,Death Beam,300,130,6930,Il tiranno galattico,Dragon Ball,1,0,Normal,5,1.5,,80,0,,,
-264,Freezer (Seconda Forma),35,2,53225,Death Storm,350,155,9450,Freezer trasformato,Dragon Ball,1,0,Normal,5,1.5,,85,0,,,
-265,Freezer (Terza Forma),40,2,70000,Crazy Finger Beam,420,185,12370,Freezer mostruoso,Dragon Ball,1,0,Normal,5,1.5,,90,0,,,
-266,Freezer (Corpo Perfetto),45,2,93225,Death Ball,500,225,15850,La forma finale di Freezer,Dragon Ball,1,0,Normal,5,1.5,,95,0,,,
-267,Golden Freezer,60,1,160000,Golden Death Ball,750,340,28810,Freezer dorato (Premium),Dragon Ball,1,0,Normal,5,1.5,,110,0,,,
-268,Cell (Imperfetto),35,2,53225,Bio-Impact,345,152,9450,L'essere creato da Gelo,Dragon Ball,1,0,Normal,5,1.5,,85,0,,,
-269,Cell (Semi-Perfetto),40,2,70000,Self-Destruct,415,183,12370,Cell dopo C17,Dragon Ball,1,0,Normal,5,1.5,,90,0,,,
-270,Cell (Perfetto),50,2,120000,Perfect Kamehameha,560,255,19410,La forma perfetta di Cell,Dragon Ball,1,0,Normal,5,1.5,,100,0,,,
-271,Cell (Super Perfetto),55,2,150000,Solar System Kamehameha,650,300,23530,Cell rinato,Dragon Ball,1,0,Normal,5,1.5,,105,0,,,
-272,Majin Buu (Grasso),55,2,150000,Innocence Cannon,640,295,23530,Il demone rosa,Dragon Ball,1,0,Normal,5,1.5,,105,0,,,
-273,Super Buu,60,2,160000,Vice Shout,740,335,28810,Buu dopo l'assorbimento,Dragon Ball,1,0,Normal,5,1.5,,110,0,,,
-274,Kid Buu,65,1,190000,Planet Burst,850,385,33010,La forma pura di Buu (Premium),Dragon Ball,1,0,Normal,5,1.5,,115,0,,,
-276,Homer Simpson,1,0,100,Donut Smash,20,10,0,D'oh!,For Fun,-1,0,Normal,5,1.5,,51,0,,,
-277,Bart Simpson,1,0,100,Slingshot,22,12,0,Ciucciami il calzino!,For Fun,-1,0,Normal,5,1.5,,51,0,,,
-278,Daffy Duck,1,0,100,Duck Season,20,10,0,Sei spregevole!,For Fun,-1,0,Normal,5,1.5,,51,0,,,
-279,Bugs Bunny,1,0,100,Carrot Crunch,22,12,0,Che succede amico?,For Fun,-1,0,Normal,5,1.5,,51,0,,,
-280,Wile E. Coyote,1,0,100,ACME Trap,25,15,0,Super Genio!,For Fun,-1,0,Normal,5,1.5,,51,0,,,
-281,Gohan Base,10,0,4575,Masenko,100,45,0,Il giovane figlio di Goku,Dragon Ball,-1,0,Normal,5,1.5,,60,0,,,
-282,Gohan Beast,55,2,150000,Special Beam Cannon (Beast),700,320,23530,La forma definitiva di Gohan,Dragon Ball,1,0,Normal,10,2.0,,110,1,92,200,2
-283,Orange Piccolo,55,2,150000,Apocalyptic Burst,680,310,23530,La forma definitiva di Piccolo,Dragon Ball,1,0,Normal,8,1.8,,105,1,62,180,2
-284,Trunks Base,15,0,10075,Burning Attack,140,60,0,Il figlio di Vegeta dal futuro,Dragon Ball,-1,0,Normal,5,1.5,,65,0,,,
-285,Trunks SSJ,26,2,29575,Shining Sword Attack,245,106,5200,Trunks Super Saiyan,Dragon Ball,1,0,Normal,5,1.5,,76,1,284,50,2
-286,Vegeta Ultra Ego,55,2,150000,Hakai,720,330,23530,La forma distruttrice di Vegeta,Dragon Ball,1,0,Normal,12,2.2,,115,1,145,250,2
+id,nome,livello,lv_premium,exp_required,special_attack_name,special_attack_damage,special_attack_mana_cost,price,description,character_group,max_concurrent_owners,is_pokemon,elemental_type,crit_chance,crit_multiplier,required_character_id,speed,is_transformation,base_character_id,transformation_mana_cost,transformation_duration_days,bonus_health,bonus_mana,bonus_damage,bonus_resistance,bonus_crit,bonus_speed
+1,Chocobo,1,0,100,Beak Peck,20,10,0,Il chocobo di Final Fantasy,Final Fantasy,-1,0,Normal,5,1.5,,51,0,,,,15,8,2,0,0,3
+2,Pichu,1,2,100,Thunder Shock,22,12,200,Il baby Pokemon elettrico,Pokemon,3,1,Normal,5,1.5,,51,0,,,,15,8,2,0,0,3
+3,Slime,1,2,100,Bounce,18,8,200,Lo slime di Dragon Quest,Dragon Quest,3,0,Normal,5,1.5,,51,0,,,,15,8,2,0,0,3
+4,Pikachu,2,2,235,Thunderbolt,35,15,210,Il Pokemon simbolo,Pokemon,3,1,Normal,5,1.5,,52,1,2,80,0,30,16,4,0,0,6
+5,Bulbasaur,2,2,235,Vine Whip,32,14,210,Lo starter erba,Pokemon,3,1,Normal,5,1.5,,52,0,,,,30,16,4,0,0,6
+6,Squirtle,2,2,235,Water Gun,32,14,210,Lo starter acqua,Pokemon,3,1,Normal,5,1.5,,52,0,,,,30,16,4,0,0,6
+7,Charmander,2,2,235,Ember,32,14,210,Lo starter fuoco,Pokemon,3,1,Normal,5,1.5,,52,0,,,,30,16,4,0,0,6
+8,Crash Bandicoot,3,0,505,Spin Attack,45,18,230,L'eroe marsupiale,Crash Bandicoot,1,0,Normal,5,1.5,,53,0,,,,45,24,6,0,1,9
+9,Spyro,3,2,505,Flame Breath,48,20,230,Il draghetto viola,Spyro,1,0,Normal,5,1.5,,53,0,,,,45,24,6,0,1,9
+10,Sonic,3,1,505,Sonic Spin,50,22,230,Il riccio blu veloce (Premium),Sonic,1,0,Normal,5,1.5,,83,0,,,,54,28,7,0,1,9
+11,Raichu,4,2,810,Thunder,55,25,270,L'evoluzione di Pikachu,Pokemon,3,1,Normal,5,1.5,,54,1,4,120,0,60,32,8,0,1,12
+12,Ivysaur,4,2,810,Razor Leaf,52,23,270,L'evoluzione di Bulbasaur,Pokemon,3,1,Normal,5,1.5,,54,1,5,100,0,60,32,8,0,1,12
+13,Wartortle,4,2,810,Bubble Beam,52,23,270,L'evoluzione di Squirtle,Pokemon,3,1,Normal,5,1.5,,54,1,6,100,0,60,32,8,0,1,12
+14,Charmeleon,4,2,810,Flamethrower,52,23,270,Il Pokemon fuoco evoluto,Pokemon,3,1,Normal,5,1.5,,54,1,7,100,0,60,32,8,0,1,12
+15,Mario,5,1,1250,Fire Ball,60,28,330,L'idraulico italiano (Premium),Super Mario,1,0,Normal,5,1.5,,65,0,,,,90,48,12,1,1,15
+16,Luigi,5,2,1250,Thunder Hand,58,26,330,Il fratello di Mario,Super Mario,1,0,Normal,5,1.5,,65,0,,,,75,40,10,1,1,15
+17,Yoshi,5,2,1250,Egg Throw,55,24,330,Il dinosauro verde,Super Mario,1,0,Normal,5,1.5,,65,0,,,,75,40,10,1,1,15
+18,Tails,6,2,1725,Tail Swipe,65,30,400,La volpe a due code,Sonic,1,0,Normal,5,1.5,,86,0,,,,90,48,12,1,2,18
+19,Knuckles,6,2,1725,Power Punch,68,32,400,L'echidna rosso,Sonic,1,0,Normal,5,1.5,,86,0,,,,90,48,12,1,2,18
+20,Shadow,6,1,1725,Chaos Spear,75,35,400,Il riccio nero (Premium),Sonic,1,0,Normal,5,1.5,,86,0,,,,108,57,14,1,2,18
+21,Venusaur,7,2,2335,Solar Beam,80,38,490,Il Pokemon erba finale,Pokemon,3,1,Normal,5,1.5,,57,1,12,150,0,105,56,14,1,2,21
+22,Blastoise,7,2,2335,Hydro Pump,80,38,490,Il Pokemon acqua finale,Pokemon,3,1,Normal,5,1.5,,57,1,13,150,0,105,56,14,1,2,21
+23,Charizard,7,2,2335,Fire Blast,85,40,490,Il drago di fuoco (Premium),Pokemon,3,1,Normal,5,1.5,,57,1,14,150,0,105,56,14,1,2,21
+24,Link,8,1,2980,Master Sword,90,42,590,L'eroe di Hyrule (Premium),Zelda,1,0,Normal,5,1.5,,58,0,,,,144,76,19,1,2,24
+25,Zelda,8,2,2980,Light Arrow,85,40,590,La principessa di Hyrule,Zelda,1,0,Normal,5,1.5,,58,0,,,,120,64,16,1,2,24
+26,Ganondorf,8,2,2980,Dark Magic,88,41,590,Il re del male,Zelda,1,0,Normal,5,1.5,,48,0,,,,120,64,16,1,2,24
+27,Samus,9,1,3760,Charge Beam,95,45,710,La cacciatrice galattica (Premium),Metroid,1,0,Normal,5,1.5,,59,0,,,,162,86,21,1,3,27
+28,Ridley,9,2,3760,Plasma Breath,92,43,710,Il drago spaziale,Metroid,1,0,Normal,5,1.5,,59,0,,,,135,72,18,1,3,27
+29,Dark Samus,9,2,3760,Phazon Beam,90,42,710,Il clone oscuro,Metroid,1,0,Normal,5,1.5,,59,0,,,,135,72,18,1,3,27
+30,Cloud,10,1,4575,Omnislash,105,50,850,Il soldato SOLDIER (Premium),Final Fantasy,1,0,Normal,5,1.5,,60,0,,,,180,96,24,2,3,30
+31,Tifa,10,2,4575,Final Heaven,100,48,850,La lottatrice di FFVII,Final Fantasy,1,0,Normal,5,1.5,,60,0,,,,150,80,20,2,3,30
+32,Sephiroth,10,2,4575,Octaslash,102,49,850,L'angelo monoala,Final Fantasy,1,0,Normal,5,1.5,,60,0,,,,150,80,20,2,3,30
+33,Squall,11,2,5525,Renzokuken,110,52,1000,Il SeeD di FFVIII,Final Fantasy,1,0,Normal,5,1.5,,61,0,,,,165,88,22,2,3,33
+34,Rinoa,11,2,5525,Angel Wing,108,51,1000,La strega di FFVIII,Final Fantasy,1,0,Normal,5,1.5,,61,0,,,,165,88,22,2,3,33
+35,Seifer,11,2,5525,No Mercy,105,50,1000,Il rivale di Squall,Final Fantasy,1,0,Normal,5,1.5,,61,0,,,,165,88,22,2,3,33
+36,Tidus,12,1,6510,Blitz Ace,120,55,1170,L'eroe di FFX (Premium),Final Fantasy,1,0,Normal,5,1.5,,62,0,,,,216,115,28,2,4,36
+37,Yuna,12,2,6510,Grand Summon,115,53,1170,L'evocatrice di FFX,Final Fantasy,1,0,Normal,5,1.5,,62,0,,,,180,96,24,2,4,36
+38,Auron,12,2,6510,Tornado,118,54,1170,Il guardiano leggendario,Final Fantasy,1,0,Normal,5,1.5,,62,0,,,,180,96,24,2,4,36
+39,Dante,13,1,7630,Devil Trigger,130,58,1350,Il cacciatore di demoni (Premium),Devil May Cry,1,0,Normal,5,1.5,,63,0,,,,234,124,31,2,4,39
+40,Vergil,13,2,7630,Judgement Cut,125,56,1350,Il fratello di Dante,Devil May Cry,1,0,Normal,5,1.5,,63,0,,,,195,104,26,2,4,39
+41,Nero,13,2,7630,Devil Bringer,122,55,1350,Il giovane cacciatore,Devil May Cry,1,0,Normal,5,1.5,,63,0,,,,195,104,26,2,4,39
+42,Kratos,14,1,8785,Spartan Rage,140,62,1550,Il dio della guerra (Premium),God of War,1,0,Normal,5,1.5,,64,0,,,,252,134,33,2,4,42
+43,Atreus,14,2,8785,Runic Summon,132,59,1550,Il figlio di Kratos,God of War,1,0,Normal,5,1.5,,64,0,,,,210,112,28,2,4,42
+44,Freya,14,2,8785,Vanir Magic,135,60,1550,La dea Vanir,God of War,1,0,Normal,5,1.5,,64,0,,,,210,112,28,2,4,42
+45,Ryu,15,2,10075,Hadouken,145,65,1770,Il guerriero del drago,Street Fighter,1,0,Normal,5,1.5,,65,0,,,,225,120,30,3,5,45
+46,Ken,15,2,10075,Shoryuken,143,64,1770,Il maestro del drago,Street Fighter,1,0,Normal,5,1.5,,65,0,,,,225,120,30,3,5,45
+47,Akuma,15,1,10075,Raging Demon,155,68,1770,Il demone furioso (Premium),Street Fighter,1,0,Normal,5,1.5,,65,0,,,,270,144,36,3,5,45
+48,Scorpion,16,2,11400,Spear Strike,150,66,2000,Il ninja spettro,Mortal Kombat,1,0,Normal,5,1.5,,66,0,,,,240,128,32,3,5,48
+49,Sub-Zero,16,2,11400,Ice Ball,148,65,2000,Il ninja del ghiaccio,Mortal Kombat,1,0,Normal,5,1.5,,66,0,,,,240,128,32,3,5,48
+50,Raiden,16,1,11400,Lightning Strike,160,70,2000,Il dio del tuono (Premium),Mortal Kombat,1,0,Normal,5,1.5,,66,0,,,,288,153,38,3,5,48
+51,Solid Snake,17,1,12860,Rocket Launcher,165,72,2250,Il soldato leggendario (Premium),Metal Gear,1,0,Normal,5,1.5,,67,0,,,,306,163,40,3,5,51
+52,Big Boss,17,2,12860,CQC Master,162,71,2250,Il padre dei soldati,Metal Gear,1,0,Normal,5,1.5,,67,0,,,,255,136,34,3,5,51
+53,Raiden MGS,17,2,12860,High Frequency Blade,160,70,2250,Il cyborg ninja,Metal Gear,1,0,Normal,5,1.5,,67,0,,,,255,136,34,3,5,51
+54,Mega Man,18,2,14355,Mega Buster,170,75,2510,Il robot blu,Mega Man,1,0,Normal,5,1.5,,68,0,,,,270,144,36,3,6,54
+55,Zero,18,2,14355,Z-Saber,168,74,2510,Il maverick hunter rosso,Mega Man,1,0,Normal,5,1.5,,68,0,,,,270,144,36,3,6,54
+56,X,18,1,14355,Charged Shot,180,78,2510,Il reploid blu (Premium),Mega Man,1,0,Normal,5,1.5,,68,0,,,,324,172,43,3,6,54
+57,Ratchet,19,2,15985,RYNO,175,77,2790,Il lombax meccanico,Ratchet & Clank,1,0,Normal,5,1.5,,69,0,,,,285,152,38,3,6,57
+58,Clank,19,2,15985,Time Bomb,172,76,2790,Il robot assistente,Ratchet & Clank,1,0,Normal,5,1.5,,69,0,,,,285,152,38,3,6,57
+59,Dr. Nefarious,19,1,15985,Annihilator,185,80,2790,Lo scienziato pazzo (Premium),Ratchet & Clank,1,0,Normal,5,1.5,,69,0,,,,342,182,45,3,6,57
+60,Goku,20,1,17650,Kamehameha,190,82,3090,Il Saiyan della Terra (Premium),Dragon Ball,1,0,Normal,5,1.5,,70,0,,,,360,192,48,4,6,60
+61,Vegeta,20,2,17650,Galick Gun,185,80,3090,Il principe dei Saiyan,Dragon Ball,1,0,Normal,5,1.5,,70,0,,,,300,160,40,4,6,60
+62,Piccolo,20,2,17650,Special Beam Cannon,182,79,3090,Il Namecciano guerriero,Dragon Ball,1,0,Normal,5,1.5,,70,0,,,,300,160,40,4,6,60
+63,Nathan Drake,21,2,19450,Grenade Launcher,195,85,3400,Il cacciatore di tesori,Uncharted,1,0,Normal,5,1.5,,71,0,,,,315,168,42,4,7,63
+64,Chloe Frazer,21,2,19450,Sniper Shot,192,84,3400,La cacciatrice australiana,Uncharted,1,0,Normal,5,1.5,,71,0,,,,315,168,42,4,7,63
+65,Victor Sullivan,21,1,19450,Cigar Bomb,200,87,3400,Il mentore veterano (Premium),Uncharted,1,0,Normal,5,1.5,,71,0,,,,378,201,50,4,7,63
+66,Aloy,22,1,21285,Triple Shot,205,90,3730,La cacciatrice di macchine (Premium),Horizon,1,0,Normal,5,1.5,,72,0,,,,396,211,52,4,7,66
+67,Erend,22,2,21285,Hammer Slam,200,88,3730,Il guerriero Oseram,Horizon,1,0,Normal,5,1.5,,72,0,,,,330,176,44,4,7,66
+68,Varl,22,2,21285,Spear Thrust,198,87,3730,Il cacciatore Nora,Horizon,1,0,Normal,5,1.5,,72,0,,,,330,176,44,4,7,66
+69,Joel,23,2,23255,Molotov,210,92,4070,Il sopravvissuto,The Last of Us,1,0,Normal,5,1.5,,73,0,,,,345,184,46,4,7,69
+70,Ellie,23,2,23255,Bow Shot,208,91,4070,La ragazza immune,The Last of Us,1,0,Normal,5,1.5,,73,0,,,,345,184,46,4,7,69
+71,Abby,23,1,23255,Pipe Swing,220,95,4070,La soldato WLF (Premium),The Last of Us,1,0,Normal,5,1.5,,73,0,,,,414,220,55,4,7,69
+72,Geralt,24,1,25260,Igni,225,98,4430,Lo strigo di Rivia (Premium),The Witcher,1,0,Normal,5,1.5,,74,0,,,,432,230,57,4,8,72
+73,Ciri,24,2,25260,Blink Strike,220,96,4430,La principessa di Cintra,The Witcher,1,0,Normal,5,1.5,,74,0,,,,360,192,48,4,8,72
+74,Yennefer,24,2,25260,Lightning Bolt,218,95,4430,La maga di Vengerberg,The Witcher,1,0,Normal,5,1.5,,74,0,,,,360,192,48,4,8,72
+75,Ezio,25,1,27400,Hidden Blade,235,102,4810,L'assassino italiano (Premium),Assassin's Creed,1,0,Normal,5,1.5,,75,0,,,,450,240,60,5,8,75
+76,Altair,25,2,27400,Eagle Strike,230,100,4810,Il primo assassino,Assassin's Creed,1,0,Normal,5,1.5,,75,0,,,,375,200,50,5,8,75
+77,Connor,25,2,27400,Tomahawk Throw,228,99,4810,L'assassino nativo,Assassin's Creed,1,0,Normal,5,1.5,,75,0,,,,375,200,50,5,8,75
+78,Goku SSJ,26,2,29575,Super Kamehameha,250,108,5200,Goku Super Saiyan (Premium),Dragon Ball,1,0,Normal,5,1.5,,76,1,60,50,2,390,208,52,5,8,78
+79,Vegeta SSJ,26,2,29575,Big Bang Attack,245,106,5200,Vegeta Super Saiyan,Dragon Ball,1,0,Normal,5,1.5,,76,1,61,50,2,390,208,52,5,8,78
+80,Gohan SSJ,26,2,29575,Masenko,242,105,5200,Il figlio di Goku,Dragon Ball,1,0,Normal,5,1.5,,76,1,281,50,2,390,208,52,5,8,78
+81,Master Chief,27,1,31885,Spartan Laser,260,112,5610,Lo Spartan-117 (Premium),Halo,1,0,Normal,5,1.5,,77,0,,,,486,259,64,5,9,81
+82,Arbiter,27,2,31885,Energy Sword,255,110,5610,L'elite Sangheili,Halo,1,0,Normal,5,1.5,,77,0,,,,405,216,54,5,9,81
+83,Cortana,27,2,31885,AI Hack,252,109,5610,L'intelligenza artificiale,Halo,1,0,Normal,5,1.5,,77,0,,,,405,216,54,5,9,81
+84,Doom Slayer,28,1,34230,BFG 9000,275,118,6030,Il massacratore (Premium),Doom,1,0,Normal,5,1.5,,78,0,,,,504,268,67,5,9,84
+85,Samuel Hayden,28,2,34230,Argent Beam,268,115,6030,Il direttore cyborg,Doom,1,0,Normal,5,1.5,,78,0,,,,420,224,56,5,9,84
+86,Vega,28,2,34230,Data Surge,265,114,6030,L'IA di Marte,Doom,1,0,Normal,5,1.5,,78,0,,,,420,224,56,5,9,84
+87,Shepard,29,2,36710,Biotic Charge,280,122,6470,Il comandante N7,Mass Effect,1,0,Normal,5,1.5,,79,0,,,,435,232,58,5,9,87
+88,Garrus,29,2,36710,Sniper Calibration,278,121,6470,Il Turian tiratore,Mass Effect,1,0,Normal,5,1.5,,79,0,,,,435,232,58,5,9,87
+89,Liara,29,1,36710,Singularity,290,125,6470,L'Asari archeologa (Premium),Mass Effect,1,0,Normal,5,1.5,,79,0,,,,522,278,69,5,9,87
+90,Goku SSJ2,30,2,39225,Super Kamehameha x2,300,130,6930,Goku Super Saiyan 2 (Premium),Dragon Ball,1,0,Normal,5,1.5,,80,1,78,80,2,450,240,60,6,10,90
+91,Vegeta SSJ2,30,2,39225,Final Flash,295,128,6930,Vegeta Super Saiyan 2,Dragon Ball,1,0,Normal,5,1.5,,80,1,79,80,2,450,240,60,6,10,90
+92,Gohan SSJ2,30,2,39225,Father-Son Kamehameha,292,127,6930,Gohan adolescente,Dragon Ball,1,0,Normal,5,1.5,,80,1,80,80,2,450,240,60,6,10,90
+93,Kirby,31,2,41875,Inhale,305,133,7400,La palla rosa,Kirby,1,0,Normal,5,1.5,,81,0,,,,465,248,62,6,10,93
+94,Meta Knight,31,2,41875,Galaxia Darkness,308,134,7400,Il cavaliere mascherato,Kirby,1,0,Normal,5,1.5,,81,0,,,,465,248,62,6,10,93
+95,King Dedede,31,1,41875,Waddle Dee Army,315,137,7400,Il re autoproclamato (Premium),Kirby,1,0,Normal,5,1.5,,81,0,,,,558,297,74,6,10,93
+96,Fox McCloud,32,1,44560,Landmaster,320,140,7890,Il pilota della Star Fox (Premium),Star Fox,1,0,Normal,5,1.5,,82,0,,,,576,307,76,6,10,96
+97,Falco,32,2,44560,Arwing Strike,315,138,7890,Il pilota asso,Star Fox,1,0,Normal,5,1.5,,82,0,,,,480,256,64,6,10,96
+98,Wolf,32,2,44560,Wolfen Assault,312,137,7890,Il rivale mercenario,Star Fox,1,0,Normal,5,1.5,,82,0,,,,480,256,64,6,10,96
+99,Sora,33,1,47380,Ragnarok,330,145,8390,Il portachiavi (Premium),Kingdom Hearts,1,0,Normal,5,1.5,,83,0,,,,594,316,79,6,11,99
+100,Riku,33,2,47380,Dark Aura,325,143,8390,L'amico oscuro,Kingdom Hearts,1,0,Normal,5,1.5,,83,0,,,,495,264,66,6,11,99
+101,Kairi,33,2,47380,Light Burst,322,142,8390,La principessa del cuore,Kingdom Hearts,1,0,Normal,5,1.5,,83,0,,,,495,264,66,6,11,99
+102,Jak,34,2,50235,Morph Gun,335,148,8910,L'eroe eco,Jak and Daxter,1,0,Normal,5,1.5,,84,0,,,,510,272,68,6,11,102
+103,Daxter,34,2,50235,Bug Spray,332,147,8910,L'ottsel parlante,Jak and Daxter,1,0,Normal,5,1.5,,84,0,,,,510,272,68,6,11,102
+104,Torn,34,1,50235,Scatter Gun,345,152,8910,Il comandante della resistenza (Premium),Jak and Daxter,1,0,Normal,5,1.5,,84,0,,,,612,326,81,6,11,102
+105,Banjo,35,2,53225,Breegull Bash,350,155,9450,L'orso avventuriero,Banjo-Kazooie,1,0,Normal,5,1.5,,85,0,,,,525,280,70,7,11,105
+106,Kazooie,35,2,53225,Egg Shot,348,154,9450,L'uccello sarcastico,Banjo-Kazooie,1,0,Normal,5,1.5,,85,0,,,,525,280,70,7,11,105
+107,Mumbo Jumbo,35,1,53225,Transformation Magic,360,158,9450,Lo sciamano (Premium),Banjo-Kazooie,1,0,Normal,5,1.5,,85,0,,,,630,336,84,7,11,105
+108,Goku SSJ3,36,2,56250,Dragon Fist,370,162,10000,Goku Super Saiyan 3 (Premium),Dragon Ball,1,0,Normal,5,1.5,,86,1,90,120,2,540,288,72,7,12,108
+109,Vegeta SSJ3,36,2,56250,Final Shine Attack,365,160,10000,Vegeta Super Saiyan 3,Dragon Ball,1,0,Normal,5,1.5,,86,1,91,120,2,540,288,72,7,12,108
+110,Gotenks SSJ3,36,2,56250,Super Ghost Kamikaze,362,159,10000,La fusione di Goten e Trunks,Dragon Ball,1,0,Normal,5,1.5,,86,1,92,120,2,540,288,72,7,12,108
+111,Rayman,37,2,59410,Lockjaw,375,165,10570,L'eroe senza braccia,Rayman,1,0,Normal,5,1.5,,87,0,,,,555,296,74,7,12,111
+112,Globox,37,2,59410,Rain Dance,372,164,10570,L'amico blu,Rayman,1,0,Normal,5,1.5,,87,0,,,,555,296,74,7,12,111
+113,Barbara,37,1,59410,Berserker Spin,385,168,10570,La guerriera vichinga (Premium),Rayman,1,0,Normal,5,1.5,,87,0,,,,666,355,88,7,12,111
+114,Lara Croft,38,1,62605,Dual Pistols,390,172,11150,L'archeologa avventuriera (Premium),Tomb Raider,1,0,Normal,5,1.5,,88,0,,,,684,364,91,7,12,114
+115,Sam Nishimura,38,2,62605,Climbing Axe,385,170,11150,L'amica documentarista,Tomb Raider,1,0,Normal,5,1.5,,88,0,,,,570,304,76,7,12,114
+116,Jonah Maiava,38,2,62605,Heavy Rifle,382,169,11150,Il compagno fidato,Tomb Raider,1,0,Normal,5,1.5,,88,0,,,,570,304,76,7,12,114
+117,Bayonetta,39,1,65935,Wicked Weave,400,178,11750,La strega Umbra (Premium),Bayonetta,1,0,Normal,5,1.5,,89,0,,,,702,374,93,7,13,117
+118,Jeanne,39,2,65935,All 4 One,395,176,11750,La rivale Umbra,Bayonetta,1,0,Normal,5,1.5,,89,0,,,,585,312,78,7,13,117
+119,Rodin,39,2,65935,Demon Summon,392,175,11750,Il fabbro demoniaco,Bayonetta,1,0,Normal,5,1.5,,89,0,,,,585,312,78,7,13,117
+120,Goku SSJ4,40,2,70000,10x Kamehameha,420,185,12370,Goku Super Saiyan 4 (Premium),Dragon Ball,1,0,Normal,5,1.5,,90,1,108,150,2,600,320,80,8,13,120
+121,Vegeta SSJ4,40,2,70000,Final Shine,415,183,12370,Vegeta Super Saiyan 4,Dragon Ball,1,0,Normal,5,1.5,,90,1,109,150,2,600,320,80,8,13,120
+122,Gogeta SSJ4,40,2,70000,Big Bang Kamehameha,412,182,12370,La fusione Saiyan,Dragon Ball,1,0,Normal,5,1.5,,90,0,,,,600,320,80,8,13,120
+123,Ness,41,2,75000,PK Thunder,425,188,13000,Il ragazzo PSI,Earthbound,1,0,Normal,5,1.5,,91,0,,,,615,328,82,8,13,123
+124,Lucas,41,2,75000,PK Love,422,187,13000,Il ragazzo sensitivo,Earthbound,1,0,Normal,5,1.5,,91,0,,,,615,328,82,8,13,123
+125,Porky,41,1,75000,Mech Assault,435,192,13000,L'antagonista grasso (Premium),Earthbound,1,0,Normal,5,1.5,,91,0,,,,738,393,98,8,13,123
+126,Pit,42,2,80000,Palutena Bow,440,195,13650,L'angelo di Skyworld,Kid Icarus,1,0,Normal,5,1.5,,92,0,,,,630,336,84,8,14,126
+127,Dark Pit,42,2,80000,Silver Bow,438,194,13650,L'angelo oscuro,Kid Icarus,1,0,Normal,5,1.5,,92,0,,,,630,336,84,8,14,126
+128,Palutena,42,1,80000,Divine Light,450,198,13650,La dea della luce (Premium),Kid Icarus,1,0,Normal,5,1.5,,92,0,,,,756,403,100,8,14,126
+129,Shulk,11,1,5525,Monado Buster,110,52,14310,Il visionario (Premium),Xenoblade,1,0,Normal,5,1.5,,93,0,,,,198,105,26,2,3,33
+130,Reyn,43,2,85000,Sword Drive,455,203,14310,Il difensore,Xenoblade,1,0,Normal,5,1.5,,93,0,,,,645,344,86,8,14,129
+131,Fiora,43,2,85000,Lock-On,452,202,14310,La meccanica,Xenoblade,1,0,Normal,5,1.5,,93,0,,,,645,344,86,8,14,129
+132,Isaac,44,2,90000,Move,465,208,14990,L'adepto di Venere,Golden Sun,1,0,Normal,5,1.5,,94,0,,,,660,352,88,8,14,132
+133,Garet,44,2,90000,Blast,462,207,14990,L'adepto di Marte,Golden Sun,1,0,Normal,5,1.5,,94,0,,,,660,352,88,8,14,132
+134,Ivan,44,1,90000,Plasma,475,212,14990,L'adepto di Giove (Premium),Golden Sun,1,0,Normal,5,1.5,,94,0,,,,792,422,105,8,14,132
+135,Marth,45,2,95000,Critical Hit,480,215,15690,Il principe di Altea,Fire Emblem,1,0,Normal,5,1.5,,95,0,,,,675,360,90,9,15,135
+136,Roy,45,2,95000,Blazer,478,214,15690,Il giovane leone,Fire Emblem,1,0,Normal,5,1.5,,95,0,,,,675,360,90,9,15,135
+137,Ike,45,1,95000,Aether,490,218,15690,L'eroe radiant (Premium),Fire Emblem,1,0,Normal,5,1.5,,95,0,,,,810,432,108,9,15,135
+138,Chrom,46,2,100000,Awakening,495,222,16400,Il principe esaltato,Fire Emblem,1,0,Normal,5,1.5,,96,0,,,,690,368,92,9,15,138
+139,Lucina,46,2,100000,Future Vision,492,221,16400,La principessa del futuro,Fire Emblem,1,0,Normal,5,1.5,,96,0,,,,690,368,92,9,15,138
+140,Robin,46,1,100000,Thoron,505,225,16400,Il tattico (Premium),Fire Emblem,1,0,Normal,5,1.5,,96,0,,,,828,441,110,9,15,138
+141,Corrin,47,2,105000,Dragon Fang,510,228,17130,Il principe drago,Fire Emblem,1,0,Normal,5,1.5,,97,0,,,,705,376,94,9,15,141
+142,Byleth,47,2,105000,Sublime Heaven,508,227,17130,Il professore,Fire Emblem,1,0,Normal,5,1.5,,97,0,,,,705,376,94,9,15,141
+143,Edelgard,47,1,105000,Raging Storm,520,232,17130,L'imperatrice (Premium),Fire Emblem,1,0,Normal,5,1.5,,97,0,,,,846,451,112,9,15,141
+144,Goku SSJ Blue,48,2,110000,God Kamehameha,530,238,17870,Goku Super Saiyan Blue (Premium),Dragon Ball,1,0,Normal,5,1.5,,98,1,120,200,2,720,384,96,9,16,144
+145,Vegeta SSJ Blue,48,2,110000,Final Explosion,525,236,17870,Vegeta Super Saiyan Blue,Dragon Ball,1,0,Normal,5,1.5,,98,1,121,200,2,720,384,96,9,16,144
+146,Vegito Blue,48,2,110000,Final Kamehameha,522,235,17870,La fusione Potara,Dragon Ball,1,0,Normal,5,1.5,,98,0,,,,720,384,96,9,16,144
+147,Captain Falcon,49,1,115000,Falcon Punch,540,245,18630,Il pilota F-Zero (Premium),F-Zero,1,0,Normal,5,1.5,,99,0,,,,882,470,117,9,16,147
+148,Samurai Goroh,49,2,115000,Katana Slash,535,243,18630,Il samurai rivale,F-Zero,1,0,Normal,5,1.5,,99,0,,,,735,392,98,9,16,147
+149,Black Shadow,49,2,115000,Dark Strike,532,242,18630,L'imperatore oscuro,F-Zero,1,0,Normal,5,1.5,,99,0,,,,735,392,98,9,16,147
+150,Goku Ultra Instinct,50,2,120000,Autonomous Ultra,560,255,19410,Goku Ultra Istinto (Premium),Dragon Ball,1,0,Normal,5,1.5,,100,1,144,300,2,750,400,100,10,16,150
+151,Jiren,50,2,120000,Power Impact,555,253,19410,Il Pride Trooper,Dragon Ball,1,0,Normal,5,1.5,,100,0,,,,750,400,100,10,16,150
+152,Broly,50,2,120000,Gigantic Roar,552,252,19410,Il Saiyan leggendario,Dragon Ball,1,0,Normal,5,1.5,,100,0,,,,750,400,100,10,16,150
+153,Olimar,51,2,125000,Pikmin Army,565,258,20200,Il capitano Pikmin,Pikmin,1,0,Normal,5,1.5,,101,0,,,,765,408,102,10,17,153
+154,Louie,51,2,125000,Purple Pikmin,562,257,20200,Il secondo capitano,Pikmin,1,0,Normal,5,1.5,,101,0,,,,765,408,102,10,17,153
+155,Alph,51,1,125000,Rock Pikmin,575,262,20200,Il giovane esploratore (Premium),Pikmin,1,0,Normal,5,1.5,,101,0,,,,918,489,122,10,17,153
+156,Villager,52,2,130000,Pocket,580,265,21010,L'abitante,Animal Crossing,1,0,Normal,5,1.5,,102,0,,,,780,416,104,10,17,156
+157,Isabelle,52,2,130000,Fishing Rod,578,264,21010,L'assistente canina,Animal Crossing,1,0,Normal,5,1.5,,102,0,,,,780,416,104,10,17,156
+158,Tom Nook,52,1,130000,Bell Bag,590,268,21010,Il procione mercante (Premium),Animal Crossing,1,0,Normal,5,1.5,,102,0,,,,936,499,124,10,17,156
+159,Inkling,53,2,135000,Splat Roller,595,272,21830,Il ragazzo calamaro,Splatoon,1,0,Normal,5,1.5,,103,0,,,,795,424,106,10,17,159
+160,Octoling,53,2,135000,Octo Shot,592,271,21830,La ragazza polpo,Splatoon,1,0,Normal,5,1.5,,103,0,,,,795,424,106,10,17,159
+161,Agent 3,53,1,135000,Splashdown,605,275,21830,L'agente speciale (Premium),Splatoon,1,0,Normal,5,1.5,,103,0,,,,954,508,127,10,17,159
+162,Steve,54,2,140000,Diamond Sword,610,278,22670,Il minatore,Minecraft,1,0,Normal,5,1.5,,104,0,,,,810,432,108,10,18,162
+163,Alex,54,2,140000,TNT Blast,608,277,22670,La costruttrice,Minecraft,1,0,Normal,5,1.5,,104,0,,,,810,432,108,10,18,162
+164,Herobrine,54,1,140000,Nether Portal,620,282,22670,La leggenda oscura (Premium),Minecraft,1,0,Normal,5,1.5,,104,0,,,,972,518,129,10,18,162
+165,Ryu Hayabusa,55,1,145000,Izuna Drop,630,288,23530,Il ninja drago (Premium),Ninja Gaiden,1,0,Normal,5,1.5,,105,0,,,,990,528,132,11,18,165
+166,Ayane,55,2,145000,Art of the Raging Mountain God,625,286,23530,La kunoichi viola,Ninja Gaiden,1,0,Normal,5,1.5,,105,0,,,,825,440,110,11,18,165
+167,Kasumi,55,2,145000,Tearing Wind Combo,622,285,23530,La kunoichi fuggitiva,Ninja Gaiden,1,0,Normal,5,1.5,,105,0,,,,825,440,110,11,18,165
+168,Sackboy,56,2,150000,Create Platform,635,292,24400,Il pupazzo di stoffa,LittleBigPlanet,1,0,Normal,5,1.5,,106,0,,,,840,448,112,11,18,168
+169,Oddsock,56,2,150000,Speed Dash,632,291,24400,Il cane veloce,LittleBigPlanet,1,0,Normal,5,1.5,,106,0,,,,840,448,112,11,18,168
+170,Toggle,56,1,150000,Size Change,645,295,24400,Il robot trasformista (Premium),LittleBigPlanet,1,0,Normal,5,1.5,,106,0,,,,1008,537,134,11,18,168
+171,Crash Bandicoot Evolved,57,2,155000,Mega Spin,650,298,25290,Crash potenziato,Crash Bandicoot,1,0,Normal,5,1.5,,107,1,8,80,0,855,456,114,11,19,171
+172,Coco Bandicoot,57,2,155000,Laptop Hack,648,297,25290,La sorella genio,Crash Bandicoot,1,0,Normal,5,1.5,,107,1,171,100,0,855,456,114,11,19,171
+173,Aku Aku Spirit,57,2,155000,Ancient Protection,660,302,25290,Lo spirito protettore (Premium),Crash Bandicoot,1,0,Normal,5,1.5,,107,1,172,150,0,855,456,114,11,19,171
+174,Spyro Elder,58,2,160000,Elder Fire,665,305,26190,Spyro adulto,Spyro,1,0,Normal,5,1.5,,108,1,9,80,0,870,464,116,11,19,174
+175,Cynder,58,2,160000,Shadow Strike,662,304,26190,La dragonessa oscura,Spyro,1,0,Normal,5,1.5,,108,1,174,100,0,870,464,116,11,19,174
+176,Malefor,58,2,160000,Dark Master Beam,675,308,26190,Il maestro oscuro (Premium),Spyro,1,0,Normal,5,1.5,,108,1,175,150,0,870,464,116,11,19,174
+177,Sonic Super,59,2,165000,Super Sonic Boost,680,312,27110,Sonic trasformato,Sonic,1,0,Normal,5,1.5,,139,1,20,100,2,885,472,118,11,19,177
+178,Shadow Chaos,59,2,165000,Chaos Blast,678,311,27110,Shadow con Chaos Emeralds,Sonic,1,0,Normal,5,1.5,,139,1,177,150,2,885,472,118,11,19,177
+179,Silver Psychic,59,2,165000,Psychokinesis,690,315,27110,Silver potenziato (Premium),Sonic,1,0,Normal,5,1.5,,139,1,178,200,2,885,472,118,11,19,177
+180,Hungarian Horntail,60,2,170000,Dragon Fire,700,320,28050,Il drago ungherese,Harry Potter Dragons,1,0,Normal,5,1.5,,110,0,,,,900,480,120,12,20,180
+181,Chinese Fireball,60,2,170000,Fireball Breath,698,319,28050,Il drago cinese,Harry Potter Dragons,1,0,Normal,5,1.5,,110,0,,,,900,480,120,12,20,180
+182,Swedish Short-Snout,60,1,170000,Ice Flame,710,323,28050,Il drago svedese (Premium),Harry Potter Dragons,1,0,Normal,5,1.5,,110,0,,,,1080,576,144,12,20,180
+183,Common Welsh Green,61,2,175000,Emerald Flame,715,327,29000,Il drago gallese,Harry Potter Dragons,1,0,Normal,5,1.5,,111,0,,,,915,488,122,12,20,183
+184,Hebridean Black,61,2,175000,Dark Fire,712,326,29000,Il drago scozzese,Harry Potter Dragons,1,0,Normal,5,1.5,,111,0,,,,915,488,122,12,20,183
+185,Norwegian Ridgeback,61,1,175000,Ridge Spike,725,330,29000,Il drago norvegese (Premium),Harry Potter Dragons,1,0,Normal,5,1.5,,111,0,,,,1098,585,146,12,20,183
+186,Romanian Longhorn,62,2,180000,Horn Charge,730,334,29970,Il drago rumeno,Harry Potter Dragons,1,0,Normal,5,1.5,,112,0,,,,930,496,124,12,20,186
+187,Peruvian Vipertooth,62,2,180000,Venom Fang,728,333,29970,Il drago peruviano,Harry Potter Dragons,1,0,Normal,5,1.5,,112,0,,,,930,496,124,12,20,186
+188,Antipodean Opaleye,62,1,180000,Opal Beam,740,337,29970,Il drago neozelandese (Premium),Harry Potter Dragons,1,0,Normal,5,1.5,,112,0,,,,1116,595,148,12,20,186
+189,Ukrainian Ironbelly,63,2,185000,Iron Scale,745,341,30950,Il drago ucraino,Harry Potter Dragons,1,0,Normal,5,1.5,,113,0,,,,945,504,126,12,20,189
+190,Catalonian Fireball,63,2,185000,Catalan Inferno,742,340,30950,Il drago catalano,Harry Potter Dragons,1,0,Normal,5,1.5,,113,0,,,,945,504,126,12,20,189
+191,Portuguese Long-Snout,63,1,185000,Flame Snout,755,344,30950,Il drago portoghese (Premium),Harry Potter Dragons,1,0,Normal,5,1.5,,113,0,,,,1134,604,151,12,20,189
+192,Gringotts Dragon,64,1,190000,Blind Fury,770,350,31950,Il drago di Gringotts (Premium),Harry Potter Dragons,1,0,Normal,5,1.5,,114,0,,,,1152,614,153,12,20,192
+193,Norbert,64,2,190000,Baby Fire,765,348,31950,Il drago di Hagrid,Harry Potter Dragons,1,0,Normal,5,1.5,,114,0,,,,960,512,128,12,20,192
+194,Dragon Keeper,64,2,190000,Dragon Command,762,347,31950,Il domatore di draghi,Harry Potter Dragons,1,0,Normal,5,1.5,,114,0,,,,960,512,128,12,20,192
+195,Bahamut,65,1,195000,Mega Flare,800,365,32970,Il re dei draghi (Premium),Final Fantasy,1,0,Normal,5,1.5,,115,0,,,,1170,624,156,13,20,195
+196,Tiamat,65,2,195000,Five Heads,795,363,32970,Il drago a cinque teste,Final Fantasy,1,0,Normal,5,1.5,,115,0,,,,975,520,130,13,20,195
+197,Leviathan,65,2,195000,Tidal Wave,792,362,32970,Il serpente marino,Final Fantasy,1,0,Normal,5,1.5,,115,0,,,,975,520,130,13,20,195
+198,Ifrit,66,2,200000,Hellfire,810,370,34000,L'invocazione del fuoco,Final Fantasy,1,0,Normal,5,1.5,,116,0,,,,990,528,132,13,20,198
+199,Shiva,66,2,200000,Diamond Dust,808,369,34000,L'invocazione del ghiaccio,Final Fantasy,1,0,Normal,5,1.5,,116,0,,,,990,528,132,13,20,198
+200,Ramuh,66,1,200000,Judgment Bolt,820,373,34000,L'invocazione del fulmine (Premium),Final Fantasy,1,0,Normal,5,1.5,,116,0,,,,1188,633,158,13,20,198
+201,Odin,67,2,205000,Zantetsuken,825,377,35050,Il cavaliere oscuro,Final Fantasy,1,0,Normal,5,1.5,,117,0,,,,1005,536,134,13,20,201
+202,Alexander,67,2,205000,Divine Judgment,822,376,35050,La fortezza sacra,Final Fantasy,1,0,Normal,5,1.5,,117,0,,,,1005,536,134,13,20,201
+203,Phoenix,67,1,205000,Rebirth Flame,835,380,35050,L'uccello immortale (Premium),Final Fantasy,1,0,Normal,5,1.5,,117,0,,,,1206,643,160,13,20,201
+204,Knights of the Round,68,1,210000,Ultimate End,860,390,36110,I cavalieri della tavola rotonda (Premium),Final Fantasy,1,0,Normal,5,1.5,,118,0,,,,1224,652,163,13,20,204
+205,Yojimbo,68,2,210000,Zanmato,855,388,36110,Il samurai mercenario,Final Fantasy,1,0,Normal,5,1.5,,118,0,,,,1020,544,136,13,20,204
+206,Anima,68,2,210000,Oblivion,852,387,36110,L'invocazione oscura,Final Fantasy,1,0,Normal,5,1.5,,118,0,,,,1020,544,136,13,20,204
+207,Ark,69,2,215000,Eternal Breath,870,395,37190,L'arca divina,Final Fantasy,1,0,Normal,5,1.5,,119,0,,,,1035,552,138,13,20,207
+208,Eden,69,2,215000,Eternal Breath,868,394,37190,Il guardiano GF,Final Fantasy,1,0,Normal,5,1.5,,119,0,,,,1035,552,138,13,20,207
+209,Doomtrain,69,1,215000,Runaway Train,880,398,37190,Il treno infernale (Premium),Final Fantasy,1,0,Normal,5,1.5,,119,0,,,,1242,662,165,13,20,207
+210,Zodiark,70,1,220000,Final Eclipse,900,405,38290,L'Esper oscuro (Premium),Final Fantasy,1,0,Normal,5,1.5,,120,0,,,,1260,672,168,14,20,210
+211,Ultima,70,2,220000,Redemption,895,403,38290,L'angelo supremo,Final Fantasy,1,0,Normal,5,1.5,,120,0,,,,1050,560,140,14,20,210
+212,Exodus,70,2,220000,Meteor,892,402,38290,Il giudice divino,Final Fantasy,1,0,Normal,5,1.5,,120,0,,,,1050,560,140,14,20,210
+213,Arceus,75,1,245000,Judgment,950,430,44010,Il dio Pokemon (Premium),Pokemon,1,1,Normal,5,1.5,,125,0,,,,1350,720,180,15,20,225
+214,Dialga,75,2,245000,Roar of Time,945,428,44010,Il dio del tempo,Pokemon,1,1,Normal,5,1.5,,125,0,,,,1125,600,150,15,20,225
+215,Palkia,75,2,245000,Spacial Rend,942,427,44010,Il dio dello spazio,Pokemon,1,1,Normal,5,1.5,,125,0,,,,1125,600,150,15,20,225
+216,Giratina,76,2,250000,Shadow Force,960,435,45200,Il dio dell'antimateria,Pokemon,1,1,Normal,5,1.5,,126,0,,,,1140,608,152,15,20,228
+217,Rayquaza,76,2,250000,Dragon Ascent,958,434,45200,Il drago del cielo,Pokemon,1,1,Normal,5,1.5,,126,0,,,,1140,608,152,15,20,228
+218,Groudon,76,1,250000,Precipice Blades,970,438,45200,Il dio della terra (Premium),Pokemon,1,1,Normal,5,1.5,,126,0,,,,1368,729,182,15,20,228
+219,Kyogre,77,2,255000,Origin Pulse,975,442,46410,Il dio del mare,Pokemon,1,1,Normal,5,1.5,,127,0,,,,1155,616,154,15,20,231
+220,Mewtwo,77,2,255000,Psystrike,972,441,46410,Il Pokemon genetico,Pokemon,1,1,Normal,5,1.5,,127,0,,,,1155,616,154,15,20,231
+221,Lugia,77,1,255000,Aeroblast,985,445,46410,Il guardiano del mare (Premium),Pokemon,1,1,Normal,5,1.5,,127,0,,,,1386,739,184,15,20,231
+222,Ho-Oh,78,2,260000,Sacred Fire,990,448,47630,L'uccello arcobaleno,Pokemon,1,1,Normal,5,1.5,,128,0,,,,1170,624,156,15,20,234
+223,Celebi,78,2,260000,Time Travel,988,447,47630,Il viaggiatore del tempo,Pokemon,1,1,Normal,5,1.5,,128,0,,,,1170,624,156,15,20,234
+224,Jirachi,78,1,260000,Doom Desire,1000,452,47630,Il Pokemon dei desideri (Premium),Pokemon,1,1,Normal,5,1.5,,128,0,,,,1404,748,187,15,20,234
+225,Shenron,80,1,270000,Eternal Dragon,1050,470,50130,Il drago dei desideri (Premium),Dragon Ball,1,0,Normal,5,1.5,,130,0,,,,1440,768,192,15,20,240
+226,Porunga,80,2,270000,Three Wishes,1045,468,50130,Il drago Namecciano,Dragon Ball,1,0,Normal,5,1.5,,130,0,,,,1200,640,160,15,20,240
+227,Super Shenron,80,2,270000,Divine Wish,1042,467,50130,Il drago divino,Dragon Ball,1,0,Normal,5,1.5,,130,0,,,,1200,640,160,15,20,240
+228,Zeus,85,1,295000,Lightning Bolt,1150,510,56650,Il re degli dei greci (Premium),Mitologia,1,0,Normal,5,1.5,,135,0,,,,1530,816,204,15,20,255
+229,Poseidon,85,2,295000,Tidal Fury,1145,508,56650,Il dio del mare greco,Mitologia,1,0,Normal,5,1.5,,135,0,,,,1275,680,170,15,20,255
+230,Hades,85,2,295000,Underworld Flame,1142,507,56650,Il dio degli inferi greco,Mitologia,1,0,Normal,5,1.5,,135,0,,,,1275,680,170,15,20,255
+231,Athena,86,2,300000,Wisdom Strike,1160,515,58000,La dea della saggezza,Mitologia,1,0,Normal,5,1.5,,136,0,,,,1290,688,172,15,20,258
+232,Ares,86,2,300000,War Cry,1158,514,58000,Il dio della guerra greco,Mitologia,1,0,Normal,5,1.5,,136,0,,,,1290,688,172,15,20,258
+233,Apollo,86,1,300000,Sun Arrow,1170,518,58000,Il dio del sole greco (Premium),Mitologia,1,0,Normal,5,1.5,,136,0,,,,1548,825,206,15,20,258
+234,Artemis,87,2,305000,Moon Bow,1175,522,59370,La dea della caccia,Mitologia,1,0,Normal,5,1.5,,137,0,,,,1305,696,174,15,20,261
+235,Hera,87,2,305000,Queen's Wrath,1172,521,59370,La regina degli dei,Mitologia,1,0,Normal,5,1.5,,137,0,,,,1305,696,174,15,20,261
+236,Hermes,87,1,305000,Divine Speed,1185,525,59370,Il messaggero degli dei (Premium),Mitologia,1,0,Normal,5,1.5,,137,0,,,,1566,835,208,15,20,261
+237,Odin,90,1,320000,Gungnir Strike,1250,550,63570,Il padre di tutti (Premium),Mitologia,1,0,Normal,5,1.5,,140,0,,,,1620,864,216,15,20,270
+238,Thor,90,2,320000,Mjolnir Thunder,1245,548,63570,Il dio del tuono nordico,Mitologia,1,0,Normal,5,1.5,,140,0,,,,1350,720,180,15,20,270
+239,Loki,90,2,320000,Trickster Magic,1242,547,63570,Il dio dell'inganno,Mitologia,1,0,Normal,5,1.5,,140,0,,,,1350,720,180,15,20,270
+240,Freya,91,2,325000,Valkyrie Strike,1260,555,65000,La dea dell'amore nordica,Mitologia,1,0,Normal,5,1.5,,141,0,,,,1365,728,182,15,20,273
+241,Tyr,91,2,325000,Justice Blade,1258,554,65000,Il dio della guerra nordico,Mitologia,1,0,Normal,5,1.5,,141,0,,,,1365,728,182,15,20,273
+242,Heimdall,91,1,325000,Bifrost Beam,1270,558,65000,Il guardiano del Bifrost (Premium),Mitologia,1,0,Normal,5,1.5,,141,0,,,,1638,873,218,15,20,273
+243,Ra,95,1,345000,Solar Flare,1350,590,70890,Il dio del sole egizio (Premium),Mitologia,1,0,Normal,5,1.5,,145,0,,,,1710,912,228,15,20,285
+244,Anubis,95,2,345000,Death Judgment,1345,588,70890,Il dio della morte egizio,Mitologia,1,0,Normal,5,1.5,,145,0,,,,1425,760,190,15,20,285
+245,Osiris,95,2,345000,Resurrection,1342,587,70890,Il dio dell'aldilà egizio,Mitologia,1,0,Normal,5,1.5,,145,0,,,,1425,760,190,15,20,285
+246,Horus,96,2,350000,Sky Attack,1360,595,72400,Il dio falco egizio,Mitologia,1,0,Normal,5,1.5,,146,0,,,,1440,768,192,15,20,288
+247,Set,96,2,350000,Chaos Storm,1358,594,72400,Il dio del caos egizio,Mitologia,1,0,Normal,5,1.5,,146,0,,,,1440,768,192,15,20,288
+248,Isis,96,1,350000,Divine Magic,1370,598,72400,La dea della magia egizia (Premium),Mitologia,1,0,Normal,5,1.5,,146,0,,,,1728,921,230,15,20,288
+249,Amaterasu,98,1,360000,Divine Sun,1450,620,75470,La dea del sole giapponese (Premium),Mitologia,1,0,Normal,5,1.5,,148,0,,,,1764,940,235,15,20,294
+250,Susanoo,98,2,360000,Storm Blade,1445,618,75470,Il dio della tempesta giapponese,Mitologia,1,0,Normal,5,1.5,,148,0,,,,1470,784,196,15,20,294
+251,Tsukuyomi,98,2,360000,Moon Illusion,1442,617,75470,Il dio della luna giapponese,Mitologia,1,0,Normal,5,1.5,,148,0,,,,1470,784,196,15,20,294
+252,The One Above All,100,1,370000,Omnipotence,1600,700,78610,L'essere supremo (Premium),Mitologia,1,0,Normal,5,1.5,,150,0,,,,1800,960,240,15,20,300
+253,Brahma,100,2,370000,Creation,1595,698,78610,Il creatore induista,Mitologia,1,0,Normal,5,1.5,,150,0,,,,1500,800,200,15,20,300
+254,Vishnu,100,2,370000,Preservation,1592,697,78610,Il preservatore induista,Mitologia,1,0,Normal,5,1.5,,150,0,,,,1500,800,200,15,20,300
+255,Shiva,100,2,370000,Destruction,1589,696,78610,Il distruttore induista,Mitologia,1,0,Normal,5,1.5,,150,0,,,,1500,800,200,15,20,300
+256,Parvati,100,2,370000,Divine Love,1586,695,78610,La dea della magia indiana,Mitologia,1,0,Normal,5,1.5,,150,0,,,,1500,800,200,15,20,300
+257,Kali,100,2,370000,Divine Wrath,1583,694,78610,La dea della guerra indiana,Mitologia,1,0,Normal,5,1.5,,150,0,,,,1500,800,200,15,20,300
+258,Ganesha,100,2,370000,Divine Wisdom,1580,693,78610,Il dio della scienza indiana,Mitologia,1,0,Normal,5,1.5,,150,0,,,,1500,800,200,15,20,300
+259,Lakshmi,100,2,370000,Divine Wealth,1578,692,78610,La dea della ricchezza indiana,Mitologia,1,,Normal,5,1.5,,150,0,,,,1500,800,200,15,20,300
+260,C16,25,2,27400,Hell Flash,240,105,4810,L'androide gentile,Dragon Ball,1,0,Normal,5,1.5,,75,0,,,,375,200,50,5,8,75
+261,C17,25,2,27400,Barrier,235,102,4810,L'androide ribelle,Dragon Ball,1,0,Normal,5,1.5,,75,0,,,,375,200,50,5,8,75
+262,C18,25,2,27400,Energy Blast,235,102,4810,La bellissima androide,Dragon Ball,1,0,Normal,5,1.5,,75,0,,,,375,200,50,5,8,75
+263,Freezer (Prima Forma),30,2,39225,Death Beam,300,130,6930,Il tiranno galattico,Dragon Ball,1,0,Normal,5,1.5,,80,0,,,,450,240,60,6,10,90
+264,Freezer (Seconda Forma),35,2,53225,Death Storm,350,155,9450,Freezer trasformato,Dragon Ball,1,0,Normal,5,1.5,,85,0,,,,525,280,70,7,11,105
+265,Freezer (Terza Forma),40,2,70000,Crazy Finger Beam,420,185,12370,Freezer mostruoso,Dragon Ball,1,0,Normal,5,1.5,,90,0,,,,600,320,80,8,13,120
+266,Freezer (Corpo Perfetto),45,2,93225,Death Ball,500,225,15850,La forma finale di Freezer,Dragon Ball,1,0,Normal,5,1.5,,95,0,,,,675,360,90,9,15,135
+267,Golden Freezer,60,1,160000,Golden Death Ball,750,340,28810,Freezer dorato (Premium),Dragon Ball,1,0,Normal,5,1.5,,110,0,,,,1080,576,144,12,20,180
+268,Cell (Imperfetto),35,2,53225,Bio-Impact,345,152,9450,L'essere creato da Gelo,Dragon Ball,1,0,Normal,5,1.5,,85,0,,,,525,280,70,7,11,105
+269,Cell (Semi-Perfetto),40,2,70000,Self-Destruct,415,183,12370,Cell dopo C17,Dragon Ball,1,0,Normal,5,1.5,,90,0,,,,600,320,80,8,13,120
+270,Cell (Perfetto),50,2,120000,Perfect Kamehameha,560,255,19410,La forma perfetta di Cell,Dragon Ball,1,0,Normal,5,1.5,,100,0,,,,750,400,100,10,16,150
+271,Cell (Super Perfetto),55,2,150000,Solar System Kamehameha,650,300,23530,Cell rinato,Dragon Ball,1,0,Normal,5,1.5,,105,0,,,,825,440,110,11,18,165
+272,Majin Buu (Grasso),55,2,150000,Innocence Cannon,640,295,23530,Il demone rosa,Dragon Ball,1,0,Normal,5,1.5,,105,0,,,,825,440,110,11,18,165
+273,Super Buu,60,2,160000,Vice Shout,740,335,28810,Buu dopo l'assorbimento,Dragon Ball,1,0,Normal,5,1.5,,110,0,,,,900,480,120,12,20,180
+274,Kid Buu,65,1,190000,Planet Burst,850,385,33010,La forma pura di Buu (Premium),Dragon Ball,1,0,Normal,5,1.5,,115,0,,,,1170,624,156,13,20,195
+276,Homer Simpson,1,0,100,Donut Smash,20,10,0,D'oh!,For Fun,-1,0,Normal,5,1.5,,51,0,,,,15,8,2,0,0,3
+277,Bart Simpson,1,0,100,Slingshot,22,12,0,Ciucciami il calzino!,For Fun,-1,0,Normal,5,1.5,,51,0,,,,15,8,2,0,0,3
+278,Daffy Duck,1,0,100,Duck Season,20,10,0,Sei spregevole!,For Fun,-1,0,Normal,5,1.5,,51,0,,,,15,8,2,0,0,3
+279,Bugs Bunny,1,0,100,Carrot Crunch,22,12,0,Che succede amico?,For Fun,-1,0,Normal,5,1.5,,51,0,,,,15,8,2,0,0,3
+280,Wile E. Coyote,1,0,100,ACME Trap,25,15,0,Super Genio!,For Fun,-1,0,Normal,5,1.5,,51,0,,,,15,8,2,0,0,3
+281,Gohan Base,10,0,4575,Masenko,100,45,0,Il giovane figlio di Goku,Dragon Ball,-1,0,Normal,5,1.5,,60,0,,,,150,80,20,2,3,30
+282,Gohan Beast,55,2,150000,Special Beam Cannon (Beast),700,320,23530,La forma definitiva di Gohan,Dragon Ball,1,0,Normal,10,2.0,,110,1,92,200,2,825,440,110,11,18,165
+283,Orange Piccolo,55,2,150000,Apocalyptic Burst,680,310,23530,La forma definitiva di Piccolo,Dragon Ball,1,0,Normal,8,1.8,,105,1,62,180,2,825,440,110,11,18,165
+284,Trunks Base,15,0,10075,Burning Attack,140,60,0,Il figlio di Vegeta dal futuro,Dragon Ball,-1,0,Normal,5,1.5,,65,0,,,,225,120,30,3,5,45
+285,Trunks SSJ,26,2,29575,Shining Sword Attack,245,106,5200,Trunks Super Saiyan,Dragon Ball,1,0,Normal,5,1.5,,76,1,284,50,2,390,208,52,5,8,78
+286,Vegeta Ultra Ego,55,2,150000,Hakai,720,330,23530,La forma distruttrice di Vegeta,Dragon Ball,1,0,Normal,12,2.2,,115,1,145,250,2,825,440,110,11,18,165
