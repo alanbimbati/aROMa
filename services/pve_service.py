@@ -432,9 +432,25 @@ class PvEService:
                 self.elemental_type = char.get('elemental_type', "Normal") if char else "Normal"
                 
                 # Base crit from char + allocated crit rate
+                # Base crit from char + allocated crit rate
                 char_crit = char.get('crit_chance', 5) if char else 5
-                allocated_crit = getattr(user, 'allocated_crit_rate', 0)
-                self.crit_chance = char_crit + allocated_crit
+                # Use total crit_chance from user if available, otherwise calculate
+                # But wait, we updated stats_service to update user.crit_chance.
+                # So user.crit_chance SHOULD contain base + allocated?
+                # Actually, user.crit_chance in DB default is 0.
+                # If we rely on user.crit_chance, we should make sure it's initialized.
+                # Let's use the allocated amount to be safe and additive, 
+                # OR trust the total column.
+                # Plan said: "Use user.crit_chance (Total) + character.crit_chance"
+                
+                user_crit = getattr(user, 'crit_chance', 0) or 0
+                # If user.crit_chance is just the allocated part (which it seems to be based on stats_service update: current + 1),
+                # then we add char_crit.
+                # However, if user.crit_chance was intended to be THE total, we should be careful.
+                # In stats_service: 'crit_chance': current_crit + 1.
+                # So it accumulates.
+                
+                self.crit_chance = char_crit + user_crit
                 
                 self.crit_multiplier = char.get('crit_multiplier', 1.5) if char else 1.5
         
@@ -745,8 +761,8 @@ class PvEService:
                 self.damage_total = int(base_dmg * multiplier)
                 self.elemental_type = char.get('elemental_type', "Normal") if char else "Normal"
                 char_crit = char.get('crit_chance', 5) if char else 5
-                allocated_crit = getattr(user, 'allocated_crit_rate', 0)
-                self.crit_chance = char_crit + allocated_crit
+                user_crit = getattr(user, 'crit_chance', 0) or 0
+                self.crit_chance = char_crit + user_crit
                 self.crit_multiplier = char.get('crit_multiplier', 1.5) if char else 1.5
         
         # Limit to 5 mobs

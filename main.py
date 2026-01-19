@@ -1879,8 +1879,101 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         else:
             self.bot.reply_to(self.message, f"❌ Utente {target_username} non trovato.")
 
-    def handle_stats(self):
-        pass
+    def handle_stats(self, is_callback=False):
+        """Show user stats and allocation menu"""
+        utente = user_service.get_user(self.chatid)
+        if not utente:
+            return
+            
+        from services.stats_service import StatsService
+        stats_service = StatsService()
+        
+        msg = stats_service.get_stat_allocation_summary(utente)
+        
+        markup = types.InlineKeyboardMarkup()
+        
+        # Allocation buttons
+        points_info = stats_service.get_available_stat_points(utente)
+        if points_info['available'] > 0:
+            markup.row(
+                types.InlineKeyboardButton("❤️ HP (+10)", callback_data="stat_up_health"),
+                types.InlineKeyboardButton("💙 Mana (+5)", callback_data="stat_up_mana")
+            )
+            markup.row(
+                types.InlineKeyboardButton("⚔️ Danno (+2)", callback_data="stat_up_damage"),
+                types.InlineKeyboardButton("⚡ Vel (+1)", callback_data="stat_up_speed")
+            )
+            markup.row(
+                types.InlineKeyboardButton("🛡️ Res (+1%)", callback_data="stat_up_resistance"),
+                types.InlineKeyboardButton("🎯 Crit (+1%)", callback_data="stat_up_crit_rate")
+            )
+        
+        # Reset button
+        markup.add(types.InlineKeyboardButton("🔄 Reset Statistiche (Gratis)", callback_data="stat_reset"))
+        markup.add(types.InlineKeyboardButton("🔙 Menu Principale", callback_data="main_menu"))
+        
+        if is_callback:
+            # Edit existing message
+            self.bot.edit_message_text(msg, self.message.chat.id, self.message.message_id, reply_markup=markup, parse_mode='markdown')
+        else:
+            # Send new message
+            self.bot.reply_to(self.message, msg, reply_markup=markup, parse_mode='markdown')
+
+    def handle_stat_callback(self, call):
+        """Handle stat allocation callbacks"""
+        print(f"[DEBUG] handle_stat_callback called with data: {call.data}")
+        try:
+            # FIX: When called from callback, self.chatid is the Bot ID (sender of the message).
+            # We must use the ID of the user who clicked the button.
+            user_id = call.from_user.id
+            self.chatid = user_id
+            print(f"[DEBUG] User ID: {user_id}")
+            
+            utente = user_service.get_user(user_id)
+            if not utente:
+                print("[DEBUG] User not found")
+                self.bot.answer_callback_query(call.id, "Utente non trovato!", show_alert=True)
+                return
+            
+            if call.data == "stat_reset":
+                print("[DEBUG] Resetting stats")
+                from services.stats_service import StatsService
+                stats_service = StatsService()
+                success, msg = stats_service.reset_stat_points(utente)
+                print(f"[DEBUG] Reset result: {success}, {msg}")
+                self.bot.answer_callback_query(call.id, "Statistiche resettate!")
+                
+                # Refresh view
+                self.message = call.message
+                self.handle_stats(is_callback=True)
+                return
+
+            if call.data.startswith("stat_up_") or call.data.startswith("stat_alloc|"):
+                if "stat_up_" in call.data:
+                    stat_type = call.data.replace("stat_up_", "")
+                else:
+                    stat_type = call.data.replace("stat_alloc|", "")
+                
+                print(f"[DEBUG] Allocating stat: {stat_type}")
+                
+                from services.stats_service import StatsService
+                stats_service = StatsService()
+                
+                success, msg = stats_service.allocate_stat_point(utente, stat_type)
+                print(f"[DEBUG] Allocation result: {success}, {msg}")
+                
+                if success:
+                    self.bot.answer_callback_query(call.id, "Punto allocato!")
+                    # Refresh view
+                    self.message = call.message
+                    self.handle_stats(is_callback=True)
+                else:
+                    self.bot.answer_callback_query(call.id, msg, show_alert=True)
+        except Exception as e:
+            print(f"[ERROR] Exception in handle_stat_callback: {e}")
+            import traceback
+            traceback.print_exc()
+            self.bot.answer_callback_query(call.id, f"Errore: {str(e)}", show_alert=True)
 
     def handle_livell(self):
         pass
@@ -3094,11 +3187,16 @@ def handle_inline_buttons(call):
         elif upgrade_type == "bordello":
             success, msg = guild_service.upgrade_bordello(call.from_user.id)
             
-        bot.answer_callback_query(call.id, msg, show_alert=True)
         if success:
-            # Refresh menu
-            call.data = "guild_manage_menu"
-            handle_inline_buttons(call)
+            bot.answer_callback_query(call.id, "Upgrade completato!")
+            # Refresh view
+            handle_guild_view(call)
+        else:
+            bot.answer_callback_query(call.id, msg, show_alert=True)
+            
+    elif call.data.startswith("stat_"):
+        bot_cmds = BotCommands(call.message, bot)
+        bot_cmds.handle_stat_callback(call)
         return
 
     elif call.data == "guild_back_main":

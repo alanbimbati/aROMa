@@ -30,7 +30,7 @@ class StatsService:
         used_points = (user.allocated_health + user.allocated_mana + user.allocated_damage + 
                       getattr(user, 'allocated_speed', 0) + 
                       getattr(user, 'allocated_resistance', 0) + 
-                      getattr(user, 'allocated_crit_rate', 0))
+                      getattr(user, 'allocated_crit', 0))
         available = total_points - used_points
         
         return {
@@ -93,11 +93,18 @@ class StatsService:
         elif stat_type == 'resistance':
             new_allocated = getattr(user, 'allocated_resistance', 0) + 1
             self.user_service.update_user(user.id_telegram, {'allocated_resistance': new_allocated})
+            # Update total resistance
+            current_res = getattr(user, 'resistance', 0) or 0
+            self.user_service.update_user(user.id_telegram, {'resistance': current_res + self.RESISTANCE_PER_POINT})
             return True, f"✅ +{self.RESISTANCE_PER_POINT}% Resistenza! Subisci meno danni."
             
         elif stat_type == 'crit_rate':
-            new_allocated = getattr(user, 'allocated_crit_rate', 0) + 1
-            self.user_service.update_user(user.id_telegram, {'allocated_crit_rate': new_allocated})
+            new_allocated = getattr(user, 'allocated_crit', 0) + 1
+            self.user_service.update_user(user.id_telegram, {'allocated_crit': new_allocated})
+            
+            # Update total crit chance
+            current_crit = getattr(user, 'crit_chance', 0) or 0
+            self.user_service.update_user(user.id_telegram, {'crit_chance': current_crit + self.CRIT_RATE_PER_POINT})
             return True, f"✅ +{self.CRIT_RATE_PER_POINT}% Crit Rate! Più probabilità di critico."
         
         else:
@@ -116,7 +123,7 @@ class StatsService:
         points_returned = (user.allocated_health + user.allocated_mana + user.allocated_damage +
                           getattr(user, 'allocated_speed', 0) + 
                           getattr(user, 'allocated_resistance', 0) + 
-                          getattr(user, 'allocated_crit_rate', 0))
+                          getattr(user, 'allocated_crit', 0))
         
         # Reset allocated points
         self.user_service.update_user(user.id_telegram, {
@@ -125,14 +132,17 @@ class StatsService:
             'allocated_damage': 0,
             'allocated_speed': 0,
             'allocated_resistance': 0,
-            'allocated_crit_rate': 0,
+            'allocated_resistance': 0,
+            'allocated_crit': 0,
             'last_stat_reset': datetime.datetime.now()
         })
         
         # Update stats back to base
-        new_max_health = user.max_health - health_to_remove
-        new_max_mana = user.max_mana - mana_to_remove
-        new_base_damage = user.base_damage - damage_to_remove
+        health_to_remove = user.allocated_health * self.HEALTH_PER_POINT
+        mana_to_remove = user.allocated_mana * self.MANA_PER_POINT
+        damage_to_remove = user.allocated_damage * self.DAMAGE_PER_POINT
+        res_to_remove = getattr(user, 'allocated_resistance', 0) * self.RESISTANCE_PER_POINT
+        crit_to_remove = getattr(user, 'allocated_crit', 0) * self.CRIT_RATE_PER_POINT
         
         # Ensure current health/mana don't exceed new max
         new_health = min(user.health, new_max_health)
@@ -143,7 +153,13 @@ class StatsService:
             'health': new_health,
             'max_mana': new_max_mana,
             'mana': new_mana,
-            'base_damage': new_base_damage
+            'max_health': new_max_health,
+            'health': new_health,
+            'max_mana': new_max_mana,
+            'mana': new_mana,
+            'base_damage': new_base_damage,
+            'resistance': max(0, (getattr(user, 'resistance', 0) or 0) - res_to_remove),
+            'crit_chance': max(0, (getattr(user, 'crit_chance', 0) or 0) - crit_to_remove)
         })
         
         return True, f"🔄 Statistiche resettate!\n\n💰 Costo: Gratuito\n📊 Punti restituiti: {points_returned}\n\nOra puoi riallocarli come preferisci!"
@@ -166,7 +182,7 @@ class StatsService:
         msg += f"⚔️ Danno: {user.allocated_damage} (+{user.allocated_damage * self.DAMAGE_PER_POINT} DMG)\n"
         msg += f"⚡ Velocità: {getattr(user, 'allocated_speed', 0)} (+{getattr(user, 'allocated_speed', 0) * self.SPEED_PER_POINT})\n"
         msg += f"🛡️ Resistenza: {getattr(user, 'allocated_resistance', 0)} (+{getattr(user, 'allocated_resistance', 0) * self.RESISTANCE_PER_POINT}%)\n"
-        msg += f"🎯 Crit Rate: {getattr(user, 'allocated_crit_rate', 0)} (+{getattr(user, 'allocated_crit_rate', 0) * self.CRIT_RATE_PER_POINT}%)\n\n"
+        msg += f"🎯 Crit Rate: {getattr(user, 'allocated_crit', 0)} (+{getattr(user, 'allocated_crit', 0) * self.CRIT_RATE_PER_POINT}%)\n\n"
         
         if points_info['available'] > 0:
             msg += f"💡 Hai {points_info['available']} punto/i da allocare!"
@@ -187,5 +203,5 @@ class StatsService:
             'base_damage': user.base_damage,
             'speed': getattr(user, 'allocated_speed', 0) * self.SPEED_PER_POINT,
             'resistance': getattr(user, 'allocated_resistance', 0) * self.RESISTANCE_PER_POINT,
-            'crit_rate': getattr(user, 'allocated_crit_rate', 0) * self.CRIT_RATE_PER_POINT
+            'crit_rate': getattr(user, 'allocated_crit', 0) * self.CRIT_RATE_PER_POINT
         }
