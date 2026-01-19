@@ -498,8 +498,14 @@ def handle_inn_cmd(message):
             markup.add(types.InlineKeyboardButton(f"🏰 Vai alla Locanda di {guild['name']}", callback_data="guild_inn_view"))
             
     try:
-        with open("/home/alan/.gemini/antigravity/brain/6760c513-3c30-43b9-a17f-21b2ff8f07a5/guild_inn_premium_1768764161342.png", 'rb') as photo:
-            bot.send_photo(message.chat.id, photo, caption=msg, reply_markup=markup, parse_mode='markdown')
+        file_id = getattr(bot, 'locanda_file_id', None)
+        if file_id:
+            bot.send_photo(message.chat.id, file_id, caption=msg, reply_markup=markup, parse_mode='markdown')
+        else:
+            with open("images/miscellania/locanda.png", 'rb') as photo:
+                res = bot.send_photo(message.chat.id, photo, caption=msg, reply_markup=markup, parse_mode='markdown')
+                bot.locanda_file_id = res.photo[-1].file_id
+        return
     except Exception:
         bot.reply_to(message, msg, reply_markup=markup, parse_mode='markdown')
 
