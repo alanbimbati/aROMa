@@ -71,13 +71,32 @@ class PotionService:
         discount_msg = f" (Sconto Premium 50%: {potion['prezzo']} → {price} 🍑)" if user.premium == 1 else ""
         return True, f"Hai acquistato {potion_name} per {price} 🍑!{discount_msg}"
     
-    def use_potion(self, user, potion_name):
-        """Use a potion"""
+    def apply_potion_effect(self, user, potion_name):
+        """Apply potion effect without consuming item (internal use)"""
         potion = self.get_potion_by_name(potion_name)
-        
         if not potion:
             return False, "Pozione non trovata."
+            
+        tipo = potion['tipo']
+        valore = potion['effetto_valore']
         
+        if tipo == 'health_potion':
+            restored = self.user_service.restore_health(user, valore)
+            return True, f"💚 Hai recuperato {restored} HP!"
+            
+        elif tipo == 'mana_potion':
+            restored = self.user_service.restore_mana(user, valore)
+            return True, f"💙 Hai recuperato {restored} Mana!"
+            
+        elif tipo == 'full_restore':
+            hp_restored = self.user_service.restore_health(user, 999)
+            mana_restored = self.user_service.restore_mana(user, 999)
+            return True, f"✨ Hai recuperato {hp_restored} HP e {mana_restored} Mana!"
+            
+        return False, "Tipo di pozione sconosciuto."
+
+    def use_potion(self, user, potion_name):
+        """Use a potion (consume + apply)"""
         # Check if user has it
         from services.item_service import ItemService
         item_service = ItemService()
@@ -86,26 +105,10 @@ class PotionService:
             return False, "Non possiedi questa pozione!"
         
         # Apply effect
-        tipo = potion['tipo']
-        valore = potion['effetto_valore']
+        success, msg = self.apply_potion_effect(user, potion_name)
         
-        if tipo == 'health_potion':
-            # Restore health
-            restored = self.user_service.restore_health(user, valore)
+        if success:
+            # Consume item
             item_service.use_item(user.id_telegram, potion_name)
-            return True, f"💚 Hai recuperato {restored} HP!"
             
-        elif tipo == 'mana_potion':
-            # Restore mana
-            restored = self.user_service.restore_mana(user, valore)
-            item_service.use_item(user.id_telegram, potion_name)
-            return True, f"💙 Hai recuperato {restored} Mana!"
-            
-        elif tipo == 'full_restore':
-            # Restore both
-            hp_restored = self.user_service.restore_health(user, 999)
-            mana_restored = self.user_service.restore_mana(user, 999)
-            item_service.use_item(user.id_telegram, potion_name)
-            return True, f"✨ Hai recuperato {hp_restored} HP e {mana_restored} Mana!"
-        
-        return False, "Tipo di pozione sconosciuto."
+        return success, msg

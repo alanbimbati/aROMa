@@ -40,6 +40,11 @@ class Mob(Base):
     
     # Targeting variety
     last_target_id = Column(Integer, nullable=True)
+    aggro_target_id = Column(Integer, nullable=True)
+    aggro_end_time = Column(DateTime, nullable=True)
+    
+    # NEW: Track the spawn message ID to delete it later
+    last_message_id = Column(Integer, nullable=True)
     
     # Dungeon integration
     dungeon_id = Column(Integer, ForeignKey('dungeon.id'), nullable=True)

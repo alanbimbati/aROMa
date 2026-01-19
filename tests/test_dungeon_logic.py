@@ -54,6 +54,7 @@ class TestDungeonLogic(unittest.TestCase):
         session.query(Mob).filter_by(chat_id=999).delete()
         session.query(DungeonParticipant).delete()
         session.query(Dungeon).filter_by(chat_id=999).delete()
+        session.query(Utente).filter(Utente.id_telegram.in_([12345, 67890, 11111])).delete()
         session.commit()
         session.close()
 

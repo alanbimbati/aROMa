@@ -49,6 +49,12 @@ class Utente(Base):
     last_stat_reset = Column(DateTime, nullable=True)  # Track last reset for cooldown
     last_attack_time = Column(DateTime, nullable=True)
     
+    # Shield Mechanic
+    shield_hp = Column(Integer, default=0)
+    shield_max_hp = Column(Integer, default=0)
+    shield_end_time = Column(DateTime, nullable=True)
+    last_shield_cast = Column(DateTime, nullable=True)
+    
     # Status Effects
     active_status_effects = Column(String, nullable=True)  # JSON: [{effect, duration, stacks}]
     
@@ -58,6 +64,10 @@ class Utente(Base):
     
     # Last character change timestamp
     last_character_change = Column(DateTime, nullable=True)
+    
+    # Inn / Resting
+    resting_since = Column(DateTime, nullable=True)
+    vigore_until = Column(DateTime, nullable=True)
 
     # Platform (iOS, Android, Web)
     platform = Column(String, nullable=True)

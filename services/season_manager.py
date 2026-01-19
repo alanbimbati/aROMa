@@ -1,7 +1,7 @@
 import datetime
 import json
 from database import Database
-from models.seasons import Season, SeasonProgress, SeasonReward
+from models.seasons import Season, SeasonProgress, SeasonReward, SeasonClaimedReward
 from models.user import Utente
 from services.user_service import UserService
 from services.character_service import CharacterService
@@ -151,11 +151,25 @@ class SeasonManager:
             for reward in rewards:
                 # Check if user can get this reward (Free or Premium)
                 if not reward.is_premium or progress.has_premium_pass:
-                    # In a real system, we'd track WHICH rewards were already claimed.
-                    # For simplicity, we'll assume rewards are awarded on level up.
-                    # To be robust, we should have a SeasonClaimedReward table.
-                    unlocked_rewards.append(reward)
-                    self.award_reward(user_id, reward)
+                    # Check if already claimed
+                    claimed = session.query(SeasonClaimedReward).filter_by(
+                        user_id=user_id,
+                        season_id=season_id,
+                        reward_id=reward.id
+                    ).first()
+                    
+                    if not claimed:
+                        unlocked_rewards.append(reward)
+                        self.award_reward(user_id, reward)
+                        
+                        # Mark as claimed
+                        new_claim = SeasonClaimedReward(
+                            user_id=user_id,
+                            season_id=season_id,
+                            reward_id=reward.id
+                        )
+                        session.add(new_claim)
+                        session.commit()
                     
             return unlocked_rewards
         finally:

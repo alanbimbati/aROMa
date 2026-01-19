@@ -107,10 +107,9 @@ def get_main_menu():
         types.KeyboardButton("👤 Scegli Personaggio")
     )
     
-    # Row 2: Inventario e Negozio Pozioni
+    # Row 2: Inventario (solo questo)
     markup.add(
-        types.KeyboardButton("🎒 Inventario"),
-        types.KeyboardButton("🧪 Negozio Pozioni")
+        types.KeyboardButton("🎒 Inventario")
     )
     
     # Row 3: Achievement e Stagione
@@ -141,19 +140,8 @@ def handle_profilo_button(message):
 def handle_inventario_button(message):
     handle_inventario_cmd(message)
 
-@bot.message_handler(func=lambda message: message.text == "🧪 Negozio Pozioni")
-def handle_shop_potions_button(message):
-    cmd = BotCommands(message, bot)
-    cmd.handle_shop_potions()
-
 @bot.message_handler(func=lambda message: message.text == "👤 Scegli Personaggio")
 def handle_scegli_personaggio_button(message):
-    cmd = BotCommands(message, bot)
-    cmd.handle_choose_character()
-
-@bot.message_handler(func=lambda message: message.text == "👤 Scegli il personaggio")
-def handle_scegli_personaggio_old_button(message):
-    """Backward compatibility for old button"""
     cmd = BotCommands(message, bot)
     cmd.handle_choose_character()
 
@@ -189,71 +177,15 @@ def handle_inventario_cmd(message):
         bot.reply_to(message, "🎒 Il tuo inventario è vuoto!")
         return
     
-    msg = "🎒 **Il tuo Inventario**\nClicca su un oggetto per usarlo.\n\n"
+    msg = "🎒 **Il tuo Inventario**\n\n"
     for item, quantity in inventory:
-        meta = item_service.get_item_metadata(item)
-        emoji = meta.get('emoji', '🎒')
-        desc = meta.get('descrizione', '')
-        
-        # If description is empty, check if it's a potion
-        if not desc:
-            from services.potion_service import PotionService
-            potion_service = PotionService()
-            potion = potion_service.get_potion_by_name(item)
-            if potion:
-                desc = potion.get('descrizione', '')
-                p_type = potion.get('tipo', '')
-                if p_type == 'health_potion':
-                    emoji = '❤️'
-                elif p_type == 'mana_potion':
-                    emoji = '💙'
-                elif p_type == 'full_restore':
-                    emoji = '💖'
-                elif emoji == '🎒': 
-                    emoji = '🧪'
-
-        msg += f"{emoji} {item} - {desc} (x{quantity})\n"
+        msg += f"• {item}: x{quantity}\n"
     
     # Create buttons for each item
     markup = types.InlineKeyboardMarkup()
-    
-    # Check Dragon Balls
-    from services.wish_service import WishService
-    wish_service = WishService()
-    utente = user_service.get_user(user_id)
-    shenron, porunga = wish_service.get_dragon_ball_counts(utente)
-    
-    if shenron >= 7:
-        markup.add(types.InlineKeyboardButton("🐉 Evoca Shenron", callback_data="wish_summon|Shenron"))
-    if porunga >= 7:
-        markup.add(types.InlineKeyboardButton("🐲 Evoca Porunga", callback_data="wish_summon|Porunga"))
-        
     for item, quantity in inventory:
-        # Skip Dragon Balls in "Use" buttons
-        if "Sfera del Drago" in item:
-            continue
-            
-        # Get Emoji
-        meta = item_service.get_item_metadata(item)
-        emoji = meta.get('emoji', '🎒')
-        
-        # Check potion emoji
-        from services.potion_service import PotionService
-        potion_service = PotionService()
-        potion = potion_service.get_potion_by_name(item)
-        if potion:
-            p_type = potion.get('tipo', '')
-            if p_type == 'health_potion':
-                emoji = '❤️'
-            elif p_type == 'mana_potion':
-                emoji = '💙'
-            elif p_type == 'full_restore':
-                emoji = '💖'
-            elif emoji == '🎒': 
-                emoji = '🧪'
-            
-        # Create a button for each item type (Emoji + Name)
-        markup.add(types.InlineKeyboardButton(f"{emoji} {item}", callback_data=f"use_item|{item}"))
+        # Create a button for each item type
+        markup.add(types.InlineKeyboardButton(f"Usa {item}", callback_data=f"use_item|{item}"))
     
     bot.reply_to(message, msg, reply_markup=markup, parse_mode='markdown')
 
@@ -400,7 +332,6 @@ def handle_guild_cmd(message):
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("👥 Membri", callback_data=f"guild_members|{guild['id']}"))
         markup.add(types.InlineKeyboardButton("🏨 Locanda", callback_data="guild_inn_view"))
-        markup.add(types.InlineKeyboardButton("📦 Magazzino", callback_data="guild_warehouse"))
         markup.add(types.InlineKeyboardButton("💰 Deposita Wumpa", callback_data="guild_deposit_start"))
         if guild['role'] == "Leader":
             markup.add(types.InlineKeyboardButton("⚙️ Gestisci Gilda", callback_data="guild_manage_menu"))
@@ -473,21 +404,8 @@ def handle_inn_cmd(message):
     
     msg = "🏨 **Locanda Pubblica di aROMaLand**\n\n"
     if status:
-        utente = user_service.get_user(user_id)
         msg += f"🛌 Stai riposando da {status['minutes']} minuti.\n"
-        
-        # HP Status
-        hp_msg = f"+{status['hp']} HP"
-        current_hp = utente.current_hp if hasattr(utente, 'current_hp') and utente.current_hp is not None else utente.health
-        if status['hp'] < status['minutes'] and (current_hp + status['hp'] >= utente.max_health):
-             hp_msg += " (Max)"
-             
-        # Mana Status
-        mana_msg = f"+{status['mana']} Mana"
-        if status['mana'] < status['minutes'] and (utente.mana + status['mana'] >= utente.max_mana):
-             mana_msg += " (Max)"
-             
-        msg += f"💖 Recupero stimato: {hp_msg}, {mana_msg}.\n\n"
+        msg += f"💖 Recupero stimato: +{status['hp']} HP, +{status['mana']} Mana.\n\n"
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("🛑 Smetti di Riposare", callback_data="inn_rest_stop"))
     else:
@@ -653,7 +571,14 @@ def handle_season_cmd(message, page=0, user_id=None):
         print(f"Error showing season: {e}")
         bot.reply_to(message, "❌ Errore nel caricamento della stagione.")
 
-
+def get_start_markup(user_id):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add('📦 Inventario', '📦 Compra Box Wumpa (50 🍑)')
+    markup.add('🧪 Negozio Pozioni', '👤 Profilo')
+    markup.add('👤 Scegli il personaggio', '💰 Listino & Guida')
+    markup.add('🏆 Achievement', '🌟 Stagione')
+    markup.add('📄 Classifica', '❓ Aiuto')
+    return markup
 
 def get_character_image(character, is_locked=False):
     """Helper to get character image from filesystem"""
@@ -714,7 +639,7 @@ def process_character_selection(message):
         
         if message.text == "🔙 Indietro":
             print("[DEBUG] User selected back button")
-            bot.reply_to(message, "Menu principale", reply_markup=get_main_menu())
+            bot.reply_to(message, "Menu principale", reply_markup=get_start_markup(chatid))
             return
 
         character_name = message.text
@@ -723,7 +648,7 @@ def process_character_selection(message):
         print(f"[DEBUG] User found: {utente is not None}")
         
         if not utente:
-            bot.reply_to(message, "❌ Errore: utente non trovato", reply_markup=get_main_menu())
+            bot.reply_to(message, "❌ Errore: utente non trovato", reply_markup=get_start_markup(chatid))
             return
         
         from services.character_loader import get_character_loader
@@ -732,7 +657,7 @@ def process_character_selection(message):
         print(f"[DEBUG] Character found: {livello is not None}")
         
         if not livello:
-            bot.reply_to(message, f"❌ Personaggio '{character_name}' non trovato nel database", reply_markup=get_main_menu())
+            bot.reply_to(message, f"❌ Personaggio '{character_name}' non trovato nel database", reply_markup=get_start_markup(chatid))
             return
         
         # Verify availability again using service
@@ -750,17 +675,17 @@ def process_character_selection(message):
                 msg_text += f"✨ Skill: {livello['special_attack_name']} ({livello['special_attack_damage']} DMG, {livello['special_attack_mana_cost']} Mana)"
             
             print(f"[DEBUG] Sending success message")
-            bot.reply_to(message, msg_text, reply_markup=get_main_menu())
+            bot.reply_to(message, msg_text, reply_markup=get_start_markup(chatid))
         else:
             print(f"[DEBUG] Character not in available list")
-            bot.reply_to(message, f"❌ Non possiedi questo personaggio o livello insufficiente", reply_markup=get_main_menu())
+            bot.reply_to(message, f"❌ Non possiedi questo personaggio o livello insufficiente", reply_markup=get_start_markup(chatid))
     except Exception as e:
         print(f"[ERROR] Error in process_character_selection: {e}")
         import traceback
         traceback.print_exc()
         try:
             chatid = message.from_user.id
-            bot.reply_to(message, f"❌ Errore durante la selezione: {str(e)}", reply_markup=get_main_menu())
+            bot.reply_to(message, f"❌ Errore durante la selezione: {str(e)}", reply_markup=get_start_markup(chatid))
         except:
             pass
 
@@ -1257,7 +1182,7 @@ Per acquistare un gioco che vedi in un canale o gruppo:
                 print(f"Error sending image: {e}")
                 self.bot.reply_to(self.message, msg)
         else:
-            self.bot.reply_to(self.message, msg, reply_markup=get_main_menu())
+            self.bot.reply_to(self.message, msg, reply_markup=get_start_markup(self.chatid))
 
     def handle_shop_potions(self):
         """Show potion shop"""
@@ -1373,7 +1298,7 @@ Per acquistare un gioco che vedi in un canale o gruppo:
                 if image_path:
                     try:
                         with open(image_path, 'rb') as photo:
-                            sent_msg = self.bot.send_photo(self.chatid, photo, caption=msg, parse_mode='markdown', reply_markup=get_main_menu())
+                            sent_msg = self.bot.send_photo(self.chatid, photo, caption=msg, parse_mode='markdown', reply_markup=get_start_markup(self.chatid))
                             
                             # Save file_id for future use
                             if sent_msg.photo:
@@ -1389,7 +1314,7 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         session.close()
         
         if not image_sent:
-            self.bot.reply_to(self.message, msg, parse_mode='markdown', reply_markup=get_main_menu())
+            self.bot.reply_to(self.message, msg, parse_mode='markdown', reply_markup=get_start_markup(self.chatid))
 
     def handle_achievements(self):
         """Show user achievements via button"""
@@ -1565,7 +1490,7 @@ Per acquistare un gioco che vedi in un canale o gruppo:
 
     def process_platform_selection(self, message):
         if message.text == "🔙 Indietro":
-            self.bot.reply_to(message, "Menu principale", reply_markup=get_main_menu())
+            self.bot.reply_to(message, "Menu principale", reply_markup=get_start_markup(self.chatid))
             return
             
         platform = message.text
@@ -1575,7 +1500,7 @@ Per acquistare un gioco che vedi in un canale o gruppo:
     def process_gamename_input(self, message, platform):
         gamename = message.text
         user_service.update_user(self.chatid, {'platform': platform, 'game_name': gamename})
-        self.bot.reply_to(message, f"✅ Salvato! {platform}: {gamename}", reply_markup=get_main_menu())
+        self.bot.reply_to(message, f"✅ Salvato! {platform}: {gamename}", reply_markup=get_start_markup(self.chatid))
 
     def process_item_target(self, message, item_name):
         """Handle target selection for items"""
@@ -2120,14 +2045,14 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         markup.add("🔙 Indietro")
         
         if count == 0:
-            self.bot.reply_to(self.message, "Hai già acquistato tutti i personaggi disponibili!", reply_markup=get_main_menu())
+            self.bot.reply_to(self.message, "Hai già acquistato tutti i personaggi disponibili!", reply_markup=get_start_markup(self.chatid))
         else:
             msg = self.bot.reply_to(self.message, f"Benvenuto nel Negozio Personaggi!\nHai {utente.points} {PointsName}.\nScegli chi acquistare:", reply_markup=markup)
             self.bot.register_next_step_handler(msg, self.process_buy_character)
 
     def process_buy_character(self, message):
         if message.text == "🔙 Indietro":
-            self.bot.reply_to(message, "Menu principale", reply_markup=get_main_menu())
+            self.bot.reply_to(message, "Menu principale", reply_markup=get_start_markup(self.chatid))
             return
 
         text = message.text
@@ -2145,11 +2070,11 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         if char:
             success, msg = character_service.purchase_character(utente, char['id'])
             if success:
-                self.bot.reply_to(message, f"🎉 {msg}", reply_markup=get_main_menu())
+                self.bot.reply_to(message, f"🎉 {msg}", reply_markup=get_start_markup(self.chatid))
             else:
-                self.bot.reply_to(message, f"❌ {msg}", reply_markup=get_main_menu())
+                self.bot.reply_to(message, f"❌ {msg}", reply_markup=get_start_markup(self.chatid))
         else:
-            self.bot.reply_to(message, "Personaggio non trovato.", reply_markup=get_main_menu())
+            self.bot.reply_to(message, "Personaggio non trovato.", reply_markup=get_start_markup(self.chatid))
             self.handle_shop_characters()
             
     def handle_guide(self):
@@ -2385,43 +2310,6 @@ Per acquistare un gioco che vedi in un canale o gruppo:
             return
 
 
-            self.handle_aoe()
-            return
-
-@bot.message_handler(func=lambda message: message.text and (message.text.startswith('+') or message.text.startswith('-')))
-def handle_admin_points(message):
-    """Handle admin point commands (+1000, -500)"""
-    # Check admin
-    # ADMIN_IDS is imported from settings
-    try:
-        if message.from_user.id not in ADMIN_IDS:
-             return
-    except NameError:
-        # Fallback if ADMIN_IDS is not defined
-        print("ADMIN_IDS not defined!")
-        return
-
-    try:
-        parts = message.text.split()
-        amount = int(parts[0])
-        
-        target_user = None
-        if message.reply_to_message:
-            target_user = user_service.get_user(message.reply_to_message.from_user.id)
-        elif len(parts) > 1 and parts[1].startswith('@'):
-            username = parts[1][1:]
-            target_user = user_service.get_user_by_username(username)
-        else:
-            target_user = user_service.get_user(message.from_user.id)
-            
-        if target_user:
-            user_service.add_points(target_user, amount)
-            bot.reply_to(message, f"✅ Aggiunti {amount} Wumpa a {target_user.username or target_user.id_telegram}!")
-        else:
-            bot.reply_to(message, "❌ Utente non trovato.")
-    except ValueError:
-        pass
-
 @bot.message_handler(content_types=['text'] + util.content_type_media)
 def any(message):
     # Check if message is a forward (Game Purchase)
@@ -2434,12 +2322,6 @@ def any(message):
         # If forwarded from a user (no forward_from_chat), we block it
         if not message.forward_from_chat:
              return
-             
-    # Private Chat Catch-all: If we are here, the message was not handled by specific handlers
-    # We reply with the new menu to force update
-    if message.chat.type == 'private':
-        bot.reply_to(message, "❌ Comando non riconosciuto o menu scaduto.\nUsa il menu qui sotto per navigare:", reply_markup=get_main_menu())
-        return
              
         # Check membership in source channel
         try:
@@ -2596,33 +2478,25 @@ def any(message):
     
     # Sunday bonus: 10 Wumpa when you write on Sunday
     if datetime.datetime.today().weekday() == 6:  # Sunday
-        try:
-            session = user_service.db.get_session()
-            from models.system import Domenica
+        session = user_service.db.get_session()
+        from models.system import Domenica
+        
+        today = datetime.date.today()
+        sunday_bonus = session.query(Domenica).filter_by(utente=utente.id_telegram).first()
+        
+        if not sunday_bonus or sunday_bonus.last_day != today:
+            # Give Sunday bonus - Box Wumpa
+            success, box_msg, item = item_service.open_box_wumpa(utente)
             
-            today = datetime.date.today()
-            sunday_bonus = session.query(Domenica).filter_by(utente=utente.id_telegram).first()
+            # Update or create record
+            if sunday_bonus:
+                sunday_bonus.last_day = today
+            else:
+                sunday_bonus = Domenica(utente=utente.id_telegram, last_day=today)
+                session.add(sunday_bonus)
             
-            if not sunday_bonus or sunday_bonus.last_day != today:
-                # Give Sunday bonus - Box Wumpa
-                success, box_msg, item = item_service.open_box_wumpa(utente)
-                
-                # Update or create record
-                if sunday_bonus:
-                    sunday_bonus.last_day = today
-                else:
-                    sunday_bonus = Domenica(utente=utente.id_telegram, last_day=today)
-                    session.add(sunday_bonus)
-                
-                session.commit()
-                bot.send_message(message.chat.id, f"🎉 **Buona Domenica!**\nEcco il tuo regalo settimanale:\n\n{box_msg}", parse_mode='Markdown')
-            session.close()
-        except Exception as e:
-            print(f"Error in Sunday bonus: {e}")
-            try:
-                session.close()
-            except:
-                pass
+            session.commit()
+            bot.send_message(message.chat.id, f"🎉 **Buona Domenica!**\nEcco il tuo regalo settimanale:\n\n{box_msg}", parse_mode='Markdown')
         
         session.close()
     
@@ -2814,10 +2688,6 @@ def handle_inline_buttons(call):
         markup.add(types.InlineKeyboardButton(f"⚔️ Armeria ({(guild['armory_level'] + 1) * 750} W)", callback_data="guild_upgrade|armory"))
         markup.add(types.InlineKeyboardButton(f"🏘️ Villaggio ({guild['village_level'] * 1000} W)", callback_data="guild_upgrade|village"))
         markup.add(types.InlineKeyboardButton(f"🔞 Bordello ({(guild['bordello_level'] + 1) * 1500} W)", callback_data="guild_upgrade|bordello"))
-        
-        # Visual button for Locanda
-        markup.add(types.InlineKeyboardButton("🏨 Vai alla Locanda", callback_data="guild_inn_view"))
-        
         markup.add(types.InlineKeyboardButton("✏️ Rinomina", callback_data="guild_rename_ask"),
                    types.InlineKeyboardButton("🗑️ Elimina", callback_data="guild_delete_ask"))
         markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guild_back_main"))
@@ -2825,116 +2695,8 @@ def handle_inline_buttons(call):
         bot.edit_message_text(f"⚙️ **Gestione Gilda: {guild['name']}**\n\nBanca: {guild['wumpa_bank']} Wumpa", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
         return
 
-        bot.edit_message_text(f"⚙️ **Gestione Gilda: {guild['name']}**\n\nBanca: {guild['wumpa_bank']} Wumpa", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
-        return
-
-    elif call.data == "guild_warehouse":
-        bot.answer_callback_query(call.id)
-        guild = guild_service.get_user_guild(call.from_user.id)
-        if not guild:
-            bot.answer_callback_query(call.id, "Non sei in una gilda!", show_alert=True)
-            return
-            
-        items = guild_service.get_guild_inventory(guild['id'])
-        msg = f"📦 **Magazzino Gilda: {guild['name']}**\n\n"
-        if not items:
-            msg += "Il magazzino è vuoto."
-        else:
-            for item, qty in items:
-                msg += f"• {item}: x{qty}\n"
-                
-        markup = types.InlineKeyboardMarkup()
-        if items:
-            for item, qty in items:
-                markup.add(types.InlineKeyboardButton(f"Preleva {item}", callback_data=f"guild_withdraw|{item}"))
-        
-        markup.add(types.InlineKeyboardButton("📥 Deposita Oggetto", callback_data="guild_deposit_ask"))
-        markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guild_back_main"))
-        
-        bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
-        return
-
-    elif call.data == "guild_deposit_ask":
-        bot.answer_callback_query(call.id)
-        # Show user inventory to pick item
-        inventory = item_service.get_inventory(call.from_user.id)
-        if not inventory:
-            bot.answer_callback_query(call.id, "Il tuo inventario è vuoto!", show_alert=True)
-            return
-            
-        markup = types.InlineKeyboardMarkup()
-        for item, qty in inventory:
-            markup.add(types.InlineKeyboardButton(f"Deposita {item} (x1)", callback_data=f"guild_deposit|{item}"))
-        markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guild_warehouse"))
-        
-        bot.edit_message_text("📥 **Scegli cosa depositare:**", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
-        return
-
-    elif call.data.startswith("guild_deposit|"):
-        _, item_name = call.data.split("|", 1)
-        success, msg = guild_service.deposit_item(call.from_user.id, item_name, 1)
-        bot.answer_callback_query(call.id, msg, show_alert=not success)
-        if success:
-            # Refresh warehouse view
-            guild = guild_service.get_user_guild(call.from_user.id)
-            items = guild_service.get_guild_inventory(guild['id'])
-            msg_text = f"📦 **Magazzino Gilda: {guild['name']}**\n\n"
-            if not items:
-                msg_text += "Il magazzino è vuoto."
-            else:
-                for item, qty in items:
-                    msg_text += f"• {item}: x{qty}\n"
-            
-            markup = types.InlineKeyboardMarkup()
-            if items:
-                for item, qty in items:
-                    markup.add(types.InlineKeyboardButton(f"Preleva {item}", callback_data=f"guild_withdraw|{item}"))
-            markup.add(types.InlineKeyboardButton("📥 Deposita Oggetto", callback_data="guild_deposit_ask"))
-            markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guild_back_main"))
-            
-            bot.edit_message_text(msg_text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
-        return
-
-    elif call.data.startswith("guild_withdraw|"):
-        _, item_name = call.data.split("|", 1)
-        success, msg = guild_service.withdraw_item(call.from_user.id, item_name, 1)
-        bot.answer_callback_query(call.id, msg, show_alert=not success)
-        if success:
-            # Refresh warehouse view
-            guild = guild_service.get_user_guild(call.from_user.id)
-            items = guild_service.get_guild_inventory(guild['id'])
-            msg_text = f"📦 **Magazzino Gilda: {guild['name']}**\n\n"
-            if not items:
-                msg_text += "Il magazzino è vuoto."
-            else:
-                for item, qty in items:
-                    msg_text += f"• {item}: x{qty}\n"
-            
-            markup = types.InlineKeyboardMarkup()
-            if items:
-                for item, qty in items:
-                    markup.add(types.InlineKeyboardButton(f"Preleva {item}", callback_data=f"guild_withdraw|{item}"))
-            markup.add(types.InlineKeyboardButton("📥 Deposita Oggetto", callback_data="guild_deposit_ask"))
-            markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guild_back_main"))
-            
-            bot.edit_message_text(msg_text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
-        return
-
-    elif call.data.startswith("wish_summon|"):
-        _, dragon_type = call.data.split("|", 1)
-        cmd = BotCommands(call.message, bot)
-        cmd.handle_wish() # handle_wish checks counts again, which is fine
-        bot.answer_callback_query(call.id)
-        return
-
     elif call.data.startswith("use_item|"):
         _, item_name = call.data.split("|", 1)
-        
-        # Dragon Ball Restriction (Double check)
-        if "Sfera del Drago" in item_name:
-             bot.answer_callback_query(call.id, "❌ Non puoi usare le sfere singolarmente!", show_alert=True)
-             return
-
         user_id = call.from_user.id
         
         # Check if user has the item
@@ -2949,7 +2711,7 @@ def handle_inline_buttons(call):
         if success:
             # Apply item effect
             effect_msg, extra_data = item_service.apply_effect(utente, item_name)
-            bot.answer_callback_query(call.id, f"✅ {item_name} utilizzato!")
+            bot.answer_callback_query(call.id, f"✅ Hai usato {item_name}!")
             
             # Update inventory display
             inventory = item_service.get_inventory(user_id)
@@ -2957,68 +2719,14 @@ def handle_inline_buttons(call):
                 msg = "🎒 Il tuo inventario è vuoto!"
                 markup = None
             else:
-                msg = "🎒 **Il tuo Inventario**\nClicca su un oggetto per usarlo.\n\n"
+                msg = "🎒 **Il tuo Inventario**\n\n"
                 for item, quantity in inventory:
-                    meta = item_service.get_item_metadata(item)
-                    emoji = meta.get('emoji', '🎒')
-                    desc = meta.get('descrizione', '')
-                    
-                    if not desc:
-                        from services.potion_service import PotionService
-                        potion_service = PotionService()
-                        potion = potion_service.get_potion_by_name(item)
-                        if potion:
-                            desc = potion.get('descrizione', '')
-                            p_type = potion.get('tipo', '')
-                            if p_type == 'health_potion':
-                                emoji = '❤️'
-                            elif p_type == 'mana_potion':
-                                emoji = '💙'
-                            elif p_type == 'full_restore':
-                                emoji = '💖'
-                            elif emoji == '🎒': 
-                                emoji = '🧪'
-                            
-                    msg += f"{emoji} {item} - {desc} (x{quantity})\n"
+                    msg += f"• {item}: x{quantity}\n"
                 
                 # Recreate buttons
                 markup = types.InlineKeyboardMarkup()
-                
-                # Check Dragon Balls
-                from services.wish_service import WishService
-                wish_service = WishService()
-                utente = user_service.get_user(user_id)
-                shenron, porunga = wish_service.get_dragon_ball_counts(utente)
-                
-                if shenron >= 7:
-                    markup.add(types.InlineKeyboardButton("🐉 Evoca Shenron", callback_data="wish_summon|Shenron"))
-                if porunga >= 7:
-                    markup.add(types.InlineKeyboardButton("🐲 Evoca Porunga", callback_data="wish_summon|Porunga"))
-                    
                 for item, quantity in inventory:
-                    if "Sfera del Drago" in item:
-                        continue
-                        
-                    # Get Emoji
-                    meta = item_service.get_item_metadata(item)
-                    emoji = meta.get('emoji', '🎒')
-                    
-                    # Check potion emoji
-                    from services.potion_service import PotionService
-                    potion_service = PotionService()
-                    potion = potion_service.get_potion_by_name(item)
-                    if potion:
-                        p_type = potion.get('tipo', '')
-                        if p_type == 'health_potion':
-                            emoji = '❤️'
-                        elif p_type == 'mana_potion':
-                            emoji = '💙'
-                        elif p_type == 'full_restore':
-                            emoji = '💖'
-                        elif emoji == '🎒': 
-                            emoji = '🧪'
-                            
-                    markup.add(types.InlineKeyboardButton(f"{emoji} {item}", callback_data=f"use_item|{item}"))
+                    markup.add(types.InlineKeyboardButton(f"Usa {item}", callback_data=f"use_item|{item}"))
             
             # Edit the message with updated inventory
             bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
@@ -3615,7 +3323,7 @@ def handle_inline_buttons(call):
         if success:
             bot.answer_callback_query(call.id, "✅ Personaggio acquistato!")
             # Send confirmation message
-            bot.send_message(user_id, f"🎉 {msg}\n\nOra puoi equipaggiarlo dalla selezione personaggi!", reply_markup=get_main_menu())
+            bot.send_message(user_id, f"🎉 {msg}\n\nOra puoi equipaggiarlo dalla selezione personaggi!", reply_markup=get_start_markup(user_id))
             
             # Refresh the current view to show it as unlocked
             # We can reuse the char_page logic to reload the current character card
@@ -3715,7 +3423,7 @@ def handle_inline_buttons(call):
         
         if success:
             bot.answer_callback_query(call.id, "✅ Personaggio equipaggiato!")
-            bot.send_message(user_id, f"✅ {msg}", reply_markup=get_main_menu())
+            bot.send_message(user_id, f"✅ {msg}", reply_markup=get_start_markup(user_id))
         else:
             bot.answer_callback_query(call.id, f"❌ {msg}")
         return
@@ -3821,7 +3529,7 @@ def handle_inline_buttons(call):
         msg += f"💙 Mana speso: {mana_cost}\n"
         msg += f"💙 Mana rimanente: {remaining_mana}"
         
-        bot.send_message(user_id, msg, reply_markup=get_main_menu(), parse_mode='markdown')
+        bot.send_message(user_id, msg, reply_markup=get_start_markup(user_id), parse_mode='markdown')
         bot.answer_callback_query(call.id, f"🔥 Trasformato in {trans_char['nome']}!")
         return
     
@@ -3833,7 +3541,7 @@ def handle_inline_buttons(call):
         
         if success:
             bot.answer_callback_query(call.id, "✅ Trasformazione acquistata!")
-            bot.send_message(user_id, f"✅ {msg}\n\nOra puoi trasformarti dal profilo!", reply_markup=get_main_menu())
+            bot.send_message(user_id, f"✅ {msg}\n\nOra puoi trasformarti dal profilo!", reply_markup=get_start_markup(user_id))
         else:
             bot.answer_callback_query(call.id, f"❌ {msg}")
         return
@@ -3850,7 +3558,7 @@ def handle_inline_buttons(call):
         except:
             pass
         # The user should use the profile button again
-        bot.send_message(user_id, "Usa il pulsante 👤 Profilo per vedere il tuo profilo.", reply_markup=get_main_menu())
+        bot.send_message(user_id, "Usa il pulsante 👤 Profilo per vedere il tuo profilo.", reply_markup=get_start_markup(user_id))
         return
     
     elif action == "stats_menu":

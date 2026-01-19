@@ -19,7 +19,7 @@ class StatsService:
     SPEED_PER_POINT = 1      # Reduces cooldown
     RESISTANCE_PER_POINT = 1 # Reduces damage taken %
     CRIT_RATE_PER_POINT = 1  # Increases crit chance %
-    RESET_COST = 400
+    RESET_COST = 0
     
     def get_available_stat_points(self, user):
         """
@@ -105,20 +105,13 @@ class StatsService:
     
     def reset_stat_points(self, user):
         """
-        Reset all allocated stat points (costs 100 Wumpa)
+        Reset all allocated stat points (FREE)
         Returns (success: bool, message: str)
         """
-        # Check if user has enough Wumpa
-        if user.points < self.RESET_COST:
-            return False, f"Non hai abbastanza {PointsName}! Serve: {self.RESET_COST} 🍑"
-        
         # Calculate stats to remove
         health_to_remove = user.allocated_health * self.HEALTH_PER_POINT
         mana_to_remove = user.allocated_mana * self.MANA_PER_POINT
         damage_to_remove = user.allocated_damage * self.DAMAGE_PER_POINT
-        
-        # Deduct cost
-        self.user_service.add_points(user, -self.RESET_COST)
         
         points_returned = (user.allocated_health + user.allocated_mana + user.allocated_damage +
                           getattr(user, 'allocated_speed', 0) + 
@@ -153,7 +146,7 @@ class StatsService:
             'base_damage': new_base_damage
         })
         
-        return True, f"🔄 Statistiche resettate!\n\n💰 Costo: {self.RESET_COST} {PointsName}\n📊 Punti restituiti: {points_returned}\n\nOra puoi riallocarli come preferisci!"
+        return True, f"🔄 Statistiche resettate!\n\n💰 Costo: Gratuito\n📊 Punti restituiti: {points_returned}\n\nOra puoi riallocarli come preferisci!"
     
     def get_stat_allocation_summary(self, user):
         """

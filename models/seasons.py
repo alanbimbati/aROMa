@@ -51,3 +51,13 @@ class SeasonReward(Base):
     is_premium = Column(Boolean, default=False)  # Free vs Premium track
     
     icon = Column(String, nullable=True)  # Emoji or icon path
+
+class SeasonClaimedReward(Base):
+    """Tracks which rewards have been claimed by a user"""
+    __tablename__ = "season_claimed_reward"
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False)
+    season_id = Column(Integer, ForeignKey('season.id'))
+    reward_id = Column(Integer, ForeignKey('season_reward.id'))
+    claimed_at = Column(DateTime, default=datetime.datetime.now)
