@@ -16,6 +16,16 @@ class TestPvE(unittest.TestCase):
         self.user = self.user_service.get_user(self.test_id)
         self.user_service.update_user(self.test_id, {'luck_boost': 0})
 
+    def tearDown(self):
+        # Clean up test user
+        session = self.db.get_session()
+        session.query(Mob).delete() # Also clean mobs
+        session.query(Raid).delete() # Also clean raids
+        from models.user import Utente
+        session.query(Utente).filter_by(id_telegram=self.test_id).delete()
+        session.commit()
+        session.close()
+
     def test_daily_mob(self):
         # Clear existing mobs
         session = self.db.get_session()

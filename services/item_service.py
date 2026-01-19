@@ -7,11 +7,33 @@ import random
 from settings import PointsName
 from services.event_dispatcher import EventDispatcher
 
+import csv
+
 class ItemService:
     def __init__(self):
         self.db = Database()
         self.user_service = UserService()
         self.event_dispatcher = EventDispatcher()
+        self.items_metadata = self.load_items_metadata()
+
+    def load_items_metadata(self):
+        """Load item metadata from CSV"""
+        metadata = {}
+        try:
+            with open('items.csv', 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    metadata[row['nome']] = {
+                        'emoji': row['emoji'],
+                        'descrizione': row['descrizione']
+                    }
+        except Exception as e:
+            print(f"Error loading items metadata: {e}")
+        return metadata
+
+    def get_item_metadata(self, item_name):
+        """Get metadata for an item"""
+        return self.items_metadata.get(item_name, {'emoji': '🎒', 'descrizione': ''})
 
     def get_inventory(self, id_telegram):
         session = self.db.get_session()
@@ -213,6 +235,13 @@ class ItemService:
     def apply_effect(self, user, item_name, target_user=None, target_mob=None):
         import json
         
+        # Check if it's a potion
+        from services.potion_service import PotionService
+        potion_service = PotionService()
+        if potion_service.get_potion_by_name(item_name):
+            success, msg = potion_service.apply_potion_effect(user, item_name)
+            return msg, None
+            
         if item_name == "Turbo":
             # Logic: +20% EXP for 30 minutes
             # Update active_status_effects

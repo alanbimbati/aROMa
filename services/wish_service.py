@@ -23,6 +23,19 @@ class WishService:
         
         return shenron_count == 7, porunga_count == 7
 
+    def get_dragon_ball_counts(self, user):
+        """Return counts of Shenron and Porunga balls"""
+        shenron_count = 0
+        porunga_count = 0
+        
+        for i in range(1, 8):
+            if self.item_service.get_item_by_user(user.id_telegram, f"La Sfera del Drago Shenron {i}") > 0:
+                shenron_count += 1
+            if self.item_service.get_item_by_user(user.id_telegram, f"La Sfera del Drago Porunga {i}") > 0:
+                porunga_count += 1
+        
+        return shenron_count, porunga_count
+
     def grant_wish(self, user, wish_type, dragon_type="Shenron"):
         # Consume spheres
         if dragon_type == "Shenron":

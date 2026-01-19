@@ -21,6 +21,11 @@ Quando appare un nemico (Mob o Boss), hai due opzioni:
 
 1.  **Attacco Normale**: Infligge danni basati sul tuo Danno Base + un valore casuale (10-30). Non costa nulla.
 2.  **Attacco Speciale**: Infligge molti più danni ma consuma Mana. Il danno e il costo dipendono dal personaggio selezionato (Grado).
+3.  **Attacco AoE (Area of Effect)**: Colpisce **tutti** i nemici attivi nel gruppo contemporaneamente.
+    *   **Danno**: 70% al bersaglio principale, 50% agli altri (fino a 5 nemici totali).
+    *   **Costo**: 0 Mana (Gratis).
+    *   **Cooldown**: Il tempo di ricarica è raddoppiato rispetto a un attacco normale.
+    *   **Utilità**: Ideale quando ci sono molti nemici deboli o per finire più bersagli insieme. Solo se ci sono almeno 2 nemici.
 
 ### Formule di Danno
 
@@ -32,6 +37,11 @@ Danno Finale = (Danno Base + Random(10, 30)) × Moltiplicatore Critico
 #### Attacco Speciale
 ```
 Danno Finale = (Danno Base + Danno Skill Personaggio) × Moltiplicatore Critico
+```
+
+#### Attacco AoE
+```
+Danno Finale = (Danno Base × 0.7) × Moltiplicatore Critico (su ogni bersaglio)
 ```
 
 #### Critico

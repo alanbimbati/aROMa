@@ -19,6 +19,13 @@ class UserService:
         self.db = Database()
         self.recent_activities = UserService._recent_activities
         self.event_dispatcher = EventDispatcher()
+
+    def get_user_by_username(self, username):
+        """Get user by username (case insensitive)"""
+        session = self.db.get_session()
+        user = session.query(Utente).filter(func.lower(Utente.username) == username.lower()).first()
+        session.close()
+        return user
     
     def _check_exp_required_column(self):
         """Verifica se la colonna exp_required esiste nel database"""
@@ -388,11 +395,20 @@ class UserService:
             answer += f"*💪🏻 Exp*: {utente.exp}\n"
             answer += f"*🎖 Lv. *{utente.livello}\n"
         
-        # RPG Stats
+        # RPG Stats Card
         current_hp = utente.current_hp if hasattr(utente, 'current_hp') and utente.current_hp is not None else utente.health
-        answer += f"\n*❤️ Vita*: {current_hp}/{utente.max_health}\n"
-        answer += f"*💙 Mana*: {utente.mana}/{utente.max_mana}\n"
-        answer += f"*⚔️ Danno Base*: {utente.base_damage}\n"
+        user_speed = getattr(utente, 'allocated_speed', 0) or 0
+        cooldown_seconds = int(60 / (1 + user_speed * 0.05))
+        
+        card = f"╔══════🕹 **{nome_utente.upper()}** ══════╗\n"
+        card += f" ❤️ **Vita**: {current_hp}/{utente.max_health}\n"
+        card += f" ⚡ **Velocità**: {user_speed} (CD: {cooldown_seconds}s)\n"
+        card += f" 🌀 **Mana**: {utente.mana}/{utente.max_mana}\n"
+        card += f" ⚔️ **Danno**: {utente.base_damage}\n"
+        card += "          *aROMa*\n"
+        card += "╚═══════════════════════╝"
+        
+        answer += f"\n{card}\n"
         
         if utente.stat_points > 0:
             answer += f"*📊 Punti Stat*: {utente.stat_points} (usa /stats)\n"
@@ -403,7 +419,7 @@ class UserService:
         
         # Special attack info  
         if selected_level and selected_level.get('special_attack_name'):
-            answer += f"\n*✨ Attacco Speciale*: {selected_level['special_attack_name']}\n"
+            answer += f"\n*✨ Speciale*: {selected_level['special_attack_name']}\n"
             answer += f"  Danno: {selected_level['special_attack_damage']} | Mana: {selected_level['special_attack_mana_cost']}\n"
 
         if giochi_utente:
@@ -471,16 +487,79 @@ class UserService:
             current_hp = utente.current_hp if hasattr(utente, 'current_hp') and utente.current_hp is not None else utente.health
             return current_hp, False
 
+        # Shield Logic
+        actual_damage = damage
+        
+        # Check if shield is active
+        if utente.shield_hp and utente.shield_hp > 0:
+            # Check expiration
+            if utente.shield_end_time and utente.shield_end_time > datetime.datetime.now():
+                # Shield is active: Apply Resistance Boost (+25%, capped at 75%)
+                base_res = getattr(utente, 'resistance', 0) or 0
+                total_res = min(base_res + 25, 75)
+                
+                # Recalculate damage with boosted resistance
+                # Note: The caller (pve_service) might have already applied base resistance.
+                # To be safe and simple, we apply the EXTRA mitigation here on the incoming damage.
+                # But pve_service applies resistance to raw damage.
+                # If we want to be precise, pve_service should ask user_service for effective resistance.
+                # For now, let's just say the shield absorbs damage directly.
+                # Let's apply the extra 25% reduction here if not already capped.
+                
+                # Actually, simpler: Shield takes damage first.
+                # And we assume the +25% res is applied to the damage BEFORE it hits the shield?
+                # Or does the shield just act as extra HP?
+                # The plan said: "Shield gives +25% res".
+                # If pve_service calculates damage, it uses user.resistance.
+                # So we should update user.resistance when shield is cast? No, that's persistent state.
+                # Let's apply a flat 25% reduction to incoming damage here if shield is up.
+                
+                mitigation = 0.25
+                actual_damage = int(damage * (1 - mitigation))
+                
+                # Absorb into shield
+                if utente.shield_hp >= actual_damage:
+                    utente.shield_hp -= actual_damage
+                    self.update_user(utente.id_telegram, {'shield_hp': utente.shield_hp})
+                    # No HP damage
+                    current_hp = utente.current_hp if hasattr(utente, 'current_hp') and utente.current_hp is not None else utente.health
+                    return current_hp, False
+                else:
+                    # Shield breaks
+                    remaining_damage = actual_damage - utente.shield_hp
+                    utente.shield_hp = 0
+                    utente.shield_end_time = None # Shield broken
+                    self.update_user(utente.id_telegram, {'shield_hp': 0, 'shield_end_time': None})
+                    actual_damage = remaining_damage
+            else:
+                # Expired
+                utente.shield_hp = 0
+                self.update_user(utente.id_telegram, {'shield_hp': 0})
+
         # Use current_hp if available
         if hasattr(utente, 'current_hp') and utente.current_hp is not None:
-            new_health = max(0, utente.current_hp - damage)
+            new_health = max(0, utente.current_hp - actual_damage)
             self.update_user(utente.id_telegram, {'current_hp': new_health})
             return new_health, new_health <= 0
             
         # Fallback to old health
-        new_health = max(0, utente.health - damage)
+        new_health = max(0, utente.health - actual_damage)
         self.update_user(utente.id_telegram, {'health': new_health})
         return new_health, new_health <= 0
+
+    def cast_shield(self, utente, amount, duration_minutes=10):
+        """Cast a shield on the user"""
+        now = datetime.datetime.now()
+        end_time = now + datetime.timedelta(minutes=duration_minutes)
+        
+        updates = {
+            'shield_hp': amount,
+            'shield_max_hp': amount,
+            'shield_end_time': end_time,
+            'last_shield_cast': now
+        }
+        self.update_user(utente.id_telegram, updates)
+        return True
     
     def restore_health(self, utente, amount):
         """Restore health (from items/etc)"""
@@ -589,3 +668,67 @@ class UserService:
         
         self.update_user(utente.id_telegram, updates)
         return True, f"Statistiche resettate! {points_to_refund} punti restituiti."
+    def start_resting(self, user_id):
+        """Start resting in the public inn"""
+        session = self.db.get_session()
+        user = session.query(Utente).filter_by(id_telegram=user_id).first()
+        if not user:
+            session.close()
+            return False, "Utente non trovato."
+        
+        if user.resting_since:
+            session.close()
+            return False, "Stai già riposando!"
+            
+        user.resting_since = datetime.datetime.now()
+        session.commit()
+        session.close()
+        return True, "Hai iniziato a riposare nella Locanda Pubblica. Recupererai 1 HP e 1 Mana al minuto."
+
+    def get_resting_status(self, user_id):
+        """Check how much HP/Mana would be recovered if resting stopped now"""
+        session = self.db.get_session()
+        user = session.query(Utente).filter_by(id_telegram=user_id).first()
+        if not user or not user.resting_since:
+            session.close()
+            return None
+            
+        now = datetime.datetime.now()
+        elapsed_minutes = int((now - user.resting_since).total_seconds() / 60)
+        
+        # 1 HP and 1 Mana per minute
+        hp_to_recover = min(elapsed_minutes, user.max_health - (user.current_hp or user.health))
+        mana_to_recover = min(elapsed_minutes, user.max_mana - user.mana)
+        
+        session.close()
+        return {
+            'minutes': elapsed_minutes,
+            'hp': hp_to_recover,
+            'mana': mana_to_recover
+        }
+
+    def stop_resting(self, user_id):
+        """Stop resting and apply recovery"""
+        session = self.db.get_session()
+        user = session.query(Utente).filter_by(id_telegram=user_id).first()
+        if not user or not user.resting_since:
+            session.close()
+            return False, "Non stai riposando."
+            
+        status = self.get_resting_status(user_id)
+        
+        # Update HP
+        if hasattr(user, 'current_hp') and user.current_hp is not None:
+            user.current_hp = min(user.current_hp + status['hp'], user.max_health)
+        else:
+            user.health = min(user.health + status['hp'], user.max_health)
+            
+        # Update Mana
+        user.mana = min(user.mana + status['mana'], user.max_mana)
+        
+        # Clear resting status
+        user.resting_since = None
+        
+        session.commit()
+        session.close()
+        return True, f"Hai smesso di riposare. Hai recuperato {status['hp']} HP e {status['mana']} Mana in {status['minutes']} minuti."

@@ -1,0 +1,9 @@
+nome,tipo,rarita,bonus_dmg,bonus_res,bonus_hp,descrizione
+Spada di Legno,Arma,1,5,0,0,Una semplice spada di legno.
+Spada di Ferro,Arma,2,15,0,0,Una spada di ferro ben affilata.
+Spada di Diamante,Arma,4,40,0,0,Una spada leggendaria fatta di diamante.
+Armatura di Cuoio,Armatura,1,0,5,10,Un'armatura leggera di cuoio.
+Armatura di Ferro,Armatura,2,0,15,30,Un'armatura pesante di ferro.
+Armatura di Diamante,Armatura,4,0,30,100,Un'armatura quasi indistruttibile.
+Bastone Magico,Arma,2,10,0,0,Aumenta il danno magico.
+Scudo di Legno,Armatura,1,0,3,5,Un piccolo scudo di legno.
