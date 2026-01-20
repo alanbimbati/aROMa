@@ -235,6 +235,18 @@ class ItemService:
     def apply_effect(self, user, item_name, target_user=None, target_mob=None):
         import json
         
+        # NEW: Log item usage event (moved to start to ensure it runs)
+        self.event_dispatcher.log_event(
+            event_type='item_used',
+            user_id=user.id_telegram,
+            value=1,
+            context={
+                'item_name': item_name,
+                'target_user_id': target_user.id_telegram if target_user else None,
+                'target_mob_id': target_mob.id if target_mob else None
+            }
+        )
+        
         # Check if it's a potion
         from services.potion_service import PotionService
         potion_service = PotionService()
@@ -321,18 +333,6 @@ class ItemService:
                     return f"Hai colpito {target_user.username}, ma non aveva abbastanza {PointsName} da perdere.", None
             else:
                 return "Devi specificare un bersaglio.", None
-
-        # NEW: Log item usage event
-        self.event_dispatcher.log_event(
-            event_type='item_used',
-            user_id=user.id_telegram,
-            value=1,
-            context={
-                'item_name': item_name,
-                'target_user_id': target_user.id_telegram if target_user else None,
-                'target_mob_id': target_mob.id if target_mob else None
-            }
-        )
 
         return "Oggetto utilizzato.", None
 

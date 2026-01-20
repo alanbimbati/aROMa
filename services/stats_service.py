@@ -24,9 +24,9 @@ class StatsService:
     def get_available_stat_points(self, user):
         """
         Calculate available stat points
-        User gets 1 point per level
+        User gets points per level (stored in stat_points)
         """
-        total_points = user.livello
+        total_points = user.stat_points if user.stat_points is not None else 0
         used_points = (user.allocated_health + user.allocated_mana + user.allocated_damage + 
                       getattr(user, 'allocated_speed', 0) + 
                       getattr(user, 'allocated_resistance', 0) + 
@@ -144,15 +144,15 @@ class StatsService:
         res_to_remove = getattr(user, 'allocated_resistance', 0) * self.RESISTANCE_PER_POINT
         crit_to_remove = getattr(user, 'allocated_crit', 0) * self.CRIT_RATE_PER_POINT
         
+        new_max_health = user.max_health - health_to_remove
+        new_max_mana = user.max_mana - mana_to_remove
+        new_base_damage = user.base_damage - damage_to_remove
+        
         # Ensure current health/mana don't exceed new max
         new_health = min(user.health, new_max_health)
         new_mana = min(user.mana, new_max_mana)
         
         self.user_service.update_user(user.id_telegram, {
-            'max_health': new_max_health,
-            'health': new_health,
-            'max_mana': new_max_mana,
-            'mana': new_mana,
             'max_health': new_max_health,
             'health': new_health,
             'max_mana': new_max_mana,

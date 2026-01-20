@@ -27,18 +27,23 @@ class AchievementTracker:
         2. Aggregate them into UserStats
         3. Check for new achievement unlocks
         """
-        # 1. Fetch
-        events = self.event_dispatcher.get_unprocessed_events(limit)
-        if not events:
-            return
+        while True:
+            # 1. Fetch
+            events = self.event_dispatcher.get_unprocessed_events(limit)
+            if not events:
+                break
+                
+            # 2. Aggregate
+            self.stat_aggregator.process_events(events)
             
-        # 2. Aggregate
-        self.stat_aggregator.process_events(events)
-        
-        # 3. Check Achievements for affected users
-        affected_user_ids = set(e.user_id for e in events)
-        for user_id in affected_user_ids:
-            self.check_achievements(user_id)
+            # 3. Check Achievements for affected users
+            affected_user_ids = set(e.user_id for e in events)
+            for user_id in affected_user_ids:
+                self.check_achievements(user_id)
+            
+            # If we fetched fewer than limit, we are done
+            if len(events) < limit:
+                break
 
     def check_achievements(self, user_id):
         """

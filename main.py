@@ -59,6 +59,32 @@ dungeon_service = DungeonService()
 # Track last viewed character for admins (for image upload feature)
 admin_last_viewed_character = {}
 
+# --- MONKEY PATCH: Auto-delete command messages ---
+_original_message_handler = bot.message_handler
+
+def _auto_delete_message_handler(*args, **kwargs):
+    def decorator(handler):
+        import functools
+        @functools.wraps(handler)
+        def wrapper(message, *a, **k):
+            # Check if it's a command message (starts with /)
+            if hasattr(message, 'text') and message.text and message.text.startswith('/'):
+                try:
+                    # Run deletion in a separate thread to not block execution? 
+                    # Or just try/except. Telebot calls are synchronous usually.
+                    # delete_message is fast.
+                    bot.delete_message(message.chat.id, message.message_id)
+                except Exception:
+                    # Ignore errors (e.g. missing permissions, message already deleted)
+                    pass
+            return handler(message, *a, **k)
+        
+        return _original_message_handler(*args, **kwargs)(wrapper)
+    return decorator
+
+bot.message_handler = _auto_delete_message_handler
+# --------------------------------------------------
+
 @bot.message_handler(content_types=['left_chat_member'])
 def esciDalGruppo(message):
     chatid = message.left_chat_member.id
@@ -467,6 +493,13 @@ def process_guild_deposit(message):
 @bot.message_handler(commands=['inn', 'locanda'])
 def handle_inn_cmd(message):
     """Access the public inn or guild inn"""
+    # Restrict to private chat
+    if message.chat.type != 'private':
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("📩 Vai alla Locanda (Privato)", url=f"https://t.me/{bot.get_me().username}?start=inn"))
+        bot.send_message(message.chat.id, "❌ La Locanda è disponibile solo in chat privata per evitare spam!", reply_markup=markup)
+        return
+
     user_id = message.from_user.id
     status = user_service.get_resting_status(user_id)
     guild = guild_service.get_user_guild(user_id)
@@ -1528,10 +1561,10 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         markup = types.InlineKeyboardMarkup()
         # Only show action buttons if viewing own profile
         if not target_user or target_user.id_telegram == self.chatid:
-            markup.add(types.InlineKeyboardButton("📊 Alloca Statistiche", callback_data="stats_menu"))
-            markup.add(types.InlineKeyboardButton(f"🔄 Reset Stats (500 {PointsName})", callback_data="reset_stats_confirm"))
+            markup.add(types.InlineKeyboardButton("📊 Alloca Statistiche", callback_data="stat_alloc"))
+            # markup.add(types.InlineKeyboardButton("🔄 Reset Stats (Gratis)", callback_data="stat_reset")) # Removed as per user request
         if character:
-            markup.add(types.InlineKeyboardButton("✨ Attacco Speciale", callback_data="special_attack_mob"))
+            # markup.add(types.InlineKeyboardButton("✨ Attacco Speciale", callback_data="special_attack_mob")) # Removed as per user request
             
             # Add transform button if transformations are available for this character
             transforms = char_loader.get_transformation_chain(character['id'])
@@ -1910,37 +1943,51 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         
         # Reset button
         markup.add(types.InlineKeyboardButton("🔄 Reset Statistiche (Gratis)", callback_data="stat_reset"))
-        markup.add(types.InlineKeyboardButton("🔙 Menu Principale", callback_data="main_menu"))
+        # Changed to profile as main_menu might not be implemented
+        markup.add(types.InlineKeyboardButton("🔙 Profilo", callback_data="profile"))
         
         if is_callback:
             # Edit existing message
-            self.bot.edit_message_text(msg, self.message.chat.id, self.message.message_id, reply_markup=markup, parse_mode='markdown')
+            try:
+                self.bot.edit_message_text(msg, self.message.chat.id, self.message.message_id, reply_markup=markup, parse_mode='markdown')
+            except Exception:
+                # If editing fails (e.g. it was a photo), send new message then delete old
+                
+                # Send new message FIRST
+                try:
+                    self.bot.send_message(self.message.chat.id, msg, reply_markup=markup, parse_mode='markdown')
+                except Exception:
+                    import traceback
+                    traceback.print_exc()
+                
+                # Then try to delete old message
+                try:
+                    self.bot.delete_message(self.message.chat.id, self.message.message_id)
+                except Exception:
+                    pass
         else:
-            # Send new message
-            self.bot.reply_to(self.message, msg, reply_markup=markup, parse_mode='markdown')
+            # Send new message (don't reply as command might be deleted)
+            # Use self.message.chat.id if available, otherwise self.chatid (fallback)
+            target_chat = self.message.chat.id if hasattr(self, 'message') and self.message else self.chatid
+            self.bot.send_message(target_chat, msg, reply_markup=markup, parse_mode='markdown')
 
     def handle_stat_callback(self, call):
         """Handle stat allocation callbacks"""
-        print(f"[DEBUG] handle_stat_callback called with data: {call.data}")
         try:
             # FIX: When called from callback, self.chatid is the Bot ID (sender of the message).
             # We must use the ID of the user who clicked the button.
             user_id = call.from_user.id
             self.chatid = user_id
-            print(f"[DEBUG] User ID: {user_id}")
             
             utente = user_service.get_user(user_id)
             if not utente:
-                print("[DEBUG] User not found")
                 self.bot.answer_callback_query(call.id, "Utente non trovato!", show_alert=True)
                 return
             
             if call.data == "stat_reset":
-                print("[DEBUG] Resetting stats")
                 from services.stats_service import StatsService
                 stats_service = StatsService()
                 success, msg = stats_service.reset_stat_points(utente)
-                print(f"[DEBUG] Reset result: {success}, {msg}")
                 self.bot.answer_callback_query(call.id, "Statistiche resettate!")
                 
                 # Refresh view
@@ -1954,13 +2001,10 @@ Per acquistare un gioco che vedi in un canale o gruppo:
                 else:
                     stat_type = call.data.replace("stat_alloc|", "")
                 
-                print(f"[DEBUG] Allocating stat: {stat_type}")
-                
                 from services.stats_service import StatsService
                 stats_service = StatsService()
                 
                 success, msg = stats_service.allocate_stat_point(utente, stat_type)
-                print(f"[DEBUG] Allocation result: {success}, {msg}")
                 
                 if success:
                     self.bot.answer_callback_query(call.id, "Punto allocato!")
@@ -1970,7 +2014,6 @@ Per acquistare un gioco che vedi in un canale o gruppo:
                 else:
                     self.bot.answer_callback_query(call.id, msg, show_alert=True)
         except Exception as e:
-            print(f"[ERROR] Exception in handle_stat_callback: {e}")
             import traceback
             traceback.print_exc()
             self.bot.answer_callback_query(call.id, f"Errore: {str(e)}", show_alert=True)
@@ -2833,7 +2876,22 @@ def get_combat_markup(enemy_type, enemy_id, chat_id):
 
 
 @bot.callback_query_handler(func=lambda call: True)
-def handle_inline_buttons(call):
+def callback_query(call):
+    user_id = call.from_user.id
+    
+    if call.data == "stat_alloc":
+        try:
+            bot.answer_callback_query(call.id)
+        except:
+            pass
+            
+        # Use BotCommands to handle stats
+        bot_cmds = BotCommands(call.message, bot)
+        bot_cmds.chatid = user_id 
+        bot_cmds.message = call.message 
+        bot_cmds.handle_stats(is_callback=True)
+        return
+
     if call.data.startswith("guild_create_final|"):
         _, name, x, y = call.data.split("|")
         success, msg, guild_id = guild_service.create_guild(call.from_user.id, name, int(x), int(y))
@@ -2874,6 +2932,20 @@ def handle_inline_buttons(call):
         return
 
     elif call.data == "inn_rest_start":
+        # Check if user is in combat (attacked in last 2 minutes)
+        utente = user_service.get_user(call.from_user.id)
+        last_attack = getattr(utente, 'last_attack_time', None)
+        in_combat = False
+        if last_attack:
+            elapsed = (datetime.datetime.now() - last_attack).total_seconds()
+            if elapsed < 120: # 2 minutes
+                in_combat = True
+                remaining = int(120 - elapsed)
+        
+        if in_combat:
+            bot.answer_callback_query(call.id, f"⚔️ Sei in combattimento! Devi aspettare {remaining}s prima di riposare.", show_alert=True)
+            return
+
         success, msg = user_service.start_resting(call.from_user.id)
         bot.answer_callback_query(call.id, msg, show_alert=True)
         if success:
@@ -3222,6 +3294,12 @@ def handle_inline_buttons(call):
     if action == "refresh_enemies":
         # Re-use the logic from handle_enemies but edit the message
         mobs = pve_service.get_active_mobs(call.message.chat.id)
+        
+    elif action == "profile":
+        bot_cmds = BotCommands(call.message, bot)
+        bot_cmds.chatid = call.from_user.id # Fix: Ensure chatid is the user's ID
+        bot_cmds.handle_profile()
+        return
         
         if not mobs:
             bot.answer_callback_query(call.id, "Nessun nemico attivo!")
@@ -3961,38 +4039,8 @@ def handle_inline_buttons(call):
         points_info = stats_service.get_available_stat_points(utente)
         
         msg = f"📊 **ALLOCAZIONE STATISTICHE**\n\n"
-        msg += f"🎯 Punti Disponibili: {points_info['available']}\n\n"
+        # Old stat_alloc handler removed
         
-        # Show current speed and CD
-        user_speed = getattr(utente, 'allocated_speed', 0) or 0
-        cooldown_seconds = int(60 / (1 + user_speed * 0.05))
-        msg += f"⚡ Velocità Attuale: {user_speed} (CD: {cooldown_seconds}s)\n\n"
-        
-        msg += f"Scegli dove allocare i tuoi punti:"
-        
-        markup = types.InlineKeyboardMarkup()
-        if points_info['available'] > 0:
-            markup.add(types.InlineKeyboardButton(f"❤️ +Vita (+{stats_service.HEALTH_PER_POINT} HP max)", callback_data="stat_alloc|health"))
-            markup.add(types.InlineKeyboardButton(f"💙 +Mana (+{stats_service.MANA_PER_POINT} mana max)", callback_data="stat_alloc|mana"))
-            markup.add(types.InlineKeyboardButton(f"⚔️ +Danno (+{stats_service.DAMAGE_PER_POINT} danno)", callback_data="stat_alloc|damage"))
-            markup.add(types.InlineKeyboardButton(f"⚡ +Velocità (+{stats_service.SPEED_PER_POINT} vel)", callback_data="stat_alloc|speed"))
-            markup.add(types.InlineKeyboardButton(f"🛡️ +Resistenza (+{stats_service.RESISTANCE_PER_POINT}% res)", callback_data="stat_alloc|resistance"))
-            markup.add(types.InlineKeyboardButton(f"🎯 +Crit Rate (+{stats_service.CRIT_RATE_PER_POINT}% crit)", callback_data="stat_alloc|crit_rate"))
-        else:
-            msg += "\n\n⚠️ Non hai punti disponibili!"
-        
-        try:
-            bot.edit_message_text(msg, user_id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
-        except Exception as e:
-            # If message can't be edited (e.g., it's an image), delete and send new one
-            try:
-                bot.delete_message(user_id, call.message.message_id)
-            except:
-                pass
-            bot.send_message(user_id, msg, reply_markup=markup, parse_mode='markdown')
-        bot.answer_callback_query(call.id)
-        return
-    
     elif action.startswith("stat_alloc|"):
         stat_type = action.split("|")[1]
         
@@ -4258,7 +4306,7 @@ def handle_inline_buttons(call):
             return
         
         # Deduct mana and calculate damage
-        user_service.update_user(user_id, {'mana': utente.mana - mana_cost})
+        # user_service.update_user(user_id, {'mana': utente.mana - mana_cost}) # MOVED TO PVE_SERVICE
         damage = character.get('special_attack_damage', 0) + utente.base_damage
         
         # Check if enemy is dead before attacking
@@ -4286,7 +4334,7 @@ def handle_inline_buttons(call):
             return
         
         # Attack (all are mobs now, bosses are just mobs with is_boss=True)
-        success, msg, extra_data = pve_service.attack_mob(utente, damage, use_special=True, mob_id=enemy_id)
+        success, msg, extra_data = pve_service.attack_mob(utente, damage, use_special=True, mob_id=enemy_id, mana_cost=mana_cost)
         
         if success:
             try:
@@ -4796,6 +4844,14 @@ def mob_attack_job():
                     
                     send_combat_message(chat_id, msg, image_path, markup, mob_id, old_msg_id)
 
+def process_achievements_job():
+    """Job to process pending achievements"""
+    try:
+        tracker = AchievementTracker()
+        tracker.process_pending_events(limit=50) # Process in batches of 50, but it loops now
+    except Exception as e:
+        print(f"[ACHIEVEMENT JOB ERROR] {e}")
+
 if __name__ == "__main__":
     polling_thread = threading.Thread(target=bot_polling_thread)
     polling_thread.start()
@@ -4804,6 +4860,7 @@ if __name__ == "__main__":
     schedule.every().hour.do(spawn_daily_mob_job)
     schedule.every().hour.do(regenerate_mana_job)  # +10 mana every hour for all users
     schedule.every(10).seconds.do(mob_attack_job)
+    schedule.every(30).seconds.do(process_achievements_job) # Process achievements every 30s
     # schedule.every().sunday.at("20:00").do(spawn_weekly_boss_job) # Disabled as per user request
     
     # Sunday reset removed - characters persist permanently

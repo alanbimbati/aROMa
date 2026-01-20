@@ -23,6 +23,8 @@ class StatAggregator:
         session = self.db.get_session()
         try:
             for event in events:
+                # Re-attach event to current session
+                event = session.merge(event)
                 self._process_single_event(session, event)
                 event.processed = True
             
