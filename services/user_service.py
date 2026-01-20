@@ -736,6 +736,44 @@ class UserService:
         
         session.commit()
         session.close()
+        
+        # Log events for achievements
+        # 1. Time Rested
+        if status['minutes'] > 0:
+            self.event_dispatcher.log_event(
+                event_type='minutes_rested_inn',
+                user_id=user_id,
+                value=status['minutes'],
+                session=None
+            )
+            
+        # 2. HP Restored
+        if status['hp'] > 0:
+            self.event_dispatcher.log_event(
+                event_type='hp_restored_inn',
+                user_id=user_id,
+                value=status['hp'],
+                session=None
+            )
+            
+        # 3. Mana Restored
+        if status['mana'] > 0:
+            self.event_dispatcher.log_event(
+                event_type='mana_restored_inn',
+                user_id=user_id,
+                value=status['mana'],
+                session=None
+            )
+            
+        # 4. Sonno Leggero (Count rests with >= 10 HP)
+        if status['hp'] >= 10:
+            self.event_dispatcher.log_event(
+                event_type='rest_sessions_10hp',
+                user_id=user_id,
+                value=1, # Increment count by 1
+                session=None
+            )
+            
         return True, f"Hai smesso di riposare. Hai recuperato {status['hp']} HP e {status['mana']} Mana in {status['minutes']} minuti."
 
     def add_title(self, user_id, title):
