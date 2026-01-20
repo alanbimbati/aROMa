@@ -404,8 +404,11 @@ class PvEService:
             return False, "Sei troppo affaticato per combattere! Riposa.", None
             
         # Check Cooldown based on Speed
-        user_speed = getattr(user, 'allocated_speed', 0)
-        cooldown_seconds = 60 / (1 + user_speed * 0.05)
+        # Speed is the raw value (e.g. 15). 1 point = 5 speed.
+        # We want 1 point to give ~5% cooldown reduction.
+        # So 5 speed * 0.01 = 0.05 (5%).
+        user_speed = getattr(user, 'speed', 0) or 0
+        cooldown_seconds = 60 / (1 + user_speed * 0.01)
         
         last_attack = getattr(user, 'last_attack_time', None)
         if last_attack:

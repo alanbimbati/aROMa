@@ -1562,6 +1562,7 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         # Only show action buttons if viewing own profile
         if not target_user or target_user.id_telegram == self.chatid:
             markup.add(types.InlineKeyboardButton("📊 Alloca Statistiche", callback_data="stat_alloc"))
+            markup.add(types.InlineKeyboardButton("🏆 Scegli Titolo", callback_data="title_menu"))
             # markup.add(types.InlineKeyboardButton("🔄 Reset Stats (Gratis)", callback_data="stat_reset")) # Removed as per user request
         if character:
             # markup.add(types.InlineKeyboardButton("✨ Attacco Speciale", callback_data="special_attack_mob")) # Removed as per user request
@@ -1970,6 +1971,79 @@ Per acquistare un gioco che vedi in un canale o gruppo:
             # Use self.message.chat.id if available, otherwise self.chatid (fallback)
             target_chat = self.message.chat.id if hasattr(self, 'message') and self.message else self.chatid
             self.bot.send_message(target_chat, msg, reply_markup=markup, parse_mode='markdown')
+
+    def handle_title_selection(self, is_callback=False, call_id=None):
+        """Show menu to select a title from unlocked achievements"""
+        utente = user_service.get_user(self.chatid)
+        if not utente:
+            return
+            
+        # Fetch unlocked achievements
+        from services.achievement_tracker import AchievementTracker
+        tracker = AchievementTracker()
+        achievements = tracker.get_user_achievements(self.chatid)
+        
+        # Filter for unlocked ones (current_tier is not None)
+        unlocked_titles = []
+        tier_emojis = {
+            'bronze': '🥉',
+            'silver': '🥈',
+            'gold': '🥇',
+            'platinum': '💎',
+            'diamond': '💎',
+            'legendary': '👑'
+        }
+        
+        for ach in achievements:
+            if ach['current_tier']:
+                emoji = tier_emojis.get(ach['current_tier'], '')
+                title_display = f"{ach['name']} {emoji}"
+                unlocked_titles.append(title_display)
+            
+        if not unlocked_titles:
+            msg = "❌ Non hai ancora sbloccato nessun titolo!\n\nCompleta gli achievement per ottenerne uno."
+            if is_callback and call_id:
+                self.bot.answer_callback_query(call_id, "Nessun titolo disponibile", show_alert=True)
+                return
+            elif not is_callback:
+                self.bot.send_message(self.chatid, msg)
+                return
+            else:
+                return
+        
+        if is_callback and call_id:
+            try:
+                self.bot.answer_callback_query(call_id)
+            except:
+                pass
+                
+        msg = f"🏆 **SCEGLI IL TUO TITOLO**\n\n"
+        msg += f"Titolo attuale: **{utente.title or 'Nessuno'}**\n\n"
+        msg += "Seleziona un titolo da equipaggiare:"
+        
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("❌ Rimuovi Titolo", callback_data="set_title|NONE"))
+        
+        for ach in achievements:
+            if ach['current_tier']:
+                emoji = tier_emojis.get(ach['current_tier'], '')
+                title_display = f"{ach['name']} {emoji}"
+                
+                # Check if current
+                icon = "✅" if utente.title == title_display else "▪️"
+                
+                # Use key in callback to avoid string encoding issues
+                markup.add(types.InlineKeyboardButton(f"{icon} {title_display}", callback_data=f"set_title|{ach['key']}"))
+            
+        markup.add(types.InlineKeyboardButton("🔙 Profilo", callback_data="profile"))
+        
+        if is_callback:
+            try:
+                self.bot.edit_message_text(msg, self.message.chat.id, self.message.message_id, reply_markup=markup, parse_mode='markdown')
+            except:
+                self.bot.send_message(self.message.chat.id, msg, reply_markup=markup, parse_mode='markdown')
+        else:
+            self.bot.send_message(self.chatid, msg, reply_markup=markup, parse_mode='markdown')
 
     def handle_stat_callback(self, call):
         """Handle stat allocation callbacks"""
@@ -2890,6 +2964,58 @@ def callback_query(call):
         bot_cmds.chatid = user_id 
         bot_cmds.message = call.message 
         bot_cmds.handle_stats(is_callback=True)
+        return
+
+    if call.data == "title_menu":
+        # Don't answer here, let handle_title_selection do it (to show alert if needed)
+        
+        bot_cmds = BotCommands(call.message, bot)
+        bot_cmds.chatid = user_id
+        bot_cmds.message = call.message
+        bot_cmds.handle_title_selection(is_callback=True, call_id=call.id)
+        return
+        
+    if call.data.startswith("set_title|"):
+        key = call.data.split("|")[1]
+        
+        if key == "NONE":
+            user_service.update_user(user_id, {'title': None})
+            msg = "Titolo rimosso!"
+        else:
+            # Verify user owns achievement (security check)
+            from services.achievement_tracker import AchievementTracker
+            tracker = AchievementTracker()
+            achievements = tracker.get_user_achievements(user_id)
+            
+            tier_emojis = {
+                'bronze': '🥉',
+                'silver': '🥈',
+                'gold': '🥇',
+                'platinum': '💎',
+                'diamond': '💎',
+                'legendary': '👑'
+            }
+            
+            selected_title = None
+            for ach in achievements:
+                if ach['key'] == key and ach['current_tier']:
+                    emoji = tier_emojis.get(ach['current_tier'], '')
+                    selected_title = f"{ach['name']} {emoji}"
+                    break
+            
+            if selected_title:
+                user_service.update_user(user_id, {'title': selected_title})
+                msg = f"Titolo impostato: {selected_title}"
+            else:
+                msg = "Non possiedi questo titolo o achievement non trovato!"
+        
+        bot.answer_callback_query(call.id, msg)
+        
+        # Refresh menu
+        bot_cmds = BotCommands(call.message, bot)
+        bot_cmds.chatid = user_id
+        bot_cmds.message = call.message
+        bot_cmds.handle_title_selection(is_callback=True, call_id=call.id)
         return
 
     if call.data.startswith("guild_create_final|"):
