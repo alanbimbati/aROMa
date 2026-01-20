@@ -175,7 +175,16 @@ class AchievementTracker:
                 print(f"[ERROR] Failed to award achievement EXP: {e}")
             
         if 'title' in rewards:
-            msg += f"🏷️ Titolo: **{rewards['title']}**\n"
+            title_text = rewards['title']
+            msg += f"🏷️ Titolo: **{title_text}**\n"
+            try:
+                # Ensure user_service is initialized (might be already if exp was awarded)
+                if 'user_service' not in locals():
+                    from services.user_service import UserService
+                    user_service = UserService()
+                user_service.add_title(user_id, title_text)
+            except Exception as e:
+                print(f"[ERROR] Failed to add title: {e}")
             
         # Send notification (using main.bot via import inside function to avoid circular dep)
         try:

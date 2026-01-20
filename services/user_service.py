@@ -402,7 +402,7 @@ class UserService:
         
         # RPG Stats Card
         current_hp = utente.current_hp if hasattr(utente, 'current_hp') and utente.current_hp is not None else utente.health
-        user_speed = getattr(utente, 'allocated_speed', 0) or 0
+        user_speed = getattr(utente, 'speed', 0) or 0
         cooldown_seconds = int(60 / (1 + user_speed * 0.05))
         
         card = f"╔══════🕹 **{nome_utente.upper()}** ══════╗\n"
@@ -737,3 +737,26 @@ class UserService:
         session.commit()
         session.close()
         return True, f"Hai smesso di riposare. Hai recuperato {status['hp']} HP e {status['mana']} Mana in {status['minutes']} minuti."
+
+    def add_title(self, user_id, title):
+        """Add a title to the user's unlocked titles list"""
+        import json
+        session = self.db.get_session()
+        user = session.query(Utente).filter_by(id_telegram=user_id).first()
+        
+        if not user:
+            session.close()
+            return False
+            
+        try:
+            titles = json.loads(user.titles) if user.titles else []
+        except:
+            titles = []
+            
+        if title not in titles:
+            titles.append(title)
+            user.titles = json.dumps(titles)
+            session.commit()
+            
+        session.close()
+        return True
