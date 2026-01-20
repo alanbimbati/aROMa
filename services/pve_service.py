@@ -378,7 +378,7 @@ class PvEService:
         finally:
             session.close()
 
-    def attack_mob(self, user, base_damage=0, use_special=False, ability=None, mob_id=None):
+    def attack_mob(self, user, base_damage=0, use_special=False, ability=None, mob_id=None, mana_cost=0):
         """Attack current mob using BattleService"""
         session = self.db.get_session()
         
@@ -416,6 +416,13 @@ class PvEService:
                 seconds = remaining % 60
                 session.close()
                 return False, f"⏳ Sei stanco! (CD: {int(cooldown_seconds)}s)\nDevi riposare ancora per {minutes}m {seconds}s.", None
+        
+        # Deduct Mana (if applicable) - NOW AFTER COOLDOWN CHECK
+        if mana_cost > 0:
+            if user.mana < mana_cost:
+                session.close()
+                return False, f"❌ Mana insufficiente! Serve: {mana_cost}", None
+            self.user_service.update_user(user.id_telegram, {'mana': user.mana - mana_cost})
         
         # Update last attack time
         self.user_service.update_user(user.id_telegram, {'last_attack_time': datetime.datetime.now()})
@@ -628,9 +635,18 @@ class PvEService:
                         if is_stunned:
                             p_xp = 0
                             p_wumpa = 0
+                        
+                        # Check if user is dead (0 HP)
+                        is_dead = False
+                        current_hp = p_user_check.current_hp if hasattr(p_user_check, 'current_hp') and p_user_check.current_hp is not None else p_user_check.health
+                        if current_hp <= 0:
+                            is_dead = True
+                            p_xp = 0
+                            p_wumpa = 0
+
                         if has_turbo:
                             p_xp = int(p_xp * 1.2)
-                        if p_xp < 1 and not is_stunned: p_xp = 1
+                        if p_xp < 1 and not is_stunned and not is_dead: p_xp = 1
                         
                         p_name = f"User {p.user_id}"
                         if p_user_check:
@@ -641,7 +657,9 @@ class PvEService:
                             'p_xp': p_xp,
                             'p_wumpa': p_wumpa,
                             'p_name': p_name,
-                            'damage_dealt': p.damage_dealt
+                            'damage_dealt': p.damage_dealt,
+                            'is_dead': is_dead,
+                            'is_stunned': is_stunned
                         })
                         actual_total_wumpa += p_wumpa
                         actual_total_xp += p_xp
@@ -661,6 +679,18 @@ class PvEService:
                     
                     display_damage = min(damage_dealt, mob_max_health)
                     reward_line = f"👤 **{p_name}**: {display_damage}/{mob_max_health} dmg -> {p_xp} Exp, {p_wumpa} {PointsName}"
+                    
+                    if p_xp == 0 and p_wumpa == 0 and not is_stunned:
+                         # Check if it was due to death (we don't have is_dead here easily without re-checking or passing it)
+                         # But we know 0 xp/wumpa usually means stun or death or penalty.
+                         # Let's re-check quickly or just assume if 0 and not stunned it might be death.
+                         # Actually, let's pass is_dead in the reward dict.
+                         pass
+                    
+                    if reward.get('is_dead'):
+                        reward_line += " 💀 (Morto)"
+                    elif reward.get('is_stunned'):
+                        reward_line += " 💫 (Stordito)"
                     if level_up_info['leveled_up']:
                         reward_line += f"\n   🎉 **LEVEL UP!** Ora sei livello {level_up_info['new_level']}!"
                         if level_up_info['next_level_exp']:

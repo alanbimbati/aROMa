@@ -1,7 +1,9 @@
 from database import Database
+from sqlalchemy.sql import func
 from models.user import Utente, Admin
 from models.system import Livello
 from models.game import GiocoUtente
+from services.character_loader import get_character_loader
 from sqlalchemy import desc, asc, text, inspect
 from sqlalchemy.orm import defer
 import datetime
@@ -278,60 +280,63 @@ class UserService:
         next_level_exp = None
         
         if utente:
-            utente.exp = int(utente.exp) + int(exp)
+            current_exp = utente.exp if utente.exp is not None else 0
+            utente.exp = int(current_exp) + int(exp)
             
-            # Check for level-up usando il metodo helper che gestisce l'assenza di exp_required
-            current_level_data = self._get_livello_by_level(session, utente.livello)
+            if utente.livello is None:
+                utente.livello = 1
             
-            if current_level_data:
-                # Check if exp exceeds requirement for next level
-                next_level_data = self._get_livello_by_level(session, utente.livello + 1)
+            # Helper to get exp required from CharacterLoader (source of truth)
+            def get_exp_required_for_level(level):
+                loader = get_character_loader()
+                chars = loader.get_characters_by_level(level)
+                if chars:
+                    # All characters of same level should have same exp req, take first
+                    return chars[0].get('exp_required', 100)
                 
-                # Gestisci il caso in cui exp_required non esiste ancora nel database
-                # Usa una formula di fallback se la colonna non è presente
-                def get_exp_required(level_data):
-                    if level_data and hasattr(level_data, 'exp_required') and level_data.exp_required is not None:
-                        return level_data.exp_required
-                    # Formula di fallback: 100 * livello^2
-                    if level_data:
-                        return 100 * (level_data.livello ** 2)
-                    return None
+                # Fallback to DB if loader fails (unlikely if CSV is good)
+                level_data = self._get_livello_by_level(session, level)
+                if level_data and hasattr(level_data, 'exp_required') and level_data.exp_required is not None:
+                    return level_data.exp_required
                 
-                next_exp_req = get_exp_required(next_level_data)
-                while next_level_data and next_exp_req is not None and utente.exp >= next_exp_req:
-                    # Level up!
-                    utente.livello += 1
-                    
-                    # Stat Points Logic
-                    # Levels 1-79: 2 points
-                    # Levels 80+: 5 points
-                    points_to_add = 5 if utente.livello >= 80 else 2
-                    utente.stat_points += points_to_add
-                    
-                    # Increase base stats
-                    utente.max_health += 10
-                    utente.max_mana += 10  # Increased from 2 to 10
-                    utente.base_damage += 2
-                    
-                    leveled_up = True
-                    new_level = utente.livello
-                    
-                    # NEW: Log level up event
-                    self.event_dispatcher.log_event(
-                        event_type='level_up',
-                        user_id=user_id,
-                        value=new_level,
-                        context={'exp': utente.exp},
-                        session=session
-                    )
-                    
-                    # Check for next level
-                    next_level_data = self._get_livello_by_level(session, utente.livello + 1)
-                    next_exp_req = get_exp_required(next_level_data)
+                # Final fallback: Formula
+                return 100 * (level ** 2)
+
+            # Check for level-up
+            next_exp_req = get_exp_required_for_level(utente.livello + 1)
+            
+            while next_exp_req is not None and utente.exp >= next_exp_req:
+                # Level up!
+                utente.livello += 1
                 
-                # Get next level exp requirement for display
-                if next_level_data:
-                    next_level_exp = get_exp_required(next_level_data)
+                # Stat Points Logic
+                # Levels 1-79: 2 points
+                # Levels 80+: 5 points
+                points_to_add = 5 if utente.livello >= 80 else 2
+                utente.stat_points += points_to_add
+                
+                # Increase base stats
+                utente.max_health += 10
+                utente.max_mana += 10
+                utente.base_damage += 2
+                
+                leveled_up = True
+                new_level = utente.livello
+                
+                # NEW: Log level up event
+                self.event_dispatcher.log_event(
+                    event_type='level_up',
+                    user_id=user_id,
+                    value=new_level,
+                    context={'exp': utente.exp},
+                    session=session
+                )
+                
+                # Check for next level
+                next_exp_req = get_exp_required_for_level(utente.livello + 1)
+            
+            # Get next level exp requirement for display
+            next_level_exp = next_exp_req
             
             session.commit()
         session.close()
