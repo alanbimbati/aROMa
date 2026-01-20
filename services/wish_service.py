@@ -44,11 +44,11 @@ class WishService:
             
             # Shenron: 1 Big Wish
             if wish_type == "wumpa":
-                amount = random.randint(300, 500)
+                amount = random.randint(1000, 2000)
                 self.user_service.add_points(user, amount)
                 return f"🐉 SHENRON HA ESAUDITO IL TUO DESIDERIO!\n\n💰 HAI OTTENUTO {amount} {PointsName}!"
             elif wish_type == "exp":
-                amount = random.randint(300, 500)
+                amount = random.randint(1000, 2000)
                 self.user_service.add_exp(user, amount)
                 # Log event for achievements
             from services.event_dispatcher import EventDispatcher
@@ -80,7 +80,7 @@ class WishService:
                 
             # This shouldn't be called directly for Porunga, handled via callbacks
             if wish_type == "wumpa":
-                amount = random.randint(50, 100)
+                amount = random.randint(300, 500)
                 self.user_service.add_points(user, amount)
                 return f"🐲 PORUNGA: Ricevi {amount} {PointsName}!"
             elif wish_type == "item":
@@ -96,7 +96,7 @@ class WishService:
     def grant_porunga_wish(self, user, wish_choice, wish_number=1):
         """Grant a single Porunga wish (called 3 times)"""
         if wish_choice == "wumpa":
-            amount = random.randint(50, 100)
+            amount = random.randint(300, 500)
             self.user_service.add_points(user, amount)
             return f"Desiderio {wish_number}/3: Ricevi {amount} {PointsName}!"
         elif wish_choice == "item":
