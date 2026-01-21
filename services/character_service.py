@@ -74,6 +74,29 @@ class CharacterService:
         if character['lv_premium'] != 2:
             session.close()
             return False, "Questo personaggio non è acquistabile!"
+            
+        # Check max ownership limit (Family Check)
+        max_owners = character.get('max_concurrent_owners', 1)
+        if max_owners != -1:
+            # Get all IDs in the family (Base + Transformations)
+            family_ids = self.char_loader.get_character_family_ids(char_id)
+            
+            # Check if ANY of these are owned by ANYONE
+            # Note: We check CharacterOwnership (Equipped) as per previous logic, 
+            # but for strict uniqueness we might want to check UserCharacter (Owned).
+            # However, sticking to "Active/Equipped" uniqueness for now as per context.
+            # WAIT: If I buy it, I want to own it. If someone else has it equipped, I can't buy it?
+            # The user said "un personaggio non può avere la mia trasformazione".
+            # This implies if I HAVE (Equipped/Owned?) Vegeta, you can't have Vegeta SSJ.
+            # Let's check CharacterOwnership for all family IDs.
+            
+            current_owners_count = session.query(CharacterOwnership).filter(
+                CharacterOwnership.character_id.in_(family_ids)
+            ).count()
+            
+            if current_owners_count >= max_owners:
+                session.close()
+                return False, f"❌ Questo personaggio (o una sua trasformazione) è già in uso da qualcun altro!"
         
         # Check evolution requirement
         if character.get('required_character_id'):
@@ -144,16 +167,25 @@ class CharacterService:
         char_name = character['nome']  # Extract name for error msg
         
         if max_owners != -1:  # If not unlimited
-            # Count current owners
-            current_owners = session.query(CharacterOwnership).filter_by(character_id=char_id).count()
+            # Get family IDs
+            family_ids = self.char_loader.get_character_family_ids(char_id)
+            
+            # Count current owners of ANY family member
+            current_owners = session.query(CharacterOwnership).filter(
+                CharacterOwnership.character_id.in_(family_ids)
+            ).count()
             
             # Check if character is already at max capacity
             if current_owners >= max_owners:
-                # Check if user already owns it
-                user_owns = session.query(CharacterOwnership).filter_by(character_id=char_id, user_id=user.id_telegram).first()
+                # Check if user already owns one of them (re-equipping same or switching form)
+                user_owns = session.query(CharacterOwnership).filter(
+                    CharacterOwnership.character_id.in_(family_ids),
+                    CharacterOwnership.user_id == user.id_telegram
+                ).first()
+                
                 if not user_owns:
                     session.close()
-                    return False, f"❌ {char_name} è già in uso da {current_owners} utente/i! (Max: {max_owners})"
+                    return False, f"❌ {char_name} (o una sua forma) è già in uso da qualcun altro!"
         
         # Release user's current character
         self._release_user_character(user.id_telegram, session)
@@ -397,3 +429,24 @@ class CharacterService:
     def get_characters_by_level(self, level):
         """Get all characters for a specific level"""
         return self.char_loader.get_characters_by_level(level)
+
+    def get_character_owner_name(self, char_id):
+        """Get the name of the current owner of a character (if unique)"""
+        session = self.db.get_session()
+        try:
+            character = self.char_loader.get_character_by_id(char_id)
+            if not character:
+                return None
+                
+            # Only relevant for unique characters
+            if character.get('max_concurrent_owners', 1) == -1:
+                return None
+                
+            ownership = session.query(CharacterOwnership).filter_by(character_id=char_id).first()
+            if ownership:
+                user = session.query(Utente).filter_by(id_telegram=ownership.user_id).first()
+                if user:
+                    return user.nome if user.username is None else user.username
+            return None
+        finally:
+            session.close()

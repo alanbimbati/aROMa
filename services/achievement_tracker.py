@@ -20,6 +20,65 @@ class AchievementTracker:
         self.event_dispatcher = EventDispatcher()
         self.stat_aggregator = StatAggregator()
         
+    def load_from_csv(self, csv_path="data/achievements.csv"):
+        """Load achievements from a CSV file, updating the database."""
+        import csv
+        import os
+        
+        if not os.path.exists(csv_path):
+            print(f"[AchievementTracker] CSV file not found: {csv_path}")
+            return
+
+        print(f"[AchievementTracker] Loading achievements from {csv_path}...")
+        session = self.db.get_session()
+        try:
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                count = 0
+                for row in reader:
+                    key = row['key']
+                    name = row['name']
+                    description = row['description']
+                    stat_key = row['stat_key']
+                    category = row['category']
+                    tiers_str = row['tiers']
+                    
+                    # Validate JSON
+                    try:
+                        json.loads(tiers_str)
+                    except json.JSONDecodeError as e:
+                        print(f"[AchievementTracker] Error parsing JSON for {key}: {e}")
+                        continue
+
+                    ach = session.query(Achievement).filter_by(achievement_key=key).first()
+                    if not ach:
+                        ach = Achievement(
+                            achievement_key=key,
+                            name=name,
+                            description=description,
+                            stat_key=stat_key,
+                            category=category,
+                            tiers=tiers_str
+                        )
+                        session.add(ach)
+                    else:
+                        ach.name = name
+                        ach.description = description
+                        ach.stat_key = stat_key
+                        ach.category = category
+                        ach.tiers = tiers_str
+                    
+                    count += 1
+                
+                session.commit()
+                print(f"[AchievementTracker] Successfully processed {count} achievements.")
+                
+        except Exception as e:
+            print(f"[AchievementTracker] Error loading CSV: {e}")
+            session.rollback()
+        finally:
+            session.close()
+        
     def process_pending_events(self, limit=100):
         """
         Main loop:
