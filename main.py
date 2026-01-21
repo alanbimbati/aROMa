@@ -42,6 +42,8 @@ from services.drop_service import DropService
 from services.dungeon_service import DungeonService
 from services.achievement_tracker import AchievementTracker
 
+
+
 # Initialize Services
 user_service = UserService()
 item_service = ItemService()
@@ -67,6 +69,18 @@ def _auto_delete_message_handler(*args, **kwargs):
         import functools
         @functools.wraps(handler)
         def wrapper(message, *a, **k):
+            try:
+                result = handler(message, *a, **k)
+            except Exception as e:
+                # If handler fails, still try to delete if it was a command
+                # But re-raise exception after
+                if hasattr(message, 'text') and message.text and message.text.startswith('/'):
+                    try:
+                        bot.delete_message(message.chat.id, message.message_id)
+                    except:
+                        pass
+                raise e
+
             # Check if it's a command message (starts with /)
             if hasattr(message, 'text') and message.text and message.text.startswith('/'):
                 try:
@@ -77,7 +91,7 @@ def _auto_delete_message_handler(*args, **kwargs):
                 except Exception:
                     # Ignore errors (e.g. missing permissions, message already deleted)
                     pass
-            return handler(message, *a, **k)
+            return result
         
         return _original_message_handler(*args, **kwargs)(wrapper)
     return decorator
@@ -2179,6 +2193,14 @@ Per acquistare un gioco che vedi in un canale o gruppo:
                 msg += f" ~~{char_price}~~"
             msg += "\n"
         
+        # Show Owner if applicable
+        owner_name = character_service.get_character_owner_name(char_id)
+        if owner_name:
+            if owner_name == (utente.nome if utente.username is None else utente.username):
+                msg += "👤 **Proprietario**: TU\n"
+            else:
+                msg += f"👤 **Proprietario**: {owner_name}\n"
+        
         
         # Show skills with crit stats
         from services.skill_service import SkillService
@@ -2638,6 +2660,133 @@ def handle_admin_points(message):
     except ValueError:
         pass
 
+@bot.message_handler(commands=['missing_image_command'])
+def handle_missing_image_command(message):
+    """Find a character, mob, or boss without an image and ask for upload"""
+    # Check if user is admin
+    user_id = message.from_user.id
+    utente = user_service.get_user(user_id)
+    if not user_service.is_admin(utente):
+        return
+
+    # 1. Check Characters
+    all_chars = character_service.get_all_characters()
+    for char in all_chars:
+        image_exists = False
+        char_name_lower = char['nome'].lower().replace(" ", "_")
+        for ext in ['.png', '.jpg', '.jpeg']:
+            if os.path.exists(f"images/characters/{char_name_lower}{ext}"):
+                image_exists = True
+                break
+        
+        if not image_exists:
+            # Check base name
+            base_name = char['nome'].split('-')[0].strip().lower().replace(" ", "_")
+            for ext in ['.png', '.jpg', '.jpeg']:
+                if os.path.exists(f"images/characters/{base_name}{ext}"):
+                    image_exists = True
+                    break
+        
+        if not image_exists:
+            admin_last_viewed_character[message.from_user.id] = {'type': 'character', 'id': char['id'], 'name': char['nome']}
+            msg = "🔍 **Immagine Mancante Trovata!**\n\n"
+            msg += f"Nome: **{char['nome']}**\n"
+            msg += f"Tipo: Character\n\n"
+            msg += "📸 Invia una foto ORA per caricarla!"
+            bot.reply_to(message, msg, parse_mode='markdown')
+            return
+
+    # 2. Check Mobs
+    if pve_service.mob_data:
+        for mob in pve_service.mob_data:
+            mob_name_lower = mob['nome'].lower().replace(" ", "_")
+            image_exists = False
+            for ext in ['.png', '.jpg', '.jpeg']:
+                if os.path.exists(f"images/mobs/{mob_name_lower}{ext}"):
+                    image_exists = True
+                    break
+            
+            if not image_exists:
+                admin_last_viewed_character[message.from_user.id] = {'type': 'mob', 'id': mob['nome'], 'name': mob['nome']} # Use name as ID for mobs
+                msg = "🔍 **Immagine Mancante Trovata!**\n\n"
+                msg += f"Nome: **{mob['nome']}**\n"
+                msg += f"Tipo: Mob\n\n"
+                msg += "📸 Invia una foto ORA per caricarla!"
+                bot.reply_to(message, msg, parse_mode='markdown')
+                return
+
+    # 3. Check Bosses
+    if pve_service.boss_data:
+        for boss in pve_service.boss_data:
+            boss_name_lower = boss['nome'].lower().replace(" ", "_")
+            image_exists = False
+            for ext in ['.png', '.jpg', '.jpeg']:
+                if os.path.exists(f"images/bosses/{boss_name_lower}{ext}"):
+                    image_exists = True
+                    break
+            
+            if not image_exists:
+                admin_last_viewed_character[message.from_user.id] = {'type': 'boss', 'id': boss['nome'], 'name': boss['nome']} # Use name as ID for bosses
+                msg = "🔍 **Immagine Mancante Trovata!**\n\n"
+                msg += f"Nome: **{boss['nome']}**\n"
+                msg += f"Tipo: Boss\n\n"
+                msg += "📸 Invia una foto ORA per caricarla!"
+                bot.reply_to(message, msg, parse_mode='markdown')
+                return
+
+    bot.reply_to(message, "✅ Tutti i personaggi, mob e boss hanno un'immagine!")
+
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
+    """Handle photo uploads for characters, mobs, and bosses"""
+    user_id = message.from_user.id
+    
+    # Check if admin is waiting to upload
+    if user_id in admin_last_viewed_character:
+        pending = admin_last_viewed_character[user_id]
+        
+        # Handle old format (just ID) for backward compatibility or if session persisted
+        if not isinstance(pending, dict):
+             pending = {'type': 'character', 'id': pending, 'name': 'Unknown'}
+             # Try to fetch name if possible, or just fail gracefully
+             char = character_service.get_character(pending['id'])
+             if char: pending['name'] = char['nome']
+
+        try:
+            # Get the photo
+            file_info = bot.get_file(message.photo[-1].file_id)
+            downloaded_file = bot.download_file(file_info.file_path)
+            
+            name_lower = pending['name'].lower().replace(" ", "_")
+            
+            if pending['type'] == 'character':
+                save_dir = "images/characters"
+            elif pending['type'] == 'mob':
+                save_dir = "images/mobs"
+            elif pending['type'] == 'boss':
+                save_dir = "images/bosses"
+            else:
+                bot.reply_to(message, "❌ Tipo sconosciuto.")
+                return
+
+            save_path = f"{save_dir}/{name_lower}.png"
+            
+            # Ensure directory exists
+            os.makedirs(save_dir, exist_ok=True)
+            
+            # Save file
+            with open(save_path, 'wb') as new_file:
+                new_file.write(downloaded_file)
+                
+            bot.reply_to(message, f"✅ Immagine salvata per **{pending['name']}** ({pending['type']})!\nUsa /missing_image_command per cercarne un'altra.", parse_mode='markdown')
+            
+            # Clear pending state
+            del admin_last_viewed_character[user_id]
+            
+        except Exception as e:
+            bot.reply_to(message, f"❌ Errore nel salvataggio: {e}")
+            # Don't clear pending state on error so they can retry
+
 @bot.message_handler(content_types=['text'] + util.content_type_media)
 def any(message):
     # Check if message is a forward (Game Purchase)
@@ -2654,7 +2803,7 @@ def any(message):
     # Private Chat Catch-all: If we are here, the message was not handled by specific handlers
     # We reply with the new menu to force update
     if message.chat.type == 'private':
-        bot.reply_to(message, "❌ Comando non riconosciuto o menu scaduto.\nUsa il menu qui sotto per navigare:", reply_markup=get_main_menu())
+        bot.send_message(message.chat.id, "❌ Comando non riconosciuto o menu scaduto.\nUsa il menu qui sotto per navigare:", reply_markup=get_main_menu())
         return
              
         # Check membership in source channel
@@ -4978,7 +5127,19 @@ def process_achievements_job():
     except Exception as e:
         print(f"[ACHIEVEMENT JOB ERROR] {e}")
 
+
+
+
 if __name__ == "__main__":
+    # Load achievements from CSV on startup
+    try:
+        print("[STARTUP] Loading achievements from CSV...")
+        from services.achievement_tracker import AchievementTracker
+        tracker = AchievementTracker()
+        tracker.load_from_csv()
+    except Exception as e:
+        print(f"[STARTUP ERROR] Could not load achievements: {e}")
+
     polling_thread = threading.Thread(target=bot_polling_thread)
     polling_thread.start()
     

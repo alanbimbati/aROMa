@@ -184,6 +184,7 @@ class UserService:
                 utente.end_tnt = datetime.datetime.now()
                 utente.scadenza_premium = datetime.datetime.now()
                 utente.abbonamento_attivo = 0
+                utente.stat_points = 2 # Level 1 * 2
                 session.add(utente)
                 session.commit()
             except:
@@ -309,11 +310,16 @@ class UserService:
                 # Level up!
                 utente.livello += 1
                 
-                # Stat Points Logic
-                # Levels 1-79: 2 points
-                # Levels 80+: 5 points
-                points_to_add = 5 if utente.livello >= 80 else 2
-                utente.stat_points += points_to_add
+                # Stat Points Logic: Always Level * 2
+                spent_points = (
+                    (utente.allocated_health or 0) + 
+                    (utente.allocated_mana or 0) + 
+                    (utente.allocated_damage or 0) +
+                    (utente.allocated_resistance or 0) +
+                    (utente.allocated_crit or 0) +
+                    (utente.allocated_speed or 0)
+                )
+                utente.stat_points = (utente.livello * 2) - spent_points
                 
                 # Increase base stats
                 utente.max_health += 10
@@ -665,7 +671,7 @@ class UserService:
             'resistance': 0,
             'crit_chance': 0,
             'speed': 0,
-            'stat_points': utente.stat_points + points_to_refund
+            'stat_points': utente.livello * 2
         }
         
         if paid:

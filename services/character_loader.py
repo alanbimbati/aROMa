@@ -188,6 +188,48 @@ class CharacterLoader:
         
         return chain
     
+    def get_character_family_ids(self, char_id: int) -> List[int]:
+        """
+        Get all character IDs that belong to the same 'family' (base + transformations).
+        Used for checking uniqueness across all forms of a character.
+        """
+        if not self._cache:
+            self.load_characters_from_csv()
+            
+        char = self.get_character_by_id(char_id)
+        if not char:
+            return []
+            
+        # 1. Find the Root Base Character
+        root_char = char
+        visited = {char['id']}
+        
+        while root_char.get('base_character_id'):
+            parent_id = root_char['base_character_id']
+            if parent_id in visited: # Cycle detection
+                break
+            visited.add(parent_id)
+            parent = self.get_character_by_id(parent_id)
+            if parent:
+                root_char = parent
+            else:
+                break
+        
+        # 2. Find all descendants of the Root (BFS/DFS)
+        family_ids = {root_char['id']}
+        queue = [root_char['id']]
+        
+        while queue:
+            current_id = queue.pop(0)
+            # Find direct children (transformations)
+            children = [c for c in self._cache if c.get('base_character_id') == current_id]
+            for child in children:
+                if child['id'] not in family_ids:
+                    family_ids.add(child['id'])
+                    queue.append(child['id'])
+                    
+        return list(family_ids)
+
     def clear_cache(self):
         """Clear the cache (useful for testing or reloading data)"""
         self._cache = None
