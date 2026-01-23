@@ -4,6 +4,7 @@ from models.pve import Mob
 from models.combat import CombatParticipation
 from models.system import Livello
 from models.user import Utente
+from models.dungeon import Dungeon
 from services.user_service import UserService
 from services.item_service import ItemService
 from services.event_dispatcher import EventDispatcher
@@ -69,10 +70,10 @@ class PvEService:
             print(f"Error loading bosses: {e}")
         return bosses
 
-    def use_special_attack(self, user):
+    def use_special_attack(self, user, is_aoe=False, chat_id=None):
         """
         Execute special attack for the user.
-        Checks mana, calculates damage, and calls attack_mob.
+        Checks mana, calculates damage, and calls attack_mob or attack_aoe.
         """
         # Get character
         from services.character_loader import get_character_loader
@@ -80,7 +81,7 @@ class PvEService:
         character = char_loader.get_character_by_id(user.livello_selezionato)
         
         if not character:
-            return False, "Personaggio non trovato."
+            return False, "Personaggio non trovato.", None, []
             
         # Check mana
         mana_cost = character.get('special_attack_mana_cost', 50)
@@ -88,32 +89,87 @@ class PvEService:
         mana_cost = int(mana_cost * multiplier)
         
         if user.mana < mana_cost:
-            return False, f"Mana insufficiente! Serve: {mana_cost}, hai: {user.mana}"
+            return False, f"Mana insufficiente! Serve: {mana_cost}, hai: {user.mana}", None, []
             
-        # Deduct mana
-        self.user_service.update_user(user.id_telegram, {'mana': user.mana - mana_cost})
-        
         # Calculate damage (base + special bonus)
-        # We let attack_mob handle the base damage + stats
-        # But we need to pass the special damage bonus
         special_damage = character.get('special_attack_damage', 0)
         
-        # Call attack_mob with use_special=True
-        # Note: attack_mob will calculate total damage using BattleService
-        # We might need to pass the ability or just let BattleService handle it if we pass use_special=True
-        # Looking at attack_mob signature: attack_mob(self, user, base_damage=0, use_special=False, ability=None, mob_id=None)
-        
-        # We'll pass the special damage as base_damage addition or handle it inside
-        # Actually, let's pass it as base_damage for now, or rely on BattleService if it knows about special attacks.
-        # The current attack_mob implementation takes base_damage.
-        
-        success, msg = self.attack_mob(user, base_damage=special_damage, use_special=True)
-        
-        if not success:
-            # Refund mana if attack failed (e.g. no mob)
-            self.user_service.update_user(user.id_telegram, {'mana': user.mana + mana_cost})
+        if is_aoe:
+            # Special AoE Attack
+            return self.attack_aoe(user, base_damage=special_damage, chat_id=chat_id, use_special=True)
+        else:
+            # Single Target Special Attack
+            # Deduct mana here for single target (attack_aoe handles it for AoE)
+            self.user_service.update_user(user.id_telegram, {'mana': user.mana - mana_cost})
+            success, msg, extra_data = self.attack_mob(user, base_damage=special_damage, use_special=True)
             
-        return success, msg
+            if not success:
+                # Refund mana if attack failed (e.g. no mob)
+                self.user_service.update_user(user.id_telegram, {'mana': user.mana + mana_cost})
+                return False, msg, None, []
+                
+            return success, msg, extra_data, []
+    def flee_mob(self, user, mob_id):
+        """
+        Allow a user to flee from a mob with a chance based on level ratio.
+        If threshold reached, mob is removed for everyone.
+        """
+        session = self.db.get_session()
+        try:
+            mob = session.query(Mob).filter_by(id=mob_id).first()
+            if not mob:
+                return False, "Mostro non trovato."
+            if mob.is_dead:
+                return False, "Il mostro è già fuggito o è stato sconfitto."
+            
+            # Check if user already fled
+            participation = session.query(CombatParticipation).filter_by(mob_id=mob_id, user_id=user.id_telegram).first()
+            if participation and participation.has_fled:
+                return False, "Sei già fuggito da questo mostro!"
+            
+            # Calculate flee chance: 0.5 * (mob_level / user_level)
+            # Increases if enemy is stronger.
+            user_level = user.livello if user.livello else 1
+            mob_level = mob.mob_level if mob.mob_level else 1
+            
+            flee_chance = 0.5 * (mob_level / user_level)
+            flee_chance = min(0.9, max(0.1, flee_chance)) # Cap between 10% and 90%
+            
+            if random.random() < flee_chance:
+                # Success!
+                # Update participation
+                if not participation:
+                    participation = CombatParticipation(mob_id=mob_id, user_id=user.id_telegram)
+                    session.add(participation)
+                
+                participation.has_fled = True
+                
+                # Check group threshold
+                fled_count = session.query(CombatParticipation).filter_by(mob_id=mob_id, has_fled=True).count()
+                threshold = 5 if mob.is_boss else 3
+                
+                group_flee = False
+                if fled_count >= threshold:
+                    mob.is_dead = True
+                    mob.has_fled = True
+                    group_flee = True
+                
+                session.commit()
+                
+                msg = f"🏃 **{user.nome}** è fuggito con successo da {mob.name}! (Probabilità: {int(flee_chance*100)}%)"
+                if group_flee:
+                    msg += f"\n\n💨 **FUGA DI GRUPPO!** {fled_count} eroi sono fuggiti, {mob.name} ha perso interesse e se n'è andato!"
+                
+                return True, msg
+            else:
+                # Failure
+                return False, f"🏃 **{user.nome}** ha provato a fuggire da {mob.name} ma è rimasto bloccato! (Probabilità: {int(flee_chance*100)}%)"
+                
+        except Exception as e:
+            return False, f"Errore durante la fuga: {e}"
+        finally:
+            session.close()
+
 
 
 
@@ -164,20 +220,21 @@ class PvEService:
             
         return speed, resistance, hp_bonus, dmg_bonus
 
-    def spawn_specific_mob(self, mob_name=None, chat_id=None):
+    def spawn_specific_mob(self, mob_name=None, chat_id=None, reference_level=None):
         """Spawn a specific mob by name or a random one if None. Returns (success, msg, mob_id)"""
         session = self.db.get_session()
         
-        # Limit: max 10 active mobs total (to prevent spam)
+        # Limit: max 50 active mobs total (to prevent spam)
         active_mobs_count = session.query(Mob).filter(Mob.is_dead == False, Mob.is_boss == False, Mob.dungeon_id == None).count()
-        if active_mobs_count >= 10:
+        if active_mobs_count >= 50:
             session.close()
             return False, f"Ci sono troppi mob attivi! Sconfiggili prima di spawnarne altri.", None
             
-        # RESTRICTION: Only spawn in official group
-        if chat_id and chat_id != GRUPPO_AROMA:
-             session.close()
-             return False, "I mob possono apparire solo nel gruppo ufficiale!", None
+        # RESTRICTION: Only spawn in official group IF NOT DUNGEON (handled by caller context usually, but here we relax it for dungeons)
+        # We trust the caller (DungeonService) to provide a valid chat_id
+        # if chat_id and chat_id != GRUPPO_AROMA:
+        #      session.close()
+        #      return False, "I mob possono apparire solo nel gruppo ufficiale!", None
             
         # Get current season theme
         from models.seasons import Season
@@ -190,29 +247,55 @@ class PvEService:
             mob_data = next((m for m in self.mob_data if m['nome'].lower() == mob_name.lower()), None)
             if not mob_data:
                 session.close()
-                return False, f"Mob '{mob_name}' non trovato.", None
+                return False, f"Mob '{mob_name}' not found.", None
+            
+            if reference_level is not None:
+                level = reference_level + random.randint(1, 10)
+            else:
+                difficulty = int(mob_data.get('difficulty', 1))
+                level = difficulty * random.randint(1, 5)
         else:
-            # Random mob, 70% chance for themed mob if available
+            # Random mob based on level and difficulty
             if not self.mob_data:
                 session.close()
-                return False, "Nessun dato mob caricato.", None
+                return False, "No mob data loaded.", None
             
-            # Filter by theme if available (robust matching)
-            themed_mobs = [m for m in self.mob_data if theme and theme in m.get('saga', '').strip().lower()]
+            if reference_level is not None:
+                level = reference_level + random.randint(1, 10)
+                target_difficulty = (level - 1) // 10 + 1
+                
+                # Filter by difficulty
+                pool = [m for m in self.mob_data if int(m.get('difficulty', 1)) == target_difficulty]
+                
+                # Fallback to closest difficulty if pool is empty
+                if not pool:
+                    all_diffs = sorted(list(set(int(m.get('difficulty', 1)) for m in self.mob_data)))
+                    if all_diffs:
+                        closest_diff = min(all_diffs, key=lambda x: abs(x - target_difficulty))
+                        pool = [m for m in self.mob_data if int(m.get('difficulty', 1)) == closest_diff]
+            else:
+                # Fallback for job-based spawn
+                pool = self.mob_data
+                level = random.randint(1, 10) # Default
             
-            # Repetition avoidance: filter out recent mobs if possible
-            def get_random_non_recent(pool):
-                if not pool: return None
-                available = [m for m in pool if m['nome'] not in self.recent_mobs]
-                if not available or len(available) < 2: # If too few non-recent, just pick any to ensure randomness
-                    return random.choice(pool)
+            if not pool:
+                session.close()
+                return False, "No suitable mob found.", None
+
+            # Filter by theme if available
+            themed_mobs = [m for m in pool if theme and theme in m.get('saga', '').strip().lower()]
+            
+            def get_random_non_recent(p):
+                if not p: return None
+                available = [m for m in p if m['nome'] not in self.recent_mobs]
+                if not available or len(available) < 2:
+                    return random.choice(p)
                 return random.choice(available)
 
             if themed_mobs and random.random() < 0.8:
                 mob_data = get_random_non_recent(themed_mobs)
             else:
-                # Fallback to any mob (30% chance or if no themed mobs)
-                mob_data = get_random_non_recent(self.mob_data)
+                mob_data = get_random_non_recent(pool)
             
         # Update recent mobs list
         if mob_data:
@@ -220,11 +303,8 @@ class PvEService:
             if len(self.recent_mobs) > 10:
                 self.recent_mobs.pop(0)
             
-        # Create Mob
-        # Ensure HP is correct
-        # Determine level based on difficulty: difficulty * random(1, 5)
         difficulty = int(mob_data.get('difficulty', 1))
-        level = difficulty * random.randint(1, 5)
+        # level is already determined above
         
         # Allocate dynamic stats
         speed, resistance, hp_bonus, dmg_bonus = self._allocate_mob_stats(level, difficulty, is_boss=False)
@@ -263,12 +343,12 @@ class PvEService:
         session.close()
         return True, f"Un {mob_name} (Lv. {level}) è apparso! (Vel: {speed}, Res: {resistance}%)", mob_id
 
-    def spawn_boss(self, boss_name=None, chat_id=None):
+    def spawn_boss(self, boss_name=None, chat_id=None, reference_level=None):
         """Spawn a boss (Mob with is_boss=True). Returns (success, msg, mob_id)"""
         session = self.db.get_session()
         
-        # Limit: max 3 active bosses total
-        active_boss_count = session.query(Mob).filter_by(is_boss=True, is_dead=False).count()
+        # Limit: max 3 active world bosses total (dungeon bosses excluded)
+        active_boss_count = session.query(Mob).filter(Mob.is_boss == True, Mob.is_dead == False, Mob.dungeon_id == None).count()
         if active_boss_count >= 3:
             session.close()
             return False, f"Troppi boss attivi ({active_boss_count}/3)!", None
@@ -284,28 +364,52 @@ class PvEService:
             boss_data = next((b for b in self.boss_data if b['nome'].lower() == boss_name.lower()), None)
             if not boss_data:
                 session.close()
-                return False, f"Boss '{boss_name}' non trovato.", None
+                return False, f"Boss '{boss_name}' not found.", None
+            
+            if reference_level is not None:
+                level = reference_level + random.randint(5, 12)
+            else:
+                difficulty = int(boss_data.get('difficulty', 5))
+                level = difficulty * random.randint(5, 10)
         else:
-            # Random boss, 70% chance for themed boss if available
+            # Random boss based on level and difficulty
             if not self.boss_data:
                 session.close()
-                return False, "Nessun dato boss caricato.", None
+                return False, "No boss data loaded.", None
             
+            if reference_level is not None:
+                level = reference_level + random.randint(5, 12)
+                target_difficulty = (level - 1) // 10 + 1
+                
+                # Filter by difficulty
+                pool = [b for b in self.boss_data if int(b.get('difficulty', 5)) == target_difficulty]
+                
+                # Fallback to closest difficulty
+                if not pool:
+                    all_diffs = sorted(list(set(int(b.get('difficulty', 5)) for b in self.boss_data)))
+                    if all_diffs:
+                        closest_diff = min(all_diffs, key=lambda x: abs(x - target_difficulty))
+                        pool = [b for b in self.boss_data if int(b.get('difficulty', 5)) == closest_diff]
+            else:
+                pool = self.boss_data
+                level = random.randint(20, 50) # Default
+            
+            if not pool:
+                session.close()
+                return False, "No suitable boss found.", None
+
             # Filter by theme if available
-            themed_bosses = [b for b in self.boss_data if theme and theme in b.get('saga', '').strip().lower()]
+            themed_bosses = [b for b in pool if theme and theme in b.get('saga', '').strip().lower()]
             
             if themed_bosses and random.random() < 0.8:
                 boss_data = random.choice(themed_bosses)
             else:
-                # Fallback to any boss (30% chance or if no themed bosses)
-                boss_data = random.choice(self.boss_data)
+                boss_data = random.choice(pool)
         
         # Create Mob with is_boss=True
         hp_base = int(boss_data['hp'])
         difficulty = int(boss_data.get('difficulty', 5))
-        
-        # Boss level: difficulty * random(5, 10) for extra challenge
-        level = difficulty * random.randint(5, 10)
+        # level is already determined above
         
         # Allocate dynamic stats
         speed, resistance, hp_bonus, dmg_bonus = self._allocate_mob_stats(level, difficulty, is_boss=True)
@@ -378,9 +482,34 @@ class PvEService:
         finally:
             session.close()
 
+    def get_mob_details(self, mob_id):
+        """Get mob details for display"""
+        session = self.db.get_session()
+        mob = session.query(Mob).filter_by(id=mob_id).first()
+        if not mob:
+            session.close()
+            return None
+            
+        data = {
+            'id': mob.id,
+            'name': mob.name,
+            'level': getattr(mob, 'mob_level', 1),
+            'health': mob.health,
+            'max_health': mob.max_health,
+            'attack': getattr(mob, 'attack_damage', 10),
+            'defense': 0,
+            'speed': getattr(mob, 'speed', 0),
+            'resistance': getattr(mob, 'resistance', 0),
+            'image_path': self.get_enemy_image_path(mob),
+            'dungeon_id': mob.dungeon_id
+        }
+        session.close()
+        return data
+
     def attack_mob(self, user, base_damage=0, use_special=False, ability=None, mob_id=None, mana_cost=0):
         """Attack current mob using BattleService"""
         session = self.db.get_session()
+        extra_data = {}
         
         if mob_id:
             # Attack specific mob by ID
@@ -391,12 +520,33 @@ class PvEService:
             if mob.is_dead:
                 session.close()
                 return False, "Questo mostro è già morto!", None
+            
+            # Check if user has fled
+            participation = session.query(CombatParticipation).filter_by(mob_id=mob_id, user_id=user.id_telegram).first()
+            if participation and participation.has_fled:
+                session.close()
+                return False, "Sei fuggito da questo mostro! Non puoi più attaccarlo.", None
         else:
             # Attack first alive mob
             mob = session.query(Mob).filter_by(is_dead=False).first()
             if not mob:
                 session.close()
                 return False, "Nessun mostro nei paraggi.", None
+        
+        # Dungeon Restriction
+        from services.dungeon_service import DungeonService
+        ds = DungeonService()
+        
+        if mob.dungeon_id:
+            participants = ds.get_dungeon_participants(mob.dungeon_id)
+            if user.id_telegram not in [p.user_id for p in participants]:
+                session.close()
+                return False, "🔒 Non puoi attaccare questo mob! Appartiene a un dungeon a cui non sei iscritto.", None
+        else:
+            # World mob: check if user is in a dungeon
+            if ds.get_user_active_dungeon(user.id_telegram):
+                session.close()
+                return False, "🔒 Sei impegnato in un dungeon! Non puoi attaccare i mostri del mondo esterno.", None
         
         # Check fatigue
         if self.user_service.check_fatigue(user):
@@ -484,6 +634,9 @@ class PvEService:
             damage = int(damage * (1 - reduction))
             combat_result['resistance_applied'] = mob.resistance
         
+        # Detect One Shot
+        is_one_shot = (mob.health == mob.max_health) and (damage >= mob.health)
+        
         # Apply damage to mob (no counterattack)
         actual_damage_dealt = max(0, min(damage, mob.health))
         mob.health -= damage
@@ -492,13 +645,13 @@ class PvEService:
         self.update_participation(mob.id, user.id_telegram, actual_damage_dealt, combat_result['is_crit'])
         
         # NEW: Log damage event
-        # NEW: Log damage event
         self.event_dispatcher.log_event(
             event_type='damage_dealt', 
             user_id=user.id_telegram, 
             value=damage,
             context={
                 'is_crit': combat_result['is_crit'],
+                'is_one_shot': is_one_shot,
                 'mob_id': mob.id,
                 'mob_name': mob.name,
                 'mob_level': getattr(mob, 'mob_level', 1),
@@ -529,13 +682,38 @@ class PvEService:
         final_mob_name = mob.name
         final_is_dead = mob.health <= 0
         final_last_msg_id = mob.last_message_id
+        # Determine image path (GIF priority for special attacks)
         final_image_path = self.get_enemy_image_path(mob)
+        
+        if use_special and character and character.get('special_attack_gif'):
+            gif_filename = character['special_attack_gif']
+            # Check images/attacks/ first (new standard)
+            gif_path = f"images/attacks/{gif_filename}"
+            if not os.path.exists(gif_path):
+                # Fallback to root images/
+                gif_path = f"images/{gif_filename}"
+            
+            if os.path.exists(gif_path):
+                final_image_path = gif_path
 
         if mob.health <= 0:
             mob.health = 0
             mob.is_dead = True
             mob.killer_id = user.id_telegram
-            msg += f"\n💀 **{mob.name} è stato sconfitto!**\n🎁 Il nemico ha lasciato un bottino da distribuire a tutti i partecipanti!"
+            
+            # Regenerate 2-3% HP and Mana on kill
+            import random
+            regen_percent = random.uniform(0.02, 0.03)
+            hp_regen = int(user.max_health * regen_percent)
+            mana_regen = int(user.max_mana * regen_percent)
+            
+            # Apply regeneration
+            user.health = min(user.health + hp_regen, user.max_health)
+            user.mana = min(user.mana + mana_regen, user.max_mana)
+            
+            msg += f"\n💀 **{mob.name} è stato sconfitto!**\n"
+            msg += f"💚 Rigenerato: +{hp_regen} HP, +{mana_regen} Mana\n"
+            msg += f"🎁 Il nemico ha lasciato un bottino da distribuire a tutti i partecipanti!"
             
             # Return delete_message_id instruction
             combat_result['delete_message_id'] = mob.last_message_id
@@ -592,14 +770,14 @@ class PvEService:
                 try:
                     for p in participants:
                         share = p.damage_dealt / total_damage if total_damage > 0 else 1/len(participants)
-                        wumpa_per_damage = 0.05 * difficulty
+                        wumpa_per_damage = 0.05 * difficulty # Reverted to 0.05
                         base_wumpa = int(p.damage_dealt * wumpa_per_damage)
                         if base_wumpa < 1 and p.damage_dealt > 0:
                             base_wumpa = 1
                             
                         mob_hp = mob_max_health if mob_max_health else 30
                         if difficulty >= 4: # Hard
-                            base_exp_pool = random.randint(100, 300) * difficulty
+                            base_exp_pool = random.randint(100, 300) * difficulty # Reverted to 100-300
                         elif difficulty == 3: # Medium
                             base_exp_pool = random.randint(100, 300) * difficulty
                         elif difficulty <= 2 and mob_hp >= 50: # Easy
@@ -706,7 +884,7 @@ class PvEService:
             msg += "\n".join(reward_details)
             
             # Item reward
-            item_chance = 0.10 if is_boss else 0.02
+            item_chance = 0.30 if is_boss else 0.10 # Increased from 0.20 and 0.05
             if random.random() < item_chance:
                 items_data = self.item_service.load_items_from_csv()
                 if items_data:
@@ -719,9 +897,18 @@ class PvEService:
             if dungeon_id:
                 from services.dungeon_service import DungeonService
                 ds = DungeonService()
-                dungeon_msg = ds.advance_dungeon(dungeon_id)
+                
+                # Check for deaths among participants to record stats
+                # We iterate over rewards_to_distribute which contains is_dead flag
+                for reward in rewards_to_distribute:
+                    if reward.get('is_dead'):
+                        ds.record_death(dungeon_id)
+
+                dungeon_msg, new_mob_ids = ds.check_step_completion(dungeon_id)
                 if dungeon_msg:
                     msg += f"\n\n{dungeon_msg}"
+                    if new_mob_ids:
+                        extra_data['new_mob_ids'] = new_mob_ids
         else:
             # Add status card only if alive
             card = self.get_status_card(mob)
@@ -729,12 +916,13 @@ class PvEService:
             msg += f"\n⏳ Cooldown: {int(cooldown_seconds)}s"
 
         # Capture data before closing session
-        extra_data = {
+        final_extra_data = {
             'mob_id': final_mob_id,
             'image_path': final_image_path,
             'mob_name': final_mob_name,
             'is_dead': final_is_dead,
-            'delete_message_id': final_last_msg_id
+            'delete_message_id': final_last_msg_id,
+            'new_mob_ids': extra_data.get('new_mob_ids', [])
         }
         
         if session.is_active:
@@ -744,25 +932,50 @@ class PvEService:
         # NEW: Process achievements
         self.achievement_tracker.process_pending_events(limit=10)
             
-        return True, msg, extra_data
+        return True, msg, final_extra_data
 
-    def attack_aoe(self, user, base_damage=0, chat_id=None, target_mob_id=None):
+    def attack_aoe(self, user, base_damage=0, chat_id=None, target_mob_id=None, use_special=False):
         """Attack up to 5 active mobs. 70% damage to target, 50% to others. 2x cooldown."""
         if not chat_id:
-            return False, "Chat ID non specificato.", None
+            return False, "Chat ID non specificato.", None, []
             
         session = self.db.get_session()
-        mobs = session.query(Mob).filter_by(chat_id=chat_id, is_dead=False).all()
+        all_mobs = session.query(Mob).filter_by(chat_id=chat_id, is_dead=False).all()
+        
+        if not all_mobs:
+            session.close()
+            return False, "Nessun mostro nei paraggi.", None, []
+            
+        # Dungeon Isolation for AoE
+        from services.dungeon_service import DungeonService
+        ds = DungeonService()
+        active_dungeon = ds.get_user_active_dungeon(user.id_telegram)
+        
+        if active_dungeon:
+            # User is in a dungeon: only attack mobs from THAT dungeon
+            mobs = [m for m in all_mobs if m.dungeon_id == active_dungeon.id]
+        else:
+            # User is NOT in a dungeon: only attack world mobs
+            mobs = [m for m in all_mobs if m.dungeon_id is None]
+            
+        if not mobs:
+            session.close()
+            msg = "Non ci sono mostri del dungeon da colpire!" if active_dungeon else "Non ci sono mostri selvatici da colpire!"
+            return False, msg, None, []
+            
+        # Filter out mobs the user has fled from
+        fled_mob_ids = [p.mob_id for p in session.query(CombatParticipation).filter_by(user_id=user.id_telegram, has_fled=True).all()]
+        mobs = [m for m in mobs if m.id not in fled_mob_ids]
         
         if not mobs:
             session.close()
-            return False, "Nessun mostro nei paraggi.", None
+            return False, "Non ci sono mostri validi da colpire (forse sei fuggito da tutti?)", None, []
             
             
         # Check fatigue
         if self.user_service.check_fatigue(user):
             session.close()
-            return False, "Sei troppo affaticato per combattere! Riposa.", None
+            return False, "Sei troppo affaticato per combattere! Riposa.", None, []
             
         # Check Cooldown (2x normal)
         user_speed = getattr(user, 'allocated_speed', 0)
@@ -776,7 +989,7 @@ class PvEService:
                 minutes = remaining // 60
                 seconds = remaining % 60
                 session.close()
-                return False, f"⏳ Sei stanco! (CD AoE: {int(cooldown_seconds)}s)\nDevi riposare ancora per {minutes}m {seconds}s.", None
+                return False, f"⏳ Sei stanco! (CD AoE: {int(cooldown_seconds)}s)\nDevi riposare ancora per {minutes}m {seconds}s.", None, []
         
         # Update last attack time
         self.user_service.update_user(user.id_telegram, {
@@ -787,6 +1000,18 @@ class PvEService:
         from services.character_loader import get_character_loader
         char_loader = get_character_loader()
         character = char_loader.get_character_by_id(user.livello_selezionato)
+        
+        # Handle Mana for Special AoE
+        if use_special and character:
+            mana_cost = character.get('special_attack_mana_cost', 50)
+            multiplier = self.guild_service.get_mana_cost_multiplier(user.id_telegram)
+            mana_cost = int(mana_cost * multiplier)
+            
+            if user.mana < mana_cost:
+                session.close()
+                return False, f"Mana insufficiente! Serve: {mana_cost}, hai: {user.mana}", None, []
+            
+            self.user_service.update_user(user.id_telegram, {'mana': user.mana - mana_cost})
         
         # Prepare attacker object wrapper
         class AttackerWrapper:
@@ -800,16 +1025,18 @@ class PvEService:
         
         # Limit to 5 mobs
         mobs = mobs[:5]
+        mob_count = len(mobs)
         
-        summary_msg = f"💥 **ATTACCO AD AREA!** (Max 5 bersagli)\n"
+        title = "🌟 **ATTACCO SPECIALE AD AREA!**" if use_special else "💥 **ATTACCO AD AREA!**"
+        summary_msg = f"{title} (Max 5 bersagli)\n"
         extra_data = {
             'delete_message_ids': [],
             'mob_ids': [m.id for m in mobs]
         }
         
         for mob in mobs:
-            # 70% to target, 50% to others
-            multiplier = 0.7 if mob.id == target_mob_id else 0.5
+            # Split 100% damage among all targets
+            multiplier = 1.0 / mob_count
             attacker = AttackerWrapper(user, character, base_damage, multiplier)
             
             # Prepare defender wrapper
@@ -829,6 +1056,9 @@ class PvEService:
                 reduction = mob.resistance / 100.0
                 damage = int(damage * (1 - reduction))
             
+            # Detect One Shot
+            is_one_shot = (mob.health == mob.max_health) and (damage >= mob.health)
+            
             # Apply damage
             actual_damage_dealt = max(0, min(damage, mob.health))
             mob.health -= damage
@@ -841,7 +1071,13 @@ class PvEService:
                 event_type='damage_dealt', 
                 user_id=user.id_telegram, 
                 value=damage,
-                context={'is_crit': combat_result['is_crit'], 'mob_id': mob.id, 'mob_name': mob.name, 'is_aoe': True}
+                context={
+                    'is_crit': combat_result['is_crit'], 
+                    'is_one_shot': is_one_shot,
+                    'mob_id': mob.id, 
+                    'mob_name': mob.name, 
+                    'is_aoe': True
+                }
             )
             
             # Compact status for AoE to avoid massive cards
@@ -877,11 +1113,11 @@ class PvEService:
                     share = p.damage_dealt / total_damage
                     
                     # Proportional Wumpa
-                    wumpa = int(p.damage_dealt * 0.05 * difficulty)
+                    wumpa = int(p.damage_dealt * 0.05 * difficulty) # Reverted to 0.05
                     if wumpa < 1: wumpa = 1
                     
                     # Flat XP based on difficulty and share
-                    base_xp_pool = random.randint(100, 300) * difficulty
+                    base_xp_pool = random.randint(100, 300) * difficulty # Reverted to 100-300
                     xp = int(base_xp_pool * share)
                     if xp < 1: xp = 1
                     
@@ -902,7 +1138,16 @@ class PvEService:
             summary_msg += f"\n👥 Ricompense distribuite a tutti i partecipanti!"
             
         session.close()
-        return True, summary_msg, extra_data
+        
+        # Trigger Counter-Attack (30% chance)
+        attack_events = []
+        if mobs and random.random() < 0.3:
+            # Pick one of the hit mobs to lead the counter-attack
+            attacker_mob = random.choice(mobs)
+            if not attacker_mob.is_dead:
+                attack_events = self.mob_random_attack(specific_mob_id=attacker_mob.id, chat_id=chat_id)
+                
+        return True, summary_msg, extra_data, attack_events
 
     def get_active_mobs_count(self, chat_id):
         """Get the number of active mobs in a chat"""
@@ -928,265 +1173,250 @@ class PvEService:
         """Mobs attack random users. If specific_mob_id is provided, only that mob attacks."""
         session = self.db.get_session()
         
-        if specific_mob_id:
-            mobs = session.query(Mob).filter_by(id=specific_mob_id).all()
-        else:
-            mobs = session.query(Mob).filter_by(is_dead=False).all()
-            
-        session.close() # Close read session immediately
-        
-        if not mobs:
-            return None
-            
-        attack_events = []
-        print(f"[DEBUG] mob_random_attack called for {len(mobs)} mobs. Chat ID: {chat_id}")
-        
-        for mob in mobs:
-            # Check mob cooldown based on speed
-            # Formula: 60 / (1 + speed * 0.05)
-            # Speed 1 -> ~57s
-            # Speed 20 -> 30s
-            # Speed 50 -> ~17s
-            mob_speed = mob.speed if mob.speed else 30
-            cooldown_seconds = 60 / (1 + mob_speed * 0.05)
-            
-            last_attack = mob.last_attack_time
-            if last_attack:
-                elapsed = (datetime.datetime.now() - last_attack).total_seconds()
-                if elapsed < cooldown_seconds:
-                    continue # This mob is on cooldown
-            
-            # AoE Logic: Bosses have 85% chance, normal mobs have 20% if difficulty >= 3
-            is_aoe = False
-            difficulty = mob.difficulty_tier if mob.difficulty_tier else 1
-            if mob.is_boss:
-                # Bosses have high AoE chance
-                if random.random() < 0.85:
-                    is_aoe = True
-            elif difficulty >= 3 and random.random() < 0.20:
-                is_aoe = True
-            
-            # Get targets
-            # RESTRICTION: Only attack users in the current chat
-            recent_users = self.user_service.get_recent_users(chat_id=chat_id)
-            
-            # Filter: Only alive users AND NOT RESTING
-            alive_users = []
-            for uid in recent_users:
-                u = self.user_service.get_user(uid)
-                if u and not self.user_service.check_fatigue(u):
-                    # Check if resting
-                    if not self.user_service.get_resting_status(u.id_telegram):
-                        alive_users.append(uid)
-            
-            # Filter: If dungeon mob, only attack participants
-            if mob.dungeon_id:
-                from services.dungeon_service import DungeonService
-                ds = DungeonService()
-                participants = ds.get_participants(mob.dungeon_id)
-                # Intersection of alive users and participants
-                targets_pool = [uid for uid in alive_users if uid in participants]
+        try:
+            if specific_mob_id:
+                mobs = session.query(Mob).filter_by(id=specific_mob_id).all()
+            elif chat_id:
+                mobs = session.query(Mob).filter_by(chat_id=chat_id, is_dead=False).all()
             else:
-                targets_pool = alive_users
-
-            targets = []
+                mobs = session.query(Mob).filter_by(is_dead=False).all()
+                
+            if not mobs:
+                session.close()
+                return []
+                
+            attack_events = []
+            print(f"[DEBUG] mob_random_attack called for {len(mobs)} mobs. Chat ID: {chat_id}")
             
-            if not targets_pool:
-                print(f"[DEBUG] No valid targets found for mob {mob.id} (chat {chat_id})")
-                continue
-            print(f"[DEBUG] Found {len(targets_pool)} valid targets for mob {mob.id}")
-
-            if is_aoe:
-                # Attack 1-5 targets
-                max_targets = min(5, len(targets_pool))
-                target_count = random.randint(1, max_targets)
-                
-                target_ids = random.sample(targets_pool, target_count)
-                primary_target_id = target_ids[0]
-                for tid in target_ids:
-                    t = self.user_service.get_user(tid)
-                    if t: targets.append(t)
-            else:
-                # Single target
-                target = None
-                
-                # Check for Aggro
-                if mob.aggro_target_id and mob.aggro_end_time and mob.aggro_end_time > datetime.datetime.now():
-                    # Check if aggro target is in the pool (i.e. active in chat)
-                    if mob.aggro_target_id in targets_pool:
-                        target_id = mob.aggro_target_id
-                    else:
-                        # Aggro target not available, clear aggro
-                        session = self.db.get_session()
-                        m = session.query(Mob).filter_by(id=mob.id).first()
-                        if m:
-                            m.aggro_target_id = None
-                            m.aggro_end_time = None
+            for mob in mobs:
+                try:
+                    # Dungeon Check: If mob belongs to a dungeon, check if it's still active
+                    if mob.dungeon_id:
+                        dungeon = session.query(Dungeon).filter_by(id=mob.dungeon_id).first()
+                        if not dungeon or dungeon.status != "active":
+                            print(f"[DEBUG] Mob {mob.id} belongs to inactive dungeon {mob.dungeon_id}. Marking as dead.")
+                            mob.is_dead = True
                             session.commit()
-                        session.close()
-                        # Fallback to random
-                        target_id = random.choice(targets_pool)
-                else:
-                    # Avoid last target if possible
-                    available_users = [uid for uid in targets_pool if uid != mob.last_target_id]
-                    if not available_users:
-                        available_users = targets_pool # Fallback if only one user active
+                            continue
+                        
+                        # Chat Consistency: Dungeon mobs only attack in their dungeon chat
+                        if chat_id and chat_id != dungeon.chat_id:
+                            print(f"[DEBUG] Mob {mob.id} (Dungeon {mob.dungeon_id}) skipped: chat {chat_id} != dungeon chat {dungeon.chat_id}")
+                            continue
+
+                    # Check mob cooldown based on speed
+                    mob_speed = mob.speed if mob.speed else 30
+                    cooldown_seconds = 60 / (1 + mob_speed * 0.05)
                     
-                    # Prioritize most recent users among available
-                    # If we have at least 2 users, prioritize the last 3 (most recent)
-                    if len(available_users) >= 2:
-                        recent_pool = available_users[-3:]
-                        # 80% chance to pick from the most recent pool, 20% from the rest
-                        if random.random() < 0.8:
-                            target_id = random.choice(recent_pool)
-                        else:
-                            target_id = random.choice(available_users)
+                    last_attack = mob.last_attack_time
+                    if last_attack:
+                        elapsed = (datetime.datetime.now() - last_attack).total_seconds()
+                        if elapsed < cooldown_seconds:
+                            continue # This mob is on cooldown
+                    
+                    # AoE Logic
+                    is_aoe = False
+                    difficulty = mob.difficulty_tier if mob.difficulty_tier else 1
+                    if mob.is_boss:
+                        if random.random() < 0.85:
+                            is_aoe = True
+                    elif difficulty >= 3 and random.random() < 0.20:
+                        is_aoe = True
+                    
+                    # Get targets
+                    recent_users = self.user_service.get_recent_users(chat_id=chat_id)
+                    
+                    # Filter: Only alive users AND NOT RESTING
+                    alive_users = []
+                    for uid in recent_users:
+                        u = self.user_service.get_user(uid)
+                        if not u:
+                            continue
+                        
+                        is_fatigued = self.user_service.check_fatigue(u)
+                        is_resting = self.user_service.get_resting_status(u.id_telegram)
+                        
+                        if not is_fatigued and not is_resting:
+                            alive_users.append(uid)
+                    
+                    from services.dungeon_service import DungeonService
+                    ds = DungeonService()
+                    
+                    if mob.dungeon_id:
+                        # For dungeon mobs, target ONLY participants
+                        participants = ds.get_dungeon_participants(mob.dungeon_id)
+                        targets_pool = [p.user_id for p in participants]
+                        
+                        # Filter by alive/not resting
+                        valid_targets = []
+                        for uid in targets_pool:
+                            u = self.user_service.get_user(uid)
+                            if u and not self.user_service.check_fatigue(u) and not self.user_service.get_resting_status(u.id_telegram):
+                                valid_targets.append(uid)
+                        
+                        targets_pool = valid_targets
+                        
+                        # Filter out fled users
+                        fled_users = [p.user_id for p in session.query(CombatParticipation).filter_by(mob_id=mob.id, has_fled=True).all()]
+                        targets_pool = [uid for uid in targets_pool if uid not in fled_users]
+                        
+                        print(f"[DEBUG] Dungeon Mob {mob.id}: participants={targets_pool}")
                     else:
-                        target_id = random.choice(available_users)
-                
-                target = self.user_service.get_user(target_id)
-                
-                if target:
-                    targets.append(target)
-                    # Update last target ID in DB
-                    session = self.db.get_session()
-                    mob_db = session.query(Mob).filter_by(id=mob.id).first()
-                    if mob_db:
-                        mob_db.last_target_id = target.id_telegram
-                        session.commit()
-                    session.close()
-            
-            if not targets:
-                continue
-                
-            base_damage = mob.attack_damage if mob.attack_damage else 10
-            
-            # Collect damage info for each target
-            damage_results = []
-            death_messages = []
-            for target in targets:
-                # AoE logic: 70% to primary target, 50% to others. Single target: 100%
-                multiplier = 1.0
-                if is_aoe:
-                    multiplier = 0.7 if target.id_telegram == primary_target_id else 0.5
-                
-                # Scale damage based on player level to prevent one-shotting high-level players
-                # Reduce damage by 50% and add level-based scaling
-                level_factor = 1 + (target.livello * 0.02)  # 2% per level
-                adjusted_damage = int((base_damage * 0.5 * multiplier) / level_factor)
-                
-                # Add damage variance (±20%)
-                damage = int(adjusted_damage * random.uniform(0.8, 1.2))
-                
-                # Apply Target Resistance
-                user_res = getattr(target, 'allocated_resistance', 0)
-                if user_res > 0:
-                    reduction_factor = 100 / (100 + user_res)
-                    damage = int(damage * reduction_factor)
-                
-                new_hp, died = self.user_service.damage_health(target, damage)
-                
-                # NEW: Log damage received event
-                self.event_dispatcher.log_event(
-                    event_type='damage_received',
-                    user_id=target.id_telegram,
-                    value=damage,
-                    context={
-                        'mob_name': mob.name,
-                        'mob_id': mob.id,
-                        'is_boss': mob.is_boss,
-                        'new_hp': new_hp,
-                        'died': died
-                    }
-                )
-                
-                # Fix double @ issue
-                username = target.username.lstrip('@') if target.username else None
-                tag = f"@{username}" if username else target.nome
-                
-                damage_results.append({'tag': tag, 'damage': damage})
-                
-                if died:
-                    death_messages.append(f"💀 **{tag}** è caduto in battaglia!")
-            
-            # Create consolidated message
-            if mob.is_boss:
-                # Boss messages
-                boss_name_escaped = mob.name.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace(']', '\\]').replace('(', '\\(').replace(')', '\\)')
-                if is_aoe:
-                    tags = ", ".join([r['tag'] for r in damage_results])
-                    avg_damage = sum([r['damage'] for r in damage_results]) // len(damage_results)
-                    msg = f"☠️ **Attacco del Boss!**\n**{boss_name_escaped}** ha scatenato un attacco ad area!\n🎯 Colpiti: {tags}\n💥 Danni inflitti: **{avg_damage}** (media)"
-                else:
-                    tag = damage_results[0]['tag']
-                    damage = damage_results[0]['damage']
-                    msg = f"☠️ **Attacco del Boss!**\n**{boss_name_escaped}** ha attaccato {tag}\n💥 Danni inflitti: **{damage}**"
-            else:
-                # Normal mob messages
-                if is_aoe:
-                    tags = ", ".join([r['tag'] for r in damage_results])
-                    avg_damage = sum([r['damage'] for r in damage_results]) // len(damage_results)
-                    msg = f"🔥 **Attacco ad Area!**\n**{mob.name}** ha colpito: {tags}\n💥 Danni inflitti: **{avg_damage}** (media)"
-                else:
-                    tag = damage_results[0]['tag']
-                    damage = damage_results[0]['damage']
-                    msg = f"⚠️ **{mob.name}** ha attaccato {tag}\n💥 Danni inflitti: **{damage}**"
-                
-                # Add status card
-                card = self.get_status_card(mob)
-                msg += f"\n\n{card}"
-            
-            # Add death messages if any
-            if death_messages:
-                msg += "\n\n" + "\n".join(death_messages)
-            
-            # Find mob/boss image
-            image_path = None
-            safe_name = mob.name.lower().replace(" ", "_")
-            if mob.is_boss:
-                # Boss images in images/bosses/
-                for ext in ['.png', '.jpg', '.jpeg']:
-                    path = f"images/bosses/{safe_name}{ext}"
-                    if os.path.exists(path):
-                        image_path = path
-                        break
-                # Fallback to default boss image if specific not found
-                if not image_path and os.path.exists("images/bosses/default.png"):
-                    image_path = "images/bosses/default.png"
-            else:
-                # Normal mob images in images/mobs/
-                mob_info = next((m for m in self.mob_data if m['nome'] == mob.name), None)
-                if mob_info:
+                        targets_pool = []
+                        # Filter out fled users for world mobs too
+                        fled_users = [p.user_id for p in session.query(CombatParticipation).filter_by(mob_id=mob.id, has_fled=True).all()]
+                        
+                        for uid in alive_users:
+                            # World mobs only attack users NOT in a dungeon
+                            if uid not in fled_users and not ds.get_user_active_dungeon(uid):
+                                targets_pool.append(uid)
+                        print(f"[DEBUG] World Mob {mob.id}: alive_users={alive_users}, pool={targets_pool}")
+
+                    if not targets_pool:
+                        print(f"[DEBUG] No valid targets found for mob {mob.id} (chat {chat_id})")
+                        continue
+                    
+                    targets = []
+                    primary_target_id = None
+                    if is_aoe:
+                        max_targets = min(5, len(targets_pool))
+                        target_count = random.randint(1, max_targets)
+                        target_ids = random.sample(targets_pool, target_count)
+                        primary_target_id = target_ids[0]
+                        for tid in target_ids:
+                            t = self.user_service.get_user(tid)
+                            if t: targets.append(t)
+                    else:
+                        target_id = None
+                        if mob.aggro_target_id and mob.aggro_end_time and mob.aggro_end_time > datetime.datetime.now():
+                            if mob.aggro_target_id in targets_pool:
+                                target_id = mob.aggro_target_id
+                            else:
+                                mob.aggro_target_id = None
+                                mob.aggro_end_time = None
+                                target_id = random.choice(targets_pool)
+                        else:
+                            available_users = [uid for uid in targets_pool if uid != mob.last_target_id]
+                            if not available_users:
+                                available_users = targets_pool
+                            
+                            if len(available_users) >= 2:
+                                recent_pool = available_users[-3:]
+                                if random.random() < 0.8:
+                                    target_id = random.choice(recent_pool)
+                                else:
+                                    target_id = random.choice(available_users)
+                            else:
+                                target_id = random.choice(available_users)
+                        
+                        target = self.user_service.get_user(target_id)
+                        if target:
+                            targets.append(target)
+                            mob.last_target_id = target.id_telegram
+                    
+                    if not targets:
+                        continue
+                        
+                    base_damage = mob.attack_damage if mob.attack_damage else 10
+                    damage_results = []
+                    death_messages = []
+                    
+                    for target in targets:
+                        multiplier = 1.0
+                        if is_aoe:
+                            multiplier = 0.7 if target.id_telegram == primary_target_id else 0.5
+                        
+                        user_level = getattr(target, 'livello', 1) or 1
+                        level_factor = 1 + (user_level * 0.02)
+                        adjusted_damage = int((base_damage * 0.5 * multiplier) / level_factor)
+                        damage = int(adjusted_damage * random.uniform(0.8, 1.2))
+                        
+                        user_res = getattr(target, 'allocated_resistance', 0)
+                        if user_res > 0:
+                            reduction_factor = 100 / (100 + user_res)
+                            damage = int(damage * reduction_factor)
+                        
+                        new_hp, died = self.user_service.damage_health(target, damage)
+                        
+                        self.event_dispatcher.log_event(
+                            event_type='damage_taken',
+                            user_id=target.id_telegram,
+                            value=damage,
+                            context={'mob_name': mob.name, 'mob_id': mob.id, 'is_boss': mob.is_boss, 'new_hp': new_hp, 'died': died}
+                        )
+                        
+                        username = target.username.lstrip('@') if target.username else None
+                        tag = f"@{username}" if username else target.nome
+                        damage_results.append({'tag': tag, 'damage': damage})
+                        if died:
+                            death_messages.append(f"💀 **{tag}** è caduto in battaglia!")
+                            
+                            # Check if dungeon failed (all players dead)
+                            if mob.dungeon_id:
+                                is_failed, fail_msg = ds.check_dungeon_failure(mob.dungeon_id)
+                                if is_failed and fail_msg:
+                                    death_messages.append(fail_msg)
+                    
+                    if mob.is_boss:
+                        boss_name_escaped = mob.name.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace(']', '\\]').replace('(', '\\(').replace(')', '\\)')
+                        if is_aoe:
+                            tags = ", ".join([r['tag'] for r in damage_results])
+                            avg_damage = sum([r['damage'] for r in damage_results]) // len(damage_results)
+                            msg = f"☠️ **Attacco del Boss!**\n**{boss_name_escaped}** ha scatenato un attacco ad area!\n🎯 Colpiti: {tags}\n💥 Danni inflitti: **{avg_damage}** (media)"
+                        else:
+                            tag = damage_results[0]['tag']
+                            damage = damage_results[0]['damage']
+                            msg = f"☠️ **Attacco del Boss!**\n**{boss_name_escaped}** ha attaccato {tag}\n💥 Danni inflitti: **{damage}**"
+                    else:
+                        if is_aoe:
+                            tags = ", ".join([r['tag'] for r in damage_results])
+                            avg_damage = sum([r['damage'] for r in damage_results]) // len(damage_results)
+                            msg = f"🔥 **Attacco ad Area!**\n**{mob.name}** ha colpito: {tags}\n💥 Danni inflitti: **{avg_damage}** (media)"
+                        else:
+                            tag = damage_results[0]['tag']
+                            damage = damage_results[0]['damage']
+                            msg = f"⚠️ **{mob.name}** ha attaccato {tag}\n💥 Danni inflitti: **{damage}**"
+                        
+                        card = self.get_status_card(mob)
+                        msg += f"\n\n{card}\n⏳ Cooldown: {int(cooldown_seconds)}s"
+                    
+                    if death_messages:
+                        msg += "\n\n" + "\n".join(death_messages)
+                    
+                    image_path = None
+                    safe_name = mob.name.lower().replace(" ", "_")
+                    
+                    # Unified check for all mobs/bosses in images/
                     for ext in ['.png', '.jpg', '.jpeg']:
-                        path = f"images/mobs/{safe_name}{ext}"
+                        path = f"images/{safe_name}{ext}"
                         if os.path.exists(path):
                             image_path = path
                             break
-                # Fallback to default mob image if specific not found
-                if not image_path and os.path.exists("images/mobs/default.png"):
-                    image_path = "images/mobs/default.png"
+                    
+                    if not image_path and os.path.exists("images/default.png"):
+                        image_path = "images/default.png"
+                    
+                    mob.last_attack_time = datetime.datetime.now()
+                    mob_id = mob.id
+                    last_msg_id = mob.last_message_id
+                    
+                    attack_events.append({
+                        'message': msg,
+                        'image': image_path,
+                        'mob_name': mob.name,
+                        'mob_id': mob_id,
+                        'last_message_id': last_msg_id
+                    })
+                except Exception as e:
+                    print(f"Error in mob_random_attack loop for mob {mob.id}: {e}")
             
-            # Update mob last attack
-            session = self.db.get_session()
-            mob_to_update = session.query(Mob).filter_by(id=mob.id).first()
-            if mob_to_update:
-                mob_to_update.last_attack_time = datetime.datetime.now()
-                # Capture ID and message ID before commit/close
-                mob_id = mob_to_update.id
-                last_msg_id = mob_to_update.last_message_id
-                session.commit()
+            session.commit()
             session.close()
-
-            # Single event per mob (not per target)
-            attack_events.append({
-                'message': msg,
-                'image': image_path,
-                'mob_name': mob.name,
-                'mob_id': mob_id,
-                'last_message_id': last_msg_id
-            })
-            
-        return attack_events
+            return attack_events
+        except Exception as e:
+            print(f"Error in mob_random_attack: {e}")
+            session.close()
+            return []
 
     def distribute_boss_rewards(self, mob_id, killer_user, final_damage):
         """Distribute rewards to all participants who attacked this boss"""
@@ -1420,28 +1650,20 @@ class PvEService:
         """Helper to get image path for mob/boss"""
         image_path = None
         safe_name = mob.name.lower().replace(" ", "_")
-        if mob.is_boss:
-            # Boss images in images/bosses/
-            for ext in ['.png', '.jpg', '.jpeg']:
-                path = f"images/bosses/{safe_name}{ext}"
-                if os.path.exists(path):
-                    image_path = path
-                    break
-            # Fallback to default boss image if specific not found
-            if not image_path and os.path.exists("images/bosses/default.png"):
-                image_path = "images/bosses/default.png"
-        else:
-            # Normal mob images in images/mobs/
-            mob_info = next((m for m in self.mob_data if m['nome'] == mob.name), None)
-            if mob_info:
-                for ext in ['.png', '.jpg', '.jpeg']:
-                    path = f"images/mobs/{safe_name}{ext}"
-                    if os.path.exists(path):
-                        image_path = path
-                        break
-            # Fallback to default mob image if specific not found
-            if not image_path and os.path.exists("images/mobs/default.png"):
-                image_path = "images/mobs/default.png"
+        
+        # Check in consolidated images folder
+        for ext in ['.png', '.jpg', '.jpeg']:
+            path = f"images/{safe_name}{ext}"
+            if os.path.exists(path):
+                image_path = path
+                break
+                
+        # Fallback to default if specific not found
+        if not image_path:
+             # Try generic default
+             if os.path.exists("images/default.png"):
+                 image_path = "images/default.png"
+                 
         return image_path
 
     def get_status_card(self, entity, is_user=False):
