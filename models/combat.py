@@ -61,6 +61,7 @@ class CombatParticipation(Base):
     exp_earned = Column(Integer, default=0)
     loot_received = Column(String, nullable=True)  # JSON array of items
     reward_claimed = Column(Boolean, default=False)
+    has_fled = Column(Boolean, default=False)
     
     # Timestamps
     first_hit_time = Column(DateTime, nullable=True)

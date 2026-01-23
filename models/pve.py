@@ -12,6 +12,7 @@ class Mob(Base):
     is_dead = Column(Boolean, default=False)
     killer_id = Column(Integer, nullable=True) # Telegram ID of killer
     reward_claimed = Column(Boolean, default=False)
+    has_fled = Column(Boolean, default=False)
     
     # Boss flag - if True, this is a boss (previously Raid)
     is_boss = Column(Boolean, default=False)

@@ -12,6 +12,12 @@ class Dungeon(Base):
     status = Column(String, default="registration") # registration, active, completed, failed
     created_at = Column(DateTime, default=datetime.datetime.now)
     completed_at = Column(DateTime, nullable=True)
+    
+    # New fields for Dragon Ball Saga Dungeons
+    dungeon_def_id = Column(Integer, nullable=True) # ID from dungeons.csv
+    stats = Column(String, default="{}") # JSON: {damage_taken, deaths, items_used}
+    start_time = Column(DateTime, nullable=True)
+    score = Column(String, nullable=True) # F, E, D, C, B, A, S, Z
 
 class DungeonParticipant(Base):
     __tablename__ = "dungeon_participant"
