@@ -1,16 +1,34 @@
-nome,hp,attack_damage,attack_type,series,description,loot_wumpa,loot_exp,speed,abilities,ai_behavior,phase_config,saga
-Bowser,5000,50,physical,Mario,Il re dei Koopa,2000,500,70,"[15]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Mario"
-Ganondorf,7000,65,magic,Zelda,Il signore delle tenebre,2500,600,70,"[26]","tactical","{""50"": ""phase2"", ""25"": ""phase3""}","Zelda"
-Ender Dragon,10000,80,ranged,Minecraft,Il drago del End,3000,800,70,"[28]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Minecraft"
-Sephiroth,8000,75,magic,Final Fantasy,L'angelo dell'ala nera,2800,700,70,"[32]","tactical","{""50"": ""phase2"", ""25"": ""phase3""}","Final Fantasy"
-Ridley,6500,70,physical,Metroid,Il drago spaziale,2300,550,70,"[27]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Metroid"
-The Gravemind,9000,85,magic,Halo,La mente Flood,3200,750,70,"[83]","tactical","{""50"": ""phase2"", ""25"": ""phase3""}","Halo"
-Cyberdemon,7500,90,ranged,Doom,Il demone cyborg,2600,650,70,"[84]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Doom"
-General RAAM,8500,80,physical,Gears of War,Il generale Locust,2900,720,70,"[77]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Gears of War"
-Alien Queen,9500,95,physical,Alien,La regina xenomorfa,3500,850,70,"[187]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Alien"
-Songbird,720,75,ranged,Bioshock,Il guardiano alato,2400,580,70,"[128]","tactical","{""50"": ""phase2"", ""25"": ""phase3""}","Bioshock"
-Freezer,1500,120,magic,Dragon Ball,L'imperatore dell'universo,5000,1500,85,"[144, 145]","boss","{""70"": ""phase2"", ""30"": ""phase3""}","Dragon Ball"
-Cell,18000,130,physical,Dragon Ball,L'essere perfetto,6000,1800,90,"[146, 147]","boss","{""60"": ""phase2"", ""20"": ""phase3""}","Dragon Ball"
-Majin Buu,2500,110,magic,Dragon Ball,La minaccia rosa,8000,2500,80,"[150, 151]","boss","{""80"": ""phase2"", ""40"": ""phase3""}","Dragon Ball"
-Broly,3000,150,physical,Dragon Ball,Il leggendario Super Saiyan,10000,3000,100,"[152, 153]","boss","{""50"": ""phase2"", ""10"": ""phase3""}","Dragon Ball"
-Beerus,5000,200,magic,Dragon Ball,Il Dio della Distruzione,20000,5000,120,"[252, 255, 257]","boss","{""90"": ""phase2"", ""50"": ""phase3"", ""10"": ""phase4""}","Dragon Ball"
+nome,hp,attack_damage,attack_type,series,description,loot_wumpa,loot_exp,speed,abilities,ai_behavior,phase_config,saga,difficulty
+Bowser,5000,50,physical,Mario,Il re dei Koopa,2000,500,70,"[15]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Mario",3
+Ganondorf,7000,65,magic,Zelda,Il signore delle tenebre,2500,600,70,"[26]","tactical","{""50"": ""phase2"", ""25"": ""phase3""}","Zelda",4
+Ender Dragon,10000,80,ranged,Minecraft,Il drago del End,3000,800,70,"[28]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Minecraft",5
+Sephiroth,8000,75,magic,Final Fantasy,L'angelo dell'ala nera,2800,700,70,"[32]","tactical","{""50"": ""phase2"", ""25"": ""phase3""}","Final Fantasy",6
+Ridley,6500,70,physical,Metroid,Il drago spaziale,2300,550,70,"[27]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Metroid",4
+The Gravemind,9000,85,magic,Halo,La mente Flood,3200,750,70,"[83]","tactical","{""50"": ""phase2"", ""25"": ""phase3""}","Halo",5
+Cyberdemon,7500,90,ranged,Doom,Il demone cyborg,2600,650,70,"[84]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Doom",5
+General RAAM,8500,80,physical,Gears of War,Il generale Locust,2900,720,70,"[77]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Gears of War",4
+Alien Queen,9500,95,physical,Alien,La regina xenomorfa,3500,850,70,"[187]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Alien",5
+Songbird,720,75,ranged,Bioshock,Il guardiano alato,2400,580,70,"[128]","tactical","{""50"": ""phase2"", ""25"": ""phase3""}","Bioshock",3
+Freezer,1500,120,magic,Dragon Ball,L'imperatore dell'universo,5000,1500,85,"[144, 145]","boss","{""70"": ""phase2"", ""30"": ""phase3""}","Dragon Ball",5
+Cell,18000,130,physical,Dragon Ball,L'essere perfetto,6000,1800,90,"[146, 147]","boss","{""60"": ""phase2"", ""20"": ""phase3""}","Dragon Ball",6
+Majin Buu,2500,110,magic,Dragon Ball,La minaccia rosa,8000,2500,80,"[150, 151]","boss","{""80"": ""phase2"", ""40"": ""phase3""}","Dragon Ball",7
+Broly,3000,150,physical,Dragon Ball,Il leggendario Super Saiyan,10000,3000,100,"[152, 153]","boss","{""50"": ""phase2"", ""10"": ""phase3""}","Dragon Ball",8
+Beerus,5000,200,magic,Dragon Ball,Il Dio della Distruzione,20000,5000,120,"[252, 255, 257]","boss","{""90"": ""phase2"", ""50"": ""phase3"", ""10"": ""phase4""}","Dragon Ball",10
+Vegeta,4000,100,physical,Dragon Ball,Il Principe dei Saiyan,1500,400,80,"[148, 149]","aggressive","{""50"": ""phase2""}","Dragon Ball",3
+C17,3500,90,ranged,Dragon Ball,Androide 17,1200,350,85,"[154]","tactical","{""50"": ""phase2""}","Dragon Ball",4
+C18,3500,90,ranged,Dragon Ball,Androide 18,1200,350,85,"[155]","tactical","{""50"": ""phase2""}","Dragon Ball",4
+Freezer First Form,2000,60,ranged,Dragon Ball,Freezer nella sua prima forma,800,200,60,"[144]","tactical","{""50"": ""phase2""}","Dragon Ball",4
+Freezer Second Form,3000,80,physical,Dragon Ball,Freezer gigante,1000,300,70,"[144]","aggressive","{""50"": ""phase2""}","Dragon Ball",4
+Freezer Third Form,4000,100,ranged,Dragon Ball,Freezer mostruoso,1200,350,90,"[145]","aggressive","{""50"": ""phase2""}","Dragon Ball",4
+Cell Imperfect,5000,110,physical,Dragon Ball,Cell che cerca C17 e C18,1500,400,80,"[146]","tactical","{""50"": ""phase2""}","Dragon Ball",5
+Raditz,3000,80,physical,Dragon Ball,Il fratello di Goku,1000,300,70,"[148]","aggressive","{""50"": ""phase2""}","Dragon Ball",2
+Nappa,4500,110,physical,Dragon Ball,Il possente guerriero Saiyan,1800,450,75,"[149]","aggressive","{""50"": ""phase2""}","Dragon Ball",3
+Dodoria,4000,100,physical,Dragon Ball,Il braccio destro di Freezer,1500,400,70,"[144]","aggressive","{""50"": ""phase2""}","Dragon Ball",3
+Zarbon,4200,105,magic,Dragon Ball,L'elegante guerriero di Freezer,1600,420,80,"[144]","tactical","{""50"": ""phase2""}","Dragon Ball",3
+Guldo,3000,70,magic,Dragon Ball,Membro della Squadra Ginyu,1200,300,60,"[150]","tactical","{""50"": ""phase2""}","Dragon Ball",3
+Recoome,5000,120,physical,Dragon Ball,Il gigante della Squadra Ginyu,2000,500,70,"[151]","aggressive","{""50"": ""phase2""}","Dragon Ball",3
+Burter,4000,90,physical,Dragon Ball,Il più veloce della Squadra Ginyu,1500,400,110,"[152]","aggressive","{""50"": ""phase2""}","Dragon Ball",3
+Jeice,4000,95,ranged,Dragon Ball,Il guerriero rosso della Squadra Ginyu,1500,400,85,"[153]","tactical","{""50"": ""phase2""}","Dragon Ball",3
+Capitano Ginyu,5500,130,magic,Dragon Ball,Il leader della Squadra Ginyu,2500,600,90,"[154]","tactical","{""50"": ""phase2""}","Dragon Ball",4
+C19,4500,100,magic,Dragon Ball,L'androide che assorbe energia,1800,450,70,"[155]","tactical","{""50"": ""phase2""}","Dragon Ball",4
+C20,4800,105,magic,Dragon Ball,Il Dr. Gelo in forma androide,1900,480,75,"[156]","tactical","{""50"": ""phase2""}","Dragon Ball",4

@@ -81,6 +81,7 @@ class Utente(Base):
     # Economy / Anti-Inflation
     daily_wumpa_earned = Column(Integer, default=0)
     last_wumpa_reset = Column(DateTime, nullable=True)
+    last_chat_drop_time = Column(DateTime, nullable=True)
 
 class Admin(Base):
     __tablename__ = "admin"
