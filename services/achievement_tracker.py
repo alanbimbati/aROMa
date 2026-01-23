@@ -104,6 +104,41 @@ class AchievementTracker:
             if len(events) < limit:
                 break
 
+    def sync_live_stats(self, user_id):
+        """
+        Synchronize 'live' stats from Utente table to UserStat table.
+        This ensures achievements like 'level_master' are up to date even if events were missed.
+        """
+        from models.user import Utente
+        session = self.db.get_session()
+        try:
+            user = session.query(Utente).filter_by(id_telegram=user_id).first()
+            if user:
+                # Sync Level
+                level_stat = session.query(UserStat).filter_by(user_id=user_id, stat_key='level').first()
+                if not level_stat or level_stat.value != user.livello:
+                    if level_stat:
+                        level_stat.value = user.livello
+                    else:
+                        level_stat = UserStat(user_id=user_id, stat_key='level', value=user.livello)
+                        session.add(level_stat)
+                    
+                    session.commit()
+                    # Re-check achievements since level changed
+                    self.check_achievements(user_id)
+                
+                # Initialize one_shots stat if missing (can't retroactively calculate, but enable future tracking)
+                one_shots_stat = session.query(UserStat).filter_by(user_id=user_id, stat_key='one_shots').first()
+                if not one_shots_stat:
+                    one_shots_stat = UserStat(user_id=user_id, stat_key='one_shots', value=0)
+                    session.add(one_shots_stat)
+                    session.commit()
+        except Exception as e:
+            print(f"[ERROR] Live stat sync failed for user {user_id}: {e}")
+            session.rollback()
+        finally:
+            session.close()
+
     def check_achievements(self, user_id):
         """
         Check all achievements for a user against their current stats.
@@ -328,6 +363,7 @@ class AchievementTracker:
         """
         Get achievement statistics for a user
         """
+        self.sync_live_stats(user_id)
         session = self.db.get_session()
         try:
             total_achievements = session.query(Achievement).count()
@@ -375,6 +411,7 @@ class AchievementTracker:
         """
         Get all available achievements with user progress, adapted for main.py UI.
         """
+        self.sync_live_stats(user_id)
         session = self.db.get_session()
         try:
             query = session.query(Achievement)

@@ -104,6 +104,9 @@ class StatAggregator:
         elif event_type == 'point_gain':
             self._increment_stat(session, user_id, 'total_wumpa_earned', value)
 
+        elif event_type == 'level_up':
+            self._set_stat(session, user_id, 'level', value)
+
         elif event_type == 'item_gain':
             item_name = context.get('item_name', '')
             if "Sfera del Drago" in item_name:
@@ -137,4 +140,15 @@ class StatAggregator:
             stat.value += amount
         else:
             stat = UserStat(user_id=user_id, stat_key=stat_key, value=amount)
+            session.add(stat)
+
+    def _set_stat(self, session, user_id, stat_key, value):
+        """
+        Helper to set a UserStat to an absolute value.
+        """
+        stat = session.query(UserStat).filter_by(user_id=user_id, stat_key=stat_key).first()
+        if stat:
+            stat.value = value
+        else:
+            stat = UserStat(user_id=user_id, stat_key=stat_key, value=value)
             session.add(stat)
