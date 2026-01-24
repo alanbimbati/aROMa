@@ -723,3 +723,9 @@ class UserService:
             
         session.close()
         return True
+    def is_invincible(self, user):
+        """Check if user has active invincibility"""
+        if not user.invincible_until:
+            return False
+            
+        return datetime.datetime.now() < user.invincible_until
