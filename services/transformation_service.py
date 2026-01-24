@@ -154,19 +154,96 @@ class TransformationService:
             return None
         
         transformation = session.query(CharacterTransformation).filter_by(id=user_trans.transformation_id).first()
+        if transformation:
+            session.expunge(transformation)
         session.close()
         
         return transformation
-    
+        
     def get_transformation_bonuses(self, user):
         """Get stat bonuses from active transformation"""
-        transformation = self.get_active_transformation(user)
+        session = self.db.get_session()
+        try:
+            user_trans = session.query(UserTransformation).filter_by(
+                user_id=user.id_telegram,
+                is_active=True
+            ).first()
+            
+            if not user_trans:
+                return {"health": 0, "mana": 0, "damage": 0}
+                
+            # Check expiration
+            if user_trans.expires_at and datetime.datetime.now() > user_trans.expires_at:
+                user_trans.is_active = False
+                session.commit()
+                return {"health": 0, "mana": 0, "damage": 0}
+                
+            transformation = session.query(CharacterTransformation).filter_by(id=user_trans.transformation_id).first()
+            
+            if not transformation:
+                return {"health": 0, "mana": 0, "damage": 0}
+            
+            bonuses = {
+                "health": int(transformation.health_bonus or 0),
+                "mana": int(transformation.mana_bonus or 0),
+                "damage": int(transformation.damage_bonus or 0)
+            }
+            return bonuses
+        except Exception as e:
+            print(f"Error in get_transformation_bonuses: {e}")
+            raise e
+        finally:
+            session.close()
+
+    def activate_temporary_transformation(self, user, transformation_id, duration_minutes=5):
+        """Activate a transformation temporarily (e.g. Potara Fusion)"""
+        session = self.db.get_session()
         
+        transformation = session.query(CharacterTransformation).filter_by(id=transformation_id).first()
         if not transformation:
-            return {"health": 0, "mana": 0, "damage": 0}
+            session.close()
+            return False, "Trasformazione non trovata."
+            
+        # Deactivate current
+        active_trans = session.query(UserTransformation).filter_by(
+            user_id=user.id_telegram,
+            is_active=True
+        ).all()
+        for trans in active_trans:
+            trans.is_active = False
+            
+        # Check if user already has an entry for this transformation
+        user_trans = session.query(UserTransformation).filter_by(
+            user_id=user.id_telegram,
+            transformation_id=transformation_id
+        ).first()
         
-        return {
-            "health": transformation.health_bonus,
-            "mana": transformation.mana_bonus,
-            "damage": transformation.damage_bonus
-        }
+        now = datetime.datetime.now()
+        expires = now + datetime.timedelta(minutes=duration_minutes)
+        
+        if user_trans:
+            user_trans.is_active = True
+            user_trans.activated_at = now
+            user_trans.expires_at = expires
+        else:
+            # Create temporary entry
+            user_trans = UserTransformation(
+                user_id=user.id_telegram,
+                transformation_id=transformation_id,
+                activated_at=now,
+                expires_at=expires,
+                is_active=True
+            )
+            session.add(user_trans)
+            
+        trans_name = transformation.transformation_name
+        session.commit()
+        session.close()
+        return True, f"Trasformazione '{trans_name}' attivata per {duration_minutes} minuti!"
+
+    def get_transformation_id_by_name(self, name):
+        """Get transformation ID by name"""
+        session = self.db.get_session()
+        trans = session.query(CharacterTransformation).filter_by(transformation_name=name).first()
+        session.close()
+        return trans.id if trans else None

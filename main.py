@@ -44,6 +44,8 @@ from services.achievement_tracker import AchievementTracker
 
 
 
+from services.equipment_service import EquipmentService
+
 # Initialize Services
 user_service = UserService()
 item_service = ItemService()
@@ -57,6 +59,7 @@ transformation_service = TransformationService()
 stats_service = StatsService()
 drop_service = DropService()
 dungeon_service = DungeonService()
+equipment_service = EquipmentService()
 
 # Track last viewed character for admins (for image upload feature)
 admin_last_viewed_character = {}
@@ -5752,4 +5755,121 @@ if __name__ == "__main__":
         schedule.run_pending()
         time.sleep(1)
 
+
+
+# --- Equipment System Commands ---
+
+@bot.message_handler(commands=['inventory', 'inv'])
+def command_inventory(message):
+    user_id = message.from_user.id
+    items = equipment_service.get_user_inventory(user_id)
+    if not items:
+        bot.reply_to(message, "Il tuo inventario è vuoto.")
+        return
+        
+    msg = "�� **Inventario**\n\n"
+    for u_item, item in items:
+        status = "✅" if u_item.is_equipped else ""
+        rarity_icon = "⚪️"
+        if item.rarity == "Uncommon": rarity_icon = "🟢"
+        elif item.rarity == "Rare": rarity_icon = "🔵"
+        elif item.rarity == "Epic": rarity_icon = "🟣"
+        elif item.rarity == "Legendary": rarity_icon = "🟠"
+        elif item.rarity == "Mythic": rarity_icon = "🔴"
+        
+        msg += f"{rarity_icon} 🆔 `{u_item.id}` - **{item.name}** ({item.slot}) {status}\n"
+        
+    msg += "\nUsa `/equip <id>` per equipaggiare."
+    bot.reply_to(message, msg, parse_mode="Markdown")
+
+@bot.message_handler(commands=['equip'])
+def command_equip(message):
+    try:
+        args = message.text.split()
+        if len(args) < 2:
+            bot.reply_to(message, "Uso: `/equip <id_oggetto>`")
+            return
+            
+        item_id = int(args[1])
+        success, result = user_service.equip_item(message.from_user.id, item_id)
+        bot.reply_to(message, result)
+    except ValueError:
+        bot.reply_to(message, "ID non valido.")
+
+@bot.message_handler(commands=['unequip'])
+def command_unequip(message):
+    try:
+        args = message.text.split()
+        if len(args) < 2:
+            bot.reply_to(message, "Uso: `/unequip <id_oggetto>`")
+            return
+            
+        item_id = int(args[1])
+        success, result = user_service.unequip_item(message.from_user.id, item_id)
+        bot.reply_to(message, result)
+    except ValueError:
+        bot.reply_to(message, "ID non valido.")
+
+@bot.message_handler(commands=['stats', 'me', 'profilo'])
+def command_stats(message):
+    # Pass Utente object or User object from message?
+    # info_user expects the message.from_user object (which has id, first_name etc)
+    # Wait, info_user signature: def info_user(self, utente_sorgente):
+    # utente_sorgente should be the telegram user object.
+    # But inside info_user it accesses id_telegram.
+    # message.from_user has id.
+    # However, Utente model has id_telegram.
+    # Let's check info_user implementation again.
+    # "utente = self.get_user(utente_sorgente.id_telegram)" -> No, message.from_user.id is the ID.
+    # message.from_user does NOT have id_telegram attribute. It has id.
+    # So I need to wrap it or pass an object with id_telegram.
+    # Actually, in main.py usually we pass message.from_user and UserService handles it?
+    # Let's check how other commands call info_user.
+    # I can't see other calls.
+    # But UserService.info_user (Line 404 in user_service.py):
+    # "utente = self.get_user(utente_sorgente.id_telegram)"
+    # So it expects an object with id_telegram.
+    # message.from_user has 'id'.
+    # So I need to adapt it.
+    
+    class UserWrapper:
+        def __init__(self, user):
+            self.id_telegram = user.id
+            self.first_name = user.first_name
+            self.username = user.username
+            # Add other fields if needed
+            self.scadenza_premium = "N/A" # Hack
+            
+    wrapper = UserWrapper(message.from_user)
+    info = user_service.info_user(wrapper)
+    bot.reply_to(message, info, parse_mode="Markdown")
+
+
+@bot.message_handler(commands=['fusion'])
+def command_fusion(message):
+    user_id = message.from_user.id
+    
+    # Check Potara
+    equipped = equipment_service.get_equipped_items(user_id)
+    potara_count = 0
+    for ui, item in equipped:
+        if item.special_effect_id == 'potara_fusion':
+            potara_count += 1
+            
+    if potara_count < 2:
+        bot.reply_to(message, "Devi indossare entrambi gli orecchini Potara per la fusione!")
+        return
+        
+    trans_id = transformation_service.get_transformation_id_by_name("Potara Fusion")
+    if not trans_id:
+        bot.reply_to(message, "Errore: Trasformazione non trovata.")
+        return
+        
+    class UserWrapper:
+        def __init__(self, user):
+            self.id_telegram = user.id
+            
+    wrapper = UserWrapper(message.from_user)
+    success, msg = transformation_service.activate_temporary_transformation(wrapper, trans_id, duration_minutes=5)
+    bot.reply_to(message, msg)
 
