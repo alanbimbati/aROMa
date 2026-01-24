@@ -16,6 +16,7 @@ import csv
 import os
 import json
 from settings import PointsName, GRUPPO_AROMA
+from services.equipment_service import EquipmentService
 
 class PvEService:
     def __init__(self):
@@ -41,6 +42,7 @@ class PvEService:
         self.boss_phase_manager = BossPhaseManager()
         self.season_manager = SeasonManager()
         self.guild_service = GuildService()
+        self.equipment_service = EquipmentService()
         
         self.mob_data = self.load_mob_data()
         self.boss_data = self.load_boss_data()
@@ -220,15 +222,16 @@ class PvEService:
             
         return speed, resistance, hp_bonus, dmg_bonus
 
-    def spawn_specific_mob(self, mob_name=None, chat_id=None, reference_level=None):
+    def spawn_specific_mob(self, mob_name=None, chat_id=None, reference_level=None, ignore_limit=False):
         """Spawn a specific mob by name or a random one if None. Returns (success, msg, mob_id)"""
         session = self.db.get_session()
         
-        # Limit: max 50 active mobs total (to prevent spam)
-        active_mobs_count = session.query(Mob).filter(Mob.is_dead == False, Mob.is_boss == False, Mob.dungeon_id == None).count()
-        if active_mobs_count >= 50:
-            session.close()
-            return False, f"Ci sono troppi mob attivi! Sconfiggili prima di spawnarne altri.", None
+        # Limit: max 1 active mob total (to prevent spam), unless ignore_limit is True (e.g. dungeons)
+        if not ignore_limit:
+            active_mobs_count = session.query(Mob).filter(Mob.is_dead == False, Mob.is_boss == False, Mob.dungeon_id == None).count()
+            if active_mobs_count >= 1:
+                session.close()
+                return False, f"C'è già un mob attivo! Sconfiggilo prima di spawnarne altri.", None
             
         # RESTRICTION: Only spawn in official group IF NOT DUNGEON (handled by caller context usually, but here we relax it for dungeons)
         # We trust the caller (DungeonService) to provide a valid chat_id
@@ -343,15 +346,16 @@ class PvEService:
         session.close()
         return True, f"Un {mob_name} (Lv. {level}) è apparso! (Vel: {speed}, Res: {resistance}%)", mob_id
 
-    def spawn_boss(self, boss_name=None, chat_id=None, reference_level=None):
+    def spawn_boss(self, boss_name=None, chat_id=None, reference_level=None, ignore_limit=False):
         """Spawn a boss (Mob with is_boss=True). Returns (success, msg, mob_id)"""
         session = self.db.get_session()
         
-        # Limit: max 3 active world bosses total (dungeon bosses excluded)
-        active_boss_count = session.query(Mob).filter(Mob.is_boss == True, Mob.is_dead == False, Mob.dungeon_id == None).count()
-        if active_boss_count >= 3:
-            session.close()
-            return False, f"Troppi boss attivi ({active_boss_count}/3)!", None
+        # Limit: max 1 active world boss total (dungeon bosses excluded), unless ignore_limit is True
+        if not ignore_limit:
+            active_boss_count = session.query(Mob).filter(Mob.is_boss == True, Mob.is_dead == False, Mob.dungeon_id == None).count()
+            if active_boss_count >= 1:
+                session.close()
+                return False, f"C'è già un boss attivo! Sconfiggilo prima di spawnarne altri.", None
         
         # Get current season theme
         from models.seasons import Season
@@ -1382,7 +1386,9 @@ class PvEService:
                             damage = damage_results[0]['damage']
                             msg = f"⚠️ **{mob.name}** ha attaccato {tag}\n💥 Danni inflitti: **{damage}**"
                         
-                        card = self.get_status_card(mob)
+                        # Pass the first target's ID to check for Scouter
+                        target_id_for_scouter = targets[0].id_telegram if targets else None
+                        card = self.get_status_card(mob, user_id=target_id_for_scouter)
                         msg += f"\n\n{card}\n⏳ Cooldown: {int(cooldown_seconds)}s"
                     
                     if death_messages:
@@ -1671,7 +1677,7 @@ class PvEService:
                  
         return image_path
 
-    def get_status_card(self, entity, is_user=False):
+    def get_status_card(self, entity, is_user=False, user_id=None):
         """Generate a premium status card for a mob or user"""
         if is_user:
             name = entity.nome if entity.username is None else entity.username
@@ -1691,7 +1697,30 @@ class PvEService:
             level = getattr(entity, 'mob_level', 1)
 
         card = f"╔══════🕹 **{name.upper()}** ══════╗\n"
-        card += f" ❤️ **Vita**: {hp}/{max_hp}\n"
+        
+        # HP Display Logic
+        if is_user:
+             card += f" ❤️ **Vita**: {hp}/{max_hp}\n"
+        else:
+            # Check Scouter
+            has_scouter = False
+            if user_id:
+                equipped = self.equipment_service.get_equipped_items(user_id)
+                for ui, item in equipped:
+                    if item.special_effect_id == 'scouter_scan':
+                        has_scouter = True
+                        break
+            
+            if has_scouter:
+                card += f" ❤️ **Vita**: {hp}/{max_hp} (Scouter Active)\n"
+            else:
+                # Percentage Bar
+                percent = int((hp / max_hp) * 100) if max_hp > 0 else 0
+                bar_len = 10
+                filled = int((percent / 100) * bar_len)
+                bar = "█" * filled + "░" * (bar_len - filled)
+                card += f" ❤️ **Vita**: {bar} {percent}%\n"
+
         card += f" ⚡ **Velocità**: {speed}\n"
         if mana is not None:
             card += f" 🌀 **Mana**: {mana}/{max_mana}\n"

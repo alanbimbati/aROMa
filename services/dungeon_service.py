@@ -206,7 +206,7 @@ class DungeonService:
                 name = mob_entry['name']
                 count = mob_entry.get('count', 1)
                 for _ in range(count):
-                    success, m, mob_id = pve.spawn_specific_mob(mob_name=name, chat_id=dungeon.chat_id)
+                    success, m, mob_id = pve.spawn_specific_mob(mob_name=name, chat_id=dungeon.chat_id, ignore_limit=True)
                     print(f"[DEBUG] spawn_specific_mob result: success={success}, mob_id={mob_id}, name={name}, chat_id={dungeon.chat_id}")
                     if success:
                         self._assign_mob_to_dungeon(mob_id, dungeon_id)
@@ -216,7 +216,7 @@ class DungeonService:
         # Handle Boss
         if 'boss' in step_data:
             boss_name = step_data['boss']
-            success, m, mob_id = pve.spawn_boss(boss_name=boss_name, chat_id=dungeon.chat_id)
+            success, m, mob_id = pve.spawn_boss(boss_name=boss_name, chat_id=dungeon.chat_id, ignore_limit=True)
             print(f"[DEBUG] spawn_boss result: success={success}, mob_id={mob_id}, name={boss_name}, chat_id={dungeon.chat_id}")
             if success:
                 self._assign_mob_to_dungeon(mob_id, dungeon_id)
