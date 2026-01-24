@@ -253,7 +253,8 @@ class PvEService:
                 return False, f"Mob '{mob_name}' not found.", None
             
             if reference_level is not None:
-                level = reference_level + random.randint(1, 10)
+                # Level range: -10 to +10 from reference, min 1
+                level = max(1, reference_level + random.randint(-10, 10))
             else:
                 difficulty = int(mob_data.get('difficulty', 1))
                 level = difficulty * random.randint(1, 5)
@@ -264,7 +265,8 @@ class PvEService:
                 return False, "No mob data loaded.", None
             
             if reference_level is not None:
-                level = reference_level + random.randint(1, 10)
+                # Level range: -10 to +10 from reference, min 1
+                level = max(1, reference_level + random.randint(-10, 10))
                 target_difficulty = (level - 1) // 10 + 1
                 
                 # Filter by difficulty
