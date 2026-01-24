@@ -64,8 +64,18 @@ class DropService:
         if theme == 'Dragon Ball':
             drop_chance = 0.05
             
+        # Anti-spam check: 30 seconds cooldown
+        import datetime
+        if user.last_chat_drop_time:
+            elapsed = (datetime.datetime.now() - user.last_chat_drop_time).total_seconds()
+            if elapsed < 30:
+                return
+
         if random.random() > drop_chance:
             return
+        
+        # Update last drop time
+        self.user_service.update_user(user.id_telegram, {'last_chat_drop_time': datetime.datetime.now()})
         
         # Load items from CSV
         items_data = self.item_service.load_items_from_csv()

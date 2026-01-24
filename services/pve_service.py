@@ -208,15 +208,15 @@ class PvEService:
             allocation[stat] += 1
             
         # Scaling per point
-        # HP: +20 per point
-        # DMG: +5 per point
-        # Speed: +5 per point
-        # Res: +5% per point (capped at 50%)
+        # HP: +10 per point (was 20)
+        # DMG: +2 per point (was 5)
+        # Speed: +1 per point (was 5)
+        # Res: +1% per point (was 5%)
         
-        hp_bonus = allocation['hp'] * 20
-        dmg_bonus = allocation['dmg'] * 5
-        speed = base_speed + (allocation['speed'] * 5)
-        resistance = min(50, base_resistance + (allocation['res'] * 5))
+        hp_bonus = allocation['hp'] * 10
+        dmg_bonus = allocation['dmg'] * 2
+        speed = base_speed + (allocation['speed'] * 1)
+        resistance = min(50, base_resistance + (allocation['res'] * 1))
             
         return speed, resistance, hp_bonus, dmg_bonus
 
@@ -310,10 +310,10 @@ class PvEService:
         speed, resistance, hp_bonus, dmg_bonus = self._allocate_mob_stats(level, difficulty, is_boss=False)
         
         # Adjust HP and Damage based on level proportionally
-        # HP: base + (level * 15) + hp_bonus
-        # Damage: base + (level * 3) + dmg_bonus
-        hp = int(mob_data['hp']) + (level * 15) + hp_bonus
-        damage = int(mob_data['attack_damage']) + (level * 3) + dmg_bonus
+        # HP: base + (level * 10) + hp_bonus (was 15)
+        # Damage: base + (level * 1) + dmg_bonus (was 3)
+        hp = int(mob_data['hp']) + (level * 10) + hp_bonus
+        damage = int(mob_data['attack_damage']) + (level * 1) + dmg_bonus
         
         new_mob = Mob(
             name=mob_data['nome'],
