@@ -218,14 +218,27 @@ class UserService:
         session.close()
         return True
 
-    def update_user(self, chatid, kwargs):
-        session = self.db.get_session()
-        utente = session.query(Utente).filter_by(id_telegram=chatid).first()
-        if utente:
-            for key, value in kwargs.items():
-                setattr(utente, key, value)
-            session.commit()
-        session.close()
+    def update_user(self, chatid, kwargs, session=None):
+        close_session = False
+        if session is None:
+            session = self.db.get_session()
+            close_session = True
+            
+        try:
+            utente = session.query(Utente).filter_by(id_telegram=chatid).first()
+            if utente:
+                for key, value in kwargs.items():
+                    setattr(utente, key, value)
+                if close_session:
+                    session.commit()
+                # If shared session, caller commits
+        except Exception as e:
+            if close_session:
+                session.rollback()
+            raise e
+        finally:
+            if close_session:
+                session.close()
 
     def add_points(self, utente, points):
         try:
@@ -517,7 +530,7 @@ class UserService:
             return utente.current_hp <= 0
         return utente.health <= 0
     
-    def damage_health(self, utente, damage):
+    def damage_health(self, utente, damage, session=None):
         """Reduce user health. Returns (new_health, died)"""
         # Check invincibility
         if self.is_invincible(utente):
@@ -532,24 +545,7 @@ class UserService:
             # Check expiration
             if utente.shield_end_time and utente.shield_end_time > datetime.datetime.now():
                 # Shield is active: Apply Resistance Boost (+25%, capped at 75%)
-                base_res = getattr(utente, 'resistance', 0) or 0
-                total_res = min(base_res + 25, 75)
-                
-                # Recalculate damage with boosted resistance
-                # Note: The caller (pve_service) might have already applied base resistance.
-                # To be safe and simple, we apply the EXTRA mitigation here on the incoming damage.
-                # But pve_service applies resistance to raw damage.
-                # If we want to be precise, pve_service should ask user_service for effective resistance.
-                # For now, let's just say the shield absorbs damage directly.
-                # Let's apply the extra 25% reduction here if not already capped.
-                
-                # Actually, simpler: Shield takes damage first.
-                # And we assume the +25% res is applied to the damage BEFORE it hits the shield?
-                # Or does the shield just act as extra HP?
-                # The plan said: "Shield gives +25% res".
-                # If pve_service calculates damage, it uses user.resistance.
-                # So we should update user.resistance when shield is cast? No, that's persistent state.
-                # Let's apply a flat 25% reduction to incoming damage here if shield is up.
+                # ... (logic same as before)
                 
                 mitigation = 0.25
                 actual_damage = int(damage * (1 - mitigation))
@@ -557,7 +553,7 @@ class UserService:
                 # Absorb into shield
                 if utente.shield_hp >= actual_damage:
                     utente.shield_hp -= actual_damage
-                    self.update_user(utente.id_telegram, {'shield_hp': utente.shield_hp})
+                    self.update_user(utente.id_telegram, {'shield_hp': utente.shield_hp}, session=session)
                     # No HP damage
                     current_hp = utente.current_hp if hasattr(utente, 'current_hp') and utente.current_hp is not None else utente.health
                     return current_hp, False
@@ -566,22 +562,22 @@ class UserService:
                     remaining_damage = actual_damage - utente.shield_hp
                     utente.shield_hp = 0
                     utente.shield_end_time = None # Shield broken
-                    self.update_user(utente.id_telegram, {'shield_hp': 0, 'shield_end_time': None})
+                    self.update_user(utente.id_telegram, {'shield_hp': 0, 'shield_end_time': None}, session=session)
                     actual_damage = remaining_damage
             else:
                 # Expired
                 utente.shield_hp = 0
-                self.update_user(utente.id_telegram, {'shield_hp': 0})
+                self.update_user(utente.id_telegram, {'shield_hp': 0}, session=session)
 
         # Use current_hp if available
         if hasattr(utente, 'current_hp') and utente.current_hp is not None:
             new_health = max(0, utente.current_hp - actual_damage)
-            self.update_user(utente.id_telegram, {'current_hp': new_health})
+            self.update_user(utente.id_telegram, {'current_hp': new_health}, session=session)
             return new_health, new_health <= 0
             
         # Fallback to old health
         new_health = max(0, utente.health - actual_damage)
-        self.update_user(utente.id_telegram, {'health': new_health})
+        self.update_user(utente.id_telegram, {'health': new_health}, session=session)
         return new_health, new_health <= 0
 
     def cast_shield(self, utente, amount, duration_minutes=10):

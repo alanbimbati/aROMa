@@ -856,10 +856,15 @@ class PvEService:
                     
                     level_up_info = self.user_service.add_exp_by_id(user_id, p_xp)
                     self.user_service.add_points_by_id(user_id, p_wumpa, is_drop=True)
-                    self.season_manager.add_seasonal_exp(user_id, p_xp)
+                    
+                    # Handle seasonal exp and potential season end
+                    rewards, season_end_msg = self.season_manager.add_seasonal_exp(user_id, p_xp)
                     
                     display_damage = min(damage_dealt, mob_max_health)
                     reward_line = f"👤 **{p_name}**: {display_damage}/{mob_max_health} dmg -> {p_xp} Exp, {p_wumpa} {PointsName}"
+                    
+                    if season_end_msg:
+                        reward_line += f"\n\n{season_end_msg}"
                     
                     if p_xp == 0 and p_wumpa == 0 and not is_stunned:
                          # Check if it was due to death (we don't have is_dead here easily without re-checking or passing it)
@@ -1336,7 +1341,7 @@ class PvEService:
                             reduction_factor = 100 / (100 + user_res)
                             damage = int(damage * reduction_factor)
                         
-                        new_hp, died = self.user_service.damage_health(target, damage)
+                        new_hp, died = self.user_service.damage_health(target, damage, session=session)
                         
                         self.event_dispatcher.log_event(
                             event_type='damage_taken',
