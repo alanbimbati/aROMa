@@ -729,3 +729,12 @@ class UserService:
             return False
             
         return datetime.datetime.now() < user.invincible_until
+
+    def check_fatigue(self, user):
+        """Check if user is fatigued (low HP)"""
+        current_hp = user.current_hp if hasattr(user, 'current_hp') and user.current_hp is not None else user.health
+        max_hp = user.max_health
+        
+        if max_hp > 0 and (current_hp / max_hp) < 0.2:
+            return True
+        return False
