@@ -105,21 +105,41 @@ class UserService:
     def track_activity(self, user_id, chat_id=None):
         """Track user activity for mob targeting with timestamp"""
         import datetime
+        try:
+            user_id = int(user_id)
+            if chat_id is not None:
+                chat_id = int(chat_id)
+        except (ValueError, TypeError):
+            pass
+            
         key = (user_id, chat_id)
         self.recent_activities[key] = datetime.datetime.now()
+        print(f"[DEBUG] track_activity: user_id={user_id}, chat_id={chat_id}")
         
     def get_recent_users(self, chat_id=None, minutes=30):
         """Get users active within the last N minutes, sorted by recency (most recent first)"""
         import datetime
         cutoff = datetime.datetime.now() - datetime.timedelta(minutes=minutes)
         
+        try:
+            if chat_id is not None:
+                chat_id = int(chat_id)
+        except (ValueError, TypeError):
+            pass
+
         # Filter by chat_id and time, then sort by timestamp (most recent first)
         recent = []
         for (uid, cid), timestamp in self.recent_activities.items():
             if timestamp >= cutoff:
+                # Ensure cid is int for comparison if chat_id is int
+                try:
+                    if cid is not None: cid = int(cid)
+                except: pass
+                
                 if chat_id is None or cid == chat_id:
                     recent.append((uid, timestamp))
         
+        print(f"[DEBUG] get_recent_users: found {len(recent)} users")
         # Sort by timestamp descending (most recent first)
         recent.sort(key=lambda x: x[1], reverse=True)
         return [uid for uid, _ in recent]
@@ -325,6 +345,12 @@ class UserService:
                 utente.max_health += 10
                 utente.max_mana += 10
                 utente.base_damage += 2
+                
+                # Full Heal on Level Up
+                utente.health = utente.max_health
+                if hasattr(utente, 'current_hp'):
+                    utente.current_hp = utente.max_health
+                utente.mana = utente.max_mana
                 
                 leveled_up = True
                 new_level = utente.livello
