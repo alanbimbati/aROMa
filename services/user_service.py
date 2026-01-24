@@ -730,7 +730,8 @@ class UserService:
         elapsed_minutes = int((now - user.resting_since).total_seconds() / 60)
         
         # 1 HP and 1 Mana per minute
-        hp_to_recover = min(elapsed_minutes, user.max_health - (user.current_hp or user.health))
+        current_hp = user.current_hp if user.current_hp is not None else user.health
+        hp_to_recover = min(elapsed_minutes, user.max_health - current_hp)
         mana_to_recover = min(elapsed_minutes, user.max_mana - user.mana)
         
         session.close()
