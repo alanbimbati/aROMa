@@ -1,5 +1,5 @@
 id,name,saga,difficulty,steps,rewards,description
-1,Raditz Invasion,Dragon Ball,1,"[{""mobs"": [{""name"": ""Saibaman"", ""count"": 3}]}, {""boss"": ""Raditz""}]","{""wumpa"": 100, ""exp"": 50}","L'inizio dell'invasione Saiyan. Sconfiggi i Saibaman e affronta Raditz!"
+1,Raditz Invasion,Dragon Ball,1,"[{""mobs"": [{""name"": ""Saibaman"", ""count"": 3}]}, {""boss"": ""Raditz"", ""dialogue"": {""text"": ""Raditz: 'Ahah! Siete solo insetti! Vi schiaccerò!'"", ""delay"": 3}}]","{""wumpa"": 100, ""exp"": 50}","L'inizio dell'invasione Saiyan. Sconfiggi i Saibaman e affronta Raditz!"
 2,Saibaman Training,Dragon Ball,1,"[{""mobs"": [{""name"": ""Saibaman"", ""count"": 2}]}, {""mobs"": [{""name"": ""Saibaman"", ""count"": 3}]}, {""mobs"": [{""name"": ""Saibaman"", ""count"": 5}]}]","{""wumpa"": 120, ""exp"": 60}","Un allenamento intensivo contro orde di Saibaman."
 3,Nappa's Arrival,Dragon Ball,2,"[{""mobs"": [{""name"": ""Saibaman"", ""count"": 3}]}, {""boss"": ""Nappa""}]","{""wumpa"": 150, ""exp"": 80}","Il possente Nappa è arrivato. Attenzione alla sua forza bruta!"
 4,Vegeta's Pride,Dragon Ball,3,"[{""boss"": ""Nappa""}, {""boss"": ""Vegeta""}]","{""wumpa"": 200, ""exp"": 100}","Affronta i Saiyan d'elite. Vegeta non avrà pietà."

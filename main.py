@@ -64,6 +64,9 @@ equipment_service = EquipmentService()
 # Track last viewed character for admins (for image upload feature)
 admin_last_viewed_character = {}
 
+# Active Traps (ChatID -> {type, user_id, time})
+active_traps = {}
+
 # --- MONKEY PATCH: Auto-delete command messages ---
 _original_message_handler = bot.message_handler
 
@@ -101,6 +104,53 @@ def _auto_delete_message_handler(*args, **kwargs):
 
 bot.message_handler = _auto_delete_message_handler
 # --------------------------------------------------
+
+@bot.message_handler(func=lambda m: m.chat.id in active_traps, content_types=['text', 'photo', 'sticker', 'video', 'voice'])
+def handle_trap_explosion(message):
+    """Handle trap explosion when someone writes in a trapped chat"""
+    chat_id = message.chat.id
+    if chat_id not in active_traps:
+        return
+
+    trap = active_traps.pop(chat_id)
+    trap_type = trap.get('type', 'TNT')
+    setter_id = trap.get('user_id')
+    
+    user = message.from_user
+    victim_name = user.username or user.first_name
+    
+    # Calculate damage/effect
+    dmg = random.randint(10, 30)
+    
+    # Apply damage to victim
+    victim = user_service.get_user(user.id)
+    if victim:
+        user_service.damage_health(victim, dmg)
+        # Also lose some Wumpa
+        wumpa_loss = random.randint(5, 15)
+        if victim.points >= wumpa_loss:
+            user_service.add_points(victim, -wumpa_loss)
+        else:
+            wumpa_loss = 0
+            
+        msg = f"💥 **BOOOM!** 💥\n"
+        msg += f"@{victim_name} ha fatto scattare una **{trap_type}**!\n"
+        msg += f"💔 Hai subito **{dmg}** danni!\n"
+        if wumpa_loss > 0:
+            msg += f"💸 Nell'esplosione hai perso **{wumpa_loss}** {PointsName}!"
+            
+        bot.reply_to(message, msg, parse_mode='markdown')
+        
+        # Give Wumpa to trap setter? (Optional, maybe half)
+        if wumpa_loss > 0 and setter_id and setter_id != user.id:
+            setter = user_service.get_user(setter_id)
+            if setter:
+                user_service.add_points(setter, wumpa_loss)
+                try:
+                    bot.send_message(setter_id, f"😈 La tua {trap_type} è esplosa! Hai guadagnato {wumpa_loss} {PointsName} da {victim_name}!")
+                except:
+                    pass
+
 
 @bot.message_handler(content_types=['left_chat_member'])
 def esciDalGruppo(message):
@@ -3898,6 +3948,14 @@ def callback_query(call):
             # Send effect message
             if effect_msg:
                 bot.send_message(call.message.chat.id, effect_msg)
+                
+            # Handle Traps
+            if extra_data and extra_data.get('type') == 'trap':
+                active_traps[call.message.chat.id] = {
+                    'type': extra_data.get('trap_type', 'TNT'),
+                    'user_id': user_id,
+                    'time': datetime.datetime.now()
+                }
         else:
             bot.answer_callback_query(call.id, "❌ Errore nell'uso dell'oggetto!", show_alert=True)
         return
@@ -4954,7 +5012,24 @@ def callback_query(call):
             return
         
         # Attack the specific target (all are mobs now, bosses are just mobs with is_boss=True)
-        success, msg, extra_data = pve_service.attack_mob(utente, damage, mob_id=enemy_id)
+        try:
+            success, msg, extra_data = pve_service.attack_mob(utente, damage, mob_id=enemy_id)
+            
+            # Handle Dungeon Events (Dialogues, Delays, Spawns)
+            if extra_data and 'dungeon_events' in extra_data:
+                events = extra_data['dungeon_events']
+                for event in events:
+                    if event['type'] == 'message':
+                        bot.send_message(call.message.chat.id, event['content'], parse_mode='markdown')
+                    elif event['type'] == 'delay':
+                        time.sleep(event['seconds'])
+                    elif event['type'] == 'spawn':
+                        bot.send_message(call.message.chat.id, event['content'], parse_mode='markdown')
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            bot.answer_callback_query(call.id, f"❌ Errore critico: {e}", show_alert=True)
+            return
         
         # Send response
         if success:
@@ -5053,6 +5128,17 @@ def callback_query(call):
         # Attack (all are mobs now, bosses are just mobs with is_boss=True)
         success, msg, extra_data = pve_service.attack_mob(utente, damage, use_special=True, mob_id=enemy_id, mana_cost=mana_cost)
         
+        # Handle Dungeon Events (Dialogues, Delays, Spawns)
+        if extra_data and 'dungeon_events' in extra_data:
+            events = extra_data['dungeon_events']
+            for event in events:
+                if event['type'] == 'message':
+                    bot.send_message(call.message.chat.id, event['content'], parse_mode='markdown')
+                elif event['type'] == 'delay':
+                    time.sleep(event['seconds'])
+                elif event['type'] == 'spawn':
+                    bot.send_message(call.message.chat.id, event['content'], parse_mode='markdown')
+        
         if success:
             try:
                 bot.answer_callback_query(call.id, "✨ Attacco Speciale!")
@@ -5141,6 +5227,17 @@ def callback_query(call):
         else:
             damage = utente.base_damage
             success, msg, extra_data, attack_events = pve_service.attack_aoe(utente, damage, chat_id=call.message.chat.id, target_mob_id=enemy_id)
+            
+        # Handle Dungeon Events (Dialogues, Delays, Spawns)
+        if extra_data and 'dungeon_events' in extra_data:
+            events = extra_data['dungeon_events']
+            for event in events:
+                if event['type'] == 'message':
+                    bot.send_message(call.message.chat.id, event['content'], parse_mode='markdown')
+                elif event['type'] == 'delay':
+                    time.sleep(event['seconds'])
+                elif event['type'] == 'spawn':
+                    bot.send_message(call.message.chat.id, event['content'], parse_mode='markdown')
         
         if success:
             try:
@@ -5873,3 +5970,50 @@ def command_fusion(message):
     success, msg = transformation_service.activate_temporary_transformation(wrapper, trans_id, duration_minutes=5)
     bot.reply_to(message, msg)
 
+
+@bot.message_handler(commands=['spawn'])
+def handle_spawn_cmd(message):
+    """Admin command to spawn mobs"""
+    # Check Admin
+    try:
+        if message.from_user.id not in ADMIN_IDS:
+            return
+    except NameError:
+        # Fallback if ADMIN_IDS not defined
+        if message.from_user.id != 62716473: # Hardcoded fallback
+            return
+
+    args = message.text.split()
+    # Syntax:
+    # /spawn -> random mob
+    # /spawn [name] -> specific mob
+    # /spawn boss -> random boss
+    # /spawn boss [name] -> specific boss
+    
+    mob_name = None
+    is_boss = False
+    
+    if len(args) > 1:
+        if args[1].lower() == 'boss':
+            is_boss = True
+            if len(args) > 2:
+                mob_name = " ".join(args[2:])
+        else:
+            mob_name = " ".join(args[1:])
+            
+    chat_id = message.chat.id
+    
+    try:
+        if is_boss:
+            success, msg, mob_id = pve_service.spawn_boss(boss_name=mob_name, chat_id=chat_id, ignore_limit=True)
+        else:
+            success, msg, mob_id = pve_service.spawn_specific_mob(mob_name=mob_name, chat_id=chat_id, ignore_limit=True)
+            
+        bot.reply_to(message, msg)
+        
+        if success and mob_id:
+            # Trigger immediate attack
+            pve_service.mob_random_attack(specific_mob_id=mob_id, chat_id=chat_id)
+            
+    except Exception as e:
+        bot.reply_to(message, f"❌ Errore durante lo spawn: {e}")
