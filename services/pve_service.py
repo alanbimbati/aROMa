@@ -418,13 +418,15 @@ class PvEService:
         # level is already determined above
         
         # Allocate dynamic stats
-        speed, resistance, hp_bonus, dmg_bonus = self._allocate_mob_stats(level, difficulty, is_boss=True)
+        # User requested only HP scales like a boss, rest like a mob.
+        # So we pass is_boss=False to get standard speed/stats allocation.
+        speed, resistance, hp_bonus, dmg_bonus = self._allocate_mob_stats(level, difficulty, is_boss=False)
         
         # Scale HP and Damage
-        # HP: base + (level * 50) + hp_bonus
-        # Damage: base + (level * 10) + dmg_bonus
-        hp = hp_base + (level * 50) + hp_bonus
-        damage = int(boss_data['attack_damage']) + (level * 10) + dmg_bonus
+        # HP: base + (level * 200) + hp_bonus (Boss HP scaling)
+        # Damage: base + (level * 1) + dmg_bonus (Standard Mob scaling)
+        hp = hp_base + (level * 200) + hp_bonus
+        damage = int(boss_data['attack_damage']) + (level * 1) + dmg_bonus
         
         new_boss = Mob(
             name=boss_data['nome'],
@@ -864,7 +866,12 @@ class PvEService:
                     self.user_service.add_points_by_id(user_id, p_wumpa, is_drop=True)
                     
                     # Handle seasonal exp and potential season end
-                    rewards, season_end_msg = self.season_manager.add_seasonal_exp(user_id, p_xp)
+                    season_result = self.season_manager.add_seasonal_exp(user_id, p_xp)
+                    if isinstance(season_result, tuple) and len(season_result) == 2:
+                        rewards, season_end_msg = season_result
+                    else:
+                        rewards = season_result
+                        season_end_msg = None
                     
                     display_damage = min(damage_dealt, mob_max_health)
                     reward_line = f"👤 **{p_name}**: {display_damage}/{mob_max_health} dmg -> {p_xp} Exp, {p_wumpa} {PointsName}"
@@ -915,9 +922,15 @@ class PvEService:
                     if reward.get('is_dead'):
                         ds.record_death(dungeon_id)
 
-                dungeon_msg, new_mob_ids = ds.check_step_completion(dungeon_id)
-                if dungeon_msg:
-                    msg += f"\n\n{dungeon_msg}"
+                dungeon_events, new_mob_ids = ds.check_step_completion(dungeon_id)
+                if dungeon_events:
+                    # If it's a list (events), pass it to extra_data
+                    if isinstance(dungeon_events, list):
+                        extra_data['dungeon_events'] = dungeon_events
+                    else:
+                        # Fallback if it's a string (shouldn't happen with new DS but safe)
+                        msg += f"\n\n{dungeon_events}"
+                        
                     if new_mob_ids:
                         extra_data['new_mob_ids'] = new_mob_ids
         else:
@@ -989,7 +1002,7 @@ class PvEService:
             return False, "Sei troppo affaticato per combattere! Riposa.", None, []
             
         # Check Cooldown (2x normal)
-        user_speed = getattr(user, 'allocated_speed', 0)
+        user_speed = getattr(user, 'allocated_speed', 0) or 0
         cooldown_seconds = (60 / (1 + user_speed * 0.05)) * 2
         
         last_attack = getattr(user, 'last_attack_time', None)
@@ -1342,7 +1355,7 @@ class PvEService:
                         adjusted_damage = int((base_damage * 0.5 * multiplier) / level_factor)
                         damage = int(adjusted_damage * random.uniform(0.8, 1.2))
                         
-                        user_res = getattr(target, 'allocated_resistance', 0)
+                        user_res = getattr(target, 'allocated_resistance', 0) or 0
                         if user_res > 0:
                             reduction_factor = 100 / (100 + user_res)
                             damage = int(damage * reduction_factor)
@@ -1468,9 +1481,12 @@ class PvEService:
             # --- NEW REWARD LOGIC (BOSS) ---
             # Bosses have fixed pools but we apply penalties
             
+            # Fetch user to get level and check limits
+            p_user_check = session.query(Utente).filter_by(id_telegram=p.user_id).first()
+            user_level = p_user_check.livello if p_user_check and p_user_check.livello else 1
+            
             # 1. Level Penalty
             mob_level = boss.mob_level if hasattr(boss, 'mob_level') and boss.mob_level else 50
-            user_level = p.user_level or 1
             
             penalty_factor_xp = 1.0
             penalty_factor_wumpa = 1.0
@@ -1484,7 +1500,6 @@ class PvEService:
             
             # 2. Daily Limit: "Fatigue" (Affaticamento)
             # After 300 Wumpa, rewards are 10% harder to obtain (10% reduction)
-            p_user_check = session.query(Utente).filter_by(id_telegram=p.user_id).first()
             
             # Check Status Effects
             is_stunned = False
@@ -1537,7 +1552,11 @@ class PvEService:
             # Add rewards and check for level-up
             level_up_info = self.user_service.add_exp_by_id(p.user_id, p_xp)
             self.user_service.add_points_by_id(p.user_id, p_wumpa, is_drop=True)
-            self.season_manager.add_seasonal_exp(p.user_id, p_xp)
+            # Handle seasonal exp
+            season_result = self.season_manager.add_seasonal_exp(p.user_id, p_xp)
+            # We don't use the rewards/msg here for boss distribution yet, but we must handle the return to avoid errors if it was unpacking
+            # Actually, we might want to show the season end msg?
+            # For now, just consume it safely.
             
             # Get username for the message
             p_user = session.query(Utente).filter_by(id_telegram=p.user_id).first()
@@ -1717,7 +1736,11 @@ class PvEService:
                 card += f" ❤️ **Vita**: {hp}/{max_hp} (Scouter Active)\n"
             else:
                 # Percentage Bar
-                percent = int((hp / max_hp) * 100) if max_hp > 0 else 0
+                safe_hp = hp if hp is not None else 0
+                safe_max_hp = max_hp if max_hp is not None else 1
+                if safe_max_hp <= 0: safe_max_hp = 1
+                
+                percent = int((safe_hp / safe_max_hp) * 100)
                 bar_len = 10
                 filled = int((percent / 100) * bar_len)
                 bar = "█" * filled + "░" * (bar_len - filled)

@@ -207,6 +207,7 @@ class UserService:
                 utente.scadenza_premium = datetime.datetime.now()
                 utente.abbonamento_attivo = 0
                 utente.stat_points = 2 # Level 1 * 2
+                utente.shield_hp = 0
                 session.add(utente)
                 session.commit()
             except:
@@ -732,7 +733,7 @@ class UserService:
 
     def check_fatigue(self, user):
         """Check if user is fatigued (low HP)"""
-        current_hp = user.current_hp if hasattr(user, 'current_hp') and user.current_hp is not None else user.health
+        current_hp = user.current_hp if hasattr(user, 'current_hp') and user.current_hp is not None else (user.health or 0)
         max_hp = user.max_health
         
         if max_hp > 0 and (current_hp / max_hp) < 0.2:
@@ -752,24 +753,25 @@ class UserService:
             user = session.query(Utente).filter_by(id_telegram=user.id_telegram).first()
             
         # Handle Shield
-        if user.shield_hp > 0:
-            if user.shield_hp >= damage:
-                user.shield_hp -= damage
+        shield_hp = user.shield_hp if user.shield_hp is not None else 0
+        if shield_hp > 0:
+            if shield_hp >= damage:
+                user.shield_hp = shield_hp - damage
                 damage = 0
             else:
-                damage -= user.shield_hp
+                damage -= shield_hp
                 user.shield_hp = 0
                 
         # Apply remaining damage to HP
         if damage > 0:
-            current_hp = user.current_hp if user.current_hp is not None else user.health
+            current_hp = user.current_hp if user.current_hp is not None else (user.health or 0)
             new_hp = max(0, current_hp - damage)
             
             user.current_hp = new_hp
             # Sync legacy health field if needed (though we should move to current_hp everywhere)
             user.health = new_hp 
         else:
-            new_hp = user.current_hp if user.current_hp is not None else user.health
+            new_hp = user.current_hp if user.current_hp is not None else (user.health or 0)
 
         died = new_hp <= 0
         
@@ -778,3 +780,69 @@ class UserService:
             session.close()
             
         return new_hp, died
+
+    def restore_health(self, user, amount):
+        """
+        Restore HP to user, up to max_health.
+        Returns amount actually restored.
+        """
+        session = self.db.get_session()
+        try:
+            # Re-fetch user to ensure fresh session attachment
+            db_user = session.query(Utente).filter_by(id_telegram=user.id_telegram).first()
+            if not db_user:
+                return 0
+                
+            current_hp = db_user.current_hp if db_user.current_hp is not None else (db_user.health or 0)
+            max_hp = db_user.max_health
+            
+            if current_hp >= max_hp:
+                return 0
+                
+            new_hp = min(current_hp + amount, max_hp)
+            restored = new_hp - current_hp
+            
+            db_user.current_hp = new_hp
+            db_user.health = new_hp # Sync legacy
+            
+            session.commit()
+            return restored
+        except Exception as e:
+            print(f"Error restoring health: {e}")
+            session.rollback()
+            return 0
+        finally:
+            session.close()
+
+
+    def restore_mana(self, user, amount):
+        """
+        Restore Mana to user, up to max_mana.
+        Returns amount actually restored.
+        """
+        session = self.db.get_session()
+        try:
+            # Re-fetch user to ensure fresh session attachment
+            db_user = session.query(Utente).filter_by(id_telegram=user.id_telegram).first()
+            if not db_user:
+                return 0
+                
+            current_mana = db_user.mana
+            max_mana = db_user.max_mana
+            
+            if current_mana >= max_mana:
+                return 0
+                
+            new_mana = min(current_mana + amount, max_mana)
+            restored = new_mana - current_mana
+            
+            db_user.mana = new_mana
+            
+            session.commit()
+            return restored
+        except Exception as e:
+            print(f"Error restoring mana: {e}")
+            session.rollback()
+            return 0
+        finally:
+            session.close()

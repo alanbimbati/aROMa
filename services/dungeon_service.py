@@ -168,9 +168,16 @@ class DungeonService:
         session.close()
         
         # Spawn first step
-        msg, mob_ids = self.spawn_step(d_id, 1)
+        events, mob_ids = self.spawn_step(d_id, 1)
+        
+        # Extract text from events for the immediate response
+        # For start_dungeon, we might want to just show the text immediately
+        # or we could return events if we update the command handler.
+        # For now, let's concatenate message events.
+        msgs = [e['content'] for e in events if e['type'] == 'message' or e['type'] == 'spawn']
+        full_msg = "\n\n".join(msgs)
             
-        return True, f"🚀 **Dungeon Iniziato!**\n\n{msg}", mob_ids
+        return True, f"🚀 **Dungeon Iniziato!**\n\n{full_msg}", mob_ids
 
     def spawn_step(self, dungeon_id, stage_num):
         """Spawns mobs for the specific stage"""
@@ -196,6 +203,20 @@ class DungeonService:
         from services.pve_service import PvEService
         pve = PvEService()
         
+        events = []
+        
+        # Handle Dialogue
+        if 'dialogue' in step_data:
+            diag = step_data['dialogue']
+            events.append({
+                'type': 'message',
+                'content': diag.get('text', '')
+            })
+            events.append({
+                'type': 'delay',
+                'seconds': diag.get('delay', 3)
+            })
+
         # Refactoring to capture IDs correctly
         mob_ids = []
         final_msgs = []
@@ -223,7 +244,14 @@ class DungeonService:
                 final_msgs.append(m)
                 mob_ids.append(mob_id)
                 
-        return "\n".join(final_msgs), mob_ids
+        if final_msgs:
+            events.append({
+                'type': 'spawn',
+                'content': "\n".join(final_msgs),
+                'mob_ids': mob_ids
+            })
+                
+        return events, mob_ids
 
     def _assign_mob_to_dungeon(self, mob_id, dungeon_id):
         session = self.db.get_session()
@@ -242,17 +270,17 @@ class DungeonService:
         
         if live_mobs > 0:
             session.close()
-            return None, None # Not done yet
+            return [], [] # Not done yet
             
         # All dead, advance
         dungeon = session.query(Dungeon).filter_by(id=dungeon_id).first()
         if not dungeon or dungeon.status != "active":
             session.close()
-            return None, None
+            return [], []
             
-        msg, mob_ids = self.advance_dungeon(dungeon_id)
+        events, mob_ids = self.advance_dungeon(dungeon_id)
         session.close()
-        return msg, mob_ids
+        return events, mob_ids
 
     def advance_dungeon(self, dungeon_id):
         """Moves to next stage or completes dungeon"""
@@ -267,10 +295,16 @@ class DungeonService:
         session.close()
         
         if current_stage <= total_stages:
-            msg, mob_ids = self.spawn_step(dungeon_id, current_stage)
-            return f"✅ **Stage Completato!**\nPreparatevi per il prossimo scontro!\n\n**Stage {current_stage}/{total_stages}**\n{msg}", mob_ids
+            events, mob_ids = self.spawn_step(dungeon_id, current_stage)
+            # Prepend stage completion message
+            events.insert(0, {
+                'type': 'message',
+                'content': f"✅ **Stage Completato!**\nPreparatevi per il prossimo scontro!\n\n**Stage {current_stage}/{total_stages}**"
+            })
+            return events, mob_ids
         else:
-            return self.complete_dungeon(dungeon_id), []
+            completion_msg = self.complete_dungeon(dungeon_id)
+            return [{'type': 'message', 'content': completion_msg}], []
 
     def complete_dungeon(self, dungeon_id):
         session = self.db.get_session()
