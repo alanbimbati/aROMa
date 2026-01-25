@@ -274,8 +274,8 @@ class UserService:
             # Check for daily reset
             self.check_daily_reset(utente)
             
-            # Add points
-            utente.points = int(utente.points) + int(points)
+            current_points = utente.points if utente.points is not None else 0
+            utente.points = int(current_points) + int(points)
             
             # Track daily earnings if it's a drop
             if is_drop:
@@ -738,3 +738,43 @@ class UserService:
         if max_hp > 0 and (current_hp / max_hp) < 0.2:
             return True
         return False
+
+    def damage_health(self, user, damage, session=None):
+        """
+        Apply damage to user, considering shields.
+        Returns (new_hp, died_boolean)
+        """
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            # Re-query user to ensure attached to session
+            user = session.query(Utente).filter_by(id_telegram=user.id_telegram).first()
+            
+        # Handle Shield
+        if user.shield_hp > 0:
+            if user.shield_hp >= damage:
+                user.shield_hp -= damage
+                damage = 0
+            else:
+                damage -= user.shield_hp
+                user.shield_hp = 0
+                
+        # Apply remaining damage to HP
+        if damage > 0:
+            current_hp = user.current_hp if user.current_hp is not None else user.health
+            new_hp = max(0, current_hp - damage)
+            
+            user.current_hp = new_hp
+            # Sync legacy health field if needed (though we should move to current_hp everywhere)
+            user.health = new_hp 
+        else:
+            new_hp = user.current_hp if user.current_hp is not None else user.health
+
+        died = new_hp <= 0
+        
+        if local_session:
+            session.commit()
+            session.close()
+            
+        return new_hp, died

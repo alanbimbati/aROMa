@@ -794,7 +794,7 @@ class PvEService:
                         base_exp = int(base_exp_pool * share)
                         mob_level = level if level else (difficulty * 5)
                         u_part = temp_session.query(Utente).filter_by(id_telegram=p.user_id).first()
-                        user_level = u_part.livello if u_part else 1
+                        user_level = u_part.livello if u_part and u_part.livello is not None else 1
                         
                         penalty_factor_xp = 1.0
                         penalty_factor_wumpa = 1.0
