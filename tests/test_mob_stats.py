@@ -21,11 +21,11 @@ class TestMobStats(unittest.TestCase):
             print(f"Trial {i+1}: Speed={speed}, Res={resistance}%, HP Bonus={hp_bonus}, DMG Bonus={dmg_bonus}")
             
             # Verify total points
-            # hp: 20, dmg: 5, speed: 5, res: 5
-            hp_pts = hp_bonus / 20
-            dmg_pts = dmg_bonus / 5
-            speed_pts = (speed - 10) / 5
-            res_pts = resistance / 5
+            # hp: 10, dmg: 2, speed: 1, res: 1
+            hp_pts = hp_bonus / 10
+            dmg_pts = dmg_bonus / 2
+            speed_pts = (speed - 10) / 1
+            res_pts = resistance / 1
             
             total_pts = hp_pts + dmg_pts + speed_pts + res_pts
             # Allow small float precision errors
@@ -40,10 +40,10 @@ class TestMobStats(unittest.TestCase):
             speed, resistance, hp_bonus, dmg_bonus = pve_service._allocate_mob_stats(level, difficulty, is_boss=True)
             print(f"Boss Trial {i+1}: Speed={speed}, Res={resistance}%, HP Bonus={hp_bonus}, DMG Bonus={dmg_bonus}")
             
-            hp_pts = hp_bonus / 20
-            dmg_pts = dmg_bonus / 5
-            speed_pts = (speed - 20) / 5
-            res_pts = resistance / 5
+            hp_pts = hp_bonus / 10
+            dmg_pts = dmg_bonus / 2
+            speed_pts = (speed - 20) / 1
+            res_pts = resistance / 1
             
             total_pts = hp_pts + dmg_pts + speed_pts + res_pts
             self.assertAlmostEqual(total_pts, level, delta=0.1, msg=f"Expected {level} points, got {total_pts}")

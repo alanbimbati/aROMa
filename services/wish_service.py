@@ -50,17 +50,17 @@ class WishService:
             elif wish_type == "exp":
                 amount = random.randint(1000, 2000)
                 self.user_service.add_exp(user, amount)
-                # Log event for achievements
-            from services.event_dispatcher import EventDispatcher
-            dispatcher = EventDispatcher()
-            dispatcher.log_event(
-                event_type='shenron_summoned',
-                user_id=user.id_telegram,
-                value=1,
-                context={}
-            )
-            
-            return f"🐉 SHENRON HA ESAUDITO IL TUO DESIDERIO!\n\n⭐ HAI OTTENUTO {amount} EXP!"
+                
+                from services.event_dispatcher import EventDispatcher
+                dispatcher = EventDispatcher()
+                dispatcher.log_event(
+                    event_type='shenron_summoned',
+                    user_id=user.id_telegram,
+                    value=1,
+                    context={}
+                )
+                
+                return f"🐉 SHENRON HA ESAUDITO IL TUO DESIDERIO!\n\n⭐ HAI OTTENUTO {amount} EXP!"
                 
         else:
             # Porunga: Will handle 3 wishes via callbacks

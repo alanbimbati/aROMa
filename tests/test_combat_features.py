@@ -4,6 +4,7 @@ import datetime
 import json
 from database import Database
 from models.user import Utente
+from models.inventory import UserItem
 from models.pve import Mob
 from models.combat import CombatParticipation
 from models.seasons import Season
@@ -50,7 +51,13 @@ class TestCombatFeatures(unittest.TestCase):
         # Ensure a season exists
         season = session.query(Season).filter_by(is_active=True).first()
         if not season:
-            season = Season(name="Test Season", theme="Dragon Ball", is_active=True)
+            season = Season(
+                name="Test Season", 
+                theme="Dragon Ball", 
+                is_active=True,
+                start_date=datetime.datetime.now(),
+                end_date=datetime.datetime.now() + datetime.timedelta(days=30)
+            )
             session.add(season)
         else:
             season.theme = "Dragon Ball"
@@ -103,7 +110,8 @@ class TestCombatFeatures(unittest.TestCase):
         initial_mana = user.mana
         
         # Perform AoE targeting Mob1
-        success, msg, extra_data = self.pve_service.attack_aoe(user, base_damage=100, chat_id=999, target_mob_id=m1_id)
+        with patch('random.randint', return_value=100): # Disable crits
+            success, msg, extra_data, attack_events = self.pve_service.attack_aoe(user, base_damage=100, chat_id=999, target_mob_id=m1_id)
         self.assertTrue(success)
         
         # Verify Mana (cost 0)
@@ -172,8 +180,12 @@ class TestCombatFeatures(unittest.TestCase):
         # U2 deals some damage first to Mob 1
         self.pve_service.update_participation(m1_id, self.u2_id, 10)
         
+        # Ensure u1's cooldown is reset for the AoE attack
+        u1.last_attack_time = datetime.datetime.now() - datetime.timedelta(hours=1)
+        session.commit()
+
         # U1 uses AoE to kill both
-        success, msg, extra_data = self.pve_service.attack_aoe(u1, base_damage=100, chat_id=999)
+        success, msg, extra_data, attack_events = self.pve_service.attack_aoe(u1, base_damage=100, chat_id=999)
         self.assertTrue(success)
         self.assertIn("💀", msg)
         self.assertIn("Ricompense distribuite", msg)
@@ -227,7 +239,7 @@ class TestCombatFeatures(unittest.TestCase):
         session.add(m2)
         session.commit()
         
-        success, msg, extra_data = self.pve_service.attack_aoe(user, base_damage=100, chat_id=999)
+        success, msg, extra_data, attack_events = self.pve_service.attack_aoe(user, base_damage=100, chat_id=999)
         self.assertTrue(success, f"AoE failed: {msg}")
         self.assertIn("è salito al livello", msg, f"AoE level up not found in message: {msg}")
         
@@ -242,7 +254,7 @@ class TestCombatFeatures(unittest.TestCase):
         session.commit()
         
         user = session.query(Utente).filter_by(id_telegram=self.u1_id).first()
-        success, msg, extra_data = self.pve_service.attack_aoe(user, base_damage=100, chat_id=999)
+        success, msg, extra_data, attack_events = self.pve_service.attack_aoe(user, base_damage=100, chat_id=999)
         self.assertTrue(success)
         
         # Check how many mobs took damage
@@ -291,7 +303,46 @@ class TestCombatFeatures(unittest.TestCase):
         # Try to spawn the 11th
         success, msg, mob_id = self.pve_service.spawn_specific_mob(chat_id=None)
         self.assertFalse(success)
-        self.assertIn("troppi mob", msg)
+        self.assertIn("già un mob attivo", msg)
+        
+        session.close()
+
+    def test_resting_methods(self):
+        """Test entering and leaving the inn"""
+        session = self.db.get_session()
+        self.user = session.query(Utente).filter_by(id_telegram=self.u1_id).first()
+        self.user.current_hp = 50
+        self.user.mana = 50
+        # Test entering the inn
+        initial_points = self.user.points
+        success, msg = self.user_service.start_resting(self.user.id_telegram)
+        self.assertTrue(success)
+        self.assertIn("iniziato a riposare", msg)
+        
+        # Mock resting time to ensure recovery
+        session = self.db.get_session()
+        u = session.query(Utente).filter_by(id_telegram=self.u1_id).first()
+        u.resting_since = datetime.datetime.now() - datetime.timedelta(hours=2)
+        session.commit()
+        session.close()
+        
+        success, msg = self.user_service.stop_resting(self.user.id_telegram)
+        self.assertTrue(success)
+        self.assertIn("smesso di riposare", msg)
+        
+        # Refresh user from DB
+        session = self.db.get_session()
+        self.user = session.query(Utente).filter_by(id_telegram=self.u1_id).first()
+        
+        self.assertIsNone(self.user.resting_since)
+        self.assertEqual(self.user.current_hp, self.user.health) # Should be fully healed
+        session.close()
+        self.assertEqual(self.user.mana, self.user.max_mana) # Should be fully restored
+
+        # Test trying to leave when not resting
+        success, msg = self.user_service.stop_resting(self.user.id_telegram)
+        self.assertFalse(success)
+        self.assertIn("Non stai riposando", msg)
         
         session.close()
 

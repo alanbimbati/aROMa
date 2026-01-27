@@ -129,6 +129,25 @@ class PvEService:
             if participation and participation.has_fled:
                 return False, "Sei già fuggito da questo mostro!"
             
+            # Check if mob belongs to a dungeon
+            if mob.dungeon_id:
+                # Fleeing from a dungeon mob means leaving the dungeon
+                from services.dungeon_service import DungeonService
+                ds = DungeonService()
+                
+                # Check if user is actually in this dungeon
+                active_dungeon = ds.get_user_active_dungeon(user.id_telegram)
+                if active_dungeon and active_dungeon.id == mob.dungeon_id:
+                    success, msg = ds.leave_dungeon(mob.chat_id, user.id_telegram)
+                    if success:
+                        return True, f"🏃 **{user.nome}** è fuggito dal dungeon!\n\n{msg}"
+                    elif "Non sei un partecipante" in msg:
+                        # Ghost participant case: User is targeted but not actually in dungeon (DB mismatch)
+                        # Allow standard flee to break the loop
+                        pass 
+                    else:
+                        return False, f"Non sei riuscito a fuggire dal dungeon: {msg}"
+            
             # Calculate flee chance: 0.5 * (mob_level / user_level)
             # Increases if enemy is stronger.
             user_level = user.livello if user.livello else 1
@@ -226,10 +245,10 @@ class PvEService:
         """Spawn a specific mob by name or a random one if None. Returns (success, msg, mob_id)"""
         session = self.db.get_session()
         
-        # Limit: max 1 active mob total (to prevent spam), unless ignore_limit is True (e.g. dungeons)
+        # Limit: max 10 active mobs total (to prevent spam), unless ignore_limit is True (e.g. dungeons)
         if not ignore_limit:
             active_mobs_count = session.query(Mob).filter(Mob.is_dead == False, Mob.is_boss == False, Mob.dungeon_id == None).count()
-            if active_mobs_count >= 1:
+            if active_mobs_count >= 10:
                 session.close()
                 return False, f"C'è già un mob attivo! Sconfiggilo prima di spawnarne altri.", None
             
@@ -518,6 +537,7 @@ class PvEService:
         """Attack current mob using BattleService"""
         session = self.db.get_session()
         extra_data = {}
+        rewards_to_distribute = [] # Initialize here to avoid UnboundLocalError later
         
         if mob_id:
             # Attack specific mob by ID
@@ -716,8 +736,9 @@ class PvEService:
             mana_regen = int(user.max_mana * regen_percent)
             
             # Apply regeneration
-            user.health = min(user.health + hp_regen, user.max_health)
-            user.mana = min(user.mana + mana_regen, user.max_mana)
+            user.health = min((user.health or 0) + hp_regen, user.max_health)
+            user.current_hp = user.health # Sync
+            user.mana = min((user.mana or 0) + mana_regen, user.max_mana)
             
             msg += f"\n💀 **{mob.name} è stato sconfitto!**\n"
             msg += f"💚 Rigenerato: +{hp_regen} HP, +{mana_regen} Mana\n"
@@ -806,10 +827,17 @@ class PvEService:
                         
                         p_xp = int(base_exp * penalty_factor_xp)
                         p_wumpa = int(base_wumpa * penalty_factor_wumpa)
-                        p_user_check = temp_session.query(Utente).filter_by(id_telegram=p.user_id).first()
+                        try:
+                            p_user_check = temp_session.query(Utente).filter_by(id_telegram=p.user_id).first()
+                            print(f"[DEBUG] distribute_rewards: Checking user {p.user_id}. Found: {p_user_check is not None}")
+                        except Exception as e:
+                            print(f"[ERROR] Failed to query user {p.user_id}: {e}")
+                            p_user_check = None
                         
                         is_stunned = False
                         has_turbo = False
+                        is_dead = False
+                        
                         if p_user_check:
                             if p_user_check.active_status_effects:
                                 try:
@@ -821,15 +849,18 @@ class PvEService:
                             if (p_user_check.daily_wumpa_earned or 0) >= 300:
                                 p_wumpa = int(p_wumpa * 0.9)
                         
-                        if is_stunned:
-                            p_xp = 0
-                            p_wumpa = 0
-                        
-                        # Check if user is dead (0 HP)
-                        is_dead = False
-                        current_hp = p_user_check.current_hp if hasattr(p_user_check, 'current_hp') and p_user_check.current_hp is not None else p_user_check.health
-                        if current_hp <= 0:
-                            is_dead = True
+                            if is_stunned:
+                                p_xp = 0
+                                p_wumpa = 0
+                            
+                            # Check if user is dead (0 HP)
+                            current_hp = p_user_check.current_hp if hasattr(p_user_check, 'current_hp') and p_user_check.current_hp is not None else p_user_check.health
+                            if current_hp <= 0:
+                                is_dead = True
+                                p_xp = 0
+                                p_wumpa = 0
+                        else:
+                            # User not found, skip rewards or set to 0
                             p_xp = 0
                             p_wumpa = 0
 
@@ -855,6 +886,7 @@ class PvEService:
                 finally:
                     temp_session.close()
                 
+                # Distribute Rewards
                 for reward in rewards_to_distribute:
                     user_id = reward['user_id']
                     p_xp = reward['p_xp']
@@ -895,6 +927,12 @@ class PvEService:
                         if level_up_info['next_level_exp']:
                             reward_line += f" (Prossimo livello: {level_up_info['next_level_exp']} Exp)"
                         reward_line += f" (+2 punti statistica)"
+                    
+                    # Ensure health is capped (just in case)
+                    u_final = self.user_service.get_user(user_id)
+                    if u_final and (u_final.health > u_final.max_health or (u_final.current_hp and u_final.current_hp > u_final.max_health)):
+                        self.user_service.recalculate_stats(user_id)
+                        
                     reward_details.append(reward_line)
                 
                 msg += f"\n\n💰 **Ricompense Distribuite!** ({actual_total_wumpa} {PointsName} totali)\n"
@@ -1059,8 +1097,12 @@ class PvEService:
         }
         
         for mob in mobs:
-            # Split 100% damage among all targets
-            multiplier = 1.0 / mob_count
+            # 70% to target, 50% to others
+            if target_mob_id and mob.id == target_mob_id:
+                multiplier = 0.7
+            else:
+                multiplier = 0.5
+            
             attacker = AttackerWrapper(user, character, base_damage, multiplier)
             
             # Prepare defender wrapper
@@ -1150,6 +1192,11 @@ class PvEService:
                     self.user_service.add_points_by_id(p.user_id, wumpa, is_drop=True)
                     self.season_manager.add_seasonal_exp(p.user_id, xp)
                     
+                    # Ensure health is capped for participants too (just in case)
+                    p_user = self.user_service.get_user(p.user_id)
+                    if p_user and (p_user.health > p_user.max_health or (p_user.current_hp and p_user.current_hp > p_user.max_health)):
+                        self.user_service.recalculate_stats(p.user_id)
+                    
                     if level_up_info['leveled_up']:
                         p_name = self.user_service.get_user(p.user_id).game_name or f"User {p.user_id}"
                         summary_msg += f"\n🎉 **{p_name}** è salito al livello **{level_up_info['new_level']}**!"
@@ -1161,7 +1208,32 @@ class PvEService:
             summary_msg += f"\n✨ Hai ricevuto: +{total_xp} Exp, +{total_wumpa} {PointsName}"
             summary_msg += f"\n👥 Ricompense distribuite a tutti i partecipanti!"
             
+        # Dungeon advancement check
+        dungeon_id = None
+        for m in mobs:
+            if m.dungeon_id:
+                dungeon_id = m.dungeon_id
+                break
+        
         session.close()
+        
+        if dungeon_id and dead_mobs:
+            from services.dungeon_service import DungeonService
+            ds = DungeonService()
+            
+            # Record deaths for stats
+            for m in dead_mobs:
+                ds.record_death(dungeon_id)
+                
+            dungeon_events, new_mob_ids = ds.check_step_completion(dungeon_id)
+            if dungeon_events:
+                if isinstance(dungeon_events, list):
+                    extra_data['dungeon_events'] = dungeon_events
+                else:
+                    summary_msg += f"\n\n{dungeon_events}"
+                
+                if new_mob_ids:
+                    extra_data['new_mob_ids'] = new_mob_ids
         
         # Trigger Counter-Attack (30% chance)
         attack_events = []
@@ -1271,11 +1343,40 @@ class PvEService:
                         participants = ds.get_dungeon_participants(mob.dungeon_id)
                         targets_pool = [p.user_id for p in participants]
                         
+                        # Fallback: If no participants found, the dungeon is empty/dead.
+                        if not targets_pool:
+                            print(f"[DEBUG] Dungeon Mob {mob.id}: No participants found. Checking failure...")
+                            is_failed, fail_msg = ds.check_dungeon_failure(mob.dungeon_id)
+                            if is_failed:
+                                print(f"[DEBUG] Dungeon {mob.dungeon_id} failed due to lack of participants.")
+                                # Add failure message event
+                                if fail_msg:
+                                    attack_events.append({
+                                        'message': fail_msg,
+                                        'image': None,
+                                        'mob_name': mob.name,
+                                        'mob_id': mob.id,
+                                        'last_message_id': None
+                                    })
+                                continue
+                        
                         # Filter by alive/not resting
                         valid_targets = []
                         for uid in targets_pool:
                             u = self.user_service.get_user(uid)
-                            if u and not self.user_service.check_fatigue(u) and not self.user_service.get_resting_status(u.id_telegram):
+                            if not u:
+                                print(f"[DEBUG] User {uid} not found")
+                                continue
+                            
+                            is_fatigued = self.user_service.check_fatigue(u)
+                            is_resting = self.user_service.get_resting_status(u.id_telegram)
+                            
+                            if is_fatigued:
+                                print(f"[DEBUG] User {uid} is fatigued (HP: {u.current_hp}/{u.max_health})")
+                            if is_resting:
+                                print(f"[DEBUG] User {uid} is resting")
+                                
+                            if not is_fatigued and not is_resting:
                                 valid_targets.append(uid)
                         
                         targets_pool = valid_targets
@@ -1433,10 +1534,14 @@ class PvEService:
                         'mob_id': mob_id,
                         'last_message_id': last_msg_id
                     })
+                    
+                    # Commit per mob to isolate failures
+                    session.commit()
+                    
                 except Exception as e:
                     print(f"Error in mob_random_attack loop for mob {mob.id}: {e}")
+                    session.rollback()
             
-            session.commit()
             session.close()
             return attack_events
         except Exception as e:

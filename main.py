@@ -867,6 +867,29 @@ def process_character_selection(message):
             bot.reply_to(message, f"❌ Errore durante la selezione: {str(e)}", reply_markup=get_main_menu())
         except:
             pass
+@bot.callback_query_handler(func=lambda call: call.data == "dungeon_leave_global")
+def handle_dungeon_leave_global(call):
+    """Handle leaving dungeon from global menu"""
+    user_id = call.from_user.id
+    
+    # Find user's dungeon
+    user_dungeon = dungeon_service.get_user_active_dungeon(user_id)
+    if not user_dungeon:
+        bot.answer_callback_query(call.id, "Non sei in nessun dungeon!", show_alert=True)
+        # Update message to remove outdated info
+        bot.edit_message_text("✅ Non sei in nessun dungeon.", call.message.chat.id, call.message.message_id)
+        return
+        
+    # Leave dungeon using its chat_id
+    success, msg = dungeon_service.leave_dungeon(user_dungeon.chat_id, user_id)
+    
+    if success:
+        bot.answer_callback_query(call.id, "Hai abbandonato il dungeon!")
+        bot.edit_message_text(f"🏃 **Hai abbandonato il dungeon {user_dungeon.name}!**\n\n{msg}", call.message.chat.id, call.message.message_id, parse_mode='markdown')
+    else:
+        bot.answer_callback_query(call.id, "Errore durante la fuga!", show_alert=True)
+        bot.send_message(call.message.chat.id, f"❌ Errore: {msg}")
+
 
 class BotCommands:
     def __init__(self, message, bot):
@@ -1090,6 +1113,22 @@ Per acquistare un gioco che vedi in un canale o gruppo:
 
     def handle_dungeons_list(self):
         """Show list of available dungeons or active lobby"""
+        # 1. Check if user is in a dungeon (Global check)
+        user_dungeon = dungeon_service.get_user_active_dungeon(self.user_id)
+        if user_dungeon:
+             # Show User Dungeon Status
+             markup = types.InlineKeyboardMarkup()
+             markup.add(types.InlineKeyboardButton("🏃 Abbandona Dungeon", callback_data="dungeon_leave_global"))
+             
+             msg = f"⚠️ **SEI IN UN DUNGEON!**\n\n"
+             msg += f"🏰 **{user_dungeon.name}**\n"
+             msg += f"Stato: {user_dungeon.status}\n"
+             msg += f"Piano: {user_dungeon.current_stage}/{user_dungeon.total_stages}\n\n"
+             msg += "Non puoi unirti ad altri dungeon finché non completi o abbandoni questo."
+             
+             self.bot.reply_to(self.message, msg, reply_markup=markup, parse_mode='markdown')
+             return
+
         # Check for active dungeon
         print(f"[DEBUG] handle_dungeons_list called for chat_id: {self.message.chat.id} (type: {self.message.chat.type})")
         active_dungeon = dungeon_service.get_active_dungeon(self.message.chat.id)
@@ -1164,6 +1203,8 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         success, msg = dungeon_service.leave_dungeon(self.message.chat.id, self.chatid)
         self.bot.reply_to(self.message, msg, parse_mode='markdown')
 
+
+
     def handle_dungeon(self):
         """Start dungeon registration"""
         # Parse ID
@@ -1198,8 +1239,14 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         # but ideally we check if they are the creator.
         # DungeonService.start_dungeon checks if registration exists.
         
-        success, msg = dungeon_service.start_dungeon(self.message.chat.id)
-        self.bot.send_message(self.message.chat.id, msg, parse_mode='markdown')
+        success, msg, events = dungeon_service.start_dungeon(self.message.chat.id)
+        
+        if success:
+            self.bot.send_message(self.message.chat.id, "🚀 **Dungeon Iniziato!**", parse_mode='markdown')
+            # Process events (dialogues, delays, spawns)
+            self.process_dungeon_events(events, self.message.chat.id)
+        else:
+            self.bot.send_message(self.message.chat.id, msg, parse_mode='markdown')
     
     def handle_kill_user(self):
         """dmin command to kill user or enemy. Usage: /kill (reply to user) OR /kill mob|boss [id/name]"""
@@ -1275,6 +1322,43 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         user_service.update_user(target_id, {'health': 0})
         self.bot.reply_to(self.message, f"💀 {target_user.nome} eliminato!")
     
+    def process_dungeon_events(self, events, chat_id):
+        """Process a list of dungeon events (messages, delays, spawns)"""
+        import time
+        
+        for event in events:
+            if event['type'] == 'message':
+                self.bot.send_message(chat_id, event['content'], parse_mode='markdown')
+            elif event['type'] == 'delay':
+                seconds = event.get('seconds', 3)
+                # Show typing action during delay
+                self.bot.send_chat_action(chat_id, 'typing')
+                time.sleep(seconds)
+            elif event['type'] == 'spawn':
+                # Spawn message is already formatted in content
+                self.bot.send_message(chat_id, event['content'], parse_mode='markdown')
+                
+                # Create cards for the spawned mobs
+                if 'mob_ids' in event:
+                    for mob_id in event['mob_ids']:
+                        # We need to get mob details to show image/buttons
+                        mob = pve_service.get_mob_status_by_id(mob_id)
+                        if mob:
+                            markup = get_combat_markup("mob", mob_id, chat_id)
+                            
+                            msg_text = f"⚠️ **{mob['name']}** è apparso!\n📊 Lv. {mob.get('level', 1)} | ⚡ Vel: {mob.get('speed', 30)} | 🛡️ Res: {mob.get('resistance', 0)}%\n❤️ Salute: {mob['health']}/{mob['max_health']} HP\n⚔️ Danno: {mob['attack']}"
+                            
+                            # Send with image if available
+                            if mob.get('image') and os.path.exists(mob['image']):
+                                try:
+                                    with open(mob['image'], 'rb') as photo:
+                                        self.bot.send_photo(chat_id, photo, caption=msg_text, reply_markup=markup, parse_mode='markdown')
+                                except Exception as e:
+                                    print(f"[ERROR] Failed to send mob photo: {e}")
+                                    self.bot.send_message(chat_id, msg_text, reply_markup=markup, parse_mode='markdown')
+                            else:
+                                self.bot.send_message(chat_id, msg_text, reply_markup=markup, parse_mode='markdown')
+
     def handle_find_missing_image(self):
         """Find a random character or mob without an image"""
         utente = user_service.get_user(self.chatid)
@@ -1405,8 +1489,27 @@ Per acquistare un gioco che vedi in un canale o gruppo:
 
     def handle_special_attack(self):
         utente = user_service.get_user(self.chatid)
-        success, msg = pve_service.use_special_attack(utente)
-        self.bot.reply_to(self.message, msg)
+        success, msg, extra_data, attack_events = pve_service.use_special_attack(utente, chat_id=self.chat_id)
+        self.bot.reply_to(self.message, msg, parse_mode='markdown')
+        
+        if success:
+            # Handle message deletion if mob died
+            if extra_data and 'delete_message_id' in extra_data:
+                try:
+                    self.bot.delete_message(self.chat_id, extra_data['delete_message_id'])
+                except:
+                    pass
+            
+            # Handle counter-attacks
+            if attack_events:
+                for event in attack_events:
+                    msg = event['message']
+                    image_path = event['image']
+                    mob_id = event['mob_id']
+                    old_msg_id = event['last_message_id']
+                    
+                    markup = get_combat_markup("mob", mob_id, self.chat_id)
+                    send_combat_message(self.chat_id, msg, image_path, markup, mob_id, old_msg_id)
 
     def handle_test_char(self):
         """Test character selection directly"""
@@ -3452,11 +3555,13 @@ def get_combat_markup(enemy_type, enemy_id, chat_id):
         types.InlineKeyboardButton("✨ Speciale", callback_data=f"special_attack_enemy|{enemy_type}|{enemy_id}")
     )
     
-    # AoE buttons
-    markup.add(
-        types.InlineKeyboardButton("💥 AoE", callback_data=f"aoe_attack_enemy|{enemy_type}|{enemy_id}"),
-        types.InlineKeyboardButton("🌟 Speciale AoE", callback_data=f"special_aoe_attack_enemy|{enemy_type}|{enemy_id}")
-    )
+    # AoE buttons (only if >= 2 mobs)
+    mob_count = pve_service.get_active_mobs_count(chat_id)
+    if mob_count >= 2:
+        markup.add(
+            types.InlineKeyboardButton("💥 AoE", callback_data=f"aoe_attack_enemy|{enemy_type}|{enemy_id}"),
+            types.InlineKeyboardButton("🌟 Speciale AoE", callback_data=f"special_aoe_attack_enemy|{enemy_type}|{enemy_id}")
+        )
     
     # Always show Flee button (requested by user)
     markup.add(types.InlineKeyboardButton("🏃 Fuggi", callback_data=f"flee_enemy|{enemy_type}|{enemy_id}"))
@@ -3768,14 +3873,26 @@ def callback_query(call):
         return
 
     elif call.data.startswith("dungeon_start|"):
-        success, msg, mob_ids = dungeon_service.start_dungeon(call.message.chat.id)
+        success, msg, events = dungeon_service.start_dungeon(call.message.chat.id)
         if success:
-             bot.edit_message_text(f"🚀 **DUNGEON INIZIATO!**\n\n{msg}", call.message.chat.id, call.message.message_id, parse_mode='markdown')
-             for mob_id in mob_ids:
-                 display_mob_spawn(bot, call.message.chat.id, mob_id)
+             bot.edit_message_text(f"🚀 **DUNGEON INIZIATO!**", call.message.chat.id, call.message.message_id, parse_mode='markdown')
              
-             # Immediate Attack!
-             trigger_dungeon_mob_attack(bot, call.message.chat.id, mob_ids)
+             # Process events
+             cmd = BotCommands(call.message, bot)
+             cmd.process_dungeon_events(events, call.message.chat.id)
+             
+             # We need to trigger attack for spawned mobs. 
+             # process_dungeon_events handles spawning messages but maybe not the immediate attack trigger?
+             # Let's check process_dungeon_events implementation.
+             # It doesn't trigger attack. We need to extract mob_ids from events to trigger attack.
+             
+             all_mob_ids = []
+             for event in events:
+                 if event['type'] == 'spawn' and 'mob_ids' in event:
+                     all_mob_ids.extend(event['mob_ids'])
+             
+             if all_mob_ids:
+                 trigger_dungeon_mob_attack(bot, call.message.chat.id, all_mob_ids)
         else:
              bot.answer_callback_query(call.id, msg, show_alert=True)
         return
@@ -5016,15 +5133,10 @@ def callback_query(call):
             success, msg, extra_data = pve_service.attack_mob(utente, damage, mob_id=enemy_id)
             
             # Handle Dungeon Events (Dialogues, Delays, Spawns)
+            # Handle Dungeon Events (Dialogues, Delays, Spawns)
             if extra_data and 'dungeon_events' in extra_data:
-                events = extra_data['dungeon_events']
-                for event in events:
-                    if event['type'] == 'message':
-                        bot.send_message(call.message.chat.id, event['content'], parse_mode='markdown')
-                    elif event['type'] == 'delay':
-                        time.sleep(event['seconds'])
-                    elif event['type'] == 'spawn':
-                        bot.send_message(call.message.chat.id, event['content'], parse_mode='markdown')
+                cmd = BotCommands(call.message, bot)
+                cmd.process_dungeon_events(extra_data['dungeon_events'], call.message.chat.id)
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -5129,15 +5241,10 @@ def callback_query(call):
         success, msg, extra_data = pve_service.attack_mob(utente, damage, use_special=True, mob_id=enemy_id, mana_cost=mana_cost)
         
         # Handle Dungeon Events (Dialogues, Delays, Spawns)
+        # Handle Dungeon Events (Dialogues, Delays, Spawns)
         if extra_data and 'dungeon_events' in extra_data:
-            events = extra_data['dungeon_events']
-            for event in events:
-                if event['type'] == 'message':
-                    bot.send_message(call.message.chat.id, event['content'], parse_mode='markdown')
-                elif event['type'] == 'delay':
-                    time.sleep(event['seconds'])
-                elif event['type'] == 'spawn':
-                    bot.send_message(call.message.chat.id, event['content'], parse_mode='markdown')
+            cmd = BotCommands(call.message, bot)
+            cmd.process_dungeon_events(extra_data['dungeon_events'], call.message.chat.id)
         
         if success:
             try:
@@ -5229,15 +5336,10 @@ def callback_query(call):
             success, msg, extra_data, attack_events = pve_service.attack_aoe(utente, damage, chat_id=call.message.chat.id, target_mob_id=enemy_id)
             
         # Handle Dungeon Events (Dialogues, Delays, Spawns)
+        # Handle Dungeon Events (Dialogues, Delays, Spawns)
         if extra_data and 'dungeon_events' in extra_data:
-            events = extra_data['dungeon_events']
-            for event in events:
-                if event['type'] == 'message':
-                    bot.send_message(call.message.chat.id, event['content'], parse_mode='markdown')
-                elif event['type'] == 'delay':
-                    time.sleep(event['seconds'])
-                elif event['type'] == 'spawn':
-                    bot.send_message(call.message.chat.id, event['content'], parse_mode='markdown')
+            cmd = BotCommands(call.message, bot)
+            cmd.process_dungeon_events(extra_data['dungeon_events'], call.message.chat.id)
         
         if success:
             try:
@@ -5407,7 +5509,7 @@ def callback_query(call):
         utente = user_service.get_user(user_id)
         
         # Try special attack on any active mob
-        success, msg = pve_service.use_special_attack(utente)
+        success, msg, extra_data, attack_events = pve_service.use_special_attack(utente, chat_id=call.message.chat.id)
         
         if success:
             try:
@@ -5440,6 +5542,17 @@ def callback_query(call):
                        
             username = escape_markdown(utente.username if utente.username else utente.nome)
             bot.send_message(call.message.chat.id, f"@{username}\n{msg}", reply_markup=markup, parse_mode='markdown')
+            
+            # Handle counter-attacks
+            if attack_events:
+                for event in attack_events:
+                    e_msg = event['message']
+                    image_path = event['image']
+                    e_mob_id = event['mob_id']
+                    old_msg_id = event['last_message_id']
+                    
+                    markup = get_combat_markup("mob", e_mob_id, call.message.chat.id)
+                    send_combat_message(call.message.chat.id, e_msg, image_path, markup, e_mob_id, old_msg_id)
         else:
             try:
                 bot.answer_callback_query(call.id, msg, show_alert=True)

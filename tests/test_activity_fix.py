@@ -11,7 +11,7 @@ from services.user_service import UserService
 class TestActivityTracking(unittest.TestCase):
     def test_text_message_tracking(self):
         user_service = UserService()
-        chat_id = 12345
+        chat_id = 14001
         user_id = 67890
         
         # Simulate tracking activity (which is what the 'any' handler now does for text)

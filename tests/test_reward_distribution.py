@@ -29,8 +29,8 @@ class TestRewardDistribution(unittest.TestCase):
             u.last_attack_time = datetime.datetime.now() - datetime.timedelta(hours=1)
             return u
 
-        self.u1_id = 12345
-        self.u2_id = 67890
+        self.u1_id = 20001
+        self.u2_id = 20002
         get_or_create(self.u1_id, "user1", "Alan Bimbati")
         get_or_create(self.u2_id, "user2", "Viktor")
         session.commit()
@@ -51,8 +51,10 @@ class TestRewardDistribution(unittest.TestCase):
         
         session = self.db.get_session()
         mob = session.query(Mob).filter_by(id=mob_id).first()
-        mob.health = 300
-        mob.max_health = 300
+        mob.health = 700
+        mob.max_health = 700
+        mob.attack_damage = 0
+        mob.resistance = 0
         session.commit()
         
         u1 = session.query(Utente).filter_by(id_telegram=self.u1_id).first()
@@ -60,13 +62,15 @@ class TestRewardDistribution(unittest.TestCase):
         session.close() # CLOSE BEFORE SERVICE CALL
         
         # User 1 attacks
-        success, msg = self.pve_service.attack_mob(u1, base_damage=200, mob_id=mob_id)
+        self.assertIsNotNone(u1, "User 1 not found")
+        success, msg, extra = self.pve_service.attack_mob(u1, base_damage=200, mob_id=mob_id)
         self.assertTrue(success)
         self.assertIn("Hai inflitto", msg)
         self.assertNotIn("sconfitto", msg)
         
         # User 2 attacks (kills it)
-        success, msg = self.pve_service.attack_mob(u2, base_damage=500, mob_id=mob_id)
+        self.assertIsNotNone(u2, "User 2 not found")
+        success, msg, extra = self.pve_service.attack_mob(u2, base_damage=500, mob_id=mob_id)
         self.assertTrue(success)
         self.assertIn("sconfitto", msg)
         
@@ -76,7 +80,7 @@ class TestRewardDistribution(unittest.TestCase):
         self.assertIn("Viktor", msg)
         self.assertIn("Ricompense Distribuite", msg)
         # Check for the new ratio format [Damage]/[Max HP]
-        self.assertIn("/300 dmg", msg) 
+        self.assertIn("/700 dmg", msg) 
         
         # Verify database updates
         session = self.db.get_session()

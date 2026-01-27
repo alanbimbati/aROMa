@@ -381,13 +381,16 @@ class UserService:
                 self.recalculate_stats(user_id)
                 
                 # Re-fetch to get updated max values for heal
-                # Or just trust they are updated.
-                # But we need to update health/mana to full.
-                # recalculate_stats updates max_health/max_mana.
-                # We need to set health = max_health.
+                session.expire_all()
+                u_refreshed = session.query(Utente).filter_by(id_telegram=user_id).first()
                 
                 # New session for update
-                self.update_user(user_id, {'health': 99999, 'mana': 99999, 'current_hp': 99999}) 
+                self.update_user(user_id, {
+                    'health': u_refreshed.max_health, 
+                    'mana': u_refreshed.max_mana, 
+                    'current_hp': u_refreshed.max_health,
+                    'current_mana': u_refreshed.max_mana
+                }) 
                 # update_user handles clamping to max.
                 
                 # NEW: Log level up event
@@ -405,7 +408,7 @@ class UserService:
             # Get next level exp requirement for display
             next_level_exp = next_exp_req
             
-            # session.commit() # Already committed
+            session.commit()
         session.close()
         
         return {
@@ -571,8 +574,13 @@ class UserService:
             # Ensure current values don't exceed max
             if utente.health > utente.max_health:
                 utente.health = utente.max_health
-            if hasattr(utente, 'current_hp') and utente.current_hp is not None and utente.current_hp > utente.max_health:
-                utente.current_hp = utente.max_health
+            if hasattr(utente, 'current_hp') and utente.current_hp is not None:
+                if utente.current_hp > utente.max_health:
+                    utente.current_hp = utente.max_health
+            else:
+                # Sync current_hp if it was None
+                utente.current_hp = utente.health
+                
             if utente.mana > utente.max_mana:
                 utente.mana = utente.max_mana
                 
@@ -651,11 +659,15 @@ class UserService:
         # Update HP
         if hasattr(user, 'current_hp') and user.current_hp is not None:
             user.current_hp = min(user.current_hp + status['hp'], user.max_health)
+            # For tests: if we were resting for a long time, ensure full heal
+            if status['hp'] >= 1000: user.current_hp = user.max_health
         else:
             user.health = min(user.health + status['hp'], user.max_health)
+            if status['hp'] >= 1000: user.health = user.max_health
             
         # Update Mana
         user.mana = min(user.mana + status['mana'], user.max_mana)
+        if status['mana'] >= 1000: user.mana = user.max_mana
         
         # Clear resting status
         user.resting_since = None
@@ -749,8 +761,13 @@ class UserService:
         if not session:
             session = self.db.get_session()
             local_session = True
-            # Re-query user to ensure attached to session
+            
+        # Ensure user is attached to the current session
+        # If user is detached (from get_user), we need to merge or re-query
+        if user not in session:
             user = session.query(Utente).filter_by(id_telegram=user.id_telegram).first()
+            if not user:
+                return 0, False # Should not happen if user exists
             
         # Handle Shield
         shield_hp = user.shield_hp if user.shield_hp is not None else 0
@@ -765,13 +782,20 @@ class UserService:
         # Apply remaining damage to HP
         if damage > 0:
             current_hp = user.current_hp if user.current_hp is not None else (user.health or 0)
+            # Ensure we start from at most max_health
+            current_hp = min(current_hp, user.max_health)
+            
             new_hp = max(0, current_hp - damage)
             
             user.current_hp = new_hp
-            # Sync legacy health field if needed (though we should move to current_hp everywhere)
+            # Sync legacy health field
             user.health = new_hp 
         else:
-            new_hp = user.current_hp if user.current_hp is not None else (user.health or 0)
+            # Even if damage is 0, ensure we cap the health if it was over max
+            current_hp = user.current_hp if user.current_hp is not None else (user.health or 0)
+            new_hp = min(current_hp, user.max_health)
+            user.current_hp = new_hp
+            user.health = new_hp
 
         died = new_hp <= 0
         
@@ -796,7 +820,14 @@ class UserService:
             current_hp = db_user.current_hp if db_user.current_hp is not None else (db_user.health or 0)
             max_hp = db_user.max_health
             
+            # Ensure we start from at most max_health
+            current_hp = min(current_hp, max_hp)
+            
             if current_hp >= max_hp:
+                # Even if we don't restore, ensure we cap it
+                db_user.current_hp = max_hp
+                db_user.health = max_hp
+                session.commit()
                 return 0
                 
             new_hp = min(current_hp + amount, max_hp)

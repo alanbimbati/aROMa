@@ -1,93 +1,90 @@
+
 import unittest
+import sys
+import os
+import datetime
+
+# Add project root to path
+sys.path.append(os.getcwd())
+
 from services.pve_service import PvEService
-from services.user_service import UserService
-from models.pve import Mob, Raid
+from models.user import Utente
+from models.pve import Mob
 from database import Database
 
 class TestPvE(unittest.TestCase):
     def setUp(self):
         self.db = Database()
+        self.session = self.db.get_session()
         self.pve_service = PvEService()
-        self.user_service = UserService()
         
-        # Test user
-        self.test_id = 123456789
-        self.user_service.create_user(self.test_id, "testuser", "Test", "User")
-        self.user = self.user_service.get_user(self.test_id)
-        self.user_service.update_user(self.test_id, {'luck_boost': 0})
-
+        self.chat_id = 210001
+        self.user_id = 21001
+        
+        self.user = Utente(
+            id_telegram=self.user_id, 
+            nome="PvETester", 
+            username="pvetester", 
+            livello=10,
+            health=1000,
+            max_health=1000,
+            base_damage=50
+        )
+        self.session.add(self.user)
+        self.session.commit()
+        
     def tearDown(self):
-        # Clean up test user
+        self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()
+        self.session.query(Mob).filter_by(chat_id=self.chat_id).delete()
+        self.session.commit()
+        self.session.close()
+        
+    def test_spawn_mob(self):
+        """Test spawning a mob"""
+        success, msg, mob_id = self.pve_service.spawn_specific_mob(chat_id=self.chat_id)
+        self.assertTrue(success)
+        self.assertIsNotNone(mob_id)
+        
         session = self.db.get_session()
-        session.query(Mob).delete() # Also clean mobs
-        session.query(Raid).delete() # Also clean raids
-        from models.user import Utente
-        session.query(Utente).filter_by(id_telegram=self.test_id).delete()
-        session.commit()
+        mob = session.query(Mob).filter_by(id=mob_id).first()
+        self.assertIsNotNone(mob)
+        self.assertEqual(mob.chat_id, self.chat_id)
         session.close()
 
-    def test_daily_mob(self):
-        # Clear existing mobs
-        session = self.db.get_session()
-        session.query(Mob).delete()
-        session.commit()
-        session.close()
-        
+    def test_attack_mob(self):
+        """Test attacking a mob"""
         # Spawn
-        self.pve_service.spawn_daily_mob()
+        self.pve_service.spawn_specific_mob(chat_id=self.chat_id)
         
         # Get mob ID
         session = self.db.get_session()
-        mob = session.query(Mob).filter_by(is_dead=False).first()
-        self.assertIsNotNone(mob)
+        mob = session.query(Mob).filter_by(chat_id=self.chat_id).first()
         mob_id = mob.id
-        print(f"Spawned mob ID: {mob_id}")
         session.close()
         
         # Attack
-        success, msg = self.pve_service.attack_mob(self.user, 1000) # Kill it
+        success, msg, _ = self.pve_service.attack_mob(self.user, 10)
+        self.assertTrue(success)
+        self.assertIn("Hai inflitto", msg)
+        
+        # Verify damage
+        session = self.db.get_session()
+        mob = session.query(Mob).filter_by(id=mob_id).first()
+        self.assertLess(mob.health, mob.max_health)
+        session.close()
+
+    def test_kill_mob(self):
+        """Test killing a mob"""
+        # Spawn
+        self.pve_service.spawn_specific_mob(chat_id=self.chat_id)
+        
+        # Attack
+        success, msg, _ = self.pve_service.attack_mob(self.user, 1000) # Kill it
         self.assertTrue(success)
         print(f"Attack result: {msg}")
         
         # Verify dead
         session = self.db.get_session()
-        mob = session.query(Mob).filter_by(id=mob_id).first()
+        mob = session.query(Mob).filter_by(chat_id=self.chat_id).first()
         self.assertTrue(mob.is_dead)
         session.close()
-
-    def test_raid(self):
-        # Clear existing raids
-        session = self.db.get_session()
-        session.query(Raid).delete()
-        session.commit()
-        session.close()
-        
-        # Spawn
-        self.pve_service.spawn_raid_boss()
-        
-        # Get raid ID
-        session = self.db.get_session()
-        raid = session.query(Raid).filter_by(is_active=True).first()
-        self.assertIsNotNone(raid)
-        raid_id = raid.id
-        print(f"Spawned raid ID: {raid_id}")
-        session.close()
-        
-        # Attack
-        success, msg = self.pve_service.attack_raid_boss(self.user, 100)
-        self.assertTrue(success)
-        print(f"Raid attack result: {msg}")
-        
-        # Kill
-        success, msg = self.pve_service.attack_raid_boss(self.user, 100000)
-        self.assertTrue(success)
-        print(f"Raid kill result: {msg}")
-        
-        # Verify inactive
-        session = self.db.get_session()
-        raid = session.query(Raid).filter_by(id=raid_id).first()
-        self.assertFalse(raid.is_active)
-        session.close()
-
-if __name__ == '__main__':
-    unittest.main()

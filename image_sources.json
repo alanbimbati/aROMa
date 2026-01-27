@@ -1,1307 +1,1307 @@
 {
   "vegito_blue": {
     "source": "pollinations_flux",
-    "path": "images/characters/vegito_blue.png",
+    "path": "images/miscellania/vegito_blue.png",
     "size": 16710,
     "generated_at": 1764430714.4333498
   },
   "tom_nook": {
     "source": "pollinations_flux",
-    "path": "images/characters/tom_nook.png",
+    "path": "images/miscellania/tom_nook.png",
     "size": 12614,
     "generated_at": 1764430775.319396
   },
   "hades": {
     "source": "unknown_small",
-    "path": "images/characters/hades.png",
+    "path": "images/miscellania/hades.png",
     "size": 13427
   },
   "parvati": {
     "source": "unknown_small",
-    "path": "images/characters/parvati.png",
+    "path": "images/miscellania/parvati.png",
     "size": 12270
   },
   "dr._nefarious": {
     "source": "unknown_small",
-    "path": "images/characters/dr._nefarious.png",
+    "path": "images/miscellania/dr._nefarious.png",
     "size": 17308
   },
   "artemis": {
     "source": "unknown_small",
-    "path": "images/characters/artemis.png",
+    "path": "images/miscellania/artemis.png",
     "size": 14194
   },
   "roy": {
     "source": "unknown_small",
-    "path": "images/characters/roy.png",
+    "path": "images/miscellania/roy.png",
     "size": 12066
   },
   "corrin": {
     "source": "unknown_small",
-    "path": "images/characters/corrin.png",
+    "path": "images/miscellania/corrin.png",
     "size": 12247
   },
   "mumbo_jumbo": {
     "source": "unknown_small",
-    "path": "images/characters/mumbo_jumbo.png",
+    "path": "images/miscellania/mumbo_jumbo.png",
     "size": 14296
   },
   "bayonetta": {
     "source": "unknown_small",
-    "path": "images/characters/bayonetta.png",
+    "path": "images/miscellania/bayonetta.png",
     "size": 16044
   },
   "ciri": {
     "source": "unknown_small",
-    "path": "images/characters/ciri.png",
+    "path": "images/miscellania/ciri.png",
     "size": 10109
   },
   "horus": {
     "source": "unknown_small",
-    "path": "images/characters/horus.png",
+    "path": "images/miscellania/horus.png",
     "size": 12240
   },
   "ike": {
     "source": "unknown_small",
-    "path": "images/characters/ike.png",
+    "path": "images/miscellania/ike.png",
     "size": 10299
   },
   "hebridean_black": {
     "source": "unknown_small",
-    "path": "images/characters/hebridean_black.png",
+    "path": "images/miscellania/hebridean_black.png",
     "size": 17827
   },
   "toggle": {
     "source": "unknown_small",
-    "path": "images/characters/toggle.png",
+    "path": "images/miscellania/toggle.png",
     "size": 12897
   },
   "zero": {
     "source": "unknown_large",
-    "path": "images/characters/zero.png",
+    "path": "images/miscellania/zero.png",
     "size": 789822
   },
   "zodiark": {
     "source": "unknown_small",
-    "path": "images/characters/zodiark.png",
+    "path": "images/miscellania/zodiark.png",
     "size": 14420
   },
   "apollo": {
     "source": "unknown_small",
-    "path": "images/characters/apollo.png",
+    "path": "images/miscellania/apollo.png",
     "size": 12331
   },
   "charmeleon": {
     "source": "unknown_small",
-    "path": "images/characters/charmeleon.png",
+    "path": "images/miscellania/charmeleon.png",
     "size": 16097
   },
   "raiden": {
     "source": "unknown_large",
-    "path": "images/characters/raiden.png",
+    "path": "images/miscellania/raiden.png",
     "size": 870483
   },
   "doom_slayer": {
     "source": "unknown_small",
-    "path": "images/characters/doom_slayer.png",
+    "path": "images/miscellania/doom_slayer.png",
     "size": 18394
   },
   "broly": {
     "source": "unknown_small",
-    "path": "images/characters/broly.png",
+    "path": "images/miscellania/broly.png",
     "size": 12698
   },
   "tiamat": {
     "source": "pollinations_flux",
-    "path": "images/characters/tiamat.png",
+    "path": "images/miscellania/tiamat.png",
     "size": 10976,
     "generated_at": 1764430822.9364815
   },
   "sephiroth": {
     "source": "unknown_large",
-    "path": "images/characters/sephiroth.png",
+    "path": "images/miscellania/sephiroth.png",
     "size": 809516
   },
   "gohan_ssj2": {
     "source": "pollinations_flux",
-    "path": "images/characters/gohan_ssj2.png",
+    "path": "images/miscellania/gohan_ssj2.png",
     "size": 18235,
     "generated_at": 1764430887.650751
   },
   "abby": {
     "source": "pollinations_flux",
-    "path": "images/characters/abby.png",
+    "path": "images/miscellania/abby.png",
     "size": 12214,
     "generated_at": 1764430972.4005992
   },
   "venusaur": {
     "source": "pollinations_flux",
-    "path": "images/characters/venusaur.png",
+    "path": "images/miscellania/venusaur.png",
     "size": 15561,
     "generated_at": 1764431061.3136604
   },
   "ridley": {
     "source": "pollinations_flux",
-    "path": "images/characters/ridley.png",
+    "path": "images/miscellania/ridley.png",
     "generated_at": 1764527474.467004
   },
   "athena": {
     "source": "pollinations_flux",
-    "path": "images/characters/athena.png",
+    "path": "images/miscellania/athena.png",
     "size": 13206,
     "generated_at": 1764431181.5172184
   },
   "big_boss": {
     "source": "pollinations_flux",
-    "path": "images/characters/big_boss.png",
+    "path": "images/miscellania/big_boss.png",
     "size": 14334,
     "generated_at": 1764431302.0634503
   },
   "connor": {
     "source": "unknown_small",
-    "path": "images/characters/connor.png",
+    "path": "images/miscellania/connor.png",
     "size": 12163
   },
   "rodin": {
     "source": "unknown_small",
-    "path": "images/characters/rodin.png",
+    "path": "images/miscellania/rodin.png",
     "size": 12425
   },
   "chinese_fireball": {
     "source": "unknown_small",
-    "path": "images/characters/chinese_fireball.png",
+    "path": "images/miscellania/chinese_fireball.png",
     "size": 16619
   },
   "edelgard": {
     "source": "unknown_small",
-    "path": "images/characters/edelgard.png",
+    "path": "images/miscellania/edelgard.png",
     "size": 14333
   },
   "victor_sullivan": {
     "source": "unknown_small",
-    "path": "images/characters/victor_sullivan.png",
+    "path": "images/miscellania/victor_sullivan.png",
     "size": 18704
   },
   "ho-oh": {
     "source": "unknown_small",
-    "path": "images/characters/ho-oh.png",
+    "path": "images/miscellania/ho-oh.png",
     "size": 12405
   },
   "vergil": {
     "source": "unknown_small",
-    "path": "images/characters/vergil.png",
+    "path": "images/miscellania/vergil.png",
     "size": 13279
   },
   "scorpion": {
     "source": "unknown_small",
-    "path": "images/characters/scorpion.png",
+    "path": "images/miscellania/scorpion.png",
     "size": 14958
   },
   "brahma": {
     "source": "unknown_small",
-    "path": "images/characters/brahma.png",
+    "path": "images/miscellania/brahma.png",
     "size": 12660
   },
   "alexander": {
     "source": "unknown_small",
-    "path": "images/characters/alexander.png",
+    "path": "images/miscellania/alexander.png",
     "size": 15953
   },
   "catalonian_fireball": {
     "source": "unknown_small",
-    "path": "images/characters/catalonian_fireball.png",
+    "path": "images/miscellania/catalonian_fireball.png",
     "size": 17139
   },
   "ryu": {
     "source": "unknown_large",
-    "path": "images/characters/ryu.png",
+    "path": "images/miscellania/ryu.png",
     "size": 882246
   },
   "vegeta": {
     "source": "unknown_small",
-    "path": "images/characters/vegeta.png",
+    "path": "images/miscellania/vegeta.png",
     "size": 14539
   },
   "vegeta_ssj_blue": {
     "source": "unknown_small",
-    "path": "images/characters/vegeta_ssj_blue.png",
+    "path": "images/miscellania/vegeta_ssj_blue.png",
     "size": 20260
   },
   "ivysaur": {
     "source": "unknown_large",
-    "path": "images/characters/ivysaur.png",
+    "path": "images/miscellania/ivysaur.png",
     "size": 594512
   },
   "porunga": {
     "source": "unknown_small",
-    "path": "images/characters/porunga.png",
+    "path": "images/miscellania/porunga.png",
     "size": 15018
   },
   "mega_man": {
     "source": "unknown_small",
-    "path": "images/characters/mega_man.png",
+    "path": "images/miscellania/mega_man.png",
     "size": 14465
   },
   "lara_croft": {
     "source": "unknown_small",
-    "path": "images/characters/lara_croft.png",
+    "path": "images/miscellania/lara_croft.png",
     "size": 13889
   },
   "geralt": {
     "source": "unknown_small",
-    "path": "images/characters/geralt.png",
+    "path": "images/miscellania/geralt.png",
     "size": 13133
   },
   "goku_ultra_instinct": {
     "source": "unknown_small",
-    "path": "images/characters/goku_ultra_instinct.png",
+    "path": "images/miscellania/goku_ultra_instinct.png",
     "size": 19231
   },
   "susanoo": {
     "source": "unknown_small",
-    "path": "images/characters/susanoo.png",
+    "path": "images/miscellania/susanoo.png",
     "size": 15323
   },
   "heimdall": {
     "source": "unknown_small",
-    "path": "images/characters/heimdall.png",
+    "path": "images/miscellania/heimdall.png",
     "size": 13137
   },
   "king_dedede": {
     "source": "unknown_small",
-    "path": "images/characters/king_dedede.png",
+    "path": "images/miscellania/king_dedede.png",
     "size": 15485
   },
   "goku_ssj": {
     "source": "unknown_small",
-    "path": "images/characters/goku_ssj.png",
+    "path": "images/miscellania/goku_ssj.png",
     "size": 16472
   },
   "hera": {
     "source": "unknown_small",
-    "path": "images/characters/hera.png",
+    "path": "images/miscellania/hera.png",
     "size": 11191
   },
   "aku_aku_spirit": {
     "source": "unknown_small",
-    "path": "images/characters/aku_aku_spirit.png",
+    "path": "images/miscellania/aku_aku_spirit.png",
     "size": 15381
   },
   "crash_bandicoot_evolved": {
     "source": "unknown_small",
-    "path": "images/characters/crash_bandicoot_evolved.png",
+    "path": "images/miscellania/crash_bandicoot_evolved.png",
     "size": 21239
   },
   "vegeta_ssj2": {
     "source": "unknown_small",
-    "path": "images/characters/vegeta_ssj2.png",
+    "path": "images/miscellania/vegeta_ssj2.png",
     "size": 19552
   },
   "ares": {
     "source": "unknown_small",
-    "path": "images/characters/ares.png",
+    "path": "images/miscellania/ares.png",
     "size": 12787
   },
   "squirtle": {
     "source": "unknown_large",
-    "path": "images/characters/squirtle.png",
+    "path": "images/miscellania/squirtle.png",
     "size": 477144
   },
   "zeus": {
     "source": "unknown_small",
-    "path": "images/characters/zeus.png",
+    "path": "images/miscellania/zeus.png",
     "size": 12416
   },
   "hungarian_horntail": {
     "source": "unknown_small",
-    "path": "images/characters/hungarian_horntail.png",
+    "path": "images/miscellania/hungarian_horntail.png",
     "size": 15422
   },
   "riku": {
     "source": "unknown_small",
-    "path": "images/characters/riku.png",
+    "path": "images/miscellania/riku.png",
     "size": 10743
   },
   "pikachu": {
     "source": "unknown_small",
-    "path": "images/characters/pikachu.png",
+    "path": "images/miscellania/pikachu.png",
     "size": 13468
   },
   "wolf": {
     "source": "unknown_small",
-    "path": "images/characters/wolf.png",
+    "path": "images/miscellania/wolf.png",
     "size": 12185
   },
   "marth": {
     "source": "unknown_small",
-    "path": "images/characters/marth.png",
+    "path": "images/miscellania/marth.png",
     "size": 11842
   },
   "anima": {
     "source": "unknown_small",
-    "path": "images/characters/anima.png",
+    "path": "images/miscellania/anima.png",
     "size": 12435
   },
   "hermes": {
     "source": "unknown_small",
-    "path": "images/characters/hermes.png",
+    "path": "images/miscellania/hermes.png",
     "size": 12594
   },
   "common_welsh_green": {
     "source": "unknown_small",
-    "path": "images/characters/common_welsh_green.png",
+    "path": "images/miscellania/common_welsh_green.png",
     "size": 20306
   },
   "lucas": {
     "source": "unknown_small",
-    "path": "images/characters/lucas.png",
+    "path": "images/miscellania/lucas.png",
     "size": 12548
   },
   "yuna": {
     "source": "unknown_small",
-    "path": "images/characters/yuna.png",
+    "path": "images/miscellania/yuna.png",
     "size": 11695
   },
   "goku_ssj4": {
     "source": "unknown_small",
-    "path": "images/characters/goku_ssj4.png",
+    "path": "images/miscellania/goku_ssj4.png",
     "size": 17079
   },
   "doomtrain": {
     "source": "unknown_small",
-    "path": "images/characters/doomtrain.png",
+    "path": "images/miscellania/doomtrain.png",
     "size": 14548
   },
   "spike": {
     "source": "unknown_large",
-    "path": "images/characters/spike.png",
+    "path": "images/miscellania/spike.png",
     "size": 849918
   },
   "vegeta_ssj4": {
     "source": "unknown_small",
-    "path": "images/characters/vegeta_ssj4.png",
+    "path": "images/miscellania/vegeta_ssj4.png",
     "size": 18899
   },
   "ness": {
     "source": "unknown_small",
-    "path": "images/characters/ness.png",
+    "path": "images/miscellania/ness.png",
     "size": 11681
   },
   "herobrine": {
     "source": "unknown_small",
-    "path": "images/characters/herobrine.png",
+    "path": "images/miscellania/herobrine.png",
     "size": 13538
   },
   "octoling": {
     "source": "pollinations_flux",
-    "path": "images/characters/octoling.png",
+    "path": "images/miscellania/octoling.png",
     "size": 15339,
     "generated_at": 1764431778.7439146
   },
   "isaac": {
     "source": "pollinations_flux",
-    "path": "images/characters/isaac.png",
+    "path": "images/miscellania/isaac.png",
     "size": 11971,
     "generated_at": 1764431823.8689961
   },
   "knights_of_the_round": {
     "source": "unknown_small",
-    "path": "images/characters/knights_of_the_round.png",
+    "path": "images/miscellania/knights_of_the_round.png",
     "size": 21713
   },
   "mario": {
     "source": "unknown_large",
-    "path": "images/characters/mario.png",
+    "path": "images/miscellania/mario.png",
     "size": 496899
   },
   "sam_nishimura": {
     "source": "unknown_small",
-    "path": "images/characters/sam_nishimura.png",
+    "path": "images/miscellania/sam_nishimura.png",
     "size": 16499
   },
   "agent_3": {
     "source": "unknown_small",
-    "path": "images/characters/agent_3.png",
+    "path": "images/miscellania/agent_3.png",
     "size": 15157
   },
   "louie": {
     "source": "unknown_small",
-    "path": "images/characters/louie.png",
+    "path": "images/miscellania/louie.png",
     "size": 11583
   },
   "ken": {
     "source": "unknown_small",
-    "path": "images/characters/ken.png",
+    "path": "images/miscellania/ken.png",
     "size": 11022
   },
   "slime": {
     "source": "unknown_large",
-    "path": "images/characters/slime.png",
+    "path": "images/miscellania/slime.png",
     "size": 344913
   },
   "leviathan": {
     "source": "unknown_small",
-    "path": "images/characters/leviathan.png",
+    "path": "images/miscellania/leviathan.png",
     "size": 13295
   },
   "wartortle": {
     "source": "unknown_large",
-    "path": "images/characters/wartortle.png",
+    "path": "images/miscellania/wartortle.png",
     "size": 630818
   },
   "antipodean_opaleye": {
     "source": "unknown_small",
-    "path": "images/characters/antipodean_opaleye.png",
+    "path": "images/miscellania/antipodean_opaleye.png",
     "size": 21012
   },
   "vishnu": {
     "source": "unknown_small",
-    "path": "images/characters/vishnu.png",
+    "path": "images/miscellania/vishnu.png",
     "size": 12557
   },
   "set": {
     "source": "unknown_small",
-    "path": "images/characters/set.png",
+    "path": "images/miscellania/set.png",
     "size": 11522
   },
   "jiren": {
     "source": "unknown_small",
-    "path": "images/characters/jiren.png",
+    "path": "images/miscellania/jiren.png",
     "size": 10882
   },
   "loki": {
     "source": "unknown_small",
-    "path": "images/characters/loki.png",
+    "path": "images/miscellania/loki.png",
     "size": 10514
   },
   "porky": {
     "source": "unknown_small",
-    "path": "images/characters/porky.png",
+    "path": "images/miscellania/porky.png",
     "size": 13224
   },
   "raiden_mgs": {
     "source": "unknown_large",
-    "path": "images/characters/raiden_mgs.png",
+    "path": "images/miscellania/raiden_mgs.png",
     "size": 830931
   },
   "daxter": {
     "source": "unknown_small",
-    "path": "images/characters/daxter.png",
+    "path": "images/miscellania/daxter.png",
     "size": 14188
   },
   "inkling": {
     "source": "unknown_small",
-    "path": "images/characters/inkling.png",
+    "path": "images/miscellania/inkling.png",
     "size": 11482
   },
   "sonic_super": {
     "source": "unknown_small",
-    "path": "images/characters/sonic_super.png",
+    "path": "images/miscellania/sonic_super.png",
     "size": 17055
   },
   "ark": {
     "source": "unknown_small",
-    "path": "images/characters/ark.png",
+    "path": "images/miscellania/ark.png",
     "size": 10738
   },
   "super_shenron": {
     "source": "unknown_small",
-    "path": "images/characters/super_shenron.png",
+    "path": "images/miscellania/super_shenron.png",
     "size": 16340
   },
   "shenron": {
     "source": "unknown_small",
-    "path": "images/characters/shenron.png",
+    "path": "images/miscellania/shenron.png",
     "size": 13958
   },
   "tyr": {
     "source": "unknown_small",
-    "path": "images/characters/tyr.png",
+    "path": "images/miscellania/tyr.png",
     "size": 10001
   },
   "raichu": {
     "source": "unknown_large",
-    "path": "images/characters/raichu.png",
+    "path": "images/miscellania/raichu.png",
     "size": 656399
   },
   "osiris": {
     "source": "unknown_small",
-    "path": "images/characters/osiris.png",
+    "path": "images/miscellania/osiris.png",
     "size": 12130
   },
   "olimar": {
     "source": "unknown_small",
-    "path": "images/characters/olimar.png",
+    "path": "images/miscellania/olimar.png",
     "size": 12929
   },
   "peruvian_vipertooth": {
     "source": "unknown_small",
-    "path": "images/characters/peruvian_vipertooth.png",
+    "path": "images/miscellania/peruvian_vipertooth.png",
     "size": 19602
   },
   "mewtwo": {
     "source": "unknown_small",
-    "path": "images/characters/mewtwo.png",
+    "path": "images/miscellania/mewtwo.png",
     "size": 14066
   },
   "chrom": {
     "source": "unknown_small",
-    "path": "images/characters/chrom.png",
+    "path": "images/miscellania/chrom.png",
     "size": 13157
   },
   "jonah_maiava": {
     "source": "unknown_small",
-    "path": "images/characters/jonah_maiava.png",
+    "path": "images/miscellania/jonah_maiava.png",
     "size": 14883
   },
   "kali": {
     "source": "unknown_small",
-    "path": "images/characters/kali.png",
+    "path": "images/miscellania/kali.png",
     "size": 10373
   },
   "shulk": {
     "source": "unknown_small",
-    "path": "images/characters/shulk.png",
+    "path": "images/miscellania/shulk.png",
     "size": 12075
   },
   "ganondorf": {
     "source": "unknown_large",
-    "path": "images/characters/ganondorf.png",
+    "path": "images/miscellania/ganondorf.png",
     "size": 826754
   },
   "bahamut": {
     "source": "unknown_small",
-    "path": "images/characters/bahamut.png",
+    "path": "images/miscellania/bahamut.png",
     "size": 13274
   },
   "ellie": {
     "source": "unknown_small",
-    "path": "images/characters/ellie.png",
+    "path": "images/miscellania/ellie.png",
     "size": 9514
   },
   "gohan_ssj": {
     "source": "unknown_small",
-    "path": "images/characters/gohan_ssj.png",
+    "path": "images/miscellania/gohan_ssj.png",
     "size": 16977
   },
   "chocobo": {
     "source": "unknown_large",
-    "path": "images/characters/chocobo.png",
+    "path": "images/miscellania/chocobo.png",
     "size": 818043
   },
   "ultima": {
     "source": "unknown_small",
-    "path": "images/characters/ultima.png",
+    "path": "images/miscellania/ultima.png",
     "size": 11715
   },
   "oddsock": {
     "source": "unknown_small",
-    "path": "images/characters/oddsock.png",
+    "path": "images/miscellania/oddsock.png",
     "size": 16355
   },
   "crash_bandicoot": {
     "source": "unknown_large",
-    "path": "images/characters/crash_bandicoot.png",
+    "path": "images/miscellania/crash_bandicoot.png",
     "size": 796936
   },
   "yoshi": {
     "source": "unknown_large",
-    "path": "images/characters/yoshi.png",
+    "path": "images/miscellania/yoshi.png",
     "size": 545832
   },
   "ukrainian_ironbelly": {
     "source": "unknown_small",
-    "path": "images/characters/ukrainian_ironbelly.png",
+    "path": "images/miscellania/ukrainian_ironbelly.png",
     "size": 18255
   },
   "garrus": {
     "source": "unknown_small",
-    "path": "images/characters/garrus.png",
+    "path": "images/miscellania/garrus.png",
     "size": 13532
   },
   "kyogre": {
     "source": "unknown_small",
-    "path": "images/characters/kyogre.png",
+    "path": "images/miscellania/kyogre.png",
     "size": 15747
   },
   "dante": {
     "source": "unknown_small",
-    "path": "images/characters/dante.png",
+    "path": "images/miscellania/dante.png",
     "size": 12845
   },
   "robin": {
     "source": "unknown_small",
-    "path": "images/characters/robin.png",
+    "path": "images/miscellania/robin.png",
     "size": 12441
   },
   "malefor": {
     "source": "unknown_small",
-    "path": "images/characters/malefor.png",
+    "path": "images/miscellania/malefor.png",
     "size": 14095
   },
   "sub-zero": {
     "source": "unknown_small",
-    "path": "images/characters/sub-zero.png",
+    "path": "images/miscellania/sub-zero.png",
     "size": 16118
   },
   "charizard": {
     "source": "unknown_large",
-    "path": "images/characters/charizard.png",
+    "path": "images/miscellania/charizard.png",
     "size": 738743
   },
   "spyro": {
     "source": "unknown_large",
-    "path": "images/characters/spyro.png",
+    "path": "images/miscellania/spyro.png",
     "size": 766053
   },
   "meta_knight": {
     "source": "unknown_small",
-    "path": "images/characters/meta_knight.png",
+    "path": "images/miscellania/meta_knight.png",
     "size": 15914
   },
   "portuguese_long-snout": {
     "source": "unknown_small",
-    "path": "images/characters/portuguese_long-snout.png",
+    "path": "images/miscellania/portuguese_long-snout.png",
     "size": 19829
   },
   "giratina": {
     "source": "unknown_small",
-    "path": "images/characters/giratina.png",
+    "path": "images/miscellania/giratina.png",
     "size": 12539
   },
   "seifer": {
     "source": "unknown_small",
-    "path": "images/characters/seifer.png",
+    "path": "images/miscellania/seifer.png",
     "size": 12196
   },
   "yojimbo": {
     "source": "unknown_small",
-    "path": "images/characters/yojimbo.png",
+    "path": "images/miscellania/yojimbo.png",
     "size": 13402
   },
   "erend": {
     "source": "unknown_small",
-    "path": "images/characters/erend.png",
+    "path": "images/miscellania/erend.png",
     "size": 11719
   },
   "luigi": {
     "source": "unknown_small",
-    "path": "images/characters/luigi.png",
+    "path": "images/miscellania/luigi.png",
     "size": 10537
   },
   "pit": {
     "source": "unknown_small",
-    "path": "images/characters/pit.png",
+    "path": "images/miscellania/pit.png",
     "size": 9126
   },
   "goku_ssj2": {
     "source": "unknown_small",
-    "path": "images/characters/goku_ssj2.png",
+    "path": "images/miscellania/goku_ssj2.png",
     "size": 17820
   },
   "norbert": {
     "source": "unknown_small",
-    "path": "images/characters/norbert.png",
+    "path": "images/miscellania/norbert.png",
     "size": 13742
   },
   "liara": {
     "source": "unknown_small",
-    "path": "images/characters/liara.png",
+    "path": "images/miscellania/liara.png",
     "size": 9891
   },
   "amaterasu": {
     "source": "unknown_small",
-    "path": "images/characters/amaterasu.png",
+    "path": "images/miscellania/amaterasu.png",
     "size": 16162
   },
   "garet": {
     "source": "unknown_small",
-    "path": "images/characters/garet.png",
+    "path": "images/miscellania/garet.png",
     "size": 13031
   },
   "vega": {
     "source": "unknown_small",
-    "path": "images/characters/vega.png",
+    "path": "images/miscellania/vega.png",
     "size": 14023
   },
   "kairi": {
     "source": "unknown_small",
-    "path": "images/characters/kairi.png",
+    "path": "images/miscellania/kairi.png",
     "size": 10845
   },
   "arbiter": {
     "source": "unknown_small",
-    "path": "images/characters/arbiter.png",
+    "path": "images/miscellania/arbiter.png",
     "size": 12966
   },
   "romanian_longhorn": {
     "source": "unknown_small",
-    "path": "images/characters/romanian_longhorn.png",
+    "path": "images/miscellania/romanian_longhorn.png",
     "size": 16555
   },
   "dragon_keeper": {
     "source": "unknown_small",
-    "path": "images/characters/dragon_keeper.png",
+    "path": "images/miscellania/dragon_keeper.png",
     "size": 18710
   },
   "captain_falcon": {
     "source": "unknown_small",
-    "path": "images/characters/captain_falcon.png",
+    "path": "images/miscellania/captain_falcon.png",
     "size": 16306
   },
   "goku": {
     "source": "unknown_large",
-    "path": "images/characters/goku.png",
+    "path": "images/miscellania/goku.png",
     "size": 817795
   },
   "celebi": {
     "source": "unknown_small",
-    "path": "images/characters/celebi.png",
+    "path": "images/miscellania/celebi.png",
     "size": 12335
   },
   "freya": {
     "source": "unknown_small",
-    "path": "images/characters/freya.png",
+    "path": "images/miscellania/freya.png",
     "size": 12809
   },
   "lugia": {
     "source": "unknown_small",
-    "path": "images/characters/lugia.png",
+    "path": "images/miscellania/lugia.png",
     "size": 11858
   },
   "reyn": {
     "source": "unknown_small",
-    "path": "images/characters/reyn.png",
+    "path": "images/miscellania/reyn.png",
     "size": 12610
   },
   "palkia": {
     "source": "unknown_small",
-    "path": "images/characters/palkia.png",
+    "path": "images/miscellania/palkia.png",
     "size": 11232
   },
   "goku_ssj_blue": {
     "source": "unknown_small",
-    "path": "images/characters/goku_ssj_blue.png",
+    "path": "images/miscellania/goku_ssj_blue.png",
     "size": 19144
   },
   "exodus": {
     "source": "unknown_small",
-    "path": "images/characters/exodus.png",
+    "path": "images/miscellania/exodus.png",
     "size": 14422
   },
   "isabelle": {
     "source": "unknown_small",
-    "path": "images/characters/isabelle.png",
+    "path": "images/miscellania/isabelle.png",
     "size": 13591
   },
   "samurai_goroh": {
     "source": "unknown_small",
-    "path": "images/characters/samurai_goroh.png",
+    "path": "images/miscellania/samurai_goroh.png",
     "size": 17471
   },
   "aku_aku": {
     "source": "unknown_large",
-    "path": "images/characters/aku_aku.png",
+    "path": "images/miscellania/aku_aku.png",
     "size": 834136
   },
   "gringotts_dragon": {
     "source": "unknown_small",
-    "path": "images/characters/gringotts_dragon.png",
+    "path": "images/miscellania/gringotts_dragon.png",
     "size": 18690
   },
   "ayane": {
     "source": "unknown_small",
-    "path": "images/characters/ayane.png",
+    "path": "images/miscellania/ayane.png",
     "size": 14216
   },
   "naruto": {
     "source": "unknown_large",
-    "path": "images/characters/naruto.png",
+    "path": "images/miscellania/naruto.png",
     "size": 842673
   },
   "phoenix": {
     "source": "unknown_small",
-    "path": "images/characters/phoenix.png",
+    "path": "images/miscellania/phoenix.png",
     "size": 13842
   },
   "solid_snake": {
     "source": "unknown_large",
-    "path": "images/characters/solid_snake.png",
+    "path": "images/miscellania/solid_snake.png",
     "size": 739050
   },
   "lucina": {
     "source": "unknown_small",
-    "path": "images/characters/lucina.png",
+    "path": "images/miscellania/lucina.png",
     "size": 11796
   },
   "ivan": {
     "source": "unknown_small",
-    "path": "images/characters/ivan.png",
+    "path": "images/miscellania/ivan.png",
     "size": 11178
   },
   "barbara": {
     "source": "unknown_small",
-    "path": "images/characters/barbara.png",
+    "path": "images/miscellania/barbara.png",
     "size": 12415
   },
   "kirby": {
     "source": "unknown_small",
-    "path": "images/characters/kirby.png",
+    "path": "images/miscellania/kirby.png",
     "size": 12298
   },
   "altair": {
     "source": "unknown_small",
-    "path": "images/characters/altair.png",
+    "path": "images/miscellania/altair.png",
     "size": 11661
   },
   "ra": {
     "source": "unknown_small",
-    "path": "images/characters/ra.png",
+    "path": "images/miscellania/ra.png",
     "size": 10352
   },
   "thor": {
     "source": "unknown_small",
-    "path": "images/characters/thor.png",
+    "path": "images/miscellania/thor.png",
     "size": 10598
   },
   "joel": {
     "source": "unknown_small",
-    "path": "images/characters/joel.png",
+    "path": "images/miscellania/joel.png",
     "size": 11305
   },
   "cynder": {
     "source": "unknown_small",
-    "path": "images/characters/cynder.png",
+    "path": "images/miscellania/cynder.png",
     "size": 14779
   },
   "tails": {
     "source": "unknown_large",
-    "path": "images/characters/tails.png",
+    "path": "images/miscellania/tails.png",
     "size": 713992
   },
   "kazooie": {
     "source": "unknown_small",
-    "path": "images/characters/kazooie.png",
+    "path": "images/miscellania/kazooie.png",
     "size": 14040
   },
   "coco_bandicoot": {
     "source": "unknown_small",
-    "path": "images/characters/coco_bandicoot.png",
+    "path": "images/miscellania/coco_bandicoot.png",
     "size": 17253
   },
   "kasumi": {
     "source": "unknown_small",
-    "path": "images/characters/kasumi.png",
+    "path": "images/miscellania/kasumi.png",
     "size": 13600
   },
   "nathan_drake": {
     "source": "unknown_small",
-    "path": "images/characters/nathan_drake.png",
+    "path": "images/miscellania/nathan_drake.png",
     "size": 15484
   },
   "chloe_frazer": {
     "source": "unknown_small",
-    "path": "images/characters/chloe_frazer.png",
+    "path": "images/miscellania/chloe_frazer.png",
     "size": 15833
   },
   "blastoise": {
     "source": "unknown_large",
-    "path": "images/characters/blastoise.png",
+    "path": "images/miscellania/blastoise.png",
     "size": 743312
   },
   "akuma": {
     "source": "unknown_large",
-    "path": "images/characters/akuma.png",
+    "path": "images/miscellania/akuma.png",
     "size": 893239
   },
   "samus": {
     "source": "pollinations_flux",
-    "path": "images/characters/samus.png",
+    "path": "images/miscellania/samus.png",
     "generated_at": 1764527472.1344614
   },
   "dark_pit": {
     "source": "unknown_small",
-    "path": "images/characters/dark_pit.png",
+    "path": "images/miscellania/dark_pit.png",
     "size": 13175
   },
   "tidus": {
     "source": "unknown_large",
-    "path": "images/characters/tidus.png",
+    "path": "images/miscellania/tidus.png",
     "size": 963285
   },
   "ryu_hayabusa": {
     "source": "unknown_small",
-    "path": "images/characters/ryu_hayabusa.png",
+    "path": "images/miscellania/ryu_hayabusa.png",
     "size": 16081
   },
   "fox_mccloud": {
     "source": "unknown_small",
-    "path": "images/characters/fox_mccloud.png",
+    "path": "images/miscellania/fox_mccloud.png",
     "size": 15467
   },
   "knuckles": {
     "source": "unknown_large",
-    "path": "images/characters/knuckles.png",
+    "path": "images/miscellania/knuckles.png",
     "size": 736817
   },
   "goku_ssj3": {
     "source": "unknown_small",
-    "path": "images/characters/goku_ssj3.png",
+    "path": "images/miscellania/goku_ssj3.png",
     "size": 18112
   },
   "ezio": {
     "source": "unknown_small",
-    "path": "images/characters/ezio.png",
+    "path": "images/miscellania/ezio.png",
     "size": 10390
   },
   "clank": {
     "source": "unknown_small",
-    "path": "images/characters/clank.png",
+    "path": "images/miscellania/clank.png",
     "size": 12533
   },
   "x": {
     "source": "unknown_large",
-    "path": "images/characters/x.png",
+    "path": "images/miscellania/x.png",
     "size": 661662
   },
   "rayman": {
     "source": "unknown_small",
-    "path": "images/characters/rayman.png",
+    "path": "images/miscellania/rayman.png",
     "size": 13816
   },
   "master_chief": {
     "source": "unknown_small",
-    "path": "images/characters/master_chief.png",
+    "path": "images/miscellania/master_chief.png",
     "size": 16881
   },
   "charmander": {
     "source": "unknown_large",
-    "path": "images/characters/charmander.png",
+    "path": "images/miscellania/charmander.png",
     "size": 571813
   },
   "fiora": {
     "source": "unknown_small",
-    "path": "images/characters/fiora.png",
+    "path": "images/miscellania/fiora.png",
     "size": 11422
   },
   "black_shadow": {
     "source": "unknown_small",
-    "path": "images/characters/black_shadow.png",
+    "path": "images/miscellania/black_shadow.png",
     "size": 19483
   },
   "bulbasaur": {
     "source": "unknown_small",
-    "path": "images/characters/bulbasaur.png",
+    "path": "images/miscellania/bulbasaur.png",
     "size": 14525
   },
   "byleth": {
     "source": "unknown_small",
-    "path": "images/characters/byleth.png",
+    "path": "images/miscellania/byleth.png",
     "size": 13145
   },
   "squall": {
     "source": "unknown_large",
-    "path": "images/characters/squall.png",
+    "path": "images/miscellania/squall.png",
     "size": 850900
   },
   "varl": {
     "source": "unknown_small",
-    "path": "images/characters/varl.png",
+    "path": "images/miscellania/varl.png",
     "size": 11363
   },
   "aloy": {
     "source": "unknown_small",
-    "path": "images/characters/aloy.png",
+    "path": "images/miscellania/aloy.png",
     "size": 12444
   },
   "anubis": {
     "source": "unknown_small",
-    "path": "images/characters/anubis.png",
+    "path": "images/miscellania/anubis.png",
     "size": 13515
   },
   "ifrit": {
     "source": "unknown_small",
-    "path": "images/characters/ifrit.png",
+    "path": "images/miscellania/ifrit.png",
     "size": 9187
   },
   "ratchet": {
     "source": "unknown_small",
-    "path": "images/characters/ratchet.png",
+    "path": "images/miscellania/ratchet.png",
     "size": 13950
   },
   "kratos": {
     "source": "unknown_large",
-    "path": "images/characters/kratos.png",
+    "path": "images/miscellania/kratos.png",
     "size": 815611
   },
   "jak": {
     "source": "unknown_small",
-    "path": "images/characters/jak.png",
+    "path": "images/miscellania/jak.png",
     "size": 10683
   },
   "lakshmi": {
     "source": "unknown_small",
-    "path": "images/characters/lakshmi.png",
+    "path": "images/miscellania/lakshmi.png",
     "size": 13519
   },
   "pichu": {
     "source": "unknown_large",
-    "path": "images/characters/pichu.png",
+    "path": "images/miscellania/pichu.png",
     "size": 414759
   },
   "rayquaza": {
     "source": "unknown_small",
-    "path": "images/characters/rayquaza.png",
+    "path": "images/miscellania/rayquaza.png",
     "size": 14900
   },
   "ganesha": {
     "source": "unknown_small",
-    "path": "images/characters/ganesha.png",
+    "path": "images/miscellania/ganesha.png",
     "size": 14579
   },
   "torn": {
     "source": "unknown_small",
-    "path": "images/characters/torn.png",
+    "path": "images/miscellania/torn.png",
     "size": 10562
   },
   "steve": {
     "source": "unknown_small",
-    "path": "images/characters/steve.png",
+    "path": "images/miscellania/steve.png",
     "size": 12916
   },
   "groudon": {
     "source": "unknown_small",
-    "path": "images/characters/groudon.png",
+    "path": "images/miscellania/groudon.png",
     "size": 14099
   },
   "vegeta_ssj3": {
     "source": "unknown_small",
-    "path": "images/characters/vegeta_ssj3.png",
+    "path": "images/miscellania/vegeta_ssj3.png",
     "size": 19826
   },
   "gotenks_ssj3": {
     "source": "unknown_small",
-    "path": "images/characters/gotenks_ssj3.png",
+    "path": "images/miscellania/gotenks_ssj3.png",
     "size": 19837
   },
   "the_one_above_all": {
     "source": "unknown_small",
-    "path": "images/characters/the_one_above_all.png",
+    "path": "images/miscellania/the_one_above_all.png",
     "size": 17654
   },
   "tsukuyomi": {
     "source": "unknown_small",
-    "path": "images/characters/tsukuyomi.png",
+    "path": "images/miscellania/tsukuyomi.png",
     "size": 15514
   },
   "nero": {
     "source": "unknown_large",
-    "path": "images/characters/nero.png",
+    "path": "images/miscellania/nero.png",
     "size": 722241
   },
   "arceus": {
     "source": "unknown_small",
-    "path": "images/characters/arceus.png",
+    "path": "images/miscellania/arceus.png",
     "size": 14469
   },
   "falco": {
     "source": "unknown_small",
-    "path": "images/characters/falco.png",
+    "path": "images/miscellania/falco.png",
     "size": 12046
   },
   "spyro_elder": {
     "source": "unknown_small",
-    "path": "images/characters/spyro_elder.png",
+    "path": "images/miscellania/spyro_elder.png",
     "size": 17512
   },
   "dark_samus": {
     "source": "pollinations_flux",
-    "path": "images/characters/dark_samus.png",
+    "path": "images/miscellania/dark_samus.png",
     "generated_at": 1764527476.7733033
   },
   "piccolo": {
     "source": "unknown_small",
-    "path": "images/characters/piccolo.png",
+    "path": "images/miscellania/piccolo.png",
     "size": 11705
   },
   "shadow": {
     "source": "unknown_large",
-    "path": "images/characters/shadow.png",
+    "path": "images/miscellania/shadow.png",
     "size": 479937
   },
   "sonic": {
     "source": "unknown_large",
-    "path": "images/characters/sonic.png",
+    "path": "images/miscellania/sonic.png",
     "size": 534473
   },
   "yennefer": {
     "source": "unknown_small",
-    "path": "images/characters/yennefer.png",
+    "path": "images/miscellania/yennefer.png",
     "size": 12171
   },
   "zelda": {
     "source": "unknown_large",
-    "path": "images/characters/zelda.png",
+    "path": "images/miscellania/zelda.png",
     "size": 850761
   },
   "shiva": {
     "source": "unknown_small",
-    "path": "images/characters/shiva.png",
+    "path": "images/miscellania/shiva.png",
     "size": 13129
   },
   "jeanne": {
     "source": "unknown_small",
-    "path": "images/characters/jeanne.png",
+    "path": "images/miscellania/jeanne.png",
     "size": 11875
   },
   "sackboy": {
     "source": "unknown_small",
-    "path": "images/characters/sackboy.png",
+    "path": "images/miscellania/sackboy.png",
     "size": 17356
   },
   "norwegian_ridgeback": {
     "source": "unknown_small",
-    "path": "images/characters/norwegian_ridgeback.png",
+    "path": "images/miscellania/norwegian_ridgeback.png",
     "size": 23174
   },
   "poseidon": {
     "source": "unknown_small",
-    "path": "images/characters/poseidon.png",
+    "path": "images/miscellania/poseidon.png",
     "size": 15102
   },
   "samuel_hayden": {
     "source": "unknown_small",
-    "path": "images/characters/samuel_hayden.png",
+    "path": "images/miscellania/samuel_hayden.png",
     "size": 17971
   },
   "swedish_short-snout": {
     "source": "unknown_small",
-    "path": "images/characters/swedish_short-snout.png",
+    "path": "images/miscellania/swedish_short-snout.png",
     "size": 19957
   },
   "atreus": {
     "source": "unknown_small",
-    "path": "images/characters/atreus.png",
+    "path": "images/miscellania/atreus.png",
     "size": 13760
   },
   "vegeta_ssj": {
     "source": "unknown_small",
-    "path": "images/characters/vegeta_ssj.png",
+    "path": "images/miscellania/vegeta_ssj.png",
     "size": 18372
   },
   "isis": {
     "source": "unknown_small",
-    "path": "images/characters/isis.png",
+    "path": "images/miscellania/isis.png",
     "size": 9586
   },
   "sora": {
     "source": "unknown_small",
-    "path": "images/characters/sora.png",
+    "path": "images/miscellania/sora.png",
     "size": 13060
   },
   "globox": {
     "source": "unknown_small",
-    "path": "images/characters/globox.png",
+    "path": "images/miscellania/globox.png",
     "size": 13869
   },
   "rinoa": {
     "source": "unknown_small",
-    "path": "images/characters/rinoa.png",
+    "path": "images/miscellania/rinoa.png",
     "size": 12616
   },
   "shadow_chaos": {
     "source": "unknown_small",
-    "path": "images/characters/shadow_chaos.png",
+    "path": "images/miscellania/shadow_chaos.png",
     "size": 19465
   },
   "jirachi": {
     "source": "unknown_small",
-    "path": "images/characters/jirachi.png",
+    "path": "images/miscellania/jirachi.png",
     "size": 12002
   },
   "alph": {
     "source": "unknown_small",
-    "path": "images/characters/alph.png",
+    "path": "images/miscellania/alph.png",
     "size": 11324
   },
   "cloud": {
     "source": "unknown_large",
-    "path": "images/characters/cloud.png",
+    "path": "images/miscellania/cloud.png",
     "size": 699870
   },
   "alex": {
     "source": "unknown_small",
-    "path": "images/characters/alex.png",
+    "path": "images/miscellania/alex.png",
     "size": 12215
   },
   "shepard": {
     "source": "unknown_small",
-    "path": "images/characters/shepard.png",
+    "path": "images/miscellania/shepard.png",
     "size": 16050
   },
   "auron": {
     "source": "unknown_small",
-    "path": "images/characters/auron.png",
+    "path": "images/miscellania/auron.png",
     "size": 12584
   },
   "ramuh": {
     "source": "unknown_small",
-    "path": "images/characters/ramuh.png",
+    "path": "images/miscellania/ramuh.png",
     "size": 12769
   },
   "gogeta_ssj4": {
     "source": "unknown_small",
-    "path": "images/characters/gogeta_ssj4.png",
+    "path": "images/miscellania/gogeta_ssj4.png",
     "size": 20045
   },
   "tifa": {
     "source": "unknown_large",
-    "path": "images/characters/tifa.png",
+    "path": "images/miscellania/tifa.png",
     "size": 541141
   },
   "odin": {
     "source": "unknown_small",
-    "path": "images/characters/odin.png",
+    "path": "images/miscellania/odin.png",
     "size": 11867
   },
   "link": {
     "source": "unknown_large",
-    "path": "images/characters/link.png",
+    "path": "images/miscellania/link.png",
     "size": 709377
   },
   "cortana": {
     "source": "unknown_small",
-    "path": "images/characters/cortana.png",
+    "path": "images/miscellania/cortana.png",
     "size": 13834
   },
   "dialga": {
     "source": "unknown_small",
-    "path": "images/characters/dialga.png",
+    "path": "images/miscellania/dialga.png",
     "size": 12537
   },
   "eden": {
     "source": "unknown_small",
-    "path": "images/characters/eden.png",
+    "path": "images/miscellania/eden.png",
     "size": 11274
   },
   "silver_psychic": {
     "source": "unknown_small",
-    "path": "images/characters/silver_psychic.png",
+    "path": "images/miscellania/silver_psychic.png",
     "size": 18659
   },
   "villager": {
     "source": "unknown_small",
-    "path": "images/characters/villager.png",
+    "path": "images/miscellania/villager.png",
     "size": 14579
   },
   "palutena": {
     "source": "unknown_small",
-    "path": "images/characters/palutena.png",
+    "path": "images/miscellania/palutena.png",
     "size": 13233
   },
   "banjo": {
     "source": "unknown_small",
-    "path": "images/characters/banjo.png",
+    "path": "images/miscellania/banjo.png",
     "size": 13052
   }
 }
