@@ -261,15 +261,20 @@ class UserService:
             return True
         return False
 
-    def add_points_by_id(self, user_id, points, is_drop=False):
+    def add_points_by_id(self, user_id, points, is_drop=False, session=None):
         """
         Add points to a user by their Telegram ID
         Args:
             user_id: Telegram ID
             points: Amount of Wumpa to add
             is_drop: If True, counts towards daily cap
+            session: Optional database session
         """
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         utente = session.query(Utente).filter_by(id_telegram=user_id).first()
         if utente:
             # Check for daily reset
@@ -282,7 +287,8 @@ class UserService:
             if is_drop:
                 utente.daily_wumpa_earned = (utente.daily_wumpa_earned or 0) + int(points)
             
-            session.commit()
+            if local_session:
+                session.commit()
             
             # NEW: Log point gain event
             self.event_dispatcher.log_event(
@@ -291,7 +297,9 @@ class UserService:
                 value=points,
                 context={'is_drop': is_drop, 'new_total': utente.points}
             )
-        session.close()
+        
+        if local_session:
+            session.close()
 
     def add_exp(self, utente, exp):
         self.update_user(utente.id_telegram, {'exp': utente.exp + exp})
@@ -308,9 +316,12 @@ class UserService:
         session.close()
         return new_total
 
-    def add_exp_by_id(self, user_id, exp):
+    def add_exp_by_id(self, user_id, exp, session=None):
         """Add experience to a user by their Telegram ID and check for level-up"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         utente = session.query(Utente).filter_by(id_telegram=user_id).first()
         leveled_up = False
         new_level = None
@@ -377,20 +388,31 @@ class UserService:
                 # This might cause lock or not see uncommitted changes.
                 # We should pass session to recalculate_stats?
                 # Or commit here first.
-                session.commit()
-                self.recalculate_stats(user_id)
+                if local_session:
+                    session.commit()
+                else:
+                    session.flush()
+                    
+                self.recalculate_stats(user_id, session=session)
                 
                 # Re-fetch to get updated max values for heal
-                session.expire_all()
+                # If we passed session, utente is still attached (if we didn't close).
+                # But recalculate_stats might have updated DB using the SAME session?
+                # If recalculate_stats used the same session, we don't need to expire_all if we flush.
+                # But let's be safe.
+                if local_session:
+                    session.expire_all()
+                else:
+                    session.expire(utente)
+                    
                 u_refreshed = session.query(Utente).filter_by(id_telegram=user_id).first()
                 
-                # New session for update
-                self.update_user(user_id, {
-                    'health': u_refreshed.max_health, 
-                    'mana': u_refreshed.max_mana, 
-                    'current_hp': u_refreshed.max_health,
-                    'current_mana': u_refreshed.max_mana
-                }) 
+                # Update current values (using same session)
+                # We can update directly on u_refreshed
+                u_refreshed.health = u_refreshed.max_health
+                u_refreshed.mana = u_refreshed.max_mana
+                u_refreshed.current_hp = u_refreshed.max_health
+                u_refreshed.current_mana = u_refreshed.max_mana
                 # update_user handles clamping to max.
                 
                 # NEW: Log level up event
@@ -408,8 +430,10 @@ class UserService:
             # Get next level exp requirement for display
             next_level_exp = next_exp_req
             
-            session.commit()
-        session.close()
+            if local_session:
+                session.commit()
+        if local_session:
+            session.close()
         
         return {
             'leveled_up': leveled_up,
@@ -427,7 +451,47 @@ class UserService:
             session.close()
             return False
 
-    # ... (info_user omitted) ...
+    def info_user(self, utente_sorgente):
+        """Get user profile info"""
+        session = self.db.get_session()
+        utente = session.query(Utente).filter_by(id_telegram=utente_sorgente.id_telegram).first()
+        
+        if not utente:
+            # Create if not exists (should be handled elsewhere but safe fallback)
+            # For info command, usually user exists.
+            session.close()
+            return "Utente non trovato."
+            
+        # Get active transformation
+        from services.transformation_service import TransformationService
+        trans_service = TransformationService()
+        active_trans = trans_service.get_active_transformation(utente_sorgente) # Use object with ID
+        trans_bonuses = trans_service.get_transformation_bonuses(utente_sorgente)
+        
+        trans_text = ""
+        if active_trans:
+            trans_text = f"\n🔥 **Trasformazione**: {active_trans.transformation_name}"
+            
+        # Calculate stats with bonuses
+        max_hp = utente.max_health + trans_bonuses.get('health', 0)
+        max_mana = utente.max_mana + trans_bonuses.get('mana', 0)
+        dmg = utente.base_damage + trans_bonuses.get('damage', 0)
+        
+        msg = f"👤 **Profilo di {utente.nome}**\n"
+        msg += f"🏅 Livello: {utente.livello}\n"
+        msg += f"✨ Exp: {utente.exp}\n"
+        msg += f"❤️ Vita: {utente.current_hp}/{max_hp}\n"
+        msg += f"💙 Mana: {utente.current_mana}/{max_mana}\n"
+        msg += f"⚔️ Danno: {dmg}\n"
+        msg += f"🛡️ Difesa: {utente.resistance}\n"
+        msg += f"⚡ Velocità: {utente.speed}\n"
+        msg += f"🍀 Critico: {utente.crit_chance}%\n"
+        msg += f"🍑 {PointsName}: {utente.points}\n"
+        msg += f"💎 Punti Stat: {utente.stat_points}\n"
+        msg += trans_text
+        
+        session.close()
+        return msg
 
     def allocate_stat_point(self, utente, stat_type):
         """Allocate a stat point to HP, Mana, Damage, Resistance, Crit, or Speed"""
@@ -511,12 +575,18 @@ class UserService:
         
         return True, f"Statistiche resettate! {points_to_refund} punti restituiti."
 
-    def recalculate_stats(self, user_id):
+    def recalculate_stats(self, user_id, session=None):
         """Recalculate total stats (Base + Allocations + Equipment)"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         try:
             utente = session.query(Utente).filter_by(id_telegram=user_id).first()
             if not utente:
+                if local_session:
+                    session.close()
                 return
 
             # 1. Calculate Base Stats
@@ -584,14 +654,18 @@ class UserService:
             if utente.mana > utente.max_mana:
                 utente.mana = utente.max_mana
                 
-            session.commit()
             print(f"Recalculated stats for {user_id}: HP {total_hp}, Dmg {total_dmg}")
-            
+            if local_session:
+                session.commit()
+            else:
+                session.flush()
         except Exception as e:
             print(f"Error recalculating stats: {e}")
-            session.rollback()
+            if local_session:
+                session.rollback()
         finally:
-            session.close()
+            if local_session:
+                session.close()
 
     def equip_item(self, user_id, user_item_id):
         """Equip item and update stats"""

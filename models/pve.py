@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Boolean, ForeignKey
 from database import Base
 import datetime
 
@@ -10,13 +10,13 @@ class Mob(Base):
     max_health = Column(Integer, nullable=False)
     spawn_time = Column(DateTime, default=datetime.datetime.now)
     is_dead = Column(Boolean, default=False)
-    killer_id = Column(Integer, nullable=True) # Telegram ID of killer
+    killer_id = Column(BigInteger, nullable=True) # Telegram ID of killer (BigInteger for large IDs)
     reward_claimed = Column(Boolean, default=False)
     has_fled = Column(Boolean, default=False)
     
     # Boss flag - if True, this is a boss (previously Raid)
     is_boss = Column(Boolean, default=False)
-    chat_id = Column(Integer, nullable=True) # Group where mob was spawned
+    chat_id = Column(BigInteger, nullable=True) # Group where mob was spawned (BigInteger for large chat IDs)
     
     # Combat attributes
     image_path = Column(String, nullable=True)
@@ -40,8 +40,8 @@ class Mob(Base):
     active_buffs = Column(String, nullable=True)  # JSON: [{buff_type, value, duration}]
     
     # Targeting variety
-    last_target_id = Column(Integer, nullable=True)
-    aggro_target_id = Column(Integer, nullable=True)
+    last_target_id = Column(BigInteger, nullable=True)
+    aggro_target_id = Column(BigInteger, nullable=True)
     aggro_end_time = Column(DateTime, nullable=True)
     
     # NEW: Track the spawn message ID to delete it later
@@ -71,5 +71,5 @@ class RaidParticipation(Base):
     __tablename__ = "raid_participation"
     id = Column(Integer, primary_key=True)
     raid_id = Column(Integer, ForeignKey('raid.id'))
-    user_id = Column(Integer, nullable=False) # Telegram ID
+    user_id = Column(BigInteger, nullable=False) # Telegram ID
     damage_dealt = Column(Integer, default=0)

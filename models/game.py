@@ -19,7 +19,7 @@ class GameInfo(Base):
 class Steam(Base):
     __tablename__ = "steam"
     id = Column(Integer, primary_key=True)
-    titolo = Column('titolo',String(64))
+    titolo = Column('titolo',String(256))  # Increased from 64 to handle long game titles
     titolone = Column('titolone',Boolean)
     preso_da = Column('preso_da',String(64))
     steam_key = Column('steam_key', String(32),unique=True)

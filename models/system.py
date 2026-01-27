@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime, Boolean, Float
+from sqlalchemy import Column, Integer, BigInteger, String, Date, DateTime, Boolean, Float
 from database import Base
 import datetime
 
@@ -79,7 +79,7 @@ class UserTransformation(Base):
     """Tracks active transformations for users"""
     __tablename__ = "user_transformation"
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, nullable=False)  # id_telegram
+    user_id = Column(BigInteger, nullable=False)  # id_telegram
     transformation_id = Column(Integer, nullable=False)  # CharacterTransformation.id
     activated_at = Column(DateTime, default=datetime.datetime.now)
     expires_at = Column(DateTime, nullable=False)
@@ -89,12 +89,12 @@ class Domenica(Base):
     __tablename__ = "domenica"
     id = Column(Integer, primary_key=True)
     last_day = Column('last_day', Date)
-    utente = Column('utente', Integer, unique=True)
+    utente = Column('utente', BigInteger, unique=True)  # Telegram ID (BigInteger for large IDs)
 
 class UserCharacter(Base):
     __tablename__ = "user_character"
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, nullable=False)  # id_telegram
+    user_id = Column(BigInteger, nullable=False)  # id_telegram
     character_id = Column(Integer, nullable=False)  # Livello.id
     obtained_at = Column(Date, nullable=True)
 

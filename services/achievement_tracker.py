@@ -79,7 +79,7 @@ class AchievementTracker:
         finally:
             session.close()
         
-    def process_pending_events(self, limit=100):
+    def process_pending_events(self, limit=100, session=None):
         """
         Main loop:
         1. Fetch unprocessed events
@@ -88,17 +88,17 @@ class AchievementTracker:
         """
         while True:
             # 1. Fetch
-            events = self.event_dispatcher.get_unprocessed_events(limit)
+            events = self.event_dispatcher.get_unprocessed_events(limit, session=session)
             if not events:
                 break
                 
             # 2. Aggregate
-            self.stat_aggregator.process_events(events)
+            self.stat_aggregator.process_events(events, session=session)
             
             # 3. Check Achievements for affected users
             affected_user_ids = set(e.user_id for e in events)
             for user_id in affected_user_ids:
-                self.check_achievements(user_id)
+                self.check_achievements(user_id, session=session)
             
             # If we fetched fewer than limit, we are done
             if len(events) < limit:
@@ -139,11 +139,15 @@ class AchievementTracker:
         finally:
             session.close()
 
-    def check_achievements(self, user_id):
+    def check_achievements(self, user_id, session=None):
         """
         Check all achievements for a user against their current stats.
         """
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         rewards_to_award = []
         try:
             # Get all achievements
@@ -156,12 +160,17 @@ class AchievementTracker:
             for achievement in all_achievements:
                 self._check_single_achievement(session, user_id, achievement, stats_map, rewards_to_award)
             
-            session.commit()
+            if local_session:
+                session.commit()
+            else:
+                session.flush()
         except Exception as e:
             print(f"[ERROR] Achievement check failed for user {user_id}: {e}")
-            session.rollback()
+            if local_session:
+                session.rollback()
         finally:
-            session.close()
+            if local_session:
+                session.close()
             
         # Apply rewards AFTER session is closed to avoid locks
         for reward_data in rewards_to_award:

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, BigInteger, String, Boolean, ForeignKey, DateTime
 from database import Base
 import datetime
 
@@ -7,7 +7,7 @@ class UserItem(Base):
     __tablename__ = "user_item"
     
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, nullable=False) # id_telegram
+    user_id = Column(BigInteger, nullable=False) # id_telegram
     item_id = Column(Integer, ForeignKey('item.id'), nullable=False)
     
     obtained_at = Column(DateTime, default=datetime.datetime.now)

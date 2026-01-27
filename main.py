@@ -19,6 +19,18 @@ def escape_markdown(text):
     # _, *, [, `
     return str(text).replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("`", "\\`")
 
+def safe_answer_callback(call_id, text=None, show_alert=False):
+    """Safely answer a callback query, ignoring timeout errors"""
+    try:
+        bot.answer_callback_query(call_id, text=text, show_alert=show_alert)
+    except Exception as e:
+        # Ignore "query is too old" or "query ID is invalid" errors
+        err_msg = str(e).lower()
+        if "query is too old" in err_msg or "query id is invalid" in err_msg:
+            pass
+        else:
+            print(f"[ERROR] Failed to answer callback {call_id}: {e}")
+
 # Image processing for grayscale conversion
 try:
     from PIL import Image, ImageEnhance
@@ -273,6 +285,12 @@ def handle_locanda_button(message):
 
 @bot.message_handler(func=lambda message: message.text == "🏰 Dungeon")
 def handle_dungeon_button(message):
+    cmd = BotCommands(message, bot)
+    cmd.handle_dungeons_list()
+
+@bot.message_handler(commands=['dungeons'])
+def handle_dungeons_cmd(message):
+    """Show dungeons list"""
     cmd = BotCommands(message, bot)
     cmd.handle_dungeons_list()
 
@@ -625,7 +643,7 @@ def handle_guild_inn_view(call):
     user_id = call.from_user.id
     guild = guild_service.get_user_guild(user_id)
     if not guild:
-        bot.answer_callback_query(call.id, "Non fai parte di nessuna gilda!", show_alert=True)
+        safe_answer_callback(call.id, "Non fai parte di nessuna gilda!", show_alert=True)
         return
         
     msg = f"🏠 **Locanda della Gilda: {guild['name']}** (Lv. {guild['inn_level']})\n\n"
@@ -875,7 +893,7 @@ def handle_dungeon_leave_global(call):
     # Find user's dungeon
     user_dungeon = dungeon_service.get_user_active_dungeon(user_id)
     if not user_dungeon:
-        bot.answer_callback_query(call.id, "Non sei in nessun dungeon!", show_alert=True)
+        safe_answer_callback(call.id, "Non sei in nessun dungeon!", show_alert=True)
         # Update message to remove outdated info
         bot.edit_message_text("✅ Non sei in nessun dungeon.", call.message.chat.id, call.message.message_id)
         return
@@ -884,10 +902,10 @@ def handle_dungeon_leave_global(call):
     success, msg = dungeon_service.leave_dungeon(user_dungeon.chat_id, user_id)
     
     if success:
-        bot.answer_callback_query(call.id, "Hai abbandonato il dungeon!")
+        safe_answer_callback(call.id, "Hai abbandonato il dungeon!")
         bot.edit_message_text(f"🏃 **Hai abbandonato il dungeon {user_dungeon.name}!**\n\n{msg}", call.message.chat.id, call.message.message_id, parse_mode='markdown')
     else:
-        bot.answer_callback_query(call.id, "Errore durante la fuga!", show_alert=True)
+        safe_answer_callback(call.id, "Errore durante la fuga!", show_alert=True)
         bot.send_message(call.message.chat.id, f"❌ Errore: {msg}")
 
 
@@ -974,6 +992,19 @@ class BotCommands:
             "!help": self.handle_help,
             "/join": self.handle_join_dungeon,
         }
+
+    def safe_answer_callback(self, call_id, text=None, show_alert=False):
+        """Safely answer a callback query, ignoring timeout errors"""
+        try:
+            self.bot.answer_callback_query(call_id, text=text, show_alert=show_alert)
+        except Exception as e:
+            # Ignore "query is too old" or "query ID is invalid" errors
+            err_msg = str(e).lower()
+            if "query is too old" in err_msg or "query id is invalid" in err_msg:
+                pass
+            else:
+                print(f"[ERROR] Failed to answer callback {call_id}: {e}")
+        
 
     def handle_help(self):
         # Redirect to improved guide system
@@ -1113,90 +1144,115 @@ Per acquistare un gioco che vedi in un canale o gruppo:
 
     def handle_dungeons_list(self):
         """Show list of available dungeons or active lobby"""
-        # 1. Check if user is in a dungeon (Global check)
-        user_dungeon = dungeon_service.get_user_active_dungeon(self.user_id)
-        if user_dungeon:
-             # Show User Dungeon Status
-             markup = types.InlineKeyboardMarkup()
-             markup.add(types.InlineKeyboardButton("🏃 Abbandona Dungeon", callback_data="dungeon_leave_global"))
-             
-             msg = f"⚠️ **SEI IN UN DUNGEON!**\n\n"
-             msg += f"🏰 **{user_dungeon.name}**\n"
-             msg += f"Stato: {user_dungeon.status}\n"
-             msg += f"Piano: {user_dungeon.current_stage}/{user_dungeon.total_stages}\n\n"
-             msg += "Non puoi unirti ad altri dungeon finché non completi o abbandoni questo."
-             
-             self.bot.reply_to(self.message, msg, reply_markup=markup, parse_mode='markdown')
-             return
-
-        # Check for active dungeon
-        print(f"[DEBUG] handle_dungeons_list called for chat_id: {self.message.chat.id} (type: {self.message.chat.type})")
-        active_dungeon = dungeon_service.get_active_dungeon(self.message.chat.id)
+        # Use a shared session for all database operations
+        from database import Database
+        db = Database()
+        session = db.get_session()
         
-        if active_dungeon:
-            # Show Lobby UI
+        try:
+            # 1. Check if user is in a dungeon (Global check)
+            user_dungeon = dungeon_service.get_user_active_dungeon(self.user_id, session=session)
+            if user_dungeon:
+                 # Check if it's in THIS chat
+                 if user_dungeon.chat_id == self.message.chat.id:
+                     # User is in the dungeon of this chat, show normal flow
+                     pass
+                 else:
+                     # User is in a dungeon in ANOTHER chat
+                     markup = types.InlineKeyboardMarkup()
+                     markup.add(types.InlineKeyboardButton("🏃 Abbandona Dungeon", callback_data="dungeon_leave_global"))
+                     
+                     msg = f"⚠️ **SEI IN UN DUNGEON IN UN'ALTRA CHAT!**\n\n"
+                     msg += f"🏰 **{user_dungeon.name}**\n"
+                     msg += f"Stato: {user_dungeon.status}\n"
+                     msg += f"Piano: {user_dungeon.current_stage}/{user_dungeon.total_stages}\n\n"
+                     msg += "Non puoi unirti ad altri dungeon finché non completi o abbandoni questo."
+                     
+                     session.close()
+                     self.bot.reply_to(self.message, msg, reply_markup=markup, parse_mode='markdown')
+                     return
+
+            # Check for active dungeon
+            print(f"[DEBUG] handle_dungeons_list called for chat_id: {self.message.chat.id} (type: {self.message.chat.type})")
+            active_dungeon = dungeon_service.get_active_dungeon(self.message.chat.id, session=session)
+            
+            if active_dungeon:
+                # Show Lobby UI
+                markup = types.InlineKeyboardMarkup()
+                if active_dungeon.status == "registration":
+                    markup.add(types.InlineKeyboardButton("➕ Unisciti", callback_data=f"dungeon_join|{active_dungeon.id}"))
+                    markup.add(types.InlineKeyboardButton("▶️ Avvia (Admin)", callback_data=f"dungeon_start|{active_dungeon.id}"))
+                elif active_dungeon.status == "active":
+                    markup.add(types.InlineKeyboardButton("👁️ Mostra Nemici", callback_data=f"dungeon_show_mobs|{active_dungeon.id}"))
+                    markup.add(types.InlineKeyboardButton("🏃 Fuggire", callback_data="flee"))
+                
+                msg = f"🏰 **DUNGEON ATTIVO: {active_dungeon.name}**\n"
+                msg += f"Status: {active_dungeon.status}\n"
+                    
+                # Get participants
+                participants = dungeon_service.get_dungeon_participants(active_dungeon.id, session=session)
+                msg += f"\n👥 Partecipanti ({len(participants)}):\n"
+                for p in participants:
+                    u = user_service.get_user(p.user_id)
+                    name = u.username if u and u.username else f"Utente {p.user_id}"
+                    msg += f"- {name}\n"
+                        
+                session.close()
+                self.bot.reply_to(self.message, msg, reply_markup=markup, parse_mode='markdown')
+                return
+
+
+            # Show List
+            dungeons = dungeon_service.dungeons_cache
+            if not dungeons:
+                session.close()
+                self.bot.reply_to(self.message, "Nessun dungeon disponibile.")
+                return
+            
+            progress = dungeon_service.get_user_progress(self.chatid, session=session)
+            completed_ids = [p.dungeon_def_id for p in progress]
+            
+            msg = "🏰 **DUNGEON DISPONIBILI**\n\n"
+            msg += "Seleziona un dungeon per hostare una partita:\n"
+            
             markup = types.InlineKeyboardMarkup()
-            if active_dungeon.status == "registration":
-                markup.add(types.InlineKeyboardButton("➕ Unisciti", callback_data=f"dungeon_join|{active_dungeon.id}"))
-                markup.add(types.InlineKeyboardButton("▶️ Avvia (Admin)", callback_data=f"dungeon_start|{active_dungeon.id}"))
-            elif active_dungeon.status == "active":
-                markup.add(types.InlineKeyboardButton("👁️ Mostra Nemici", callback_data=f"dungeon_show_mobs|{active_dungeon.id}"))
-                markup.add(types.InlineKeyboardButton("🏃 Fuggire", callback_data="flee"))
             
-            msg = f"🏰 **DUNGEON ATTIVO: {active_dungeon.name}**\n"
-            msg += f"Status: {active_dungeon.status}\n"
+            # Sort by ID
+            sorted_ids = sorted(dungeons.keys())
             
-            # Get participants
-            participants = dungeon_service.get_dungeon_participants(active_dungeon.id)
-            msg += f"\n👥 Partecipanti ({len(participants)}):\n"
-            for p in participants:
-                u = user_service.get_user(p.user_id)
-                name = u.username if u and u.username else f"Utente {p.user_id}"
-                msg += f"- {name}\n"
+            for d_id in sorted_ids:
+                d = dungeons[d_id]
+                is_unlocked = dungeon_service.can_access_dungeon(self.chatid, d_id, session=session)
                 
+                status_icon = "🔒"
+                if is_unlocked:
+                    status_icon = "🔓"
+                if d_id in completed_ids:
+                    status_icon = "✅"
+                    
+                # Get best rank
+                rank = ""
+                p = next((x for x in progress if x.dungeon_def_id == d_id), None)
+                if p and p.best_rank:
+                    rank = f" (Rango: {p.best_rank})"
+                    
+                btn_text = f"{status_icon} {d['name']} (Diff: {d['difficulty']}){rank}"
+                if is_unlocked:
+                    markup.add(types.InlineKeyboardButton(btn_text, callback_data=f"dungeon_host|{d_id}"))
+                else:
+                    markup.add(types.InlineKeyboardButton(f"🔒 {d['name']} (Bloccato)", callback_data="ignore"))
+            
+            session.commit()
             self.bot.reply_to(self.message, msg, reply_markup=markup, parse_mode='markdown')
-            return
-
-        # Show List
-        dungeons = dungeon_service.dungeons_cache
-        if not dungeons:
-            self.bot.reply_to(self.message, "Nessun dungeon disponibile.")
-            return
             
-        progress = dungeon_service.get_user_progress(self.chatid)
-        completed_ids = [p.dungeon_def_id for p in progress]
-        
-        msg = "🏰 **DUNGEON DISPONIBILI**\n\n"
-        msg += "Seleziona un dungeon per hostare una partita:\n"
-        
-        markup = types.InlineKeyboardMarkup()
-        
-        # Sort by ID
-        sorted_ids = sorted(dungeons.keys())
-        
-        for d_id in sorted_ids:
-            d = dungeons[d_id]
-            is_unlocked = dungeon_service.can_access_dungeon(self.chatid, d_id)
-            
-            status_icon = "🔒"
-            if is_unlocked:
-                status_icon = "🔓"
-            if d_id in completed_ids:
-                status_icon = "✅"
-                
-            # Get best rank
-            rank = ""
-            p = next((x for x in progress if x.dungeon_def_id == d_id), None)
-            if p and p.best_rank:
-                rank = f" (Rango: {p.best_rank})"
-                
-            btn_text = f"{status_icon} {d['name']} (Diff: {d['difficulty']}){rank}"
-            if is_unlocked:
-                markup.add(types.InlineKeyboardButton(btn_text, callback_data=f"dungeon_host|{d_id}"))
-            else:
-                markup.add(types.InlineKeyboardButton(f"🔒 {d['name']} (Bloccato)", callback_data="ignore"))
-                
-        self.bot.reply_to(self.message, msg, reply_markup=markup, parse_mode='markdown')
+        except Exception as e:
+            session.rollback()
+            print(f"[ERROR] handle_dungeons_list: {e}")
+            import traceback
+            traceback.print_exc()
+            self.bot.reply_to(self.message, "Errore nel caricamento dei dungeon.")
+        finally:
+            session.close()
 
     def handle_flee(self):
         """Allow user to flee from dungeon"""
@@ -1335,29 +1391,9 @@ Per acquistare un gioco che vedi in un canale o gruppo:
                 self.bot.send_chat_action(chat_id, 'typing')
                 time.sleep(seconds)
             elif event['type'] == 'spawn':
-                # Spawn message is already formatted in content
-                self.bot.send_message(chat_id, event['content'], parse_mode='markdown')
-                
-                # Create cards for the spawned mobs
-                if 'mob_ids' in event:
-                    for mob_id in event['mob_ids']:
-                        # We need to get mob details to show image/buttons
-                        mob = pve_service.get_mob_status_by_id(mob_id)
-                        if mob:
-                            markup = get_combat_markup("mob", mob_id, chat_id)
-                            
-                            msg_text = f"⚠️ **{mob['name']}** è apparso!\n📊 Lv. {mob.get('level', 1)} | ⚡ Vel: {mob.get('speed', 30)} | 🛡️ Res: {mob.get('resistance', 0)}%\n❤️ Salute: {mob['health']}/{mob['max_health']} HP\n⚔️ Danno: {mob['attack']}"
-                            
-                            # Send with image if available
-                            if mob.get('image') and os.path.exists(mob['image']):
-                                try:
-                                    with open(mob['image'], 'rb') as photo:
-                                        self.bot.send_photo(chat_id, photo, caption=msg_text, reply_markup=markup, parse_mode='markdown')
-                                except Exception as e:
-                                    print(f"[ERROR] Failed to send mob photo: {e}")
-                                    self.bot.send_message(chat_id, msg_text, reply_markup=markup, parse_mode='markdown')
-                            else:
-                                self.bot.send_message(chat_id, msg_text, reply_markup=markup, parse_mode='markdown')
+                # Individual cards will be sent by display_mob_spawn in callback_query
+                # to avoid duplicates.
+                pass
 
     def handle_find_missing_image(self):
         """Find a random character or mob without an image"""
@@ -2264,7 +2300,7 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         if not unlocked_titles:
             msg = "❌ Non hai ancora sbloccato nessun titolo!\n\nCompleta gli achievement per ottenerne uno."
             if is_callback and call_id:
-                self.bot.answer_callback_query(call_id, "Nessun titolo disponibile", show_alert=True)
+                self.safe_answer_callback(call_id, "Nessun titolo disponibile", show_alert=True)
                 return
             elif not is_callback:
                 self.bot.send_message(self.chatid, msg)
@@ -2274,7 +2310,7 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         
         if is_callback and call_id:
             try:
-                self.bot.answer_callback_query(call_id)
+                self.safe_answer_callback(call_id)
             except:
                 pass
                 
@@ -2316,14 +2352,14 @@ Per acquistare un gioco che vedi in un canale o gruppo:
             
             utente = user_service.get_user(user_id)
             if not utente:
-                self.bot.answer_callback_query(call.id, "Utente non trovato!", show_alert=True)
+                self.safe_answer_callback(call.id, "Utente non trovato!", show_alert=True)
                 return
             
             if call.data == "stat_reset":
                 from services.stats_service import StatsService
                 stats_service = StatsService()
                 success, msg = stats_service.reset_stat_points(utente)
-                self.bot.answer_callback_query(call.id, "Statistiche resettate!")
+                self.safe_answer_callback(call.id, "Statistiche resettate!")
                 
                 # Refresh view
                 self.message = call.message
@@ -2342,16 +2378,16 @@ Per acquistare un gioco che vedi in un canale o gruppo:
                 success, msg = stats_service.allocate_stat_point(utente, stat_type)
                 
                 if success:
-                    self.bot.answer_callback_query(call.id, "Punto allocato!")
+                    self.safe_answer_callback(call.id, "Punto allocato!")
                     # Refresh view
                     self.message = call.message
                     self.handle_stats(is_callback=True)
                 else:
-                    self.bot.answer_callback_query(call.id, msg, show_alert=True)
+                    self.safe_answer_callback(call.id, msg, show_alert=True)
         except Exception as e:
             import traceback
             traceback.print_exc()
-            self.bot.answer_callback_query(call.id, f"Errore: {str(e)}", show_alert=True)
+            self.safe_answer_callback(call.id, f"Errore: {str(e)}", show_alert=True)
 
     def handle_livell(self):
         pass
@@ -3458,94 +3494,6 @@ def any(message):
     bothandler = BotCommands(message, bot)
     bothandler.handle_all_commands()
 
-def display_mob_spawn(bot, chat_id, mob_id):
-    """Helper to display a spawned mob with image and buttons"""
-    print(f"[DEBUG] display_mob_spawn called for mob_id {mob_id}")
-    mob = pve_service.get_mob_details(mob_id)
-    if not mob: 
-        print(f"[DEBUG] display_mob_spawn: mob details not found for {mob_id}")
-        return
-    
-    markup = get_combat_markup("mob", mob_id, chat_id)
-    
-    msg_text = f"⚠️ Un {mob['name']} è apparso!\n📊 Lv. {mob['level']} | ⚡ Vel: {mob['speed']} | 🛡️ Res: {mob['resistance']}%\n❤️ Salute: {mob['health']}/{mob['max_health']} HP\n⚔️ Danno: {mob['attack']}\n\nSconfiggilo per proseguire!"
-    
-    image_path = mob['image_path']
-    print(f"[DEBUG] display_mob_spawn: image_path={image_path}")
-    sent_msg = None
-    
-    try:
-        if image_path and os.path.exists(image_path):
-            with open(image_path, 'rb') as photo:
-                sent_msg = bot.send_photo(chat_id, photo, caption=msg_text, reply_markup=markup, parse_mode='markdown')
-        else:
-            print(f"[DEBUG] display_mob_spawn: sending text only (image not found or None)")
-            sent_msg = bot.send_message(chat_id, msg_text, reply_markup=markup, parse_mode='markdown')
-            
-        if sent_msg:
-            pve_service.update_mob_message_id(mob_id, sent_msg.message_id)
-            print(f"[DEBUG] display_mob_spawn: message sent successfully (id: {sent_msg.message_id})")
-    except Exception as e:
-        print(f"Error displaying mob: {e}")
-
-def trigger_dungeon_mob_attack(bot, chat_id, mob_ids):
-    """Helper to trigger immediate attack from spawned mobs"""
-    print(f"[DEBUG] Triggering immediate attack for mobs: {mob_ids}")
-    for mob_id in mob_ids:
-        # Force attack (bypass some checks if needed, but mob_random_attack handles most)
-        # We use specific_mob_id to ensure THIS mob attacks
-        attack_events = pve_service.mob_random_attack(specific_mob_id=mob_id, chat_id=chat_id)
-        
-        if attack_events:
-            for event in attack_events:
-                msg = event['message']
-                image_path = event['image']
-                try:
-                    markup = get_combat_markup("mob", mob_id, chat_id)
-                    if image_path and os.path.exists(image_path):
-                        with open(image_path, 'rb') as photo:
-                            bot.send_photo(chat_id, photo, caption=msg, reply_markup=markup, parse_mode='markdown')
-                    else:
-                        bot.send_message(chat_id, msg, reply_markup=markup, parse_mode='markdown')
-                except Exception as e:
-                    print(f"[DEBUG] Error sending attack message: {e}")
-
-def send_combat_message(chat_id, text, image_path, markup, mob_id, old_message_id=None, is_death=False):
-    """Helper to send combat messages, deleting the previous one and showing the enemy image."""
-    if old_message_id:
-        try:
-            bot.delete_message(chat_id, old_message_id)
-        except Exception:
-            pass
-    
-    sent_msg = None
-    try:
-        if image_path and os.path.exists(image_path):
-            ext = os.path.splitext(image_path)[1].lower()
-            if ext in ['.gif']:
-                with open(image_path, 'rb') as animation:
-                    sent_msg = bot.send_animation(chat_id, animation, caption=text, reply_markup=markup, parse_mode='markdown')
-            elif ext in ['.mp4', '.mov']:
-                with open(image_path, 'rb') as video:
-                    sent_msg = bot.send_video(chat_id, video, caption=text, reply_markup=markup, parse_mode='markdown')
-            else:
-                with open(image_path, 'rb') as photo:
-                    sent_msg = bot.send_photo(chat_id, photo, caption=text, reply_markup=markup, parse_mode='markdown')
-        else:
-            sent_msg = bot.send_message(chat_id, text, reply_markup=markup, parse_mode='markdown')
-        
-        if not is_death and sent_msg:
-            pve_service.update_mob_message_id(mob_id, sent_msg.message_id)
-    except Exception as e:
-        print(f"[ERROR] send_combat_message failed: {e}")
-        try:
-            sent_msg = bot.send_message(chat_id, text, reply_markup=markup, parse_mode='markdown')
-            if not is_death:
-                pve_service.update_mob_message_id(mob_id, sent_msg.message_id)
-        except:
-            pass
-    return sent_msg
-
 def get_combat_markup(enemy_type, enemy_id, chat_id):
     """Generate combat markup with all required buttons"""
     markup = types.InlineKeyboardMarkup()
@@ -3568,6 +3516,150 @@ def get_combat_markup(enemy_type, enemy_id, chat_id):
         
     return markup
 
+def display_mob_spawn(bot, chat_id, mob_id):
+    """Helper to display a spawned mob with image and buttons"""
+    print(f"[DEBUG] display_mob_spawn called for mob_id {mob_id} in chat {chat_id}")
+    mob = pve_service.get_mob_details(mob_id)
+    if not mob: 
+        print(f"[DEBUG] display_mob_spawn: mob details not found for {mob_id}")
+        return
+    
+    # Format ASCII Card
+    hp_percent = int((mob['health'] / mob['max_health']) * 10)
+    hp_bar = "█" * hp_percent + "░" * (10 - hp_percent)
+    
+    msg_text = f"⚠️ Un {mob['name']} è apparso!\n"
+    msg_text += f"╔══════🕹 {mob['name'].upper()} ══════╗\n"
+    msg_text += f" ❤️ Vita: {hp_bar} {int((mob['health']/mob['max_health'])*100)}%\n"
+    msg_text += f" ⚡ Velocità: {mob.get('speed', 0)}\n"
+    msg_text += f" 📊 Livello: {mob.get('level', 1)}\n"
+    msg_text += f"          aROMa\n"
+    msg_text += f"╚═══════════════════════╝\n"
+    msg_text += "\nSconfiggilo per proseguire!"
+    
+    image_path = mob['image_path']
+    print(f"[DEBUG] display_mob_spawn: image_path={image_path}")
+    
+    sent_msg = None
+    try:
+        # Define markup inside try block to be safe
+        mob_type = "boss" if mob.get('is_boss') else "mob"
+        markup = get_combat_markup(mob_type, mob_id, chat_id)
+        
+        if image_path and os.path.exists(image_path):
+            with open(image_path, 'rb') as photo:
+                sent_msg = bot.send_photo(chat_id, photo, caption=msg_text, reply_markup=markup, parse_mode='markdown')
+        else:
+            print(f"[DEBUG] display_mob_spawn: sending text only (image not found or None)")
+            sent_msg = bot.send_message(chat_id, msg_text, reply_markup=markup, parse_mode='markdown')
+            
+        if sent_msg:
+            pve_service.update_mob_message_id(mob_id, sent_msg.message_id)
+            print(f"[DEBUG] display_mob_spawn: message sent successfully (id: {sent_msg.message_id})")
+    except Exception as e:
+        print(f"Error displaying mob: {e}")
+
+def trigger_dungeon_mob_attack(bot, chat_id, mob_ids):
+    """Helper to trigger immediate attack from spawned mobs"""
+    print(f"[DEBUG] Triggering immediate attack for mobs: {mob_ids}")
+    for mob_id in mob_ids:
+        # Force attack
+        attack_events = pve_service.mob_random_attack(specific_mob_id=mob_id, chat_id=chat_id)
+        
+        if attack_events:
+            for event in attack_events:
+                msg = event['message']
+                image_path = event['image']
+                mob_id = event['mob_id']
+                old_msg_id = event['last_message_id']
+                
+                markup = get_combat_markup("mob", mob_id, chat_id)
+                send_combat_message(chat_id, msg, image_path, markup, mob_id, old_msg_id)
+
+def send_combat_message(chat_id, text, image_path, markup, mob_id, old_message_id=None, is_death=False):
+    """Helper to send combat messages, deleting the previous one and showing the enemy image."""
+    if old_message_id:
+        try:
+            bot.delete_message(chat_id, old_message_id)
+        except Exception:
+            pass
+    
+    # Parse text to extract HP if it's in the old format or raw text
+    # But wait, the text passed here is usually constructed by the caller.
+    # We should modify the CALLER to format the text correctly, OR reformat it here if it's a simple string.
+    # However, pve_service.attack_mob returns a message that is already formatted.
+    # The user wants the ASCII card format.
+    # Let's check if the text is already an ASCII card.
+    
+    # Actually, the best place to format the message is in the caller (handle_combat_callback) 
+    # or inside pve_service.attack_mob return value.
+    # But pve_service returns a simple string.
+    # Let's modify send_combat_message to WRAP the text in the card if it's not already.
+    
+    # Wait, pve_service.attack_mob returns "Hai inflitto X danni...".
+    # We need to fetch the mob status again to build the card?
+    # Yes, handle_combat_callback does fetching if needed, or we can do it here.
+    
+    # Let's look at handle_combat_callback again. It constructs `full_msg = f"@{username}\n{msg}"`.
+    # This is just the attack result.
+    # The user wants the MOB STATUS CARD to be updated.
+    
+    # So we need to rebuild the card with the new HP.
+    # We need the mob object.
+    
+    mob = pve_service.get_mob_details(mob_id)
+    if mob:
+        hp_percent = int((mob['health'] / mob['max_health']) * 10)
+        hp_bar = "█" * hp_percent + "░" * (10 - hp_percent)
+        
+        # ASCII Card with HIDDEN HP (100%)
+        card = f"╔══════🕹 {mob['name'].upper()} ══════╗\n"
+        card += f" ❤️ Vita: {hp_bar} {int((mob['health']/mob['max_health'])*100)}%\n"
+        card += f" ⚡ Velocità: {mob.get('speed', 0)}\n"
+        card += f" 📊 Livello: {mob.get('level', 1)}\n"
+        card += f"          aROMa\n"
+        card += f"╚═══════════════════════╝\n"
+        
+        # Append the attack result text below the card ONLY if not already there
+        if "╔══════🕹" in text:
+            final_text = text
+        else:
+            final_text = f"{text}\n\n{card}"
+        
+        # Update image path if not provided (use mob's image)
+        if not image_path:
+            image_path = mob.get('image_path')
+    else:
+        final_text = text
+    
+    sent_msg = None
+    try:
+        if image_path and os.path.exists(image_path):
+            ext = os.path.splitext(image_path)[1].lower()
+            if ext in ['.gif']:
+                with open(image_path, 'rb') as animation:
+                    sent_msg = bot.send_animation(chat_id, animation, caption=final_text, reply_markup=markup, parse_mode='markdown')
+            elif ext in ['.mp4', '.mov']:
+                with open(image_path, 'rb') as video:
+                    sent_msg = bot.send_video(chat_id, video, caption=final_text, reply_markup=markup, parse_mode='markdown')
+            else:
+                with open(image_path, 'rb') as photo:
+                    sent_msg = bot.send_photo(chat_id, photo, caption=final_text, reply_markup=markup, parse_mode='markdown')
+        else:
+            sent_msg = bot.send_message(chat_id, final_text, reply_markup=markup, parse_mode='markdown')
+        
+        if not is_death and sent_msg:
+            pve_service.update_mob_message_id(mob_id, sent_msg.message_id)
+    except Exception as e:
+        print(f"[ERROR] send_combat_message failed: {e}")
+        try:
+            sent_msg = bot.send_message(chat_id, final_text, reply_markup=markup, parse_mode='markdown')
+            if not is_death:
+                pve_service.update_mob_message_id(mob_id, sent_msg.message_id)
+        except:
+            pass
+    return sent_msg
+
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
@@ -3579,7 +3671,7 @@ def callback_query(call):
     
     if call.data == "stat_alloc":
         try:
-            bot.answer_callback_query(call.id)
+            safe_answer_callback(call.id)
         except:
             pass
             
@@ -3633,7 +3725,7 @@ def callback_query(call):
             else:
                 msg = "Non possiedi questo titolo o achievement non trovato!"
         
-        bot.answer_callback_query(call.id, msg)
+        safe_answer_callback(call.id, msg)
         
         # Refresh menu
         bot_cmds = BotCommands(call.message, bot)
@@ -3646,15 +3738,15 @@ def callback_query(call):
         _, name, x, y = call.data.split("|")
         success, msg, guild_id = guild_service.create_guild(call.from_user.id, name, int(x), int(y))
         if success:
-            bot.answer_callback_query(call.id, "Gilda creata con successo!")
+            safe_answer_callback(call.id, "Gilda creata con successo!")
             # Show the guild menu
             handle_guild_cmd(call.message)
         else:
-            bot.answer_callback_query(call.id, msg, show_alert=True)
+            safe_answer_callback(call.id, msg, show_alert=True)
         return
 
     elif call.data == "guild_found_start":
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         # Fix: use call.from_user.id instead of call.message.from_user.id
         user_id = call.from_user.id
         utente = user_service.get_user(user_id)
@@ -3664,11 +3756,11 @@ def callback_query(call):
             return
         
         if utente.livello < 10:
-            bot.answer_callback_query(call.id, "❌ Devi essere almeno al livello 10 per fondare una gilda!", show_alert=True)
+            safe_answer_callback(call.id, "❌ Devi essere almeno al livello 10 per fondare una gilda!", show_alert=True)
             return
             
         if utente.points < 1000:
-            bot.answer_callback_query(call.id, "❌ Ti servono 1000 Wumpa per fondare una gilda!", show_alert=True)
+            safe_answer_callback(call.id, "❌ Ti servono 1000 Wumpa per fondare una gilda!", show_alert=True)
             return
             
         msg = bot.send_message(call.message.chat.id, "🏰 **Fondazione Gilda**\n\nInserisci il nome della tua gilda (max 32 caratteri):")
@@ -3676,7 +3768,7 @@ def callback_query(call):
         return
 
     elif call.data == "guild_deposit_start":
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         msg = bot.send_message(call.message.chat.id, "💰 **Deposito Gilda**\n\nInserisci la quantità di Wumpa da depositare:")
         bot.register_next_step_handler(msg, process_guild_deposit)
         return
@@ -3693,22 +3785,22 @@ def callback_query(call):
                 remaining = int(120 - elapsed)
         
         if in_combat:
-            bot.answer_callback_query(call.id, f"⚔️ Sei in combattimento! Devi aspettare {remaining}s prima di riposare.", show_alert=True)
+            safe_answer_callback(call.id, f"⚔️ Sei in combattimento! Devi aspettare {remaining}s prima di riposare.", show_alert=True)
             return
 
         success, msg = user_service.start_resting(call.from_user.id)
-        bot.answer_callback_query(call.id, msg, show_alert=True)
+        safe_answer_callback(call.id, msg, show_alert=True)
         if success:
             handle_inn_cmd(call.message)
 
     elif call.data == "inn_rest_stop":
         success, msg = user_service.stop_resting(call.from_user.id)
-        bot.answer_callback_query(call.id, msg, show_alert=True)
+        safe_answer_callback(call.id, msg, show_alert=True)
         if success:
             handle_inn_cmd(call.message)
 
     elif call.data == "guild_list_view":
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         handle_guilds_list_cmd(call.message)
 
     elif call.data.startswith("guild_members|"):
@@ -3724,10 +3816,10 @@ def callback_query(call):
         return
 
     elif call.data == "guild_manage_menu":
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         guild = guild_service.get_user_guild(call.from_user.id)
         if not guild or guild['role'] != "Leader":
-            bot.answer_callback_query(call.id, "Solo il capogilda può accedere a questo menu!", show_alert=True)
+            safe_answer_callback(call.id, "Solo il capogilda può accedere a questo menu!", show_alert=True)
             return
             
         markup = types.InlineKeyboardMarkup()
@@ -3750,10 +3842,10 @@ def callback_query(call):
         return
 
     elif call.data == "guild_warehouse":
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         guild = guild_service.get_user_guild(call.from_user.id)
         if not guild:
-            bot.answer_callback_query(call.id, "Non sei in una gilda!", show_alert=True)
+            safe_answer_callback(call.id, "Non sei in una gilda!", show_alert=True)
             return
             
         items = guild_service.get_guild_inventory(guild['id'])
@@ -3776,11 +3868,11 @@ def callback_query(call):
         return
 
     elif call.data == "guild_deposit_ask":
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         # Show user inventory to pick item
         inventory = item_service.get_inventory(call.from_user.id)
         if not inventory:
-            bot.answer_callback_query(call.id, "Il tuo inventario è vuoto!", show_alert=True)
+            safe_answer_callback(call.id, "Il tuo inventario è vuoto!", show_alert=True)
             return
             
         markup = types.InlineKeyboardMarkup()
@@ -3794,7 +3886,7 @@ def callback_query(call):
     elif call.data.startswith("guild_deposit|"):
         _, item_name = call.data.split("|", 1)
         success, msg = guild_service.deposit_item(call.from_user.id, item_name, 1)
-        bot.answer_callback_query(call.id, msg, show_alert=not success)
+        safe_answer_callback(call.id, msg, show_alert=not success)
         if success:
             # Refresh warehouse view
             guild = guild_service.get_user_guild(call.from_user.id)
@@ -3823,7 +3915,7 @@ def callback_query(call):
             d_id = int(d_id_str)
             d_real_id, msg = dungeon_service.create_dungeon(call.message.chat.id, d_id, call.from_user.id)
             if not d_real_id:
-                bot.answer_callback_query(call.id, msg, show_alert=True)
+                safe_answer_callback(call.id, msg, show_alert=True)
             else:
                 # Update message to Lobby
                 dungeon = dungeon_service.get_active_dungeon(call.message.chat.id)
@@ -3843,13 +3935,13 @@ def callback_query(call):
                 
                 bot.edit_message_text(msg_text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
         except ValueError:
-            bot.answer_callback_query(call.id, "ID non valido.")
+            safe_answer_callback(call.id, "ID non valido.")
         return
 
     elif call.data.startswith("dungeon_join|"):
         _, d_id_str = call.data.split("|", 1)
         success, msg = dungeon_service.join_dungeon(call.message.chat.id, call.from_user.id)
-        bot.answer_callback_query(call.id, msg, show_alert=not success)
+        safe_answer_callback(call.id, msg, show_alert=not success)
         
         if success:
             # Update Lobby
@@ -3886,15 +3978,19 @@ def callback_query(call):
              # Let's check process_dungeon_events implementation.
              # It doesn't trigger attack. We need to extract mob_ids from events to trigger attack.
              
+             print(f"[DEBUG] Events received: {events}")
              all_mob_ids = []
              for event in events:
                  if event['type'] == 'spawn' and 'mob_ids' in event:
                      all_mob_ids.extend(event['mob_ids'])
              
+             print(f"[DEBUG] All mob IDs to trigger: {all_mob_ids}")
              if all_mob_ids:
                  trigger_dungeon_mob_attack(bot, call.message.chat.id, all_mob_ids)
+             else:
+                 print("[DEBUG] No mob IDs found in events!")
         else:
-             bot.answer_callback_query(call.id, msg, show_alert=True)
+             safe_answer_callback(call.id, msg, show_alert=True)
         return
 
     elif call.data.startswith("dungeon_show_mobs|"):
@@ -3905,31 +4001,31 @@ def callback_query(call):
             mobs = pve_service.get_active_mobs(call.message.chat.id)
             print(f"[DEBUG] dungeon_show_mobs: Found {len(mobs)} active mobs for chat {call.message.chat.id}")
             if not mobs:
-                bot.answer_callback_query(call.id, "Nessun nemico attivo trovato!", show_alert=True)
+                safe_answer_callback(call.id, "Nessun nemico attivo trovato!", show_alert=True)
             else:
-                bot.answer_callback_query(call.id, "Mostro i nemici...")
+                safe_answer_callback(call.id, "Mostro i nemici...")
                 for mob in mobs:
                     print(f"[DEBUG] Displaying mob {mob.id} ({mob.name})")
                     display_mob_spawn(bot, call.message.chat.id, mob.id)
         except Exception as e:
             print(f"[DEBUG] Error in dungeon_show_mobs: {e}")
-            bot.answer_callback_query(call.id, f"Errore: {e}", show_alert=True)
+            safe_answer_callback(call.id, f"Errore: {e}", show_alert=True)
         return
 
     elif call.data == "ignore":
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         return
 
     elif call.data == "flee":
         success, msg = dungeon_service.leave_dungeon(call.message.chat.id, call.from_user.id)
-        bot.answer_callback_query(call.id, "Tentativo di fuga...", show_alert=False)
+        safe_answer_callback(call.id, "Tentativo di fuga...", show_alert=False)
         bot.send_message(call.message.chat.id, f"🏃 @{call.from_user.username or call.from_user.first_name}: {msg}", parse_mode='markdown')
         return
 
     elif call.data.startswith("guild_withdraw|"):
         _, item_name = call.data.split("|", 1)
         success, msg = guild_service.withdraw_item(call.from_user.id, item_name, 1)
-        bot.answer_callback_query(call.id, msg, show_alert=not success)
+        safe_answer_callback(call.id, msg, show_alert=not success)
         if success:
             # Refresh warehouse view
             guild = guild_service.get_user_guild(call.from_user.id)
@@ -3958,7 +4054,7 @@ def callback_query(call):
         # We must explicitly set the user ID from the callback.
         cmd.chatid = call.from_user.id
         cmd.handle_wish() # handle_wish checks counts again, which is fine
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         return
 
     elif call.data.startswith("use_item|"):
@@ -3966,14 +4062,14 @@ def callback_query(call):
         
         # Dragon Ball Restriction (Double check)
         if "Sfera del Drago" in item_name:
-             bot.answer_callback_query(call.id, "❌ Non puoi usare le sfere singolarmente!", show_alert=True)
+             safe_answer_callback(call.id, "❌ Non puoi usare le sfere singolarmente!", show_alert=True)
              return
 
         user_id = call.from_user.id
         
         # Check if user has the item
         if item_service.get_item_by_user(user_id, item_name) <= 0:
-            bot.answer_callback_query(call.id, "❌ Non hai questo oggetto!", show_alert=True)
+            safe_answer_callback(call.id, "❌ Non hai questo oggetto!", show_alert=True)
             return
         
         # Use the item
@@ -3988,7 +4084,7 @@ def callback_query(call):
 
             # Apply item effect
             effect_msg, extra_data = item_service.apply_effect(utente, item_name)
-            bot.answer_callback_query(call.id, f"✅ {item_name} utilizzato!")
+            safe_answer_callback(call.id, f"✅ {item_name} utilizzato!")
             
             # Update inventory display
             inventory = item_service.get_inventory(user_id)
@@ -4074,17 +4170,17 @@ def callback_query(call):
                     'time': datetime.datetime.now()
                 }
         else:
-            bot.answer_callback_query(call.id, "❌ Errore nell'uso dell'oggetto!", show_alert=True)
+            safe_answer_callback(call.id, "❌ Errore nell'uso dell'oggetto!", show_alert=True)
         return
 
     elif call.data == "guild_rename_ask":
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         msg = bot.send_message(call.message.chat.id, "✏️ **Rinomina Gilda**\n\nInserisci il nuovo nome per la gilda:", parse_mode='markdown')
         bot.register_next_step_handler(msg, process_guild_rename)
         return
 
     elif call.data == "guild_delete_ask":
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("✅ SÌ, ELIMINA", callback_data="guild_delete_confirm"))
         markup.add(types.InlineKeyboardButton("❌ Annulla", callback_data="guild_manage_menu"))
@@ -4093,7 +4189,7 @@ def callback_query(call):
 
     elif call.data == "guild_delete_confirm":
         success, msg = guild_service.delete_guild(call.from_user.id)
-        bot.answer_callback_query(call.id, msg, show_alert=True)
+        safe_answer_callback(call.id, msg, show_alert=True)
         if success:
             bot.delete_message(call.message.chat.id, call.message.message_id)
             bot.send_message(call.message.chat.id, msg)
@@ -4102,7 +4198,7 @@ def callback_query(call):
         return
 
     elif call.data == "guild_back_main":
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         # Reload guild menu
         guild = guild_service.get_user_guild(call.from_user.id)
         if guild:
@@ -4136,11 +4232,11 @@ def callback_query(call):
             success, msg = guild_service.upgrade_bordello(call.from_user.id)
             
         if success:
-            bot.answer_callback_query(call.id, "Upgrade completato!")
+            safe_answer_callback(call.id, "Upgrade completato!")
             # Refresh view
             handle_guild_view(call)
         else:
-            bot.answer_callback_query(call.id, msg, show_alert=True)
+            safe_answer_callback(call.id, msg, show_alert=True)
             
     elif call.data.startswith("stat_"):
         bot_cmds = BotCommands(call.message, bot)
@@ -4148,7 +4244,7 @@ def callback_query(call):
         return
 
     elif call.data == "guild_back_main":
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         handle_guild_cmd(call.message)
         return
 
@@ -4162,7 +4258,7 @@ def callback_query(call):
     if action.startswith("season_page|"):
         page = int(action.split("|")[1])
         handle_season_cmd(call.message, page=page, user_id=user_id)
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         return
 
     # REFRESH ENEMIES LIST
@@ -4177,7 +4273,7 @@ def callback_query(call):
         return
         
         if not mobs:
-            bot.answer_callback_query(call.id, "Nessun nemico attivo!")
+            safe_answer_callback(call.id, "Nessun nemico attivo!")
             bot.edit_message_text("🧟 Nessun nemico attivo al momento. Tutto tranquillo... per ora.", call.message.chat.id, call.message.message_id)
             return
             
@@ -4206,10 +4302,10 @@ def callback_query(call):
         
         try:
             bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
-            bot.answer_callback_query(call.id, "Lista aggiornata!")
+            safe_answer_callback(call.id, "Lista aggiornata!")
         except Exception as e:
             # If message content is same, Telegram API raises error
-            bot.answer_callback_query(call.id, "Nessun cambiamento.")
+            safe_answer_callback(call.id, "Nessun cambiamento.")
         return
 
     # TITLE SELECTION
@@ -4219,11 +4315,11 @@ def callback_query(call):
 
         try:
             user_service.update_user(user_id, {'title': new_title})
-            bot.answer_callback_query(call.id, f"✅ Titolo impostato: {new_title}")
+            safe_answer_callback(call.id, f"✅ Titolo impostato: {new_title}")
             bot.edit_message_text(f"✅ Titolo impostato con successo: **{new_title}**", user_id, call.message.message_id, parse_mode='markdown')
         except Exception as e:
             print(f"Error setting title in callback: {e}")
-            bot.answer_callback_query(call.id, "❌ Errore nel salvataggio")
+            safe_answer_callback(call.id, "❌ Errore nel salvataggio")
         return
 
     # NEW HANDLERS - Character Selection & Stats
@@ -4440,7 +4536,7 @@ def callback_query(call):
             except Exception as e:
                 print(f"Error editing message text: {e}")
 
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         return
     
     elif action.startswith("saga_nav|"):
@@ -4464,7 +4560,7 @@ def callback_query(call):
         saga_chars = char_loader.get_characters_by_saga(saga_name)
         
         if not saga_chars:
-            bot.answer_callback_query(call.id, f"Nessun personaggio nella saga {saga_name}!")
+            safe_answer_callback(call.id, f"Nessun personaggio nella saga {saga_name}!")
             return
         
         # Filter by user access (unless admin)
@@ -4472,7 +4568,7 @@ def callback_query(call):
             saga_chars = [c for c in saga_chars if c['livello'] <= utente.livello or c['lv_premium'] == 2]
         
         if not saga_chars:
-            bot.answer_callback_query(call.id, f"Nessun personaggio sbloccato in {saga_name}!")
+            safe_answer_callback(call.id, f"Nessun personaggio sbloccato in {saga_name}!")
             return
         
         # Validate char index
@@ -4583,7 +4679,7 @@ def callback_query(call):
             print(f"Error in saga_nav: {e}")
             bot.send_message(user_id, msg, reply_markup=markup, parse_mode='markdown')
         
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         return
     
     elif action.startswith("char_filter|"):
@@ -4594,7 +4690,7 @@ def callback_query(call):
         page_chars, total_pages, current_page = character_service.get_all_characters_paginated(utente, page=0, level_filter=level_filter)
         
         if not page_chars:
-            bot.answer_callback_query(call.id, f"Nessun personaggio di livello {filter_value}!")
+            safe_answer_callback(call.id, f"Nessun personaggio di livello {filter_value}!")
             return
         
         char = page_chars[0]
@@ -4670,7 +4766,7 @@ def callback_query(call):
                 markup.add(types.InlineKeyboardButton(f"🔓 Sblocca ({price} 🍑)", callback_data=f"char_buy|{char.id}"))
         
         bot.edit_message_text(msg, user_id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
-        bot.answer_callback_query(call.id, f"Filtrando per {'tutti i livelli' if filter_value == 'all' else f'livello {filter_value}'}")
+        safe_answer_callback(call.id, f"Filtrando per {'tutti i livelli' if filter_value == 'all' else f'livello {filter_value}'}")
         return
     
     elif action.startswith("char_buy|"):
@@ -4679,7 +4775,7 @@ def callback_query(call):
         success, msg = character_service.purchase_character(utente, char_id)
         
         if success:
-            bot.answer_callback_query(call.id, "✅ Personaggio acquistato!")
+            safe_answer_callback(call.id, "✅ Personaggio acquistato!")
             # Send confirmation message
             bot.send_message(user_id, f"🎉 {msg}\n\nOra puoi equipaggiarlo dalla selezione personaggi!", reply_markup=get_main_menu())
             
@@ -4727,15 +4823,15 @@ def callback_query(call):
                 print(f"Error refreshing after purchase: {e}")
                 
         else:
-            bot.answer_callback_query(call.id, f"❌ {msg}", show_alert=True)
+            safe_answer_callback(call.id, f"❌ {msg}", show_alert=True)
         return
     
     elif action == "char_already_equipped":
-        bot.answer_callback_query(call.id, "⭐ Questo personaggio è già equipaggiato!")
+        safe_answer_callback(call.id, "⭐ Questo personaggio è già equipaggiato!")
         return
     
     elif action == "char_page_info":
-        bot.answer_callback_query(call.id, "Usa le frecce per navigare")
+        safe_answer_callback(call.id, "Usa le frecce per navigare")
         return
     
     elif action.startswith("char_select|"):
@@ -4774,16 +4870,16 @@ def callback_query(call):
                 except:
                     pass
                 bot.send_message(user_id, msg, reply_markup=markup, parse_mode='markdown')
-                bot.answer_callback_query(call.id)
+                safe_answer_callback(call.id)
                 return
         
         success, msg = character_service.equip_character(utente, char_id)
         
         if success:
-            bot.answer_callback_query(call.id, "✅ Personaggio equipaggiato!")
+            safe_answer_callback(call.id, "✅ Personaggio equipaggiato!")
             bot.send_message(user_id, f"✅ {msg}", reply_markup=get_main_menu())
         else:
-            bot.answer_callback_query(call.id, f"❌ {msg}")
+            safe_answer_callback(call.id, f"❌ {msg}")
         return
     
     elif action.startswith("transform_menu|"):
@@ -4797,7 +4893,7 @@ def callback_query(call):
         base_char = char_loader.get_character_by_id(base_char_id)
         
         if not transforms:
-            bot.answer_callback_query(call.id, "❌ Nessuna trasformazione disponibile!")
+            safe_answer_callback(call.id, "❌ Nessuna trasformazione disponibile!")
             return
         
         # Check which ones user owns
@@ -4848,7 +4944,7 @@ def callback_query(call):
             bot.edit_message_text(msg, user_id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
         except:
             bot.send_message(user_id, msg, reply_markup=markup, parse_mode='markdown')
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         return
     
     elif action.startswith("activate_transform|"):
@@ -4859,7 +4955,7 @@ def callback_query(call):
         
         trans_char = char_loader.get_character_by_id(trans_id)
         if not trans_char:
-            bot.answer_callback_query(call.id, "❌ Trasformazione non trovata!")
+            safe_answer_callback(call.id, "❌ Trasformazione non trovata!")
             return
         
         mana_cost = trans_char.get('transformation_mana_cost', 50)
@@ -4867,7 +4963,7 @@ def callback_query(call):
         
         # Check mana
         if utente.mana < mana_cost:
-            bot.answer_callback_query(call.id, f"❌ Mana insufficiente! Serve: {mana_cost}, hai: {utente.mana}")
+            safe_answer_callback(call.id, f"❌ Mana insufficiente! Serve: {mana_cost}, hai: {utente.mana}")
             return
         
         # Deduct mana and apply transformation
@@ -4888,7 +4984,7 @@ def callback_query(call):
         msg += f"💙 Mana rimanente: {remaining_mana}"
         
         bot.send_message(user_id, msg, reply_markup=get_main_menu(), parse_mode='markdown')
-        bot.answer_callback_query(call.id, f"🔥 Trasformato in {trans_char['nome']}!")
+        safe_answer_callback(call.id, f"🔥 Trasformato in {trans_char['nome']}!")
         return
     
     elif action.startswith("buy_transform|"):
@@ -4898,19 +4994,19 @@ def callback_query(call):
         success, msg = character_service.purchase_character(utente, trans_id)
         
         if success:
-            bot.answer_callback_query(call.id, "✅ Trasformazione acquistata!")
+            safe_answer_callback(call.id, "✅ Trasformazione acquistata!")
             bot.send_message(user_id, f"✅ {msg}\n\nOra puoi trasformarti dal profilo!", reply_markup=get_main_menu())
         else:
-            bot.answer_callback_query(call.id, f"❌ {msg}")
+            safe_answer_callback(call.id, f"❌ {msg}")
         return
     
     elif action == "no_mana":
-        bot.answer_callback_query(call.id, "❌ Non hai abbastanza mana! Rigenera +10 ogni ora.")
+        safe_answer_callback(call.id, "❌ Non hai abbastanza mana! Rigenera +10 ogni ora.")
         return
     
     elif action == "back_to_profile":
         # Redirect to profile
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         try:
             bot.delete_message(user_id, call.message.message_id)
         except:
@@ -4930,7 +5026,7 @@ def callback_query(call):
         
         success, msg = stats_service.allocate_stat_point(utente, stat_type)
         
-        bot.answer_callback_query(call.id, msg if success else f"❌ {msg}")
+        safe_answer_callback(call.id, msg if success else f"❌ {msg}")
         
         if success:
             # Refresh stats menu
@@ -4983,15 +5079,15 @@ def callback_query(call):
                 except:
                     pass
                 bot.send_message(user_id, msg, reply_markup=markup, parse_mode='markdown')
-            bot.answer_callback_query(call.id)
+            safe_answer_callback(call.id)
         
         elif action == "reset_stats_yes":
             success, msg = stats_service.reset_stat_points(utente)
-            bot.answer_callback_query(call.id, "✅ Reset completato!" if success else f"❌ Errore")
+            safe_answer_callback(call.id, "✅ Reset completato!" if success else f"❌ Errore")
             bot.send_message(user_id, msg)
         
         elif action == "reset_stats_no":
-            bot.answer_callback_query(call.id, "Reset annullato")
+            safe_answer_callback(call.id, "Reset annullato")
             bot.delete_message(user_id, call.message.message_id)
         return
     
@@ -5025,11 +5121,11 @@ def callback_query(call):
             msg += "Nessuna trasformazione disponibile per questo personaggio."
             bot.edit_message_text(msg, user_id, call.message.message_id, parse_mode='markdown')
         
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         return
     
     elif action == "transform_locked":
-        bot.answer_callback_query(call.id, "🔒 Non puoi attivare questa trasformazione!")
+        safe_answer_callback(call.id, "🔒 Non puoi attivare questa trasformazione!")
         return
     
     elif action.startswith("transform|"):
@@ -5037,7 +5133,7 @@ def callback_query(call):
         
         success, msg = transformation_service.activate_transformation(utente, trans_id)
         
-        bot.answer_callback_query(call.id, "✨ Trasformazione attivata!" if success else f"❌ Errore")
+        safe_answer_callback(call.id, "✨ Trasformazione attivata!" if success else f"❌ Errore")
         bot.send_message(user_id, msg, parse_mode='markdown')
         return
     
@@ -5054,10 +5150,10 @@ def callback_query(call):
         success, msg = potion_service.use_potion(utente, potion_name)
         
         if success:
-            bot.answer_callback_query(call.id, "✅ Pozione usata!")
+            safe_answer_callback(call.id, "✅ Pozione usata!")
             bot.send_message(user_id, msg)
         else:
-            bot.answer_callback_query(call.id, f"❌ {msg}", show_alert=True)
+            safe_answer_callback(call.id, f"❌ {msg}", show_alert=True)
         return
     
     elif action.startswith("buy_potion|"):
@@ -5072,10 +5168,10 @@ def callback_query(call):
         success, msg = potion_service.buy_potion(utente, potion_name)
         
         if success:
-            bot.answer_callback_query(call.id, "✅ Acquisto effettuato!")
+            safe_answer_callback(call.id, "✅ Acquisto effettuato!")
             bot.send_message(user_id, f"🛍️ {msg}\n\nPuoi usare la pozione dal tuo 📦 Inventario.")
         else:
-            bot.answer_callback_query(call.id, f"❌ {msg}", show_alert=True)
+            safe_answer_callback(call.id, f"❌ {msg}", show_alert=True)
         return
 
 
@@ -5084,13 +5180,13 @@ def callback_query(call):
         # Type can be 'mob' or 'raid'
         parts = action.split("|")
         if len(parts) != 3:
-            bot.answer_callback_query(call.id, "❌ Formato callback non valido", show_alert=True)
+            safe_answer_callback(call.id, "❌ Formato callback non valido", show_alert=True)
             return
             
         # Check if user is resting in inn
         resting_status = user_service.get_resting_status(user_id)
         if resting_status:
-            bot.answer_callback_query(call.id, "❌ Non puoi attaccare mentre stai riposando nella locanda! Usa /inn per smettere di riposare.", show_alert=True)
+            safe_answer_callback(call.id, "❌ Non puoi attaccare mentre stai riposando nella locanda! Usa /inn per smettere di riposare.", show_alert=True)
             return
         
         enemy_type = parts[1]
@@ -5115,17 +5211,17 @@ def callback_query(call):
             mob = session.query(Mob).filter_by(id=enemy_id).first()
             if not mob:
                 session.close()
-                bot.answer_callback_query(call.id, "❌ Nemico non trovato!", show_alert=True)
+                safe_answer_callback(call.id, "❌ Nemico non trovato!", show_alert=True)
                 return
             enemy_dead = mob.is_dead
         else:
             session.close()
-            bot.answer_callback_query(call.id, "❌ Tipo nemico non valido", show_alert=True)
+            safe_answer_callback(call.id, "❌ Tipo nemico non valido", show_alert=True)
             return
         session.close()
         
         if enemy_dead:
-            bot.answer_callback_query(call.id, "💀 Questo nemico è già morto!", show_alert=True)
+            safe_answer_callback(call.id, "💀 Questo nemico è già morto!", show_alert=True)
             return
         
         # Attack the specific target (all are mobs now, bosses are just mobs with is_boss=True)
@@ -5140,13 +5236,13 @@ def callback_query(call):
         except Exception as e:
             import traceback
             traceback.print_exc()
-            bot.answer_callback_query(call.id, f"❌ Errore critico: {e}", show_alert=True)
+            safe_answer_callback(call.id, f"❌ Errore critico: {e}", show_alert=True)
             return
         
         # Send response
         if success:
             try:
-                bot.answer_callback_query(call.id, "⚔️ Attacco effettuato!")
+                safe_answer_callback(call.id, "⚔️ Attacco effettuato!")
             except Exception:
                 pass
             
@@ -5172,7 +5268,7 @@ def callback_query(call):
                 trigger_dungeon_mob_attack(bot, call.message.chat.id, extra_data['new_mob_ids'])
         else:
             try:
-                bot.answer_callback_query(call.id, msg, show_alert=True)
+                safe_answer_callback(call.id, msg, show_alert=True)
             except Exception:
                 pass
         return
@@ -5181,13 +5277,13 @@ def callback_query(call):
         # Special attack on specific enemy: special_attack_enemy|{type}|{id}
         parts = action.split("|")
         if len(parts) != 3:
-            bot.answer_callback_query(call.id, "❌ Formato non valido", show_alert=True)
+            safe_answer_callback(call.id, "❌ Formato non valido", show_alert=True)
             return
             
         # Check if user is resting in inn
         resting_status = user_service.get_resting_status(user_id)
         if resting_status:
-            bot.answer_callback_query(call.id, "❌ Non puoi attaccare mentre stai riposando nella locanda! Usa /inn per smettere di riposare.", show_alert=True)
+            safe_answer_callback(call.id, "❌ Non puoi attaccare mentre stai riposando nella locanda! Usa /inn per smettere di riposare.", show_alert=True)
             return
         
         enemy_type = parts[1]
@@ -5200,13 +5296,13 @@ def callback_query(call):
         character = char_loader.get_character_by_id(utente.livello_selezionato)
         
         if not character:
-            bot.answer_callback_query(call.id, "❌ Personaggio non selezionato!", show_alert=True)
+            safe_answer_callback(call.id, "❌ Personaggio non selezionato!", show_alert=True)
             return
         
         # Check mana
         mana_cost = character.get('special_attack_mana_cost', 0)
         if utente.mana < mana_cost:
-            bot.answer_callback_query(call.id, f"❌ Mana insufficiente! Serve: {mana_cost}", show_alert=True)
+            safe_answer_callback(call.id, f"❌ Mana insufficiente! Serve: {mana_cost}", show_alert=True)
             return
         
         # Deduct mana and calculate damage
@@ -5224,17 +5320,17 @@ def callback_query(call):
             mob = session.query(Mob).filter_by(id=enemy_id).first()
             if not mob:
                 session.close()
-                bot.answer_callback_query(call.id, "❌ Nemico non trovato!", show_alert=True)
+                safe_answer_callback(call.id, "❌ Nemico non trovato!", show_alert=True)
                 return
             enemy_dead = mob.is_dead
         else:
             session.close()
-            bot.answer_callback_query(call.id, "❌ Tipo non valido", show_alert=True)
+            safe_answer_callback(call.id, "❌ Tipo non valido", show_alert=True)
             return
         session.close()
         
         if enemy_dead:
-            bot.answer_callback_query(call.id, "💀 Questo nemico è già morto!", show_alert=True)
+            safe_answer_callback(call.id, "💀 Questo nemico è già morto!", show_alert=True)
             return
         
         # Attack (all are mobs now, bosses are just mobs with is_boss=True)
@@ -5248,7 +5344,7 @@ def callback_query(call):
         
         if success:
             try:
-                bot.answer_callback_query(call.id, "✨ Attacco Speciale!")
+                safe_answer_callback(call.id, "✨ Attacco Speciale!")
             except:
                 pass
             
@@ -5277,7 +5373,7 @@ def callback_query(call):
         # flee_enemy|{type}|{id}
         parts = call.data.split("|")
         if len(parts) < 3:
-            bot.answer_callback_query(call.id, "Dati non validi.")
+            safe_answer_callback(call.id, "Dati non validi.")
             return
             
         enemy_type = parts[1]
@@ -5288,7 +5384,7 @@ def callback_query(call):
         if mob_details and mob_details.get('dungeon_id'):
             # Use existing dungeon flee logic
             success, msg = dungeon_service.leave_dungeon(call.message.chat.id, call.from_user.id)
-            bot.answer_callback_query(call.id, "Tentativo di fuga dal dungeon...", show_alert=False)
+            safe_answer_callback(call.id, "Tentativo di fuga dal dungeon...", show_alert=False)
             bot.send_message(call.message.chat.id, f"🏃 @{call.from_user.username or call.from_user.first_name}: {msg}", parse_mode='markdown')
             
             # If successful and mob is now dead (dungeon failed), delete message
@@ -5304,7 +5400,7 @@ def callback_query(call):
             # Regular mob flee
             utente = user_service.get_user(call.from_user.id)
             success, msg = pve_service.flee_mob(utente, enemy_id)
-            bot.answer_callback_query(call.id, msg, show_alert=True)
+            safe_answer_callback(call.id, msg, show_alert=True)
             if success:
                 try:
                     bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -5316,13 +5412,13 @@ def callback_query(call):
         is_special = action.startswith("special_aoe_attack_enemy|")
         parts = action.split("|")
         if len(parts) != 3:
-            bot.answer_callback_query(call.id, "❌ Formato non valido", show_alert=True)
+            safe_answer_callback(call.id, "❌ Formato non valido", show_alert=True)
             return
             
         # Check if user is resting in inn
         resting_status = user_service.get_resting_status(user_id)
         if resting_status:
-            bot.answer_callback_query(call.id, "❌ Non puoi attaccare mentre stai riposando nella locanda! Usa /inn per smettere di riposare.", show_alert=True)
+            safe_answer_callback(call.id, "❌ Non puoi attaccare mentre stai riposando nella locanda! Usa /inn per smettere di riposare.", show_alert=True)
             return
         
         enemy_id = int(parts[2])
@@ -5344,7 +5440,7 @@ def callback_query(call):
         if success:
             try:
                 alert_text = "🌟 Speciale AoE!" if is_special else "💥 Attacco ad Area!"
-                bot.answer_callback_query(call.id, alert_text)
+                safe_answer_callback(call.id, alert_text)
             except:
                 pass
             
@@ -5398,7 +5494,7 @@ def callback_query(call):
                         print(f"Error sending counter-attack message: {e}")
         else:
             try:
-                bot.answer_callback_query(call.id, msg, show_alert=True)
+                safe_answer_callback(call.id, msg, show_alert=True)
             except:
                 pass
         return
@@ -5415,7 +5511,7 @@ def callback_query(call):
         
         if success:
             try:
-                bot.answer_callback_query(call.id, "🏃 Fuga riuscita!")
+                safe_answer_callback(call.id, "🏃 Fuga riuscita!")
             except:
                 pass
             
@@ -5447,7 +5543,7 @@ def callback_query(call):
                 bot.send_message(call.message.chat.id, full_msg, parse_mode='markdown')
         else:
             try:
-                bot.answer_callback_query(call.id, msg, show_alert=True)
+                safe_answer_callback(call.id, msg, show_alert=True)
             except:
                 pass
         return
@@ -5468,7 +5564,7 @@ def callback_query(call):
         
         if success:
             try:
-                bot.answer_callback_query(call.id, "⚔️ Attacco effettuato!")
+                safe_answer_callback(call.id, "⚔️ Attacco effettuato!")
             except Exception:
                 pass
                 
@@ -5500,7 +5596,7 @@ def callback_query(call):
             bot.send_message(call.message.chat.id, f"@{username}\n{msg}", reply_markup=markup, parse_mode='markdown')
         else:
             try:
-                bot.answer_callback_query(call.id, msg, show_alert=True)
+                safe_answer_callback(call.id, msg, show_alert=True)
             except Exception:
                 pass
         return
@@ -5513,7 +5609,7 @@ def callback_query(call):
         
         if success:
             try:
-                bot.answer_callback_query(call.id, "✨ Attacco Speciale effettuato!")
+                safe_answer_callback(call.id, "✨ Attacco Speciale effettuato!")
             except Exception:
                 pass
                 
@@ -5555,7 +5651,7 @@ def callback_query(call):
                     send_combat_message(call.message.chat.id, e_msg, image_path, markup, e_mob_id, old_msg_id)
         else:
             try:
-                bot.answer_callback_query(call.id, msg, show_alert=True)
+                safe_answer_callback(call.id, msg, show_alert=True)
             except Exception:
                 pass
         return
@@ -5569,7 +5665,7 @@ def callback_query(call):
         targeted_items = ["Colpisci un giocatore", "Mira un giocatore"]
         
         if item_name in targeted_items:
-            bot.answer_callback_query(call.id)
+            safe_answer_callback(call.id)
             msg = bot.send_message(user_id, f"🎯 Hai scelto di usare **{item_name}**.\n\nScrivi il @username del giocatore che vuoi colpire:", parse_mode='markdown')
             
             # Instantiate BotCommands to use its method
@@ -5587,15 +5683,15 @@ def callback_query(call):
                 drop_service.set_trap(call.message.chat.id, data['trap_type'], user_id)
                 
             bot.send_message(user_id, msg)
-            bot.answer_callback_query(call.id, "✅ Oggetto usato!")
+            safe_answer_callback(call.id, "✅ Oggetto usato!")
         else:
             bot.send_message(user_id, "Non hai questo oggetto o è già stato usato.")
-            bot.answer_callback_query(call.id, "❌ Errore")
+            safe_answer_callback(call.id, "❌ Errore")
 
     elif action.startswith("steal|"):
         # Give 1 wumpa
         user_service.add_points(utente, 1)
-        bot.answer_callback_query(call.id, "Hai rubato 1 Wumpa!")
+        safe_answer_callback(call.id, "Hai rubato 1 Wumpa!")
         
         # Remove the button
         current_markup = call.message.reply_markup
@@ -5658,7 +5754,7 @@ def callback_query(call):
         
         msg = wish_service.grant_wish(utente, wish, dragon)
         bot.send_message(user_id, msg)
-        bot.answer_callback_query(call.id, "Desiderio esaudito!")
+        safe_answer_callback(call.id, "Desiderio esaudito!")
 
     elif action.startswith("pwish|"):
         # Porunga wish (multi-step)
@@ -5683,7 +5779,7 @@ def callback_query(call):
                 item_service.use_item(user_id, f"La Sfera del Drago Porunga {i}")
             bot.send_message(user_id, f"{msg}\n\n🐲 PORUNGA HA ESAUDITO I TUOI 3 DESIDERI!")
         
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         return
 
     elif action.startswith("guide|"):
@@ -5704,12 +5800,12 @@ def callback_query(call):
                 else:
                     bot.send_message(user_id, content, parse_mode='markdown')
                     
-                bot.answer_callback_query(call.id, "📖 Guida aperta!")
+                safe_answer_callback(call.id, "📖 Guida aperta!")
             else:
-                bot.answer_callback_query(call.id, "❌ Guida non trovata!", show_alert=True)
+                safe_answer_callback(call.id, "❌ Guida non trovata!", show_alert=True)
         except Exception as e:
             print(f"Error showing guide: {e}")
-            bot.answer_callback_query(call.id, "❌ Errore nell'apertura della guida", show_alert=True)
+            safe_answer_callback(call.id, "❌ Errore nell'apertura della guida", show_alert=True)
         return
 
     # ACHIEVEMENT PAGINATION
@@ -5722,21 +5818,21 @@ def callback_query(call):
         else:
             page = int(parts[1])
             handle_achievements_cmd(call.message, page=page, user_id=user_id)
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         return
 
     # ACHIEVEMENT CATEGORY
     elif action.startswith("ach_cat|"):
         category = action.split("|")[1]
         handle_achievements_cmd(call.message, category=category, user_id=user_id)
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         return
 
     # SEASON PAGINATION
     elif action.startswith("season_page|"):
         page = int(action.split("|")[1])
         handle_season_cmd(call.message, page=page)
-        bot.answer_callback_query(call.id)
+        safe_answer_callback(call.id)
         return
 
     # SEASON PASS PURCHASE
@@ -5746,11 +5842,11 @@ def callback_query(call):
         success, msg = manager.purchase_season_pass(user_id)
         
         if success:
-            bot.answer_callback_query(call.id, "✅ Acquisto completato!")
+            safe_answer_callback(call.id, "✅ Acquisto completato!")
             # Update the season message to show the new status
             handle_season_cmd(call.message)
         else:
-            bot.answer_callback_query(call.id, "❌ Errore")
+            safe_answer_callback(call.id, "❌ Errore")
             bot.send_message(user_id, msg, parse_mode='markdown')
         return
 
@@ -5875,9 +5971,26 @@ def mob_attack_job():
                             mob_id = event['mob_id']
                             old_msg_id = event['last_message_id']
                             
-                            send_combat_message(chat_id, msg, image_path, markup, mob_id, old_msg_id)
+                            sent = send_combat_message(chat_id, msg, image_path, markup, mob_id, old_msg_id)
+                            if not sent:
+                                # If message failed to send, check if it's a "chat not found" error
+                                # This is handled inside send_combat_message but we can double check here
+                                pass
                 except Exception as e:
-                    print(f"Error processing attack for enemy {enemy.id}: {e}")
+                    err_msg = str(e).lower()
+                    if "chat not found" in err_msg or "chat_id_invalid" in err_msg:
+                        print(f"[WARNING] Chat {enemy.chat_id} not found. Marking mob {enemy.id} as dead.")
+                        # We need a new session to mark as dead since we are in a loop
+                        temp_session = db.get_session()
+                        try:
+                            m = temp_session.query(Mob).filter_by(id=enemy.id).first()
+                            if m:
+                                m.is_dead = True
+                                temp_session.commit()
+                        finally:
+                            temp_session.close()
+                    else:
+                        print(f"Error processing attack for enemy {enemy.id}: {e}")
     except Exception as e:
         print(f"Error in mob_attack_job: {e}")
         try:

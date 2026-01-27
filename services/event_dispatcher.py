@@ -58,16 +58,21 @@ class EventDispatcher:
             if local_session:
                 session.close()
     
-    def get_unprocessed_events(self, limit=100):
+    def get_unprocessed_events(self, limit=100, session=None):
         """Get events that haven't been processed for achievements"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         try:
             events = session.query(GameEvent).filter(
                 GameEvent.processed == False
             ).limit(limit).all()
             return events
         finally:
-            session.close()
+            if local_session:
+                session.close()
     
     def mark_processed(self, event_id):
         """Mark event as processed"""

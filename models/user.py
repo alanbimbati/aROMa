@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Boolean
 from database import Base
 import datetime
 from dateutil.relativedelta import relativedelta
@@ -6,10 +6,10 @@ from dateutil.relativedelta import relativedelta
 class Utente(Base):
     __tablename__ = "utente"
     id = Column(Integer, primary_key=True)
-    id_telegram = Column('id_Telegram', Integer, unique=True)
-    nome  = Column('nome', String(32))
-    cognome = Column('cognome', String(32))
-    username = Column('username', String(32), unique=True)
+    id_telegram = Column('id_Telegram', BigInteger, unique=True)
+    nome  = Column('nome', String(256))  # Increased from 32 to handle long display names
+    cognome = Column('cognome', String(256))  # Increased from 32
+    username = Column('username', String(64), unique=True)  # Increased from 32
     exp = Column('exp', Integer)
     points = Column('money', Integer)
     livello = Column('livello', Integer)

@@ -72,7 +72,7 @@ class PvEService:
             print(f"Error loading bosses: {e}")
         return bosses
 
-    def use_special_attack(self, user, is_aoe=False, chat_id=None):
+    def use_special_attack(self, user, is_aoe=False, chat_id=None, session=None):
         """
         Execute special attack for the user.
         Checks mana, calculates damage, and calls attack_mob or attack_aoe.
@@ -98,19 +98,36 @@ class PvEService:
         
         if is_aoe:
             # Special AoE Attack
-            return self.attack_aoe(user, base_damage=special_damage, chat_id=chat_id, use_special=True)
+            return self.attack_aoe(user, base_damage=special_damage, chat_id=chat_id, use_special=True, session=session)
         else:
             # Single Target Special Attack
             # Deduct mana here for single target (attack_aoe handles it for AoE)
-            self.user_service.update_user(user.id_telegram, {'mana': user.mana - mana_cost})
-            success, msg, extra_data = self.attack_mob(user, base_damage=special_damage, use_special=True)
-            
-            if not success:
-                # Refund mana if attack failed (e.g. no mob)
-                self.user_service.update_user(user.id_telegram, {'mana': user.mana + mana_cost})
-                return False, msg, None, []
+            local_session = False
+            if not session:
+                session = self.db.get_session()
+                local_session = True
                 
-            return success, msg, extra_data, []
+            try:
+                self.user_service.update_user(user.id_telegram, {'mana': user.mana - mana_cost}, session=session)
+                success, msg, extra_data = self.attack_mob(user, base_damage=special_damage, use_special=True, session=session)
+                
+                if not success:
+                    # Refund mana if attack failed (e.g. no mob)
+                    self.user_service.update_user(user.id_telegram, {'mana': user.mana + mana_cost}, session=session)
+                    if local_session:
+                        session.commit()
+                    return False, msg, None, []
+                
+                if local_session:
+                    session.commit()
+                return success, msg, extra_data, []
+            except Exception as e:
+                if local_session:
+                    session.rollback()
+                return False, f"Errore durante l'attacco speciale: {e}", None, []
+            finally:
+                if local_session:
+                    session.close()
     def flee_mob(self, user, mob_id):
         """
         Allow a user to flee from a mob with a chance based on level ratio.
@@ -241,15 +258,19 @@ class PvEService:
             
         return speed, resistance, hp_bonus, dmg_bonus
 
-    def spawn_specific_mob(self, mob_name=None, chat_id=None, reference_level=None, ignore_limit=False):
+    def spawn_specific_mob(self, mob_name=None, chat_id=None, reference_level=None, ignore_limit=False, session=None):
         """Spawn a specific mob by name or a random one if None. Returns (success, msg, mob_id)"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         
         # Limit: max 10 active mobs total (to prevent spam), unless ignore_limit is True (e.g. dungeons)
         if not ignore_limit:
             active_mobs_count = session.query(Mob).filter(Mob.is_dead == False, Mob.is_boss == False, Mob.dungeon_id == None).count()
             if active_mobs_count >= 10:
-                session.close()
+                if local_session:
+                    session.close()
                 return False, f"C'è già un mob attivo! Sconfiggilo prima di spawnarne altri.", None
             
         # RESTRICTION: Only spawn in official group IF NOT DUNGEON (handled by caller context usually, but here we relax it for dungeons)
@@ -268,8 +289,9 @@ class PvEService:
             # Find specific mob
             mob_data = next((m for m in self.mob_data if m['nome'].lower() == mob_name.lower()), None)
             if not mob_data:
-                session.close()
-                return False, f"Mob '{mob_name}' not found.", None
+                if local_session:
+                    session.close()
+                return False, f"Mostro '{mob_name}' non trovato.", None
             
             if reference_level is not None:
                 # Level range: -10 to +10 from reference, min 1
@@ -303,7 +325,8 @@ class PvEService:
                 level = random.randint(1, 10) # Default
             
             if not pool:
-                session.close()
+                if local_session:
+                    session.close()
                 return False, "No suitable mob found.", None
 
             # Filter by theme if available
@@ -358,27 +381,38 @@ class PvEService:
             new_mob.mob_level = level
         
         session.add(new_mob)
-        session.commit()
+        if local_session:
+            session.commit()
+        else:
+            session.flush()
         
         # Get ID
         mob_id = new_mob.id
         mob_name = new_mob.name
         
-        session.close()
+        if local_session:
+            session.close()
         return True, f"Un {mob_name} (Lv. {level}) è apparso! (Vel: {speed}, Res: {resistance}%)", mob_id
 
-    def spawn_boss(self, boss_name=None, chat_id=None, reference_level=None, ignore_limit=False):
+    def spawn_boss(self, boss_name=None, chat_id=None, reference_level=None, ignore_limit=False, session=None):
         """Spawn a boss (Mob with is_boss=True). Returns (success, msg, mob_id)"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         
         # Limit: max 1 active world boss total (dungeon bosses excluded), unless ignore_limit is True
         if not ignore_limit:
             active_boss_count = session.query(Mob).filter(Mob.is_boss == True, Mob.is_dead == False, Mob.dungeon_id == None).count()
-            if active_boss_count >= 1:
-                session.close()
-                return False, f"C'è già un boss attivo! Sconfiggilo prima di spawnarne altri.", None
+            # Check if boss already exists in this chat
+            existing = session.query(Mob).filter_by(chat_id=chat_id, is_boss=True, is_dead=False).first()
+            if existing:
+                if local_session:
+                    session.close()
+                return False, f"C'è già un boss attivo: {existing.name}!", None
         
-        # Get current season theme
+        # Get current season theme (if not provided)
+        theme = None
         from models.seasons import Season
         current_season = session.query(Season).filter_by(is_active=True).first()
         theme = current_season.theme if current_season else None
@@ -388,7 +422,8 @@ class PvEService:
             # Find specific boss
             boss_data = next((b for b in self.boss_data if b['nome'].lower() == boss_name.lower()), None)
             if not boss_data:
-                session.close()
+                if local_session:
+                    session.close()
                 return False, f"Boss '{boss_name}' not found.", None
             
             if reference_level is not None:
@@ -399,7 +434,8 @@ class PvEService:
         else:
             # Random boss based on level and difficulty
             if not self.boss_data:
-                session.close()
+                if local_session:
+                    session.close()
                 return False, "No boss data loaded.", None
             
             if reference_level is not None:
@@ -420,7 +456,8 @@ class PvEService:
                 level = random.randint(20, 50) # Default
             
             if not pool:
-                session.close()
+                if local_session:
+                    session.close()
                 return False, "No suitable boss found.", None
 
             # Filter by theme if available
@@ -470,11 +507,16 @@ class PvEService:
             new_boss.mob_level = level
         
         session.add(new_boss)
-        session.commit()
+        if local_session:
+            session.commit()
+        else:
+            session.flush()
+        
         boss_id = new_boss.id
         boss_name = new_boss.name
         
-        session.close()
+        if local_session:
+            session.close()
         return True, f"Un boss {boss_name} (Lv. {level}) è apparso! (Vel: {speed}, Res: {resistance}%)", boss_id
 
     def taunt_mob(self, user, mob_id):
@@ -528,14 +570,18 @@ class PvEService:
             'speed': getattr(mob, 'speed', 0),
             'resistance': getattr(mob, 'resistance', 0),
             'image_path': self.get_enemy_image_path(mob),
-            'dungeon_id': mob.dungeon_id
+            'dungeon_id': mob.dungeon_id,
+            'is_boss': mob.is_boss
         }
         session.close()
         return data
 
-    def attack_mob(self, user, base_damage=0, use_special=False, ability=None, mob_id=None, mana_cost=0):
+    def attack_mob(self, user, base_damage=0, use_special=False, ability=None, mob_id=None, mana_cost=0, session=None):
         """Attack current mob using BattleService"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         extra_data = {}
         rewards_to_distribute = [] # Initialize here to avoid UnboundLocalError later
         
@@ -543,22 +589,26 @@ class PvEService:
             # Attack specific mob by ID
             mob = session.query(Mob).filter_by(id=mob_id).first()
             if not mob:
-                session.close()
+                if local_session:
+                    session.close()
                 return False, "Mostro non trovato.", None
             if mob.is_dead:
-                session.close()
+                if local_session:
+                    session.close()
                 return False, "Questo mostro è già morto!", None
             
             # Check if user has fled
             participation = session.query(CombatParticipation).filter_by(mob_id=mob_id, user_id=user.id_telegram).first()
             if participation and participation.has_fled:
-                session.close()
+                if local_session:
+                    session.close()
                 return False, "Sei fuggito da questo mostro! Non puoi più attaccarlo.", None
         else:
             # Attack first alive mob
             mob = session.query(Mob).filter_by(is_dead=False).first()
             if not mob:
-                session.close()
+                if local_session:
+                    session.close()
                 return False, "Nessun mostro nei paraggi.", None
         
         # Dungeon Restriction
@@ -568,17 +618,20 @@ class PvEService:
         if mob.dungeon_id:
             participants = ds.get_dungeon_participants(mob.dungeon_id)
             if user.id_telegram not in [p.user_id for p in participants]:
-                session.close()
+                if local_session:
+                    session.close()
                 return False, "🔒 Non puoi attaccare questo mob! Appartiene a un dungeon a cui non sei iscritto.", None
         else:
             # World mob: check if user is in a dungeon
             if ds.get_user_active_dungeon(user.id_telegram):
-                session.close()
+                if local_session:
+                    session.close()
                 return False, "🔒 Sei impegnato in un dungeon! Non puoi attaccare i mostri del mondo esterno.", None
         
         # Check fatigue
         if self.user_service.check_fatigue(user):
-            session.close()
+            if local_session:
+                session.close()
             return False, "Sei troppo affaticato per combattere! Riposa.", None
             
         # Check Cooldown based on Speed
@@ -595,18 +648,20 @@ class PvEService:
                 remaining = int(cooldown_seconds - elapsed)
                 minutes = remaining // 60
                 seconds = remaining % 60
-                session.close()
+                if local_session:
+                    session.close()
                 return False, f"⏳ Sei stanco! (CD: {int(cooldown_seconds)}s)\nDevi riposare ancora per {minutes}m {seconds}s.", None
         
         # Deduct Mana (if applicable) - NOW AFTER COOLDOWN CHECK
         if mana_cost > 0:
             if user.mana < mana_cost:
-                session.close()
+                if local_session:
+                    session.close()
                 return False, f"❌ Mana insufficiente! Serve: {mana_cost}", None
-            self.user_service.update_user(user.id_telegram, {'mana': user.mana - mana_cost})
+            self.user_service.update_user(user.id_telegram, {'mana': user.mana - mana_cost}, session=session)
         
         # Update last attack time
-        self.user_service.update_user(user.id_telegram, {'last_attack_time': datetime.datetime.now()})
+        self.user_service.update_user(user.id_telegram, {'last_attack_time': datetime.datetime.now()}, session=session)
         
         # Get user character for stats/type
         from services.character_loader import get_character_loader
@@ -670,7 +725,7 @@ class PvEService:
         mob.health -= damage
         
         # NEW: Update combat participation with capped damage
-        self.update_participation(mob.id, user.id_telegram, actual_damage_dealt, combat_result['is_crit'])
+        self.update_participation(mob.id, user.id_telegram, actual_damage_dealt, combat_result['is_crit'], session=session)
         
         # NEW: Log damage event
         self.event_dispatcher.log_event(
@@ -684,7 +739,8 @@ class PvEService:
                 'mob_name': mob.name,
                 'mob_level': getattr(mob, 'mob_level', 1),
                 'effectiveness': combat_result.get('effectiveness', 1.0)
-            }
+            },
+            session=session
         )
         
         # Build message
@@ -759,7 +815,7 @@ class PvEService:
             user_level = user.livello
             
             # NEW: Log mob kill event
-            participants = self.get_combat_participants(mob_id)
+            participants = self.get_combat_participants(mob_id, session=session)
             solo_kill = len(participants) == 1
             participation = next((p for p in participants if p.user_id == user_id), None)
             
@@ -772,30 +828,29 @@ class PvEService:
                     'is_boss': is_boss,
                     'solo_kill': solo_kill,
                     'damage_dealt': participation.damage_dealt if participation else 0
-                }
+                },
+                session=session
             )
             
-            # COMMIT AND CLOSE SESSION BEFORE REWARDS
+            # COMMIT transaction but keep session open for rewards
             session.commit()
-            session.close()
             
             # Rewards based on difficulty and level (already captured)
             reward_details = []
             
             # Bosses give much better rewards
             if is_boss:
-                reward_details, total_wumpa, total_xp = self.distribute_boss_rewards(mob_id, user, damage)
+                reward_details, total_wumpa, total_xp = self.distribute_boss_rewards(mob_id, user, damage, session=session)
                 msg += f"\n\n🏆 **Ricompense Boss Distribuite!** ({total_wumpa} {PointsName} totali)\n"
             else:
                 # Normal mob rewards distributed among participants
-                participants = self.get_combat_participants(mob_id)
+                participants = self.get_combat_participants(mob_id, session=session)
                 total_damage = sum(p.damage_dealt for p in participants)
                 
                 actual_total_wumpa = 0
                 actual_total_xp = 0
                 
                 rewards_to_distribute = []
-                temp_session = self.db.get_session()
                 try:
                     for p in participants:
                         share = p.damage_dealt / total_damage if total_damage > 0 else 1/len(participants)
@@ -816,7 +871,7 @@ class PvEService:
                             
                         base_exp = int(base_exp_pool * share)
                         mob_level = level if level else (difficulty * 5)
-                        u_part = temp_session.query(Utente).filter_by(id_telegram=p.user_id).first()
+                        u_part = session.query(Utente).filter_by(id_telegram=p.user_id).first()
                         user_level = u_part.livello if u_part and u_part.livello is not None else 1
                         
                         penalty_factor_xp = 1.0
@@ -828,7 +883,7 @@ class PvEService:
                         p_xp = int(base_exp * penalty_factor_xp)
                         p_wumpa = int(base_wumpa * penalty_factor_wumpa)
                         try:
-                            p_user_check = temp_session.query(Utente).filter_by(id_telegram=p.user_id).first()
+                            p_user_check = session.query(Utente).filter_by(id_telegram=p.user_id).first()
                             print(f"[DEBUG] distribute_rewards: Checking user {p.user_id}. Found: {p_user_check is not None}")
                         except Exception as e:
                             print(f"[ERROR] Failed to query user {p.user_id}: {e}")
@@ -884,7 +939,7 @@ class PvEService:
                         actual_total_wumpa += p_wumpa
                         actual_total_xp += p_xp
                 finally:
-                    temp_session.close()
+                    pass
                 
                 # Distribute Rewards
                 for reward in rewards_to_distribute:
@@ -894,8 +949,8 @@ class PvEService:
                     p_name = reward['p_name']
                     damage_dealt = reward['damage_dealt']
                     
-                    level_up_info = self.user_service.add_exp_by_id(user_id, p_xp)
-                    self.user_service.add_points_by_id(user_id, p_wumpa, is_drop=True)
+                    level_up_info = self.user_service.add_exp_by_id(user_id, p_xp, session=session)
+                    self.user_service.add_points_by_id(user_id, p_wumpa, is_drop=True, session=session)
                     
                     # Handle seasonal exp and potential season end
                     season_result = self.season_manager.add_seasonal_exp(user_id, p_xp)
@@ -960,7 +1015,8 @@ class PvEService:
                     if reward.get('is_dead'):
                         ds.record_death(dungeon_id)
 
-                dungeon_events, new_mob_ids = ds.check_step_completion(dungeon_id)
+                dungeon_events, new_mob_ids = ds.check_step_completion(dungeon_id, session=session)
+                
                 if dungeon_events:
                     # If it's a list (events), pass it to extra_data
                     if isinstance(dungeon_events, list):
@@ -968,9 +1024,9 @@ class PvEService:
                     else:
                         # Fallback if it's a string (shouldn't happen with new DS but safe)
                         msg += f"\n\n{dungeon_events}"
-                        
-                    if new_mob_ids:
-                        extra_data['new_mob_ids'] = new_mob_ids
+                
+                if new_mob_ids:
+                    extra_data['new_mob_ids'] = new_mob_ids
         else:
             # Add status card only if alive
             card = self.get_status_card(mob)
@@ -987,25 +1043,29 @@ class PvEService:
             'new_mob_ids': extra_data.get('new_mob_ids', [])
         }
         
-        if session.is_active:
+        # NEW: Process achievements BEFORE closing session
+        self.achievement_tracker.process_pending_events(limit=10, session=session)
+        
+        if local_session:
             session.commit()
             session.close()
         
-        # NEW: Process achievements
-        self.achievement_tracker.process_pending_events(limit=10)
-            
         return True, msg, final_extra_data
 
-    def attack_aoe(self, user, base_damage=0, chat_id=None, target_mob_id=None, use_special=False):
+    def attack_aoe(self, user, base_damage=0, chat_id=None, target_mob_id=None, use_special=False, session=None):
         """Attack up to 5 active mobs. 70% damage to target, 50% to others. 2x cooldown."""
         if not chat_id:
             return False, "Chat ID non specificato.", None, []
             
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         all_mobs = session.query(Mob).filter_by(chat_id=chat_id, is_dead=False).all()
         
         if not all_mobs:
-            session.close()
+            if local_session:
+                session.close()
             return False, "Nessun mostro nei paraggi.", None, []
             
         # Dungeon Isolation for AoE
@@ -1021,7 +1081,8 @@ class PvEService:
             mobs = [m for m in all_mobs if m.dungeon_id is None]
             
         if not mobs:
-            session.close()
+            if local_session:
+                session.close()
             msg = "Non ci sono mostri del dungeon da colpire!" if active_dungeon else "Non ci sono mostri selvatici da colpire!"
             return False, msg, None, []
             
@@ -1030,13 +1091,15 @@ class PvEService:
         mobs = [m for m in mobs if m.id not in fled_mob_ids]
         
         if not mobs:
-            session.close()
+            if local_session:
+                session.close()
             return False, "Non ci sono mostri validi da colpire (forse sei fuggito da tutti?)", None, []
             
             
         # Check fatigue
         if self.user_service.check_fatigue(user):
-            session.close()
+            if local_session:
+                session.close()
             return False, "Sei troppo affaticato per combattere! Riposa.", None, []
             
         # Check Cooldown (2x normal)
@@ -1050,13 +1113,14 @@ class PvEService:
                 remaining = int(cooldown_seconds - elapsed)
                 minutes = remaining // 60
                 seconds = remaining % 60
-                session.close()
+                if local_session:
+                    session.close()
                 return False, f"⏳ Sei stanco! (CD AoE: {int(cooldown_seconds)}s)\nDevi riposare ancora per {minutes}m {seconds}s.", None, []
         
         # Update last attack time
         self.user_service.update_user(user.id_telegram, {
             'last_attack_time': datetime.datetime.now()
-        })
+        }, session=session)
         
         # Get user character for stats/type
         from services.character_loader import get_character_loader
@@ -1070,10 +1134,10 @@ class PvEService:
             mana_cost = int(mana_cost * multiplier)
             
             if user.mana < mana_cost:
-                session.close()
+                if local_session:
+                    session.close()
                 return False, f"Mana insufficiente! Serve: {mana_cost}, hai: {user.mana}", None, []
-            
-            self.user_service.update_user(user.id_telegram, {'mana': user.mana - mana_cost})
+            self.user_service.update_user(user.id_telegram, {'mana': user.mana - mana_cost}, session=session)
         
         # Prepare attacker object wrapper
         class AttackerWrapper:
@@ -1130,7 +1194,7 @@ class PvEService:
             mob.health -= damage
             
             # Update participation
-            self.update_participation(mob.id, user.id_telegram, actual_damage_dealt, combat_result['is_crit'])
+            self.update_participation(mob.id, user.id_telegram, actual_damage_dealt, combat_result['is_crit'], session=session)
             
             # Log event
             self.event_dispatcher.log_event(
@@ -1143,11 +1207,13 @@ class PvEService:
                     'mob_id': mob.id, 
                     'mob_name': mob.name, 
                     'is_aoe': True
-                }
+                },
+                session=session
             )
             
             # Compact status for AoE to avoid massive cards
-            summary_msg += f"\n⚔️ **{mob.name}**: {mob.health}/{mob.max_health} HP (-{damage})"
+            hp_percent = int((mob.health / mob.max_health) * 100)
+            summary_msg += f"\n⚔️ **{mob.name}**: {hp_percent}% HP (-{damage})"
             
             if mob.last_message_id:
                 extra_data['delete_message_ids'].append(mob.last_message_id)
@@ -1158,7 +1224,8 @@ class PvEService:
                 mob.killer_id = user.id_telegram
                 summary_msg += " 💀"
         
-        session.commit()
+        if local_session:
+            session.commit()
         
         # Handle rewards for dead mobs (simplified for AoE to avoid massive spam)
         # We'll just distribute basic rewards without the full detailed breakdown for each if many die
@@ -1188,8 +1255,8 @@ class PvEService:
                     if xp < 1: xp = 1
                     
                     # Apply rewards
-                    level_up_info = self.user_service.add_exp_by_id(p.user_id, xp)
-                    self.user_service.add_points_by_id(p.user_id, wumpa, is_drop=True)
+                    level_up_info = self.user_service.add_exp_by_id(p.user_id, xp, session=session)
+                    self.user_service.add_points_by_id(p.user_id, wumpa, is_drop=True, session=session)
                     self.season_manager.add_seasonal_exp(p.user_id, xp)
                     
                     # Ensure health is capped for participants too (just in case)
@@ -1213,9 +1280,8 @@ class PvEService:
         for m in mobs:
             if m.dungeon_id:
                 dungeon_id = m.dungeon_id
-                break
-        
-        session.close()
+        if local_session:
+            session.commit()
         
         if dungeon_id and dead_mobs:
             from services.dungeon_service import DungeonService
@@ -1240,9 +1306,14 @@ class PvEService:
         if mobs and random.random() < 0.3:
             # Pick one of the hit mobs to lead the counter-attack
             attacker_mob = random.choice(mobs)
+            # Ensure mob is still attached or re-query if needed, but keeping session open is better
             if not attacker_mob.is_dead:
-                attack_events = self.mob_random_attack(specific_mob_id=attacker_mob.id, chat_id=chat_id)
-                
+                attack_events = self.mob_random_attack(specific_mob_id=attacker_mob.id, chat_id=chat_id, session=session)
+        
+        if local_session:
+            session.commit()
+            session.close()
+            
         return True, summary_msg, extra_data, attack_events
 
     def get_active_mobs_count(self, chat_id):
@@ -1265,9 +1336,12 @@ class PvEService:
         finally:
             session.close()
 
-    def mob_random_attack(self, specific_mob_id=None, chat_id=None):
+    def mob_random_attack(self, specific_mob_id=None, chat_id=None, session=None):
         """Mobs attack random users. If specific_mob_id is provided, only that mob attacks."""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         
         try:
             if specific_mob_id:
@@ -1292,7 +1366,7 @@ class PvEService:
                         if not dungeon or dungeon.status != "active":
                             print(f"[DEBUG] Mob {mob.id} belongs to inactive dungeon {mob.dungeon_id}. Marking as dead.")
                             mob.is_dead = True
-                            session.commit()
+                            # Removed individual commit to reduce locking
                             continue
                         
                         # Chat Consistency: Dungeon mobs only attack in their dungeon chat
@@ -1332,8 +1406,10 @@ class PvEService:
                         is_fatigued = self.user_service.check_fatigue(u)
                         is_resting = self.user_service.get_resting_status(u.id_telegram)
                         
-                        if not is_fatigued and not is_resting:
-                            alive_users.append(uid)
+                        if not is_resting:
+                            # In dungeons, we allow attacking fatigued users to maintain challenge
+                            if mob.dungeon_id or not is_fatigued:
+                                alive_users.append(uid)
                     
                     from services.dungeon_service import DungeonService
                     ds = DungeonService()
@@ -1376,7 +1452,8 @@ class PvEService:
                             if is_resting:
                                 print(f"[DEBUG] User {uid} is resting")
                                 
-                            if not is_fatigued and not is_resting:
+                            if not is_resting:
+                                # In dungeons, we allow attacking fatigued users
                                 valid_targets.append(uid)
                         
                         targets_pool = valid_targets
@@ -1467,7 +1544,8 @@ class PvEService:
                             event_type='damage_taken',
                             user_id=target.id_telegram,
                             value=damage,
-                            context={'mob_name': mob.name, 'mob_id': mob.id, 'is_boss': mob.is_boss, 'new_hp': new_hp, 'died': died}
+                            context={'mob_name': mob.name, 'mob_id': mob.id, 'is_boss': mob.is_boss, 'new_hp': new_hp, 'died': died},
+                            session=session
                         )
                         
                         username = target.username.lstrip('@') if target.username else None
@@ -1535,27 +1613,35 @@ class PvEService:
                         'last_message_id': last_msg_id
                     })
                     
-                    # Commit per mob to isolate failures
-                    session.commit()
+                    # Removed individual commit to reduce locking
                     
                 except Exception as e:
                     print(f"Error in mob_random_attack loop for mob {mob.id}: {e}")
                     session.rollback()
             
-            session.close()
+            if local_session:
+                session.commit()
+                session.close()
             return attack_events
         except Exception as e:
             print(f"Error in mob_random_attack: {e}")
-            session.close()
+            if local_session:
+                session.rollback()
+                session.close()
             return []
 
-    def distribute_boss_rewards(self, mob_id, killer_user, final_damage):
+    def distribute_boss_rewards(self, mob_id, killer_user, final_damage, session=None):
         """Distribute rewards to all participants who attacked this boss"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         boss = session.query(Mob).filter_by(id=mob_id).first()
         
         if not boss or not boss.is_boss:
-            session.close()
+            if local_session:
+                session.close()
             return []
         
         # Get boss loot from data
@@ -1655,8 +1741,8 @@ class PvEService:
                 # Note: We don't add to actual_total_wumpa/xp again because it was already counted (just redirected)
             
             # Add rewards and check for level-up
-            level_up_info = self.user_service.add_exp_by_id(p.user_id, p_xp)
-            self.user_service.add_points_by_id(p.user_id, p_wumpa, is_drop=True)
+            level_up_info = self.user_service.add_exp_by_id(p.user_id, p_xp, session=session)
+            self.user_service.add_points_by_id(p.user_id, p_wumpa, is_drop=True, session=session)
             # Handle seasonal exp
             season_result = self.season_manager.add_seasonal_exp(p.user_id, p_xp)
             # We don't use the rewards/msg here for boss distribution yet, but we must handle the return to avoid errors if it was unpacking
@@ -1684,7 +1770,8 @@ class PvEService:
             
             reward_details.append(reward_line)
         
-        session.close()
+        if local_session:
+            session.close()
         return reward_details, actual_total_wumpa, actual_total_xp
 
     def get_mob_status_by_id(self, mob_id):
@@ -1886,9 +1973,13 @@ class PvEService:
         finally:
             session.close()
     
-    def update_participation(self, mob_id, user_id, damage, is_crit=False):
+    def update_participation(self, mob_id, user_id, damage, is_crit=False, session=None):
         """Update combat participation with damage dealt (creates if missing)"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         try:
             participation = session.query(CombatParticipation).filter_by(
                 mob_id=mob_id,
@@ -1911,12 +2002,15 @@ class PvEService:
             if is_crit:
                 participation.critical_hits += 1
             participation.last_hit_time = datetime.datetime.now()
-            session.commit()
+            
+            if local_session:
+                session.commit()
         except Exception as e:
             session.rollback()
             print(f"Error updating participation: {e}")
         finally:
-            session.close()
+            if local_session:
+                session.close()
 
     def force_mob_drop(self, mob_id, percent):
         """Force a mob to drop a percentage of its potential Wumpa loot"""
@@ -1949,13 +2043,17 @@ class PvEService:
         session.close()
         return drop_amount
     
-    def get_combat_participants(self, mob_id):
+    def get_combat_participants(self, mob_id, session=None):
         """Get all participants for a mob fight"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         try:
             participants = session.query(CombatParticipation).filter_by(
                 mob_id=mob_id
             ).all()
             return participants
         finally:
-            session.close()
+            if local_session:
+                session.close()

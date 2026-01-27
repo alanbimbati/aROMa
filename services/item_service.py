@@ -118,8 +118,12 @@ class ItemService:
         finally:
             session.close()
 
-    def use_item(self, id_telegram, oggetto):
-        session = self.db.get_session()
+    def use_item(self, id_telegram, oggetto, session=None):
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+        
         collezionabile = session.query(Collezionabili).filter_by(id_telegram=str(id_telegram), oggetto=oggetto, data_utilizzo=None).first()
         if collezionabile:
             collezionabile.data_utilizzo = datetime.datetime.today()
@@ -127,11 +131,13 @@ class ItemService:
             
             # Apply effect
             user = session.query(Utente).filter_by(id_telegram=int(id_telegram)).first()
-            result = self.apply_effect(user, oggetto)
+            result = self.apply_effect(user, oggetto, session=session)
             
-            session.close()
+            if local_session:
+                session.close()
             return True, result[0] if isinstance(result, tuple) else result
-        session.close()
+        if local_session:
+            session.close()
         return False, "Oggetto non trovato."
 
     def get_item_by_user(self, id_telegram, nome_oggetto):
@@ -237,7 +243,7 @@ class ItemService:
         else:
             return True, base_msg, item
 
-    def apply_effect(self, user, item_name, target_user=None, target_mob=None):
+    def apply_effect(self, user, item_name, target_user=None, target_mob=None, session=None):
         import json
         
         # NEW: Log item usage event (moved to start to ensure it runs)
@@ -256,7 +262,7 @@ class ItemService:
         from services.potion_service import PotionService
         potion_service = PotionService()
         if potion_service.get_potion_by_name(item_name):
-            success, msg = potion_service.apply_potion_effect(user, item_name)
+            success, msg = potion_service.apply_potion_effect(user, item_name, session=session)
             return msg, None
             
         if item_name == "Turbo":
