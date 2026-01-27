@@ -76,5 +76,5 @@ MISCELLANIA = {
 
 from telebot import TeleBot
 from telebot import types
-bot = TeleBot(BOT_TOKEN, threaded=False)
+bot = TeleBot(BOT_TOKEN, threaded=True, num_threads=4)
 hideBoard = types.ReplyKeyboardRemove()  

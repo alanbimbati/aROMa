@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Float, UniqueConstraint
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Boolean, ForeignKey, Float, UniqueConstraint
 from database import Base
 import datetime
 
@@ -46,7 +46,7 @@ class CombatParticipation(Base):
     
     id = Column(Integer, primary_key=True)
     mob_id = Column(Integer, ForeignKey('mob.id'))
-    user_id = Column(Integer, nullable=False)  # id_telegram
+    user_id = Column(BigInteger, nullable=False)  # id_telegram
     
     # Damage Tracking
     damage_dealt = Column(Integer, default=0)

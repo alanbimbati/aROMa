@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Float
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Boolean, ForeignKey, Float
 from database import Base
 import datetime
 
@@ -25,7 +25,7 @@ class SeasonProgress(Base):
     __tablename__ = "season_progress"
     
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, nullable=False)  # id_telegram
+    user_id = Column(BigInteger, nullable=False)  # id_telegram
     season_id = Column(Integer, ForeignKey('season.id'))
     
     current_exp = Column(Integer, default=0)
@@ -57,7 +57,7 @@ class SeasonClaimedReward(Base):
     __tablename__ = "season_claimed_reward"
     
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, nullable=False)
+    user_id = Column(BigInteger, nullable=False)
     season_id = Column(Integer, ForeignKey('season.id'))
     reward_id = Column(Integer, ForeignKey('season_reward.id'))
     claimed_at = Column(DateTime, default=datetime.datetime.now)

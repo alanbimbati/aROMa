@@ -41,13 +41,17 @@ class TransformationService:
         session.close()
         return available
     
-    def purchase_transformation(self, user, transformation_id):
+    def purchase_transformation(self, user, transformation_id, session=None):
         """Purchase a transformation"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         
         transformation = session.query(CharacterTransformation).filter_by(id=transformation_id).first()
         if not transformation:
-            session.close()
+            if local_session:
+                session.close()
             return False, "Trasformazione non trovata."
         
         # Check if already purchased
@@ -57,12 +61,14 @@ class TransformationService:
         ).first()
         
         if existing:
-            session.close()
+            if local_session:
+                session.close()
             return False, "Hai già acquistato questa trasformazione!"
         
         # Check level requirement
         if transformation.required_level and user.livello < transformation.required_level:
-            session.close()
+            if local_session:
+                session.close()
             return False, f"Livello {transformation.required_level} richiesto!"
         
         # Check progressive requirement
@@ -72,12 +78,14 @@ class TransformationService:
                 transformation_id=transformation.previous_transformation_id
             ).first()
             if not prev_purchased:
-                session.close()
+                if local_session:
+                    session.close()
                 return False, "Devi prima acquistare la trasformazione precedente!"
         
         # Check Wumpa cost
         if user.points < transformation.wumpa_cost:
-            session.close()
+            if local_session:
+                session.close()
             return False, f"Servono {transformation.wumpa_cost} Wumpa Fruits!"
         
         # Deduct cost
@@ -89,18 +97,24 @@ class TransformationService:
             user_id=user.id_telegram,
             transformation_id=transformation_id,
             activated_at=None,
-            expires_at=None,
+            expires_at=datetime.datetime.now(),
             is_active=False
         )
         session.add(user_trans)
-        session.commit()
-        session.close()
+        if local_session:
+            session.commit()
+            session.close()
+        else:
+            session.flush() # Ensure ID is generated but don't commit transaction
         
         return True, f"Trasformazione '{transformation.transformation_name}' acquistata per {transformation.wumpa_cost} Wumpa!"
     
-    def activate_transformation(self, user, transformation_id):
+    def activate_transformation(self, user, transformation_id, session=None):
         """Activate a purchased transformation"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         
         # Check if user owns this transformation
         user_trans = session.query(UserTransformation).filter_by(
@@ -109,7 +123,8 @@ class TransformationService:
         ).first()
         
         if not user_trans:
-            session.close()
+            if local_session:
+                session.close()
             return False, "Non possiedi questa trasformazione!"
         
         transformation = session.query(CharacterTransformation).filter_by(id=transformation_id).first()
@@ -128,14 +143,20 @@ class TransformationService:
         user_trans.activated_at = datetime.datetime.now()
         user_trans.expires_at = datetime.datetime.now() + datetime.timedelta(days=transformation.duration_days)
         
-        session.commit()
-        session.close()
+        if local_session:
+            session.commit()
+            session.close()
+        else:
+            session.flush()
         
         return True, f"Trasformazione '{transformation.transformation_name}' attivata per {transformation.duration_days} giorni!"
     
-    def get_active_transformation(self, user):
+    def get_active_transformation(self, user, session=None):
         """Get user's currently active transformation"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         
         user_trans = session.query(UserTransformation).filter_by(
             user_id=user.id_telegram,
@@ -143,26 +164,35 @@ class TransformationService:
         ).first()
         
         if not user_trans:
-            session.close()
+            if local_session:
+                session.close()
             return None
         
         # Check if expired
         if user_trans.expires_at and datetime.datetime.now() > user_trans.expires_at:
             user_trans.is_active = False
-            session.commit()
-            session.close()
+            if local_session:
+                session.commit()
+                session.close()
+            else:
+                session.flush()
             return None
         
         transformation = session.query(CharacterTransformation).filter_by(id=user_trans.transformation_id).first()
-        if transformation:
+        if transformation and local_session:
             session.expunge(transformation)
-        session.close()
+        
+        if local_session:
+            session.close()
         
         return transformation
         
-    def get_transformation_bonuses(self, user):
+    def get_transformation_bonuses(self, user, session=None):
         """Get stat bonuses from active transformation"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         try:
             user_trans = session.query(UserTransformation).filter_by(
                 user_id=user.id_telegram,
@@ -175,7 +205,10 @@ class TransformationService:
             # Check expiration
             if user_trans.expires_at and datetime.datetime.now() > user_trans.expires_at:
                 user_trans.is_active = False
-                session.commit()
+                if local_session:
+                    session.commit()
+                else:
+                    session.flush()
                 return {"health": 0, "mana": 0, "damage": 0}
                 
             transformation = session.query(CharacterTransformation).filter_by(id=user_trans.transformation_id).first()
@@ -193,7 +226,8 @@ class TransformationService:
             print(f"Error in get_transformation_bonuses: {e}")
             raise e
         finally:
-            session.close()
+            if local_session:
+                session.close()
 
     def activate_temporary_transformation(self, user, transformation_id, duration_minutes=5):
         """Activate a transformation temporarily (e.g. Potara Fusion)"""

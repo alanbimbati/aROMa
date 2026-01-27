@@ -18,6 +18,10 @@ from models.combat import CombatParticipation
 from services.user_service import UserService
 from services.pve_service import PvEService
 
+import inspect
+import sys
+sys.stderr.write(f"[DEBUG] PvEService file: {inspect.getfile(PvEService)}\n")
+
 class TestCombatActions(unittest.TestCase):
     def setUp(self):
         self.db = Database()
@@ -73,6 +77,7 @@ class TestCombatActions(unittest.TestCase):
         self.assertTrue(success, f"Attack failed: {msg}")
         self.assertIn("Hai inflitto", msg)
         
+        self.session.expire_all()
         self.session.refresh(mob)
         self.assertLess(mob.health, 100)
 
@@ -96,6 +101,7 @@ class TestCombatActions(unittest.TestCase):
         success, msg, extra_data, attack_events = result
         self.assertTrue(success, f"Special attack failed: {msg}")
         
+        self.session.expire_all()
         self.session.refresh(user)
         self.assertLess(user.mana, initial_mana)
         
@@ -124,6 +130,7 @@ class TestCombatActions(unittest.TestCase):
         self.assertIn("mob_ids", extra_data)
         
         # Verify all mobs took damage
+        self.session.expire_all()
         mobs = self.session.query(Mob).filter_by(chat_id=self.chat_id).all()
         self.assertEqual(len(mobs), 3)
         for m in mobs:

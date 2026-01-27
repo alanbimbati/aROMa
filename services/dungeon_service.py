@@ -60,39 +60,57 @@ class DungeonService:
     def get_dungeon_def(self, dungeon_def_id):
         return self.dungeons_cache.get(dungeon_def_id)
 
-    def get_user_progress(self, user_id):
-        session = self.db.get_session()
+    def get_user_progress(self, user_id, session=None):
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         progress = session.query(DungeonProgress).filter_by(user_id=user_id).all()
-        session.close()
+        if local_session:
+            session.close()
         return progress
 
-    def can_access_dungeon(self, user_id, dungeon_def_id):
+    def can_access_dungeon(self, user_id, dungeon_def_id, session=None):
         if dungeon_def_id == 1:
             return True
         
         # Check if previous dungeon is completed
         prev_id = dungeon_def_id - 1
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         completed = session.query(DungeonProgress).filter_by(
             user_id=user_id, 
             dungeon_def_id=prev_id
         ).first()
-        session.close()
+        
+        if local_session:
+            session.close()
         
         return completed is not None
 
-    def create_dungeon(self, chat_id, dungeon_def_id, creator_id):
+    def create_dungeon(self, chat_id, dungeon_def_id, creator_id, session=None):
         """Starts dungeon registration for a specific dungeon definition"""
         dungeon_def = self.get_dungeon_def(dungeon_def_id)
         if not dungeon_def:
             return None, "Dungeon non trovato."
 
         # Check access for creator
-        if not self.can_access_dungeon(creator_id, dungeon_def_id):
+        # We need session for can_access_dungeon if we want to be safe, but it handles its own session if None
+        # However, if we are in a transaction, we should pass it.
+        
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
+        if not self.can_access_dungeon(creator_id, dungeon_def_id, session=session):
             print(f"[DEBUG] create_dungeon: Access denied for user {creator_id} to dungeon {dungeon_def_id}")
+            if local_session:
+                session.close()
             return None, "Non hai ancora sbloccato questo dungeon! Completa prima i precedenti."
-
-        session = self.db.get_session()
         
         # Cleanup ghost dungeons first
         self._cleanup_ghost_dungeons(chat_id, session)
@@ -105,7 +123,8 @@ class DungeonService:
         
         if active:
             print(f"[DEBUG] create_dungeon: Active dungeon already exists in chat {chat_id}: {active.name} (status: {active.status})")
-            session.close()
+            if local_session:
+                session.close()
             return None, f"C'è già un dungeon attivo in questo gruppo: **{active.name}**"
             
         new_dungeon = Dungeon(
@@ -118,20 +137,31 @@ class DungeonService:
             score=None
         )
         session.add(new_dungeon)
-        session.commit()
+        if local_session:
+            session.commit()
+        else:
+            session.flush()
+            
         d_id = new_dungeon.id
         
         # Add creator as participant automatically
         participant = DungeonParticipant(dungeon_id=d_id, user_id=creator_id)
         session.add(participant)
-        session.commit()
         
-        session.close()
+        if local_session:
+            session.commit()
+            session.close()
+        else:
+            session.flush()
+        
         return d_id, f"🏰 **Dungeon Creato: {dungeon_def['name']}** (Difficoltà: {dungeon_def['difficulty']})\n\n{dungeon_def['description']}\n\nIscrivetevi usando `/join`!\nQuando siete pronti, l'admin può usare `/start_dungeon`."
 
-    def join_dungeon(self, chat_id, user_id):
+    def join_dungeon(self, chat_id, user_id, session=None):
         """Adds a participant to the current registration"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         
         dungeon = session.query(Dungeon).filter(
             Dungeon.chat_id == chat_id,
@@ -139,13 +169,15 @@ class DungeonService:
         ).first()
         
         if not dungeon:
-            session.close()
+            if local_session:
+                session.close()
             return False, "Non c'è nessuna iscrizione aperta per un dungeon in questo gruppo."
             
         # Check access for joiner
         if dungeon.dungeon_def_id:
-            if not self.can_access_dungeon(user_id, dungeon.dungeon_def_id):
-                session.close()
+            if not self.can_access_dungeon(user_id, dungeon.dungeon_def_id, session=session):
+                if local_session:
+                    session.close()
                 return False, "🔒 Non hai ancora sbloccato questo dungeon! Completa i precedenti."
 
         # Check if already joined
@@ -155,27 +187,37 @@ class DungeonService:
         ).first()
         
         if exists:
-            session.close()
+            if local_session:
+                session.close()
             return False, "Ti sei già iscritto a questo dungeon!"
             
         participant = DungeonParticipant(dungeon_id=dungeon.id, user_id=user_id)
         session.add(participant)
-        session.commit()
+        
+        if local_session:
+            session.commit()
+        else:
+            session.flush()
         
         # Verify persistence
         check = session.query(DungeonParticipant).filter_by(dungeon_id=dungeon.id, user_id=user_id).first()
         if not check:
             print(f"[ERROR] join_dungeon: Participant {user_id} NOT found after commit!")
-            session.close()
+            if local_session:
+                session.close()
             return False, "Errore di sistema: iscrizione non salvata."
             
-        session.close()
+        if local_session:
+            session.close()
         return True, "Ti sei iscritto con successo al dungeon! ⚔️"
 
-    def start_dungeon(self, chat_id):
+    def start_dungeon(self, chat_id, session=None):
         """Starts the dungeon and spawns the first step mobs"""
         print(f"[DEBUG] start_dungeon called for chat_id: {chat_id}")
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         
         dungeon = session.query(Dungeon).filter(
             Dungeon.chat_id == chat_id,
@@ -183,12 +225,14 @@ class DungeonService:
         ).first()
         
         if not dungeon:
-            session.close()
+            if local_session:
+                session.close()
             return False, "Non c'è nessun dungeon in fase di iscrizione.", []
             
         participants = session.query(DungeonParticipant).filter_by(dungeon_id=dungeon.id).all()
         if not participants:
-            session.close()
+            if local_session:
+                session.close()
             return False, "Nessun partecipante iscritto! Almeno una persona deve partecipare.", []
             
         dungeon.status = "active"
@@ -196,34 +240,51 @@ class DungeonService:
         dungeon.start_time = datetime.datetime.now()
         d_id = dungeon.id
         d_def_id = dungeon.dungeon_def_id
-        session.commit()
-        session.close()
+        
+        if local_session:
+            session.flush()
+        else:
+            session.flush()
         
         # Spawn first step
-        events, mob_ids = self.spawn_step(d_id, 1)
+        # Note: spawn_step creates its own session if not passed, but we should pass it if we are in a transaction
+        # However, spawn_step calls pve.spawn_specific_mob which might commit.
+        # Let's check spawn_step.
+        
+        events, mob_ids = self.spawn_step(d_id, 1, session=session)
+        
+        if local_session:
+            session.commit()
+            session.close()
         
         return True, "Dungeon Iniziato", events
 
-    def spawn_step(self, dungeon_id, stage_num):
+    def spawn_step(self, dungeon_id, stage_num, session=None):
         """Spawns mobs for the specific stage"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         dungeon = session.query(Dungeon).filter_by(id=dungeon_id).first()
         if not dungeon or not dungeon.dungeon_def_id:
-            session.close()
+            if local_session:
+                session.close()
             return "Errore dungeon."
             
         dungeon_def = self.get_dungeon_def(dungeon.dungeon_def_id)
         if not dungeon_def:
-            session.close()
+            if local_session:
+                session.close()
             return "Definizione dungeon non trovata."
             
         steps = dungeon_def['steps']
         if stage_num > len(steps):
-            session.close()
+            if local_session:
+                session.close()
             return "Errore stage."
             
         step_data = steps[stage_num - 1]
-        session.close()
         
         from services.pve_service import PvEService
         pve = PvEService()
@@ -252,20 +313,20 @@ class DungeonService:
                 name = mob_entry['name']
                 count = mob_entry.get('count', 1)
                 for _ in range(count):
-                    success, m, mob_id = pve.spawn_specific_mob(mob_name=name, chat_id=dungeon.chat_id, ignore_limit=True)
+                    success, m, mob_id = pve.spawn_specific_mob(mob_name=name, chat_id=dungeon.chat_id, ignore_limit=True, session=session)
                     print(f"[DEBUG] spawn_specific_mob result: success={success}, mob_id={mob_id}, name={name}, chat_id={dungeon.chat_id}")
                     if success:
-                        self._assign_mob_to_dungeon(mob_id, dungeon_id)
+                        self._assign_mob_to_dungeon(mob_id, dungeon_id, session=session)
                         final_msgs.append(m)
                         mob_ids.append(mob_id)
         
         # Handle Boss
         if 'boss' in step_data:
             boss_name = step_data['boss']
-            success, m, mob_id = pve.spawn_boss(boss_name=boss_name, chat_id=dungeon.chat_id, ignore_limit=True)
+            success, m, mob_id = pve.spawn_boss(boss_name=boss_name, chat_id=dungeon.chat_id, ignore_limit=True, session=session)
             print(f"[DEBUG] spawn_boss result: success={success}, mob_id={mob_id}, name={boss_name}, chat_id={dungeon.chat_id}")
             if success:
-                self._assign_mob_to_dungeon(mob_id, dungeon_id)
+                self._assign_mob_to_dungeon(mob_id, dungeon_id, session=session)
                 final_msgs.append(m)
                 mob_ids.append(mob_id)
                 
@@ -275,53 +336,85 @@ class DungeonService:
                 'content': "\n".join(final_msgs),
                 'mob_ids': mob_ids
             })
+        
+        if local_session:
+            session.commit()
+            session.close()
+        else:
+            session.flush()
                 
         return events, mob_ids
 
-    def _assign_mob_to_dungeon(self, mob_id, dungeon_id):
-        session = self.db.get_session()
+    def _assign_mob_to_dungeon(self, mob_id, dungeon_id, session=None):
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         mob = session.query(Mob).filter_by(id=mob_id).first()
         if mob:
             mob.dungeon_id = dungeon_id
-            session.commit()
+            if local_session:
+                session.commit()
+            else:
+                session.flush()
             print(f"[DEBUG] Assigned mob {mob_id} to dungeon {dungeon_id}. Mob dungeon_id: {mob.dungeon_id}")
-        session.close()
+            
+        if local_session:
+            session.close()
 
-    def check_step_completion(self, dungeon_id):
+    def check_step_completion(self, dungeon_id, session=None):
         """Checks if all mobs in the current step are dead. If so, advances."""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         
         # Check if any live mob exists for this dungeon
         live_mobs = session.query(Mob).filter_by(dungeon_id=dungeon_id, is_dead=False).count()
         
         if live_mobs > 0:
-            session.close()
+            if local_session:
+                session.close()
             return [], [] # Not done yet
             
         # All dead, advance
         dungeon = session.query(Dungeon).filter_by(id=dungeon_id).first()
         if not dungeon or dungeon.status != "active":
-            session.close()
+            if local_session:
+                session.close()
             return [], []
             
-        events, mob_ids = self.advance_dungeon(dungeon_id)
-        session.close()
+        events, mob_ids = self.advance_dungeon(dungeon_id, session=session)
+        
+        if local_session:
+            session.close()
         return events, mob_ids
 
-    def advance_dungeon(self, dungeon_id):
+    def advance_dungeon(self, dungeon_id, session=None):
         """Moves to next stage or completes dungeon"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         dungeon = session.query(Dungeon).filter_by(id=dungeon_id).first()
         
         dungeon.current_stage += 1
         current_stage = dungeon.current_stage
         total_stages = dungeon.total_stages
         
-        session.commit()
-        session.close()
+        if local_session:
+            session.commit()
+            session.close()
+        else:
+            session.flush()
         
         if current_stage <= total_stages:
-            events, mob_ids = self.spawn_step(dungeon_id, current_stage)
+            # Pass session if shared? spawn_step creates its own if not passed.
+            # But we closed local session above if local.
+            # If shared, we can pass it.
+            events, mob_ids = self.spawn_step(dungeon_id, current_stage, session=session if not local_session else None)
             # Prepend stage completion message
             events.insert(0, {
                 'type': 'message',
@@ -329,11 +422,15 @@ class DungeonService:
             })
             return events, mob_ids
         else:
-            completion_msg = self.complete_dungeon(dungeon_id)
+            completion_msg = self.complete_dungeon(dungeon_id, session=session if not local_session else None)
             return [{'type': 'message', 'content': completion_msg}], []
 
-    def complete_dungeon(self, dungeon_id):
-        session = self.db.get_session()
+    def complete_dungeon(self, dungeon_id, session=None):
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         dungeon = session.query(Dungeon).filter_by(id=dungeon_id).first()
         dungeon.status = "completed"
         dungeon.completed_at = datetime.datetime.now()
@@ -375,7 +472,10 @@ class DungeonService:
             m.is_dead = True
             m.health = 0
             
-        session.commit()
+        if local_session:
+            session.commit()
+        else:
+            session.flush()
         
         # Distribute Rewards (Daily limit check needed?)
         # For now, just give rewards defined in CSV
@@ -393,11 +493,12 @@ class DungeonService:
         print(f"[DEBUG] complete_dungeon: participants count={len(participants)}")
         for p in participants:
             print(f"[DEBUG] complete_dungeon: Distributing to user {p.user_id}")
-            us.add_points_by_id(p.user_id, wumpa)
-            us.add_exp_by_id(p.user_id, exp)
+            us.add_points_by_id(p.user_id, wumpa, session=session)
+            us.add_exp_by_id(p.user_id, exp, session=session)
             reward_msg.append(f"User {p.user_id}: +{wumpa} Wumpa, +{exp} EXP")
             
-        session.close()
+        if local_session:
+            session.close()
         
         return f"🏆 **DUNGEON COMPLETATO!** 🏆\n\n**Rango: {score}**\n{details}\n\nRicompense:\n+{wumpa} Wumpa, +{exp} EXP a tutti!"
 
@@ -469,10 +570,14 @@ class DungeonService:
             session.commit()
         session.close()
 
-    def get_dungeon_participants(self, dungeon_id):
-        session = self.db.get_session()
+    def get_dungeon_participants(self, dungeon_id, session=None):
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         participants = session.query(DungeonParticipant).filter_by(dungeon_id=dungeon_id).all()
-        session.close()
+        if local_session:
+            session.close()
         return participants
 
     def _cleanup_ghost_dungeons(self, chat_id, session):
@@ -493,9 +598,12 @@ class DungeonService:
         
         session.commit()
 
-    def get_active_dungeon(self, chat_id):
+    def get_active_dungeon(self, chat_id, session=None):
         """Returns the active or registering dungeon for the chat"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         
         # Cleanup ghost dungeons first
         self._cleanup_ghost_dungeons(chat_id, session)
@@ -504,29 +612,42 @@ class DungeonService:
             Dungeon.chat_id == chat_id,
             Dungeon.status.in_(["registration", "active"])
         ).first()
-        session.close()
+        
+        if local_session:
+            session.close()
         return dungeon
 
-    def get_user_active_dungeon(self, user_id):
+    def get_user_active_dungeon(self, user_id, session=None):
         """Returns the active dungeon the user is participating in, if any"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         dungeon = session.query(Dungeon).join(DungeonParticipant).filter(
             DungeonParticipant.user_id == user_id,
             Dungeon.status == "active"
         ).first()
-        session.close()
+        
+        if local_session:
+            session.close()
         return dungeon
 
-    def leave_dungeon(self, chat_id, user_id):
+    def leave_dungeon(self, chat_id, user_id, session=None):
         """Allows a user to leave the active dungeon"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         dungeon = session.query(Dungeon).filter(
             Dungeon.chat_id == chat_id,
             Dungeon.status.in_(["registration", "active"])
         ).first()
         
         if not dungeon:
-            session.close()
+            if local_session:
+                session.close()
             return False, "Nessun dungeon attivo."
             
         participant = session.query(DungeonParticipant).filter_by(
@@ -535,12 +656,16 @@ class DungeonService:
         ).first()
         
         if not participant:
-            session.close()
+            if local_session:
+                session.close()
             return False, "Non sei un partecipante di questo dungeon."
             
         # Remove participant
         session.delete(participant)
-        session.commit()
+        if local_session:
+            session.commit()
+        else:
+            session.flush()
         
         # Check if any participants remain
         remaining = session.query(DungeonParticipant).filter_by(dungeon_id=dungeon.id).count()
@@ -557,10 +682,14 @@ class DungeonService:
                 m.is_dead = True
                 m.health = 0
                 
-            session.commit()
+            if local_session:
+                session.commit()
+            else:
+                session.flush()
             msg += "\n\n💀 **Dungeon Fallito!** Tutti i partecipanti sono fuggiti o morti."
             
-        session.close()
+        if local_session:
+            session.close()
         return True, msg
 
     def check_dungeon_failure(self, dungeon_id):

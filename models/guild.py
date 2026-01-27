@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, ForeignKey, Float
 from sqlalchemy.orm import relationship
 from database import Base
 import datetime
@@ -7,7 +7,7 @@ class Guild(Base):
     __tablename__ = "guilds"
     id = Column(Integer, primary_key=True)
     name = Column(String(64), unique=True, nullable=False)
-    leader_id = Column(Integer, ForeignKey('utente.id_Telegram'), nullable=False)
+    leader_id = Column(BigInteger, ForeignKey('utente.id_Telegram'), nullable=False)
     wumpa_bank = Column(Integer, default=0)
     member_limit = Column(Integer, default=5)
     
@@ -31,7 +31,7 @@ class GuildMember(Base):
     __tablename__ = "guild_members"
     id = Column(Integer, primary_key=True)
     guild_id = Column(Integer, ForeignKey('guilds.id'), nullable=False)
-    user_id = Column(Integer, ForeignKey('utente.id_Telegram'), unique=True, nullable=False)
+    user_id = Column(BigInteger, ForeignKey('utente.id_Telegram'), unique=True, nullable=False)
     role = Column(String(20), default="Member") # Leader, Officer, Member
     joined_at = Column(DateTime, default=datetime.datetime.now)
     

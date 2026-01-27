@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Float
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Boolean, ForeignKey, Float
 from database import Base
 import datetime
 
@@ -35,7 +35,7 @@ class UserAchievement(Base):
     """Tracks user achievement progress"""
     __tablename__ = "user_achievement"
     
-    user_id = Column(Integer, primary_key=True)  # id_telegram
+    user_id = Column(BigInteger, primary_key=True)  # id_telegram
     achievement_key = Column(String(50), primary_key=True) # Changed to use key as PK part
     
     current_tier = Column(String(20), nullable=True) # NULL, 'bronze', 'silver', 'gold', 'platinum'
@@ -51,7 +51,7 @@ class GameEvent(Base):
     __tablename__ = "game_event"
     
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, nullable=False)
+    user_id = Column(BigInteger, nullable=False)
     event_type = Column(String(50), nullable=False)  # mob_kill, damage_dealt, etc.
     
     value = Column(Float, default=0.0)            # The primary metric

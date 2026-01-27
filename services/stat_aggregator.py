@@ -13,27 +13,37 @@ class StatAggregator:
     def __init__(self):
         self.db = Database()
         
-    def process_events(self, events):
+    def process_events(self, events, session=None):
         """
         Process a batch of events and update stats.
         """
         if not events:
             return
             
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         try:
             for event in events:
-                # Re-attach event to current session
-                event = session.merge(event)
+                # Re-attach event to current session if needed
+                if event not in session:
+                    event = session.merge(event)
                 self._process_single_event(session, event)
                 event.processed = True
             
-            session.commit()
+            if local_session:
+                session.commit()
+            else:
+                session.flush()
         except Exception as e:
             print(f"[ERROR] Stat Aggregation failed: {e}")
-            session.rollback()
+            if local_session:
+                session.rollback()
         finally:
-            session.close()
+            if local_session:
+                session.close()
 
     def _process_single_event(self, session, event):
         """
