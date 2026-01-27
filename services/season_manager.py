@@ -9,7 +9,7 @@ from services.character_service import CharacterService
 class SeasonManager:
     """Manages seasonal progression and rewards"""
     
-    MAX_RANK = 100        # Maximum seasonal rank
+    MAX_RANK = 30        # Maximum seasonal rank
     
     def __init__(self):
         self.db = Database()
@@ -68,10 +68,10 @@ class SeasonManager:
             session.close()
             
     def add_seasonal_exp(self, user_id, amount):
-        """Add EXP to user's seasonal progress (based on seasonal EXP, not total level)"""
+        """Add EXP to user's seasonal progress. Returns (rewards, season_end_msg)"""
         season = self.get_active_season()
         if not season:
-            return None
+            return [], None
             
         session = self.db.get_session()
         try:
@@ -116,22 +116,103 @@ class SeasonManager:
             if progress.current_level >= self.MAX_RANK:
                 progress.current_exp = 0
                 
-            session.commit()
+            # session.commit() # Moved to end
+            
+            rewards = []
+            season_end_msg = None
             
             if leveled_up:
-                return self.check_and_award_rewards(user_id, season.id, progress.current_level)
+                rewards = self.check_and_award_rewards(user_id, season.id, progress.current_level, session)
                 
-            return []
+                # Check if reached max rank (Season End Condition)
+                if progress.current_level >= self.MAX_RANK:
+                    season_end_msg = self.end_season(season.id, user_id, session)
+            
+            session.commit()
+            return rewards, season_end_msg
         except Exception as e:
             session.rollback()
             print(f"Error adding seasonal exp: {e}")
-            return []
+            return [], None
         finally:
             session.close()
+
+    def end_season(self, season_id, winner_user_id, session=None):
+        """End the season, calculate stats, award top 3, and return summary message"""
+        close_session = False
+        if session is None:
+            session = self.db.get_session()
+            close_session = True
             
-    def check_and_award_rewards(self, user_id, season_id, current_level):
+        try:
+            season = session.query(Season).filter_by(id=season_id).first()
+            if not season or not season.is_active:
+                return None
+                
+            # 1. Close Season
+            season.is_active = False
+            season.end_date = datetime.datetime.now()
+            
+            # Calculate Duration
+            duration = season.end_date - season.start_date
+            days = duration.days
+            
+            # 2. Get Top 3
+            # We need to join with Utente to get names
+            top_users = session.query(SeasonProgress, Utente).join(Utente, SeasonProgress.user_id == Utente.id_telegram)\
+                .filter(SeasonProgress.season_id == season_id)\
+                .order_by(SeasonProgress.current_level.desc(), SeasonProgress.current_exp.desc())\
+                .limit(3).all()
+                
+            # 3. Award Wumpa and Build Message
+            winner_user = self.user_service.get_user(winner_user_id)
+            winner_name = winner_user.game_name or winner_user.nome or "Eroe"
+            
+            msg = f"\n🏆 **LA STAGIONE È TERMINATA!** 🏆\n\n"
+            msg += f"🥇 **{winner_name}** ha raggiunto il Grado {self.MAX_RANK} e ha concluso la stagione!\n"
+            msg += f"⏱️ Durata: {days} giorni\n\n"
+            msg += "🏅 **CLASSIFICA FINALE**\n"
+            
+            prizes = [1000, 500, 200]
+            emojis = ["🥇", "🥈", "🥉"]
+            
+            for i, (progress, user) in enumerate(top_users):
+                prize = prizes[i] if i < len(prizes) else 0
+                emoji = emojis[i] if i < len(emojis) else "🔸"
+                name = user.game_name or user.nome or f"User {user.id_telegram}"
+                
+                # Award Prize
+                # Update directly to avoid nested session
+                user.points = int(user.points) + prize
+                
+                msg += f"{emoji} **{name}** - Grado {progress.current_level} (+{prize} 🍑)\n"
+                
+            if close_session:
+                session.commit()
+            else:
+                # If sharing session, we might want to flush or commit here to ensure it saves?
+                # Or let caller handle it. But caller (add_seasonal_exp) commits BEFORE calling this currently.
+                # We will fix caller next.
+                pass
+            return msg
+            return msg
+            
+        except Exception as e:
+            print(f"Error ending season: {e}")
+            if close_session:
+                session.rollback()
+            return None
+        finally:
+            if close_session:
+                session.close()
+            
+    def check_and_award_rewards(self, user_id, season_id, current_level, session=None):
         """Check and award rewards up to current Grado"""
-        session = self.db.get_session()
+        close_session = False
+        if session is None:
+            session = self.db.get_session()
+            close_session = True
+            
         try:
             progress = session.query(SeasonProgress).filter_by(
                 user_id=user_id,
@@ -160,7 +241,7 @@ class SeasonManager:
                     
                     if not claimed:
                         unlocked_rewards.append(reward)
-                        self.award_reward(user_id, reward)
+                        self.award_reward(user_id, reward, session)
                         
                         # Mark as claimed
                         new_claim = SeasonClaimedReward(
@@ -169,28 +250,36 @@ class SeasonManager:
                             reward_id=reward.id
                         )
                         session.add(new_claim)
-                        session.commit()
+                        # Don't commit here if using shared session, let caller commit
+                        if close_session:
+                            session.commit()
                     
             return unlocked_rewards
         finally:
-            session.close()
+            if close_session:
+                session.close()
             
-    def award_reward(self, user_id, reward):
+    def award_reward(self, user_id, reward, session=None):
         """Actually give the reward to the user"""
-        # This would integrate with user_service, character_service, etc.
         print(f"Awarding reward to {user_id}: {reward.reward_name} ({reward.reward_type})")
         
-        user = self.user_service.get_user(user_id)
-        if not user:
-            return
-            
-        if reward.reward_type == 'points':
-            self.user_service.add_points(user, int(reward.reward_value))
-        elif reward.reward_type == 'character':
-            # Unlock character for user
-            char_id = int(reward.reward_value)
+        close_session = False
+        if session is None:
             session = self.db.get_session()
-            try:
+            close_session = True
+            
+        try:
+            if reward.reward_type == 'points':
+                # Update directly to avoid nested session in user_service.add_points
+                user = session.query(Utente).filter_by(id_telegram=user_id).first()
+                if user:
+                    user.points = int(user.points) + int(reward.reward_value)
+                    if close_session:
+                        session.commit()
+                        
+            elif reward.reward_type == 'character':
+                # Unlock character for user
+                char_id = int(reward.reward_value)
                 from models.system import UserCharacter
                 # Check if already owned
                 owned = session.query(UserCharacter).filter_by(
@@ -205,12 +294,15 @@ class SeasonManager:
                         obtained_at=datetime.date.today()
                     )
                     session.add(new_ownership)
-                    session.commit()
+                    if close_session:
+                        session.commit()
                     print(f"Character {char_id} unlocked for user {user_id}")
-            except Exception as e:
+        except Exception as e:
+            if close_session:
                 session.rollback()
-                print(f"Error unlocking character in season: {e}")
-            finally:
+            print(f"Error unlocking reward in season: {e}")
+        finally:
+            if close_session:
                 session.close()
             
     def purchase_season_pass(self, user_id):

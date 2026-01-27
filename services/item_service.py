@@ -124,10 +124,15 @@ class ItemService:
         if collezionabile:
             collezionabile.data_utilizzo = datetime.datetime.today()
             session.commit()
+            
+            # Apply effect
+            user = session.query(Utente).filter_by(id_telegram=int(id_telegram)).first()
+            result = self.apply_effect(user, oggetto)
+            
             session.close()
-            return True
+            return True, result[0] if isinstance(result, tuple) else result
         session.close()
-        return False
+        return False, "Oggetto non trovato."
 
     def get_item_by_user(self, id_telegram, nome_oggetto):
         session = self.db.get_session()

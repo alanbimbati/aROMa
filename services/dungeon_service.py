@@ -19,20 +19,39 @@ class DungeonService:
         dungeons = {}
         try:
             with open('data/dungeons.csv', 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
+                reader = csv.DictReader(f, skipinitialspace=True)
                 for row in reader:
+                    # Strip whitespace from all string values
+                    row = {k: v.strip() if isinstance(v, str) else v for k, v in row.items()}
+                    
                     row['id'] = int(row['id'])
                     row['difficulty'] = int(row['difficulty'])
-                    # Parse steps JSON
-                    try:
-                        row['steps'] = json.loads(row['steps'])
-                    except:
-                        row['steps'] = []
                     # Parse rewards JSON
                     try:
-                        row['rewards'] = json.loads(row['rewards'])
-                    except:
+                        raw_rewards = row['rewards'].strip()
+                        # If it's wrapped in literal double quotes from CSV export, strip them
+                        while raw_rewards.startswith('"') and raw_rewards.endswith('"'):
+                            raw_rewards = raw_rewards[1:-1].strip()
+                        # Handle escaped double quotes
+                        raw_rewards = raw_rewards.replace('""', '"')
+                        
+                        if not raw_rewards or raw_rewards == '{}':
+                            row['rewards'] = {}
+                        else:
+                            row['rewards'] = json.loads(raw_rewards)
+                    except Exception as e:
+                        print(f"[ERROR] Failed to parse rewards for dungeon {row['id']}: {e}. Raw: {row['rewards']}")
                         row['rewards'] = {}
+                    # Parse steps JSON
+                    try:
+                        raw_steps = row['steps'].strip()
+                        while raw_steps.startswith('"') and raw_steps.endswith('"'):
+                            raw_steps = raw_steps[1:-1].strip()
+                        raw_steps = raw_steps.replace('""', '"')
+                        row['steps'] = json.loads(raw_steps)
+                    except Exception as e:
+                        # print(f"[ERROR] Failed to parse steps for dungeon {row['id']}: {e}. Raw: {row['steps']}")
+                        row['steps'] = []
                     dungeons[row['id']] = row
         except Exception as e:
             print(f"Error loading dungeons: {e}")
@@ -70,9 +89,13 @@ class DungeonService:
 
         # Check access for creator
         if not self.can_access_dungeon(creator_id, dungeon_def_id):
+            print(f"[DEBUG] create_dungeon: Access denied for user {creator_id} to dungeon {dungeon_def_id}")
             return None, "Non hai ancora sbloccato questo dungeon! Completa prima i precedenti."
 
         session = self.db.get_session()
+        
+        # Cleanup ghost dungeons first
+        self._cleanup_ghost_dungeons(chat_id, session)
         
         # Check if there's already an active dungeon in this chat
         active = session.query(Dungeon).filter(
@@ -81,6 +104,7 @@ class DungeonService:
         ).first()
         
         if active:
+            print(f"[DEBUG] create_dungeon: Active dungeon already exists in chat {chat_id}: {active.name} (status: {active.status})")
             session.close()
             return None, f"C'è già un dungeon attivo in questo gruppo: **{active.name}**"
             
@@ -137,6 +161,14 @@ class DungeonService:
         participant = DungeonParticipant(dungeon_id=dungeon.id, user_id=user_id)
         session.add(participant)
         session.commit()
+        
+        # Verify persistence
+        check = session.query(DungeonParticipant).filter_by(dungeon_id=dungeon.id, user_id=user_id).first()
+        if not check:
+            print(f"[ERROR] join_dungeon: Participant {user_id} NOT found after commit!")
+            session.close()
+            return False, "Errore di sistema: iscrizione non salvata."
+            
         session.close()
         return True, "Ti sei iscritto con successo al dungeon! ⚔️"
 
@@ -170,14 +202,7 @@ class DungeonService:
         # Spawn first step
         events, mob_ids = self.spawn_step(d_id, 1)
         
-        # Extract text from events for the immediate response
-        # For start_dungeon, we might want to just show the text immediately
-        # or we could return events if we update the command handler.
-        # For now, let's concatenate message events.
-        msgs = [e['content'] for e in events if e['type'] == 'message' or e['type'] == 'spawn']
-        full_msg = "\n\n".join(msgs)
-            
-        return True, f"🚀 **Dungeon Iniziato!**\n\n{full_msg}", mob_ids
+        return True, "Dungeon Iniziato", events
 
     def spawn_step(self, dungeon_id, stage_num):
         """Spawns mobs for the specific stage"""
@@ -259,6 +284,7 @@ class DungeonService:
         if mob:
             mob.dungeon_id = dungeon_id
             session.commit()
+            print(f"[DEBUG] Assigned mob {mob_id} to dungeon {dungeon_id}. Mob dungeon_id: {mob.dungeon_id}")
         session.close()
 
     def check_step_completion(self, dungeon_id):
@@ -354,15 +380,19 @@ class DungeonService:
         # Distribute Rewards (Daily limit check needed?)
         # For now, just give rewards defined in CSV
         dungeon_def = self.get_dungeon_def(dungeon.dungeon_def_id)
-        rewards = dungeon_def.get('rewards', {})
+        print(f"[DEBUG] complete_dungeon: dungeon_def_id={dungeon.dungeon_def_id}, dungeon_def found={dungeon_def is not None}")
+        rewards = dungeon_def.get('rewards', {}) if dungeon_def else {}
         wumpa = rewards.get('wumpa', 0)
         exp = rewards.get('exp', 0)
+        print(f"[DEBUG] complete_dungeon: rewards={rewards}, wumpa={wumpa}, exp={exp}")
         
         from services.user_service import UserService
         us = UserService()
         
         reward_msg = []
+        print(f"[DEBUG] complete_dungeon: participants count={len(participants)}")
         for p in participants:
+            print(f"[DEBUG] complete_dungeon: Distributing to user {p.user_id}")
             us.add_points_by_id(p.user_id, wumpa)
             us.add_exp_by_id(p.user_id, exp)
             reward_msg.append(f"User {p.user_id}: +{wumpa} Wumpa, +{exp} EXP")
@@ -445,9 +475,31 @@ class DungeonService:
         session.close()
         return participants
 
+    def _cleanup_ghost_dungeons(self, chat_id, session):
+        """Internal helper to fail dungeons with 0 participants"""
+        ghosts = session.query(Dungeon).filter(
+            Dungeon.chat_id == chat_id,
+            Dungeon.status.in_(["registration", "active"])
+        ).all()
+        
+        for dungeon in ghosts:
+            participant_count = session.query(DungeonParticipant).filter_by(dungeon_id=dungeon.id).count()
+            if participant_count == 0:
+                print(f"[DEBUG] _cleanup_ghost_dungeons: Failing ghost dungeon {dungeon.id} ({dungeon.name}) in chat {chat_id}")
+                dungeon.status = "failed"
+                dungeon.end_time = datetime.datetime.now()
+                # Mark associated mobs as dead
+                session.query(Mob).filter_by(dungeon_id=dungeon.id, is_dead=False).update({'is_dead': True})
+        
+        session.commit()
+
     def get_active_dungeon(self, chat_id):
         """Returns the active or registering dungeon for the chat"""
         session = self.db.get_session()
+        
+        # Cleanup ghost dungeons first
+        self._cleanup_ghost_dungeons(chat_id, session)
+        
         dungeon = session.query(Dungeon).filter(
             Dungeon.chat_id == chat_id,
             Dungeon.status.in_(["registration", "active"])

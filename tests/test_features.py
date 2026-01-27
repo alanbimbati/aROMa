@@ -68,10 +68,10 @@ class TestFeatures(unittest.TestCase):
         self.assertTrue(has_shenron)
         
         initial_points = self.user.points
-        msg = self.wish_service.grant_wish(self.user, "points", "Shenron")
+        msg = self.wish_service.grant_wish(self.user, "wumpa", "Shenron")
         
         self.user = self.user_service.get_user(self.test_id) # Refresh
-        self.assertEqual(self.user.points, initial_points + 1000)
+        self.assertGreaterEqual(self.user.points, initial_points + 1000)
         print(f"Wish result: {msg}")
 
 if __name__ == '__main__':

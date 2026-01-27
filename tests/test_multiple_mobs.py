@@ -28,15 +28,15 @@ def test_multiple_spawns():
     
     # Create a test user in the DB
     session = db.get_session()
-    test_user = session.query(Utente).filter_by(id_telegram=12345).first()
+    test_user = session.query(Utente).filter_by(id_telegram=15001).first()
     if not test_user:
-        test_user = Utente(id_telegram=12345, nome="TestUser", username="testuser")
+        test_user = Utente(id_telegram=15001, nome="TestUser", username="testuser")
         session.add(test_user)
         session.commit()
     session.close()
 
     # Track activity for a test user
-    pve_service.user_service.track_activity(12345, chat_id)
+    pve_service.user_service.track_activity(15001, chat_id)
     
     # Spawn 3 mobs
     for i in range(3):

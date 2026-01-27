@@ -12,7 +12,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 TRACKING_FILE = "image_sources.json"
-IMAGE_DIR = "images/characters"
+IMAGE_DIR = "images/miscellania"
 
 # Character prompts for better image generation
 CHARACTER_PROMPTS = {

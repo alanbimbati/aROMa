@@ -104,12 +104,17 @@ def main():
             print(f"⏭️  Skipping {name} (Already exists)")
             continue
 
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+
         # Construct Prompt
-        prompt = f"Epic digital art of {name} from {item_type}, high quality, detailed, 4k resolution"
+        prompt = f"Epic digital art of {name}, high quality, detailed, 4k resolution"
         if item_type == "character":
-            prompt += ", character portrait, dynamic pose"
+            prompt += ", character portrait, dynamic pose, fantasy style"
         elif item_type == "boss":
-            prompt += ", boss battle, menacing, powerful"
+            prompt += ", boss battle, menacing, powerful, fantasy style"
+        elif item_type == "mob":
+             prompt += ", creature design, fantasy style"
 
         # Retry Loop
         while True:

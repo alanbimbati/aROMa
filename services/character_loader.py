@@ -65,6 +65,7 @@ class CharacterLoader:
                         'base_character_id': safe_int(row.get('base_character_id'), None) if row.get('base_character_id', '').strip() else None,
                         'transformation_mana_cost': safe_int(row.get('transformation_mana_cost'), 0),
                         'transformation_duration_days': safe_int(row.get('transformation_duration_days'), 0),
+                        'special_attack_gif': row.get('special_attack_gif', ''),
                     }
                     characters.append(char)
                     
@@ -246,6 +247,53 @@ def get_character_loader() -> CharacterLoader:
         _character_loader = CharacterLoader()
     return _character_loader
 
+    def update_character_gif(self, char_id: int, filename: str) -> bool:
+        """
+        Update the special_attack_gif for a character in the CSV and cache.
+        """
+        input_file = 'data/characters.csv'
+        temp_file = 'data/characters_temp.csv'
+        updated = False
+        
+        try:
+            with open(input_file, 'r', encoding='utf-8') as f_in, \
+                 open(temp_file, 'w', encoding='utf-8', newline='') as f_out:
+                
+                reader = csv.DictReader(f_in)
+                fieldnames = reader.fieldnames
+                if 'special_attack_gif' not in fieldnames:
+                    fieldnames.append('special_attack_gif')
+                    
+                writer = csv.DictWriter(f_out, fieldnames=fieldnames)
+                writer.writeheader()
+                
+                for row in reader:
+                    if int(row['id']) == char_id:
+                        row['special_attack_gif'] = filename
+                        updated = True
+                        # Update cache if loaded
+                        if self._cache:
+                            for char in self._cache:
+                                if char['id'] == char_id:
+                                    char['special_attack_gif'] = filename
+                                    break
+                            self._cache_by_id[char_id]['special_attack_gif'] = filename
+                            
+                    writer.writerow(row)
+            
+            if updated:
+                os.replace(temp_file, input_file)
+                return True
+            else:
+                os.remove(temp_file)
+                return False
+                
+        except Exception as e:
+            print(f"Error updating character GIF: {e}")
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+            return False
+
 def get_character_image(character: Dict[str, Any], is_locked: bool = False):
     """
     Get image for character.
@@ -254,15 +302,13 @@ def get_character_image(character: Dict[str, Any], is_locked: bool = False):
     if not character:
         return None
         
-    # TODO: Check for telegram_file_id in character dict if we add it to CSV
-    
     # Try local file
     # Normalize name: "Crash Bandicoot" -> "crash_bandicoot"
     safe_name = character['nome'].lower().replace(' ', '_')
     
     # Check possible extensions
     for ext in ['.png', '.jpg', '.jpeg']:
-        path = f"images/characters/{safe_name}{ext}"
+        path = f"images/{safe_name}{ext}"
         if os.path.exists(path):
             try:
                 return open(path, 'rb')

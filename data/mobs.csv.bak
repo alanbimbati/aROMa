@@ -68,6 +68,7 @@ Revenant,75,20,ranged,3,Doom,Lo scheletro missilistico,50,Doom
 Archvile,95,28,magic,4,Doom,L'evocatore,60,Doom
 Pain Elemental,85,16,ranged,3,Doom,Il generatore di anime,50,Doom
 Hell Knight,110,24,physical,4,Doom,Il cavaliere infernale,60,Doom
+Cyberdemon,250,50,ranged,5,Doom,Il cyborg demone,70,Doom
 Covenant Grunt,45,10,physical,2,Various,Il soldato base,40,Halo
 Swarmer,35,8,physical,1,Gears of War,Lo sciame,30,Gears of War
 Wretch,55,12,physical,2,Gears of War,Il mostro veloce,40,Gears of War
@@ -97,6 +98,17 @@ Houdini Splicer,60,16,magic,3,Bioshock,Il mago pazzo,50,Bioshock
 Nitro Splicer,65,20,explosive,3,Bioshock,L'esplosivo,50,Bioshock
 Saibaman,40,15,physical,1,Dragon Ball,Il mostro verde nato dal terreno,40,Dragon Ball
 Soldato di Freezer,60,20,ranged,2,Dragon Ball,Un soldato dell'armata di Freezer,50,Dragon Ball
+Guldo,80,25,magic,3,Dragon Ball,Membro della Squadra Ginyu,60,Dragon Ball
 Cell Junior,120,35,physical,4,Dragon Ball,La prole di Cell,70,Dragon Ball
 Majin Minion,100,30,magic,3,Dragon Ball,Un servo di Majin Buu,60,Dragon Ball
+Nappa,150,45,physical,4,Dragon Ball,Il possente guerriero Saiyan,60,Dragon Ball
+Raditz,90,30,physical,3,Dragon Ball,Il fratello di Goku,50,Dragon Ball
+Dodoria,130,40,physical,4,Dragon Ball,Il braccio destro di Freezer,55,Dragon Ball
+Zarbon,140,42,magic,4,Dragon Ball,L'elegante guerriero di Freezer,65,Dragon Ball
+Capitano Ginyu,180,50,magic,4,Dragon Ball,Il leader della Squadra Ginyu,70,Dragon Ball
+Recoome,170,48,physical,4,Dragon Ball,Il gigante della Squadra Ginyu,60,Dragon Ball
+Burter,160,45,physical,4,Dragon Ball,Il più veloce della Squadra Ginyu,100,Dragon Ball
+Jeice,160,45,ranged,4,Dragon Ball,Il guerriero rosso della Squadra Ginyu,70,Dragon Ball
+C19,150,40,magic,4,Dragon Ball,L'androide che assorbe energia,50,Dragon Ball
+C20,160,42,magic,4,Dragon Ball,Il Dr. Gelo in forma androide,55,Dragon Ball
 Saibaman Elite,60,25,physical,2,Dragon Ball,Un Saibaman potenziato,50,Dragon Ball
