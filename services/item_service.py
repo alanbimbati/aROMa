@@ -157,19 +157,17 @@ class ItemService:
     def load_items_from_csv(self):
         items = []
         try:
-            with open('items.csv', 'r') as f:
-                lines = f.readlines()[1:] # Skip header
-                for line in lines:
-                    parts = line.strip().split(',')
-                    if len(parts) >= 6:
-                        items.append({
-                            'nome': parts[0],
-                            'rarita': int(parts[1]),
-                            'sticker': parts[4],
-                            'descrizione': parts[6] if len(parts) > 6 else ""
-                        })
+            with open('items.csv', 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    items.append({
+                        'nome': row['nome'],
+                        'rarita': int(row['rarita']) if row['rarita'] else 100,
+                        'sticker': row['sticker'],
+                        'descrizione': row.get('descrizione', "")
+                    })
         except Exception as e:
-            print(f"Error loading items: {e}")
+            print(f"[ERROR] load_items_from_csv failed: {e}")
         return items
 
     def get_item_details(self, item_name):
