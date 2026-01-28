@@ -37,72 +37,99 @@ class WishService:
         return shenron_count, porunga_count
 
     def grant_wish(self, user, wish_type, dragon_type="Shenron"):
-        # Consume spheres
-        if dragon_type == "Shenron":
-            for i in range(1, 8):
-                self.item_service.use_item(user.id_telegram, f"La Sfera del Drago Shenron {i}")
+        """Grant a dragon wish (Shenron or Porunga)"""
+        session = self.db.get_session()
+        try:
+            # Consume spheres in a single transaction
+            if dragon_type == "Shenron":
+                for i in range(1, 8):
+                    self.item_service.use_item(user.id_telegram, f"La Sfera del Drago Shenron {i}", session=session)
+                
+                # Shenron: 1 Big Wish
+                if wish_type == "wumpa":
+                    amount = random.randint(1000, 2000)
+                    self.user_service.add_points_by_id(user.id_telegram, amount, session=session)
+                    session.commit()
+                    return f"🐉 SHENRON HA ESAUDITO IL TUO DESIDERIO!\n\n💰 HAI OTTENUTO {amount} {PointsName}!"
+                elif wish_type == "exp":
+                    amount = random.randint(1000, 2000)
+                    self.user_service.add_exp_by_id(user.id_telegram, amount, session=session)
+                    
+                    from services.event_dispatcher import EventDispatcher
+                    dispatcher = EventDispatcher()
+                    dispatcher.log_event(
+                        event_type='shenron_summoned',
+                        user_id=user.id_telegram,
+                        value=1,
+                        context={},
+                        session=session
+                    )
+                    
+                    session.commit()
+                    return f"🐉 SHENRON HA ESAUDITO IL TUO DESIDERIO!\n\n⭐ HAI OTTENUTO {amount} EXP!"
+                    
+            else:
+                # Porunga: Consumes spheres and grants one wish (called via main.py)
+                # Note: Spheres are consumed in the 3rd wish in main.py, but we can do it here too if needed.
+                # To be safe and consistent with current main.py logic, we handle the wish here.
+                
+                if wish_type == "wumpa":
+                    amount = random.randint(300, 500)
+                    self.user_service.add_points_by_id(user.id_telegram, amount, session=session)
+                    session.commit()
+                    return f"🐲 PORUNGA: Ricevi {amount} {PointsName}!"
+                elif wish_type == "item":
+                    # Give 1 random item
+                    items_data = self.item_service.load_items_from_csv()
+                    if not items_data:
+                        session.rollback()
+                        return "🐲 PORUNGA: Nessun oggetto trovato nel database!"
+                        
+                    weights = [1/item['rarita'] if item['rarita'] > 0 else 0.01 for item in items_data]
+                    item = random.choices(items_data, weights=weights, k=1)[0]
+                    self.item_service.add_item(user.id_telegram, item['nome'], session=session)
+                    session.commit()
+                    return f"🐲 PORUNGA: Ricevi {item['nome']}!"
             
-            # Shenron: 1 Big Wish
-            if wish_type == "wumpa":
-                amount = random.randint(1000, 2000)
-                self.user_service.add_points(user, amount)
-                return f"🐉 SHENRON HA ESAUDITO IL TUO DESIDERIO!\n\n💰 HAI OTTENUTO {amount} {PointsName}!"
-            elif wish_type == "exp":
-                amount = random.randint(1000, 2000)
-                self.user_service.add_exp(user, amount)
-                
-                from services.event_dispatcher import EventDispatcher
-                dispatcher = EventDispatcher()
-                dispatcher.log_event(
-                    event_type='shenron_summoned',
-                    user_id=user.id_telegram,
-                    value=1,
-                    context={}
-                )
-                
-                return f"🐉 SHENRON HA ESAUDITO IL TUO DESIDERIO!\n\n⭐ HAI OTTENUTO {amount} EXP!"
-                
-        else:
-            # Porunga: Will handle 3 wishes via callbacks
-            # For now just consume the spheres
-            for i in range(1, 8):
-                self.item_service.use_item(user.id_telegram, f"La Sfera del Drago Porunga {i}")
-            
-            # Log event for achievements
-            from services.event_dispatcher import EventDispatcher
-            dispatcher = EventDispatcher()
-            dispatcher.log_event(
-                event_type='porunga_summoned',
-                user_id=user.id_telegram,
-                value=1,
-                context={}
-            )
-                
-            # This shouldn't be called directly for Porunga, handled via callbacks
-            if wish_type == "wumpa":
-                amount = random.randint(300, 500)
-                self.user_service.add_points(user, amount)
-                return f"🐲 PORUNGA: Ricevi {amount} {PointsName}!"
-            elif wish_type == "item":
-                # Give 1 random item
-                items_data = self.item_service.load_items_from_csv()
-                weights = [1/item['rarita'] for item in items_data]
-                item = random.choices(items_data, weights=weights, k=1)[0]
-                self.item_service.add_item(user.id_telegram, item['nome'])
-                return f"🐲 PORUNGA: Ricevi {item['nome']}!"
-        
-        return "Desiderio esaudito!"
+            session.commit()
+            return "Desiderio esaudito!"
+        except Exception as e:
+            session.rollback()
+            print(f"[ERROR] grant_wish failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return f"❌ Errore durante l'esaudimento del desiderio: {e}"
+        finally:
+            session.close()
     
     def grant_porunga_wish(self, user, wish_choice, wish_number=1):
         """Grant a single Porunga wish (called 3 times)"""
-        if wish_choice == "wumpa":
-            amount = random.randint(300, 500)
-            self.user_service.add_points(user, amount)
-            return f"Desiderio {wish_number}/3: Ricevi {amount} {PointsName}!"
-        elif wish_choice == "item":
-            items_data = self.item_service.load_items_from_csv()
-            weights = [1/item['rarita'] for item in items_data]
-            item = random.choices(items_data, weights=weights, k=1)[0]
-            self.item_service.add_item(user.id_telegram, item['nome'])
-            return f"Desiderio {wish_number}/3: Ricevi {item['nome']}!"
-        return "Desiderio esaudito!"
+        # This is essentially the same as grant_wish(dragon_type="Porunga")
+        # but with wish_number tracking.
+        session = self.db.get_session()
+        try:
+            if wish_choice == "wumpa":
+                amount = random.randint(300, 500)
+                self.user_service.add_points_by_id(user.id_telegram, amount, session=session)
+                session.commit()
+                return f"Desiderio {wish_number}/3: Ricevi {amount} {PointsName}!"
+            elif wish_choice == "item":
+                items_data = self.item_service.load_items_from_csv()
+                if not items_data:
+                    session.rollback()
+                    return f"Desiderio {wish_number}/3: Nessun oggetto trovato!"
+                    
+                weights = [1/item['rarita'] if item['rarita'] > 0 else 0.01 for item in items_data]
+                item = random.choices(items_data, weights=weights, k=1)[0]
+                self.item_service.add_item(user.id_telegram, item['nome'], session=session)
+                session.commit()
+                return f"Desiderio {wish_number}/3: Ricevi {item['nome']}!"
+            
+            session.commit()
+            return f"Desiderio {wish_number}/3 esaudito!"
+        except Exception as e:
+            session.rollback()
+            print(f"[ERROR] grant_porunga_wish failed: {e}")
+            return f"❌ Errore desiderio {wish_number}: {e}"
+        finally:
+            session.close()

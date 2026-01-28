@@ -571,7 +571,8 @@ class PvEService:
             'resistance': getattr(mob, 'resistance', 0),
             'image_path': self.get_enemy_image_path(mob),
             'dungeon_id': mob.dungeon_id,
-            'is_boss': mob.is_boss
+            'is_boss': mob.is_boss,
+            'spawn_time': mob.spawn_time
         }
         session.close()
         return data

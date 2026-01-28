@@ -244,10 +244,12 @@ class UserService:
                 session.close()
 
     def add_points(self, utente, points):
+        """Add points to a user object"""
         try:
-            self.update_user(utente.id_telegram, {'points': int(utente.points) + int(points)})
+            # Use add_points_by_id to ensure consistent logic (daily reset, etc)
+            self.add_points_by_id(utente.id_telegram, points)
         except Exception as e:
-            print(e)
+            print(f"[ERROR] add_points failed: {e}")
 
     def check_daily_reset(self, utente):
         """Check if daily limits need to be reset"""
@@ -302,7 +304,12 @@ class UserService:
             session.close()
 
     def add_exp(self, utente, exp):
-        self.update_user(utente.id_telegram, {'exp': utente.exp + exp})
+        """Add experience to a user object"""
+        try:
+            # Use add_exp_by_id to handle level-ups and session management
+            self.add_exp_by_id(utente.id_telegram, exp)
+        except Exception as e:
+            print(f"[ERROR] add_exp failed: {e}")
 
     def add_chat_exp(self, user_id, amount):
         """Add chat EXP to user and return new total"""

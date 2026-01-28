@@ -25,6 +25,9 @@ class StatAggregator:
             session = self.db.get_session()
             local_session = True
             
+        # Local cache for this batch to avoid multiple queries/inserts for same PK
+        self._batch_cache = {}
+        
         try:
             for event in events:
                 # Re-attach event to current session if needed
@@ -41,7 +44,9 @@ class StatAggregator:
             print(f"[ERROR] Stat Aggregation failed: {e}")
             if local_session:
                 session.rollback()
+            raise e
         finally:
+            self._batch_cache = {}
             if local_session:
                 session.close()
 
@@ -145,20 +150,44 @@ class StatAggregator:
         """
         Helper to safely increment a UserStat.
         """
-        stat = session.query(UserStat).filter_by(user_id=user_id, stat_key=stat_key).first()
+        cache_key = (user_id, stat_key)
+        
+        # 1. Check local batch cache
+        if cache_key in self._batch_cache:
+            stat = self._batch_cache[cache_key]
+            stat.value = (stat.value or 0) + amount
+            return
+
+        # 2. Check session/DB
+        stat = session.get(UserStat, cache_key)
         if stat:
-            stat.value += amount
+            stat.value = (stat.value or 0) + amount
         else:
             stat = UserStat(user_id=user_id, stat_key=stat_key, value=amount)
             session.add(stat)
+            
+        # 3. Update cache
+        self._batch_cache[cache_key] = stat
 
     def _set_stat(self, session, user_id, stat_key, value):
         """
         Helper to set a UserStat to an absolute value.
         """
-        stat = session.query(UserStat).filter_by(user_id=user_id, stat_key=stat_key).first()
+        cache_key = (user_id, stat_key)
+        
+        # 1. Check local batch cache
+        if cache_key in self._batch_cache:
+            stat = self._batch_cache[cache_key]
+            stat.value = value
+            return
+
+        # 2. Check session/DB
+        stat = session.get(UserStat, cache_key)
         if stat:
             stat.value = value
         else:
             stat = UserStat(user_id=user_id, stat_key=stat_key, value=value)
             session.add(stat)
+            
+        # 3. Update cache
+        self._batch_cache[cache_key] = stat

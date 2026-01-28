@@ -980,14 +980,9 @@ class BotCommands:
             "!inventario": self.handle_inventario,
             "/inventario": self.handle_inventario,
             "/wish": self.handle_wish,
-            "attacca": self.handle_attack,
-            "/attacca": self.handle_attack,
-            "⚔️ Attacca": self.handle_attack,
             "/search": self.handle_search_game,
             "/givedragonballs": self.handle_give_dragonballs,  # Admin only
             "/testchar": self.handle_test_char,  # Debug
-            "attacco speciale": self.handle_special_attack,
-            "🔮 attacco speciale": self.handle_special_attack,
             "/help": self.handle_help,
             "!help": self.handle_help,
             "/join": self.handle_join_dungeon,
@@ -1523,30 +1518,6 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         
         self.bot.reply_to(self.message, msg, parse_mode='markdown')
 
-    def handle_special_attack(self):
-        utente = user_service.get_user(self.chatid)
-        success, msg, extra_data, attack_events = pve_service.use_special_attack(utente, chat_id=self.chat_id)
-        self.bot.reply_to(self.message, msg, parse_mode='markdown')
-        
-        if success:
-            # Handle message deletion if mob died
-            if extra_data and 'delete_message_id' in extra_data:
-                try:
-                    self.bot.delete_message(self.chat_id, extra_data['delete_message_id'])
-                except:
-                    pass
-            
-            # Handle counter-attacks
-            if attack_events:
-                for event in attack_events:
-                    msg = event['message']
-                    image_path = event['image']
-                    mob_id = event['mob_id']
-                    old_msg_id = event['last_message_id']
-                    
-                    markup = get_combat_markup("mob", mob_id, self.chat_id)
-                    send_combat_message(self.chat_id, msg, image_path, markup, mob_id, old_msg_id)
-
     def handle_test_char(self):
         """Test character selection directly"""
         utente = user_service.get_user(self.chatid)
@@ -1571,8 +1542,6 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         
         self.bot.reply_to(self.message, "✅ Ti ho dato tutte le 14 sfere del drago (7 Shenron + 7 Porunga) per testare!\n\nUsa /wish o vai in inventario per evocarli.")
 
-    def handle_attack(self):
-        self.bot.reply_to(self.message, "❌ Per attaccare devi usare i pulsanti sotto il messaggio del mostro!")
 
     def handle_buy_box_wumpa(self):
         utente = user_service.get_user(self.chatid)
@@ -3494,8 +3463,13 @@ def any(message):
     bothandler = BotCommands(message, bot)
     bothandler.handle_all_commands()
 
-def get_combat_markup(enemy_type, enemy_id, chat_id):
+def get_combat_markup(enemy_type, enemy_id, chat_id, can_use_items=None):
     """Generate combat markup with all required buttons"""
+    if can_use_items is None:
+        # Auto-detect if it's a "next mob" (ID > 237)
+        mob = pve_service.get_mob_details(enemy_id)
+        can_use_items = mob and mob['id'] > 237
+        
     markup = types.InlineKeyboardMarkup()
     # Standard attack buttons
     markup.add(
@@ -3509,6 +3483,13 @@ def get_combat_markup(enemy_type, enemy_id, chat_id):
         markup.add(
             types.InlineKeyboardButton("💥 AoE", callback_data=f"aoe_attack_enemy|{enemy_type}|{enemy_id}"),
             types.InlineKeyboardButton("🌟 Speciale AoE", callback_data=f"special_aoe_attack_enemy|{enemy_type}|{enemy_id}")
+        )
+    
+    # Nitro and TNT buttons (only for "next mobs")
+    if can_use_items:
+        markup.add(
+            types.InlineKeyboardButton("🧨 Nitro", callback_data=f"use_item_mob|Nitro|{enemy_id}"),
+            types.InlineKeyboardButton("💣 TNT", callback_data=f"use_item_mob|TNT|{enemy_id}")
         )
     
     # Always show Flee button (requested by user)
@@ -4169,6 +4150,78 @@ def callback_query(call):
                     'user_id': user_id,
                     'time': datetime.datetime.now()
                 }
+        else:
+            safe_answer_callback(call.id, "❌ Errore nell'uso dell'oggetto!", show_alert=True)
+        return
+
+    elif call.data.startswith("use_item_mob|"):
+        # use_item_mob|{item_name}|{mob_id}
+        parts = call.data.split("|")
+        if len(parts) != 3:
+            safe_answer_callback(call.id, "❌ Formato non valido", show_alert=True)
+            return
+            
+        item_name = parts[1]
+        mob_id = int(parts[2])
+        user_id = call.from_user.id
+        
+        # Check if user has the item
+        if item_service.get_item_by_user(user_id, item_name) <= 0:
+            safe_answer_callback(call.id, f"❌ Non hai {item_name}!", show_alert=True)
+            return
+            
+        # Get mob details
+        mob_data = pve_service.get_mob_details(mob_id)
+        if not mob_data:
+            safe_answer_callback(call.id, "❌ Nemico non trovato!", show_alert=True)
+            return
+            
+        # Use the item
+        utente = user_service.get_user(user_id)
+        success = item_service.use_item(user_id, item_name)
+        
+        if success:
+            # Create a dummy mob object for apply_effect (it expects an object with .id and .name)
+            class DummyMob:
+                def __init__(self, d):
+                    self.id = d['id']
+                    self.name = d['name']
+            
+            target_mob = DummyMob(mob_data)
+            
+            # Apply effect on mob
+            effect_msg, data = item_service.apply_effect(utente, item_name, target_mob=target_mob)
+            safe_answer_callback(call.id, f"✅ {item_name} utilizzato!")
+            
+            # Handle mob drop (Nitro/TNT effect)
+            if data and data.get('type') == 'mob_drop':
+                percent = data['percent']
+                dropped_amount = pve_service.force_mob_drop(mob_id, percent)
+                
+                if dropped_amount > 0:
+                    # Create buttons for stealing the dropped wumpa
+                    markup = types.InlineKeyboardMarkup()
+                    buttons = []
+                    import uuid
+                    visual_amount = min(dropped_amount, 50)
+                    for i in range(visual_amount):
+                        uid = str(uuid.uuid4())[:8]
+                        buttons.append(types.InlineKeyboardButton("🍑", callback_data=f"steal|{uid}"))
+                    
+                    for i in range(0, len(buttons), 5):
+                        markup.row(*buttons[i:i+5])
+                        
+                    username = escape_markdown(utente.username if utente.username else utente.nome)
+                    full_msg = f"@{username}\n{effect_msg}\n\n💰 Il Mob ha perso {dropped_amount} Wumpa!"
+                    
+                    # Send as a new message to the group
+                    bot.send_message(call.message.chat.id, full_msg, reply_markup=markup)
+                else:
+                    username = escape_markdown(utente.username if utente.username else utente.nome)
+                    bot.send_message(call.message.chat.id, f"@{username}\n{effect_msg}")
+            else:
+                username = escape_markdown(utente.username if utente.username else utente.nome)
+                bot.send_message(call.message.chat.id, f"@{username}\n{effect_msg}")
         else:
             safe_answer_callback(call.id, "❌ Errore nell'uso dell'oggetto!", show_alert=True)
         return
@@ -5748,38 +5801,55 @@ def callback_query(call):
 
     elif action.startswith("wish|"):
         # Shenron wish
+        safe_answer_callback(call.id)
         parts = action.split("|")
         dragon = parts[1]
         wish = parts[2]
         
-        msg = wish_service.grant_wish(utente, wish, dragon)
-        bot.send_message(user_id, msg)
-        safe_answer_callback(call.id, "Desiderio esaudito!")
+        try:
+            msg = wish_service.grant_wish(utente, wish, dragon)
+            bot.send_message(call.message.chat.id, msg)
+        except Exception as e:
+            print(f"[ERROR] wish handler failed: {e}")
+            bot.send_message(call.message.chat.id, f"❌ Errore durante l'esaudimento del desiderio: {e}")
+        return
 
     elif action.startswith("pwish|"):
         # Porunga wish (multi-step)
+        safe_answer_callback(call.id)
         parts = action.split("|")
         wish_number = int(parts[1])
         wish_choice = parts[2]
         
-        # Grant this wish
-        msg = wish_service.grant_porunga_wish(utente, wish_choice, wish_number)
-        
-        # Check if there are more wishes
-        if wish_number < 3:
-            # Show next wish options
-            markup = types.InlineKeyboardMarkup()
-            markup.add(types.InlineKeyboardButton(f"💰 {PointsName} (50-100)", callback_data=f"pwish|{wish_number+1}|wumpa"))
-            markup.add(types.InlineKeyboardButton("🎁 Oggetto Raro", callback_data=f"pwish|{wish_number+1}|item"))
-            bot.send_message(user_id, f"{msg}\n\n[Desiderio {wish_number+1}/3]", reply_markup=markup)
-        else:
-            # Final wish
-            # Consume spheres now
-            for i in range(1, 8):
-                item_service.use_item(user_id, f"La Sfera del Drago Porunga {i}")
-            bot.send_message(user_id, f"{msg}\n\n🐲 PORUNGA HA ESAUDITO I TUOI 3 DESIDERI!")
-        
-        safe_answer_callback(call.id)
+        try:
+            # Grant this wish
+            msg = wish_service.grant_porunga_wish(utente, wish_choice, wish_number)
+            
+            # Check if there are more wishes
+            if wish_number < 3:
+                # Show next wish options
+                markup = types.InlineKeyboardMarkup()
+                markup.add(types.InlineKeyboardButton(f"💰 {PointsName} (50-100)", callback_data=f"pwish|{wish_number+1}|wumpa"))
+                markup.add(types.InlineKeyboardButton("🎁 Oggetto Raro", callback_data=f"pwish|{wish_number+1}|item"))
+                bot.send_message(call.message.chat.id, f"{msg}\n\n[Desiderio {wish_number+1}/3]", reply_markup=markup)
+            else:
+                # Final wish
+                # Consume spheres now (in a single transaction)
+                session = wish_service.db.get_session()
+                try:
+                    for i in range(1, 8):
+                        item_service.use_item(user_id, f"La Sfera del Drago Porunga {i}", session=session)
+                    session.commit()
+                except Exception as e:
+                    session.rollback()
+                    print(f"[ERROR] Failed to consume Porunga spheres: {e}")
+                finally:
+                    session.close()
+                    
+                bot.send_message(call.message.chat.id, f"{msg}\n\n🐲 PORUNGA HA ESAUDITO I TUOI 3 DESIDERI!")
+        except Exception as e:
+            print(f"[ERROR] pwish handler failed: {e}")
+            bot.send_message(call.message.chat.id, f"❌ Errore durante il desiderio {wish_number}: {e}")
         return
 
     elif action.startswith("guide|"):
