@@ -498,17 +498,40 @@ def handle_guilds_list_cmd(message):
         return
         
     msg = "🏰 **Gilde di aROMaLand**\n\n"
+    markup = types.InlineKeyboardMarkup()
     for g in guilds:
         msg += f"🔹 **{g['name']}** (Lv. {g['level']})\n"
         msg += f"   👥 Membri: {g['members']}/{g['limit']}\n\n"
         
-    bot.reply_to(message, msg, parse_mode='markdown')
+        # Add join button if not full
+        if g['members'] < g['limit']:
+             markup.add(types.InlineKeyboardButton(f"➕ Unisciti a {g['name']}", callback_data=f"guild_join|{g['id']}"))
+        
+    bot.reply_to(message, msg, reply_markup=markup, parse_mode='markdown')
 
-@bot.message_handler(commands=['bordello'])
-def handle_bordello_cmd(message):
-    """Buy the Vigore bonus"""
-    success, msg = guild_service.apply_vigore_bonus(message.from_user.id)
-    bot.reply_to(message, msg)
+def handle_guild_view(call):
+    """Refresh the guild management view"""
+    guild = guild_service.get_user_guild(call.from_user.id)
+    if not guild or guild['role'] != "Leader":
+        safe_answer_callback(call.id, "Solo il capogilda può accedere a questo menu!", show_alert=True)
+        return
+        
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton(f"🏠 Locanda ({guild['inn_level'] * 500} W)", callback_data="guild_upgrade|inn"))
+    markup.add(types.InlineKeyboardButton(f"⚔️ Armeria ({(guild['armory_level'] + 1) * 750} W)", callback_data="guild_upgrade|armory"))
+    markup.add(types.InlineKeyboardButton(f"🏘️ Villaggio ({guild['village_level'] * 1000} W)", callback_data="guild_upgrade|village"))
+    markup.add(types.InlineKeyboardButton(f"🔞 Bordello ({(guild['bordello_level'] + 1) * 1500} W)", callback_data="guild_upgrade|bordello"))
+    
+    # Visual button for Locanda
+    markup.add(types.InlineKeyboardButton("🏨 Vai alla Locanda", callback_data="guild_inn_view"))
+    
+    markup.add(types.InlineKeyboardButton("✏️ Rinomina", callback_data="guild_rename_ask"),
+               types.InlineKeyboardButton("🗑️ Elimina", callback_data="guild_delete_ask"))
+    markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guild_back_main"))
+    
+    bot.edit_message_text(f"⚙️ **Gestione Gilda: {guild['name']}**\n\nBanca: {guild['wumpa_bank']} Wumpa", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+
+# /bordello command removed in favor of buttons in Inn view
 
 @bot.message_handler(commands=['guild', 'gilda'])
 def handle_guild_cmd(message):
@@ -538,6 +561,8 @@ def handle_guild_cmd(message):
         markup.add(types.InlineKeyboardButton("💰 Deposita Wumpa", callback_data="guild_deposit_start"))
         if guild['role'] == "Leader":
             markup.add(types.InlineKeyboardButton("⚙️ Gestisci Gilda", callback_data="guild_manage_menu"))
+        else:
+            markup.add(types.InlineKeyboardButton("🚪 Abbandona Gilda", callback_data="guild_leave_ask"))
         
         bot.send_message(message.chat.id, msg, reply_markup=markup, parse_mode='markdown')
 
@@ -660,18 +685,50 @@ def handle_guild_inn_view(call):
         return
         
     msg = f"🏠 **Locanda della Gilda: {guild['name']}** (Lv. {guild['inn_level']})\n\n"
-    msg += "🍺 **/beer**: Bevi una birra artigianale (50 W) per curarti e potenziare le pozioni!\n"
+    msg += "Qui puoi riposare, bere una birra artigianale o passare del tempo nel bordello (se disponibile).\n\n"
+    msg += f"🍺 **Birra Artigianale**: Ti cura del 10% e potenzia le tue pozioni!\n"
     if guild['bordello_level'] > 0:
-        msg += "🔞 **/bordello**: Passa del tempo con le Elfe del Piacere (200 W) per il bonus Vigore!\n"
-    msg += "\n🛏️ **Riposo di Gilda**: (In arrivo...)"
+        msg += f"🔞 **Bordello delle Elfe**: Ottieni il bonus Vigore!\n"
     
-    bot.edit_message_caption(msg, call.message.chat.id, call.message.message_id, parse_mode='markdown')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton(f"🍺 Bevi Birra (50 {PointsName})", callback_data="guild_buy_beer"))
+    if guild['bordello_level'] > 0:
+        markup.add(types.InlineKeyboardButton(f"🔞 Bordello (200 {PointsName})", callback_data="guild_buy_vigore"))
+    markup.add(types.InlineKeyboardButton("🔙 Torna alla Gilda", callback_data="guild_view"))
+    
+    image_path = guild_service.get_inn_image(guild['inn_level'])
+    
+    try:
+        # Delete old message and send new one with photo
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        with open(image_path, 'rb') as photo:
+            bot.send_photo(call.message.chat.id, photo, caption=msg, reply_markup=markup, parse_mode='markdown')
+    except Exception as e:
+        print(f"Error showing inn view: {e}")
+        bot.send_message(call.message.chat.id, msg, reply_markup=markup, parse_mode='markdown')
 
-@bot.message_handler(commands=['beer', 'birra'])
-def handle_beer_cmd(message):
-    """Buy a craft beer"""
-    success, msg = guild_service.buy_craft_beer(message.from_user.id)
-    bot.reply_to(message, msg)
+@bot.callback_query_handler(func=lambda call: call.data == "guild_buy_beer")
+def handle_guild_buy_beer(call):
+    """Buy a craft beer via button"""
+    user_id = call.from_user.id
+    success, msg = guild_service.buy_craft_beer(user_id)
+    safe_answer_callback(call.id, msg, show_alert=not success)
+    
+    if success:
+        # Refresh the inn view to update wumpa/cooldown if we had it in text
+        # For now, just answer callback is enough as the msg is an alert or reply
+        # But let's send a message too if it was successful
+        bot.send_message(call.message.chat.id, msg, parse_mode='markdown')
+
+@bot.callback_query_handler(func=lambda call: call.data == "guild_buy_vigore")
+def handle_guild_buy_vigore(call):
+    """Buy vigore bonus via button"""
+    user_id = call.from_user.id
+    success, msg = guild_service.apply_vigore_bonus(user_id)
+    safe_answer_callback(call.id, msg, show_alert=not success)
+    
+    if success:
+        bot.send_message(call.message.chat.id, msg, parse_mode='markdown')
 
 @bot.message_handler(commands=['armory', 'armeria'])
 def handle_armory_cmd(message):
@@ -1059,6 +1116,13 @@ Per acquistare un gioco che vedi in un canale o gruppo:
             
         mob_id, attack_events = pve_service.spawn_daily_mob(chat_id=self.chat_id)
         if mob_id:
+            # Apply pending effects
+            applied = pve_service.apply_pending_effects(mob_id, self.chat_id)
+            for app in applied:
+                bot.send_message(self.chat_id, f"💥 **{app['effect']}** esplode sul nuovo arrivato! Danni: {app['damage']}")
+                # Trigger drop if needed? User didn't explicitly ask for drop on pending, but it's consistent.
+                # Let's just do damage for now as per "fare anche danno almeno".
+            
             mob = pve_service.get_mob_status_by_id(mob_id)
             if mob:
                 markup = get_combat_markup("mob", mob_id, self.chatid)
@@ -1202,7 +1266,7 @@ Per acquistare un gioco che vedi in un canale o gruppo:
                 msg += f"\n👥 Partecipanti ({len(participants)}):\n"
                 for p in participants:
                     u = user_service.get_user(p.user_id)
-                    name = u.username if u and u.username else f"Utente {p.user_id}"
+                    name = f"@{u.username}" if u and u.username else (u.nome if u else f"Utente {p.user_id}")
                     msg += f"- {name}\n"
                         
                 session.close()
@@ -1399,9 +1463,22 @@ Per acquistare un gioco che vedi in un canale o gruppo:
                 self.bot.send_chat_action(chat_id, 'typing')
                 time.sleep(seconds)
             elif event['type'] == 'spawn':
-                # Individual cards will be sent by display_mob_spawn in callback_query
-                # to avoid duplicates.
-                pass
+                # Display spawned mobs
+                mob_ids = event.get('mob_ids', [])
+                for mob_id in mob_ids:
+                    # Get mob details
+                    mob_data = pve_service.get_mob_details(mob_id)
+                    if mob_data:
+                        # Construct message
+                        msg = f"⚠️ **{mob_data['name']}** è apparso!"
+                        if mob_data['is_boss']:
+                            msg = f"☠️ **BOSS: {mob_data['name']}** è sceso in campo!"
+                        
+                        # Get markup
+                        markup = get_combat_markup("mob", mob_id, chat_id)
+                        
+                        # Send message
+                        send_combat_message(chat_id, msg, mob_data['image_path'], markup, mob_id)
 
     def handle_find_missing_image(self):
         """Find a random character or mob without an image"""
@@ -1624,12 +1701,14 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         has_shenron, has_porunga = wish_service.check_dragon_balls(utente)
         
         if has_shenron:
+            wish_service.log_summon(self.chatid, "Shenron")
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton(f"💰 {PointsName} (300-500)", callback_data="wish|Shenron|wumpa"))
             markup.add(types.InlineKeyboardButton("⭐ EXP (300-500)", callback_data="wish|Shenron|exp"))
             self.bot.reply_to(self.message, "🐉 Shenron è stato evocato!\n\nEsprimi il tuo desiderio!", reply_markup=markup)
             
         elif has_porunga:
+            wish_service.log_summon(self.chatid, "Porunga")
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton(f"💰 {PointsName} (50-100)", callback_data="pwish|1|wumpa"))
             markup.add(types.InlineKeyboardButton("🎁 Oggetto Raro", callback_data="pwish|1|item"))
@@ -3489,6 +3568,8 @@ def get_combat_markup(enemy_type, enemy_id, chat_id, can_use_items=None):
         types.InlineKeyboardButton("⚔️ Attacca", callback_data=f"attack_enemy|{enemy_type}|{enemy_id}"),
         types.InlineKeyboardButton("✨ Speciale", callback_data=f"special_attack_enemy|{enemy_type}|{enemy_id}")
     )
+    # Defend button
+    markup.add(types.InlineKeyboardButton("🛡️ Difesa", callback_data="defend_mob"))
     
     # AoE buttons (only if >= 2 mobs)
     mob_count = pve_service.get_active_mobs_count(chat_id)
@@ -3843,6 +3924,15 @@ def callback_query(call):
             msg += f"🔹 {m['name']} ({m['role']}) - Lv. {m['level']}\n"
         
         markup = types.InlineKeyboardMarkup()
+        # Add Leave button for members (Leader has manage menu)
+        # We need to check if user is leader? No, get_guild_members returns list.
+        # We are in guild_back_main or similar context.
+        # Actually, this block is for "guild_back_main" or initial view?
+        # Line 3840 is inside "guild_view_members" probably?
+        # Let's check context. 
+        # Wait, I need to find where the main guild menu is shown for MEMBERS.
+        # It's usually in handle_guild_cmd or similar.
+        # Let's look at handle_guild_cmd implementation first.
         markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guild_back_main"))
         bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
         return
@@ -3868,6 +3958,23 @@ def callback_query(call):
         markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guild_back_main"))
         
         bot.edit_message_text(f"⚙️ **Gestione Gilda: {guild['name']}**\n\nBanca: {guild['wumpa_bank']} Wumpa", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+        return
+
+    elif call.data == "guild_leave_ask":
+        safe_answer_callback(call.id)
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("✅ Sì, abbandona", callback_data="guild_leave_confirm"))
+        markup.add(types.InlineKeyboardButton("❌ No, resta", callback_data="guild_back_main"))
+        
+        bot.edit_message_text("⚠️ **Sei sicuro di voler abbandonare la gilda?**\nPerderai l'accesso a tutti i benefici.", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+        return
+
+    elif call.data == "guild_leave_confirm":
+        success, msg = guild_service.leave_guild(call.from_user.id)
+        safe_answer_callback(call.id, msg, show_alert=True)
+        if success:
+            # Go back to main guild menu (which will show "Found" or "Join")
+            handle_guild_cmd(call.message)
         return
 
         bot.edit_message_text(f"⚙️ **Gestione Gilda: {guild['name']}**\n\nBanca: {guild['wumpa_bank']} Wumpa", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
@@ -3962,7 +4069,7 @@ def callback_query(call):
                 msg_text += f"👥 Partecipanti ({len(participants)}):\n"
                 for p in participants:
                     u = user_service.get_user(p.user_id)
-                    name = u.username if u and u.username else f"Utente {p.user_id}"
+                    name = f"@{u.username}" if u and u.username else (u.nome if u else f"Utente {p.user_id}")
                     msg_text += f"- {name}\n"
                 
                 bot.edit_message_text(msg_text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
@@ -3990,7 +4097,7 @@ def callback_query(call):
                  msg_text += f"\n👥 Partecipanti ({len(participants)}):\n"
                  for p in participants:
                      u = user_service.get_user(p.user_id)
-                     name = u.username if u and u.username else f"Utente {p.user_id}"
+                     name = f"@{u.username}" if u and u.username else (u.nome if u else f"Utente {p.user_id}")
                      msg_text += f"- {name}\n"
                      
                  bot.edit_message_text(msg_text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
@@ -4204,12 +4311,18 @@ def callback_query(call):
                 bot.send_message(call.message.chat.id, effect_msg)
                 
             # Handle Traps
-            if extra_data and extra_data.get('type') == 'trap':
                 active_traps[call.message.chat.id] = {
                     'type': extra_data.get('trap_type', 'TNT'),
                     'user_id': user_id,
                     'time': datetime.datetime.now()
                 }
+            
+            # Handle Next Mob Effects
+            if extra_data and extra_data.get('type') == 'next_mob_effect':
+                chat_id = call.message.chat.id
+                if chat_id not in pve_service.pending_mob_effects:
+                    pve_service.pending_mob_effects[chat_id] = []
+                pve_service.pending_mob_effects[chat_id].append(extra_data.get('effect'))
         else:
             safe_answer_callback(call.id, "❌ Errore nell'uso dell'oggetto!", show_alert=True)
         return
@@ -4259,6 +4372,16 @@ def callback_query(call):
                 dropped_amount = pve_service.force_mob_drop(mob_id, percent)
                 
                 if dropped_amount > 0:
+                    # Apply damage if present
+                    damage = data.get('damage', 0)
+                    if damage > 0:
+                        mob = pve_service.db.get_session().query(Mob).filter_by(id=mob_id).first()
+                        if mob:
+                            mob.health -= damage
+                            if mob.health < 0: mob.health = 0
+                            pve_service.db.get_session().commit()
+                            effect_msg += f"\n💥 Danni inflitti: **{damage}**!"
+
                     # Create buttons for stealing the dropped wumpa
                     markup = types.InlineKeyboardMarkup()
                     buttons = []
@@ -4279,6 +4402,14 @@ def callback_query(call):
                 else:
                     username = escape_markdown(utente.username if utente.username else utente.nome)
                     bot.send_message(call.message.chat.id, f"@{username}\n{effect_msg}")
+            
+            elif data and data.get('type') == 'next_mob_effect':
+                chat_id = call.message.chat.id
+                if chat_id not in pve_service.pending_mob_effects:
+                    pve_service.pending_mob_effects[chat_id] = []
+                pve_service.pending_mob_effects[chat_id].append(data.get('effect'))
+                username = escape_markdown(utente.username if utente.username else utente.nome)
+                bot.send_message(call.message.chat.id, f"@{username}\n{effect_msg}")
             else:
                 username = escape_markdown(utente.username if utente.username else utente.nome)
                 bot.send_message(call.message.chat.id, f"@{username}\n{effect_msg}")
@@ -5701,6 +5832,7 @@ def callback_query(call):
                     markup = types.InlineKeyboardMarkup()
                     markup.add(types.InlineKeyboardButton("⚔️ Attacca", callback_data="attack_mob"), 
                                types.InlineKeyboardButton("✨ Attacco Speciale", callback_data="special_attack_mob"))
+                    markup.add(types.InlineKeyboardButton("🛡️ Difesa", callback_data="defend_mob"))
             else:
                 markup = None
 
@@ -5746,6 +5878,7 @@ def callback_query(call):
                     markup = types.InlineKeyboardMarkup()
                     markup.add(types.InlineKeyboardButton("⚔️ Attacca", callback_data="attack_mob"), 
                                types.InlineKeyboardButton("✨ Attacco Speciale", callback_data="special_attack_mob"))
+                    markup.add(types.InlineKeyboardButton("🛡️ Difesa", callback_data="defend_mob"))
             else:
                 markup = None
                        
@@ -5760,14 +5893,42 @@ def callback_query(call):
                     e_mob_id = event['mob_id']
                     old_msg_id = event['last_message_id']
                     
-                    markup = get_combat_markup("mob", e_mob_id, call.message.chat.id)
-                    send_combat_message(call.message.chat.id, e_msg, image_path, markup, e_mob_id, old_msg_id)
-        else:
+                    # We need to define get_combat_markup or use inline logic
+                    # Assuming get_combat_markup is not available in this scope or needs import?
+                    # Let's check if get_combat_markup is defined in main.py
+                    # It seems it was used in the garbage code, so it might exist.
+                    # If not, we'll use a simple markup generation.
+                    
+                    markup = types.InlineKeyboardMarkup()
+                    markup.add(types.InlineKeyboardButton("⚔️ Attacca", callback_data=f"attack_enemy|mob|{e_mob_id}"), 
+                               types.InlineKeyboardButton("✨ Attacco Speciale", callback_data=f"special_attack_enemy|mob|{e_mob_id}"))
+                    markup.add(types.InlineKeyboardButton("🛡️ Difesa", callback_data="defend_mob"))
+                    
+                    # send_combat_message might also be a helper or need to be replaced by bot.send_message
+                    # The garbage code used send_combat_message. Let's assume it exists or use bot.send_message.
+                    # To be safe, I'll use bot.send_photo or bot.send_message directly.
+                    
+                    if image_path and os.path.exists(image_path):
+                        with open(image_path, 'rb') as photo:
+                            bot.send_photo(call.message.chat.id, photo, caption=e_msg, reply_markup=markup, parse_mode='markdown')
+                    else:
+                        bot.send_message(call.message.chat.id, e_msg, reply_markup=markup, parse_mode='markdown')
+        return
+
+    elif action == "defend_mob":
+        utente = user_service.get_user(user_id)
+        success, msg = pve_service.defend(utente)
+        
+        if success:
             try:
-                safe_answer_callback(call.id, msg, show_alert=True)
+                safe_answer_callback(call.id, "🛡️ Posizione difensiva assunta!")
             except Exception:
                 pass
-        return
+            
+            username = escape_markdown(utente.username if utente.username else utente.nome)
+            bot.send_message(call.message.chat.id, f"@{username}\n{msg}", parse_mode='markdown')
+        else:
+            safe_answer_callback(call.id, msg, show_alert=True)
     
     
     # EXISTING HANDLERS BELOW
@@ -5849,11 +6010,13 @@ def callback_query(call):
         has_shenron, has_porunga = wish_service.check_dragon_balls(utente)
         
         if dragon == "shenron" and has_shenron:
+            wish_service.log_summon(user_id, "Shenron")
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton(f"💰 {PointsName} (300-500)", callback_data="wish|Shenron|wumpa"))
             markup.add(types.InlineKeyboardButton("⭐ EXP (300-500)", callback_data="wish|Shenron|exp"))
             bot.send_message(user_id, "🐉 Shenron è stato evocato!\n\nEsprimi il tuo desiderio!", reply_markup=markup)
         elif dragon == "porunga" and has_porunga:
+            wish_service.log_summon(user_id, "Porunga")
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton(f"💰 {PointsName} (50-100)", callback_data="pwish|1|wumpa"))
             markup.add(types.InlineKeyboardButton("🎁 Oggetto Raro", callback_data="pwish|1|item"))
@@ -6021,6 +6184,11 @@ def spawn_daily_mob_job():
         if random.random() < 0.2: 
             success, msg, mob_id = pve_service.spawn_specific_mob(chat_id=GRUPPO_AROMA)
             if mob_id:
+                # Apply pending effects
+                applied = pve_service.apply_pending_effects(mob_id, GRUPPO_AROMA)
+                for app in applied:
+                    bot.send_message(GRUPPO_AROMA, f"💥 **{app['effect']}** esplode sul nuovo arrivato! Danni: {app['damage']}")
+                
                 mob = pve_service.get_current_mob_status(mob_id)
                 if mob:
                     # Get the actual mob ID from spawn_daily_mob return value

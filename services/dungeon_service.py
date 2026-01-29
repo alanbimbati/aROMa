@@ -317,6 +317,14 @@ class DungeonService:
                     print(f"[DEBUG] spawn_specific_mob result: success={success}, mob_id={mob_id}, name={name}, chat_id={dungeon.chat_id}")
                     if success:
                         self._assign_mob_to_dungeon(mob_id, dungeon_id, session=session)
+                        # Apply pending effects
+                        applied = pve.apply_pending_effects(mob_id, dungeon.chat_id, session=session)
+                        # We don't send messages here, they should be handled by the caller or added to events
+                        for app in applied:
+                            events.append({
+                                'type': 'message',
+                                'content': f"💥 **{app['effect']}** esplode su {name}! Danni: {app['damage']}"
+                            })
                         final_msgs.append(m)
                         mob_ids.append(mob_id)
         

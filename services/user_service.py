@@ -529,7 +529,7 @@ class UserService:
             msg = "Critico +1%!"
         elif stat_type == "speed":
             updates['allocated_speed'] = (utente.allocated_speed or 0) + 1
-            msg = "Velocità +5!"
+            msg = "Velocità +1!"
         else:
             return False, "Statistica non valida!"
         
@@ -618,7 +618,7 @@ class UserService:
             alloc_dmg = (utente.allocated_damage or 0) * 2
             alloc_res = (utente.allocated_resistance or 0) * 1
             alloc_crit = (utente.allocated_crit or 0) * 1
-            alloc_speed = (utente.allocated_speed or 0) * 5
+            alloc_speed = (utente.allocated_speed or 0) * 1
             
             total_hp = base_hp + alloc_hp
             total_mana = base_mana + alloc_mana
@@ -829,7 +829,7 @@ class UserService:
         current_hp = user.current_hp if hasattr(user, 'current_hp') and user.current_hp is not None else (user.health or 0)
         max_hp = user.max_health
         
-        if max_hp > 0 and (current_hp / max_hp) < 0.2:
+        if max_hp > 0 and (current_hp / max_hp) < 0.05:
             return True
         return False
 
@@ -886,12 +886,15 @@ class UserService:
             
         return new_hp, died
 
-    def restore_health(self, user, amount):
+    def restore_health(self, user, amount, session=None):
         """
         Restore HP to user, up to max_health.
         Returns amount actually restored.
         """
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         try:
             # Re-fetch user to ensure fresh session attachment
             db_user = session.query(Utente).filter_by(id_telegram=user.id_telegram).first()
@@ -908,7 +911,8 @@ class UserService:
                 # Even if we don't restore, ensure we cap it
                 db_user.current_hp = max_hp
                 db_user.health = max_hp
-                session.commit()
+                if local_session:
+                    session.commit()
                 return 0
                 
             new_hp = min(current_hp + amount, max_hp)
@@ -917,22 +921,30 @@ class UserService:
             db_user.current_hp = new_hp
             db_user.health = new_hp # Sync legacy
             
-            session.commit()
+            if local_session:
+                session.commit()
+            else:
+                session.flush()
             return restored
         except Exception as e:
             print(f"Error restoring health: {e}")
-            session.rollback()
+            if local_session:
+                session.rollback()
             return 0
         finally:
-            session.close()
+            if local_session:
+                session.close()
 
 
-    def restore_mana(self, user, amount):
+    def restore_mana(self, user, amount, session=None):
         """
         Restore Mana to user, up to max_mana.
         Returns amount actually restored.
         """
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         try:
             # Re-fetch user to ensure fresh session attachment
             db_user = session.query(Utente).filter_by(id_telegram=user.id_telegram).first()
@@ -943,6 +955,8 @@ class UserService:
             max_mana = db_user.max_mana
             
             if current_mana >= max_mana:
+                if local_session:
+                    session.commit()
                 return 0
                 
             new_mana = min(current_mana + amount, max_mana)
@@ -950,11 +964,16 @@ class UserService:
             
             db_user.mana = new_mana
             
-            session.commit()
+            if local_session:
+                session.commit()
+            else:
+                session.flush()
             return restored
         except Exception as e:
             print(f"Error restoring mana: {e}")
-            session.rollback()
+            if local_session:
+                session.rollback()
             return 0
         finally:
-            session.close()
+            if local_session:
+                session.close()

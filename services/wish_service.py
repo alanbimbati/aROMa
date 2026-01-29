@@ -36,12 +36,27 @@ class WishService:
         
         return shenron_count, porunga_count
 
+    def log_summon(self, user_id, dragon_type, session=None):
+        """Log dragon summon event for achievements"""
+        from services.event_dispatcher import EventDispatcher
+        dispatcher = EventDispatcher()
+        
+        event_type = 'shenron_summons' if dragon_type.lower() == 'shenron' else 'porunga_summons'
+        
+        dispatcher.log_event(
+            event_type=event_type,
+            user_id=user_id,
+            value=1,
+            context={'dragon': dragon_type},
+            session=session
+        )
+
     def grant_wish(self, user, wish_type, dragon_type="Shenron"):
         """Grant a dragon wish (Shenron or Porunga)"""
         session = self.db.get_session()
         try:
             # Consume spheres in a single transaction
-            if dragon_type == "Shenron":
+            if dragon_type.lower() == "shenron":
                 for i in range(1, 8):
                     self.item_service.use_item(user.id_telegram, f"La Sfera del Drago Shenron {i}", session=session)
                 
@@ -54,25 +69,11 @@ class WishService:
                 elif wish_type == "exp":
                     amount = random.randint(1000, 2000)
                     self.user_service.add_exp_by_id(user.id_telegram, amount, session=session)
-                    
-                    from services.event_dispatcher import EventDispatcher
-                    dispatcher = EventDispatcher()
-                    dispatcher.log_event(
-                        event_type='shenron_summoned',
-                        user_id=user.id_telegram,
-                        value=1,
-                        context={},
-                        session=session
-                    )
-                    
                     session.commit()
                     return f"🐉 SHENRON HA ESAUDITO IL TUO DESIDERIO!\n\n⭐ HAI OTTENUTO {amount} EXP!"
                     
             else:
                 # Porunga: Consumes spheres and grants one wish (called via main.py)
-                # Note: Spheres are consumed in the 3rd wish in main.py, but we can do it here too if needed.
-                # To be safe and consistent with current main.py logic, we handle the wish here.
-                
                 if wish_type == "wumpa":
                     amount = random.randint(300, 500)
                     self.user_service.add_points_by_id(user.id_telegram, amount, session=session)
@@ -96,16 +97,12 @@ class WishService:
         except Exception as e:
             session.rollback()
             print(f"[ERROR] grant_wish failed: {e}")
-            import traceback
-            traceback.print_exc()
             return f"❌ Errore durante l'esaudimento del desiderio: {e}"
         finally:
             session.close()
     
     def grant_porunga_wish(self, user, wish_choice, wish_number=1):
         """Grant a single Porunga wish (called 3 times)"""
-        # This is essentially the same as grant_wish(dragon_type="Porunga")
-        # but with wish_number tracking.
         session = self.db.get_session()
         try:
             if wish_choice == "wumpa":

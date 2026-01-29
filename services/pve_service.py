@@ -10,6 +10,7 @@ from services.item_service import ItemService
 from services.event_dispatcher import EventDispatcher
 from services.damage_calculator import DamageCalculator
 from services.status_effects import StatusEffect
+from services.targeting_service import TargetingService
 import datetime
 import random
 import csv
@@ -29,6 +30,7 @@ class PvEService:
         # NEW: Enhanced combat services
         self.event_dispatcher = EventDispatcher()
         self.damage_calculator = DamageCalculator()
+        self.targeting_service = TargetingService()
         
         # NEW: Achievement tracker
         from services.achievement_tracker import AchievementTracker
@@ -47,6 +49,7 @@ class PvEService:
         self.mob_data = self.load_mob_data()
         self.boss_data = self.load_boss_data()
         self.recent_mobs = [] # Track last 10 spawned mobs to avoid repetition
+        self.pending_mob_effects = {} # {chat_id: [effect1, effect2, ...]}
 
     def load_mob_data(self):
         """Load mob data from CSV"""
@@ -128,6 +131,51 @@ class PvEService:
             finally:
                 if local_session:
                     session.close()
+
+
+    def defend(self, user):
+        """
+        Enter defensive stance.
+        - Increases resistance by 50% (capped at 75%) for next attack.
+        - Heals 2-3% HP.
+        - Shares cooldown with attack.
+        """
+        session = self.db.get_session()
+        try:
+            # Check Cooldown (Shared with attack)
+            user_speed = getattr(user, 'speed', 0) or 0
+            cooldown_seconds = 60 / (1 + user_speed * 0.01)
+            
+            last_attack = getattr(user, 'last_attack_time', None)
+            if last_attack:
+                elapsed = (datetime.datetime.now() - last_attack).total_seconds()
+                if elapsed < cooldown_seconds:
+                    remaining = int(cooldown_seconds - elapsed)
+                    session.close()
+                    return False, f"⏳ Sei stanco! (CD: {int(cooldown_seconds)}s)\nDevi riposare ancora per {remaining}s."
+            
+            # Apply Defense Up Effect
+            StatusEffect.apply_status(user, 'defense_up', duration=1)
+            
+            # Heal 2-3% HP
+            heal_percent = random.uniform(0.02, 0.03)
+            heal_amount = int(user.max_health * heal_percent)
+            
+            user.health = min((user.health or 0) + heal_amount, user.max_health)
+            user.current_hp = user.health
+            
+            # Update last action time
+            self.user_service.update_user(user.id_telegram, {'last_attack_time': datetime.datetime.now()}, session=session)
+            
+            session.commit()
+            return True, f"🛡️ **{user.nome}** usa **Difesa**!\nResistenza aumentata del 5% e recuperati {heal_amount} HP."
+            
+        except Exception as e:
+            session.rollback()
+            return False, f"Errore durante la difesa: {e}"
+        finally:
+            session.close()
+
     def flee_mob(self, user, mob_id):
         """
         Allow a user to flee from a mob with a chance based on level ratio.
@@ -313,7 +361,14 @@ class PvEService:
                 # Filter by difficulty
                 pool = [m for m in self.mob_data if int(m.get('difficulty', 1)) == target_difficulty]
                 
-                # Fallback to closest difficulty if pool is empty
+                # Fallback: Try adjacent difficulties if pool is empty
+                if not pool:
+                    for offset in [1, -1, 2, -2]:
+                        adj_diff = target_difficulty + offset
+                        pool = [m for m in self.mob_data if int(m.get('difficulty', 1)) == adj_diff]
+                        if pool: break
+                
+                # Final fallback to closest difficulty if pool is still empty
                 if not pool:
                     all_diffs = sorted(list(set(int(m.get('difficulty', 1)) for m in self.mob_data)))
                     if all_diffs:
@@ -332,6 +387,14 @@ class PvEService:
             # Filter by theme if available
             themed_mobs = [m for m in pool if theme and theme in m.get('saga', '').strip().lower()]
             
+            # If no themed mobs in current pool, try to find ANY themed mob within +/- 1 difficulty
+            if not themed_mobs and theme:
+                for offset in [1, -1, 2, -2]:
+                    adj_diff = target_difficulty + offset
+                    adj_pool = [m for m in self.mob_data if int(m.get('difficulty', 1)) == adj_diff]
+                    themed_mobs = [m for m in adj_pool if theme in m.get('saga', '').strip().lower()]
+                    if themed_mobs: break
+
             def get_random_non_recent(p):
                 if not p: return None
                 available = [m for m in p if m['nome'] not in self.recent_mobs]
@@ -339,7 +402,8 @@ class PvEService:
                     return random.choice(p)
                 return random.choice(available)
 
-            if themed_mobs and random.random() < 0.8:
+            # High chance (95%) to spawn themed mob if available
+            if themed_mobs and random.random() < 0.95:
                 mob_data = get_random_non_recent(themed_mobs)
             else:
                 mob_data = get_random_non_recent(pool)
@@ -463,7 +527,15 @@ class PvEService:
             # Filter by theme if available
             themed_bosses = [b for b in pool if theme and theme in b.get('saga', '').strip().lower()]
             
-            if themed_bosses and random.random() < 0.8:
+            # If no themed bosses in current pool, try to find ANY themed boss within +/- 1 difficulty
+            if not themed_bosses and theme:
+                for offset in [1, -1, 2, -2]:
+                    adj_diff = target_difficulty + offset
+                    adj_pool = [b for b in self.boss_data if int(b.get('difficulty', 5)) == adj_diff]
+                    themed_bosses = [b for b in adj_pool if theme in b.get('saga', '').strip().lower()]
+                    if themed_bosses: break
+
+            if themed_bosses and random.random() < 0.95:
                 boss_data = random.choice(themed_bosses)
             else:
                 boss_data = random.choice(pool)
@@ -1394,86 +1466,16 @@ class PvEService:
                     elif difficulty >= 3 and random.random() < 0.20:
                         is_aoe = True
                     
-                    # Get targets
+                    # Get targets using TargetingService
                     recent_users = self.user_service.get_recent_users(chat_id=chat_id)
+                    targets_pool = self.targeting_service.get_valid_targets(
+                        mob=mob,
+                        chat_id=chat_id,
+                        recent_users=recent_users,
+                        session=session
+                    )
                     
-                    # Filter: Only alive users AND NOT RESTING
-                    alive_users = []
-                    for uid in recent_users:
-                        u = self.user_service.get_user(uid)
-                        if not u:
-                            continue
-                        
-                        is_fatigued = self.user_service.check_fatigue(u)
-                        is_resting = self.user_service.get_resting_status(u.id_telegram)
-                        
-                        if not is_resting:
-                            # In dungeons, we allow attacking fatigued users to maintain challenge
-                            if mob.dungeon_id or not is_fatigued:
-                                alive_users.append(uid)
-                    
-                    from services.dungeon_service import DungeonService
-                    ds = DungeonService()
-                    
-                    if mob.dungeon_id:
-                        # For dungeon mobs, target ONLY participants
-                        participants = ds.get_dungeon_participants(mob.dungeon_id)
-                        targets_pool = [p.user_id for p in participants]
-                        
-                        # Fallback: If no participants found, the dungeon is empty/dead.
-                        if not targets_pool:
-                            print(f"[DEBUG] Dungeon Mob {mob.id}: No participants found. Checking failure...")
-                            is_failed, fail_msg = ds.check_dungeon_failure(mob.dungeon_id)
-                            if is_failed:
-                                print(f"[DEBUG] Dungeon {mob.dungeon_id} failed due to lack of participants.")
-                                # Add failure message event
-                                if fail_msg:
-                                    attack_events.append({
-                                        'message': fail_msg,
-                                        'image': None,
-                                        'mob_name': mob.name,
-                                        'mob_id': mob.id,
-                                        'last_message_id': None
-                                    })
-                                continue
-                        
-                        # Filter by alive/not resting
-                        valid_targets = []
-                        for uid in targets_pool:
-                            u = self.user_service.get_user(uid)
-                            if not u:
-                                print(f"[DEBUG] User {uid} not found")
-                                continue
-                            
-                            is_fatigued = self.user_service.check_fatigue(u)
-                            is_resting = self.user_service.get_resting_status(u.id_telegram)
-                            
-                            if is_fatigued:
-                                print(f"[DEBUG] User {uid} is fatigued (HP: {u.current_hp}/{u.max_health})")
-                            if is_resting:
-                                print(f"[DEBUG] User {uid} is resting")
-                                
-                            if not is_resting:
-                                # In dungeons, we allow attacking fatigued users
-                                valid_targets.append(uid)
-                        
-                        targets_pool = valid_targets
-                        
-                        # Filter out fled users
-                        fled_users = [p.user_id for p in session.query(CombatParticipation).filter_by(mob_id=mob.id, has_fled=True).all()]
-                        targets_pool = [uid for uid in targets_pool if uid not in fled_users]
-                        
-                        print(f"[DEBUG] Dungeon Mob {mob.id}: participants={targets_pool}")
-                    else:
-                        targets_pool = []
-                        # Filter out fled users for world mobs too
-                        fled_users = [p.user_id for p in session.query(CombatParticipation).filter_by(mob_id=mob.id, has_fled=True).all()]
-                        
-                        for uid in alive_users:
-                            # World mobs only attack users NOT in a dungeon
-                            if uid not in fled_users and not ds.get_user_active_dungeon(uid):
-                                targets_pool.append(uid)
-                        print(f"[DEBUG] World Mob {mob.id}: alive_users={alive_users}, pool={targets_pool}")
+                    print(f"[DEBUG] {'Dungeon' if mob.dungeon_id else 'World'} Mob {mob.id}: targets_pool={targets_pool}")
 
                     if not targets_pool:
                         print(f"[DEBUG] No valid targets found for mob {mob.id} (chat {chat_id})")
@@ -1535,6 +1537,15 @@ class PvEService:
                         damage = int(adjusted_damage * random.uniform(0.8, 1.2))
                         
                         user_res = getattr(target, 'allocated_resistance', 0) or 0
+                        
+                        # Check for Defense Up status
+                        if StatusEffect.has_effect(target, 'defense_up'):
+                            # Add 5% resistance, capped at 75% total
+                            user_res += 5
+                            
+                        # Hard cap at 75%
+                        user_res = min(user_res, 75)
+                        
                         if user_res > 0:
                             reduction_factor = 100 / (100 + user_res)
                             damage = int(damage * reduction_factor)
@@ -1704,10 +1715,11 @@ class PvEService:
                     try:
                         effects = json.loads(p_user_check.active_status_effects)
                         for effect in effects:
-                            if effect.get('id') == 'stunned':
+                            eff_id = effect.get('effect') or effect.get('id')
+                            if eff_id == 'stunned':
                                 is_stunned = True
                                 stun_attacker_id = effect.get('source_id')
-                            elif effect.get('id') == 'turbo':
+                            elif eff_id == 'turbo':
                                 has_turbo = True
                     except:
                         pass
@@ -2058,3 +2070,41 @@ class PvEService:
         finally:
             if local_session:
                 session.close()
+
+    def apply_pending_effects(self, mob_id, chat_id, session=None):
+        """Apply pending effects (Nitro/TNT) to a newly spawned mob"""
+        if chat_id not in self.pending_mob_effects or not self.pending_mob_effects[chat_id]:
+            return []
+            
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
+        mob = session.query(Mob).filter_by(id=mob_id).first()
+        if not mob:
+            if local_session: session.close()
+            return []
+            
+        applied = []
+        effects_to_apply = self.pending_mob_effects[chat_id][:]
+        self.pending_mob_effects[chat_id] = [] # Clear pending
+        
+        for effect_name in effects_to_apply:
+            # Nitro/TNT deal 10% max HP damage
+            damage = int(mob.max_health * 0.10)
+            mob.health = max(0, mob.health - damage)
+            
+            applied.append({
+                'effect': effect_name,
+                'damage': damage,
+                'percent': 0.15
+            })
+            
+        if local_session:
+            session.commit()
+            session.close()
+        else:
+            session.flush()
+            
+        return applied

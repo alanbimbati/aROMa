@@ -75,6 +75,13 @@ class StatusEffect:
             'stackable': False,
             'message': '💔 {target} è indebolito!',
             'icon': '💔'
+        },
+        'defense_up': {
+            'resistance_bonus': 5,  # +5% Resistance
+            'duration': 1, # 1 turn (or until next attack processed)
+            'stackable': False,
+            'message': '🛡️ {target} è in Difesa!',
+            'icon': '🛡️'
         }
     }
     
@@ -101,7 +108,7 @@ class StatusEffect:
         effects = json.loads(getattr(target, 'active_status_effects', None) or '[]')
         
         # Check if stackable
-        existing = next((e for e in effects if e['effect'] == effect_name), None)
+        existing = next((e for e in effects if e.get('effect') == effect_name or e.get('id') == effect_name), None)
         
         if existing:
             if effect_config.get('stackable', False):
@@ -146,7 +153,7 @@ class StatusEffect:
         remaining_effects = []
         
         for effect_data in effects:
-            effect_name = effect_data['effect']
+            effect_name = effect_data.get('effect') or effect_data.get('id')
             effect_config = StatusEffect.EFFECTS.get(effect_name)
             
             if not effect_config:
@@ -228,13 +235,13 @@ class StatusEffect:
     def has_effect(target, effect_name):
         """Check if target has specific effect"""
         effects = StatusEffect.get_active_effects(target)
-        return any(e['effect'] == effect_name for e in effects)
+        return any(e.get('effect') == effect_name or e.get('id') == effect_name for e in effects)
     
     @staticmethod
     def remove_effect(target, effect_name):
         """Remove specific effect from target"""
         effects = json.loads(getattr(target, 'active_status_effects', None) or '[]')
-        effects = [e for e in effects if e['effect'] != effect_name]
+        effects = [e for e in effects if e.get('effect') != effect_name and e.get('id') != effect_name]
         target.active_status_effects = json.dumps(effects)
         return True
     
@@ -254,7 +261,7 @@ class StatusEffect:
         
         display_parts = []
         for effect_data in effects:
-            effect_name = effect_data['effect']
+            effect_name = effect_data.get('effect') or effect_data.get('id')
             effect_config = StatusEffect.EFFECTS.get(effect_name)
             
             if not effect_config:

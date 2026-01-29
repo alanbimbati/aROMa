@@ -56,46 +56,23 @@ class StatsService:
         
         # Allocate based on type
         if stat_type == 'health':
-            new_allocated = user.allocated_health + 1
-            updates['allocated_health'] = new_allocated
-            updates['max_health'] = user.max_health + self.HEALTH_PER_POINT
-            # Do NOT update current health
-            msg = f"✅ +{self.HEALTH_PER_POINT} Vita Max! Nuova Vita Max: {updates['max_health']} HP"
-            
+            updates['allocated_health'] = user.allocated_health + 1
+            msg = f"✅ +{self.HEALTH_PER_POINT} Vita Max!"
         elif stat_type == 'mana':
-            new_allocated = user.allocated_mana + 1
-            updates['allocated_mana'] = new_allocated
-            updates['max_mana'] = user.max_mana + self.MANA_PER_POINT
-            # Do NOT update current mana
-            msg = f"✅ +{self.MANA_PER_POINT} Mana Max! Nuovo Mana Max: {updates['max_mana']}"
-            
+            updates['allocated_mana'] = user.allocated_mana + 1
+            msg = f"✅ +{self.MANA_PER_POINT} Mana Max!"
         elif stat_type == 'damage':
-            new_allocated = user.allocated_damage + 1
-            updates['allocated_damage'] = new_allocated
-            updates['base_damage'] = user.base_damage + self.DAMAGE_PER_POINT
-            msg = f"✅ +{self.DAMAGE_PER_POINT} Danno! Nuovo Danno Base: {updates['base_damage']}"
-            
+            updates['allocated_damage'] = user.allocated_damage + 1
+            msg = f"✅ +{self.DAMAGE_PER_POINT} Danno!"
         elif stat_type == 'speed':
-            new_allocated = getattr(user, 'allocated_speed', 0) + 1
-            updates['allocated_speed'] = new_allocated
-            current_speed = getattr(user, 'speed', 0) or 0
-            updates['speed'] = current_speed + self.SPEED_PER_POINT
-            msg = f"✅ +{self.SPEED_PER_POINT} Velocità! Riduci il cooldown attacchi."
-            
+            updates['allocated_speed'] = getattr(user, 'allocated_speed', 0) + 1
+            msg = f"✅ +{self.SPEED_PER_POINT} Velocità!"
         elif stat_type == 'resistance':
-            new_allocated = getattr(user, 'allocated_resistance', 0) + 1
-            updates['allocated_resistance'] = new_allocated
-            current_res = getattr(user, 'resistance', 0) or 0
-            updates['resistance'] = current_res + self.RESISTANCE_PER_POINT
-            msg = f"✅ +{self.RESISTANCE_PER_POINT}% Resistenza! Subisci meno danni."
-            
+            updates['allocated_resistance'] = getattr(user, 'allocated_resistance', 0) + 1
+            msg = f"✅ +{self.RESISTANCE_PER_POINT}% Resistenza!"
         elif stat_type == 'crit_rate':
-            new_allocated = getattr(user, 'allocated_crit', 0) + 1
-            updates['allocated_crit'] = new_allocated
-            current_crit = getattr(user, 'crit_chance', 0) or 0
-            updates['crit_chance'] = current_crit + self.CRIT_RATE_PER_POINT
-            msg = f"✅ +{self.CRIT_RATE_PER_POINT}% Crit Rate! Più probabilità di critico."
-        
+            updates['allocated_crit'] = getattr(user, 'allocated_crit', 0) + 1
+            msg = f"✅ +{self.CRIT_RATE_PER_POINT}% Crit Rate!"
         else:
             return False, "Tipo di statistica non valido!"
             
@@ -103,6 +80,8 @@ class StatsService:
         if updates:
             updates['stat_points'] = user.stat_points - 1
             self.user_service.update_user(user.id_telegram, updates)
+            # Recalculate everything from base + new allocations
+            self.user_service.recalculate_stats(user.id_telegram)
             return True, msg
         
         return False, "Errore sconosciuto durante l'allocazione."
@@ -112,40 +91,12 @@ class StatsService:
         Reset all allocated stat points (FREE)
         Returns (success: bool, message: str)
         """
-        # Calculate stats to remove
-        health_to_remove = user.allocated_health * self.HEALTH_PER_POINT
-        mana_to_remove = user.allocated_mana * self.MANA_PER_POINT
-        damage_to_remove = user.allocated_damage * self.DAMAGE_PER_POINT
-        
-        # Speed: 1 point = SPEED_PER_POINT speed
-        speed_to_remove = getattr(user, 'allocated_speed', 0) * self.SPEED_PER_POINT
-        
-        # Resistance & Crit
-        res_to_remove = getattr(user, 'allocated_resistance', 0) * self.RESISTANCE_PER_POINT
-        crit_to_remove = getattr(user, 'allocated_crit', 0) * self.CRIT_RATE_PER_POINT
-        
         points_returned = (user.allocated_health + user.allocated_mana + user.allocated_damage +
                           getattr(user, 'allocated_speed', 0) + 
                           getattr(user, 'allocated_resistance', 0) + 
                           getattr(user, 'allocated_crit', 0))
         
-        new_max_health = max(100, user.max_health - health_to_remove) # Ensure not below base
-        new_max_mana = max(50, user.max_mana - mana_to_remove)
-        new_base_damage = max(10, user.base_damage - damage_to_remove)
-        
-        # Ensure current health/mana don't exceed new max
-        new_health = min(user.health, new_max_health)
-        new_mana = min(user.mana, new_max_mana)
-        
         self.user_service.update_user(user.id_telegram, {
-            'max_health': new_max_health,
-            'health': new_health,
-            'max_mana': new_max_mana,
-            'mana': new_mana,
-            'base_damage': new_base_damage,
-            'speed': max(0, (getattr(user, 'speed', 0) or 0) - speed_to_remove),
-            'resistance': max(0, (getattr(user, 'resistance', 0) or 0) - res_to_remove),
-            'crit_chance': max(0, (getattr(user, 'crit_chance', 0) or 0) - crit_to_remove),
             'stat_points': user.stat_points + points_returned,
             # Reset allocated counters
             'allocated_health': 0,
@@ -156,6 +107,9 @@ class StatsService:
             'allocated_crit': 0,
             'last_stat_reset': datetime.datetime.now()
         })
+        
+        # Recalculate everything from base
+        self.user_service.recalculate_stats(user.id_telegram)
         
         return True, f"✅ Statistiche resettate! Hai recuperato {points_returned} punti."
     

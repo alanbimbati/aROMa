@@ -85,7 +85,8 @@ class GuildService:
             'village_level': guild.village_level,
             'map_x': guild.map_x,
             'map_y': guild.map_y,
-            'role': member.role
+            'role': member.role,
+            'bordello_level': guild.bordello_level
         }
         session.close()
         return guild_data
@@ -228,18 +229,37 @@ class GuildService:
             session.close()
             return False, "Non fai parte di nessuna gilda!"
             
+        # Cooldown check: 1 hour using repurposed last_health_restore
+        now = datetime.datetime.now()
+        if user.last_health_restore:
+            elapsed = (now - user.last_health_restore).total_seconds()
+            if elapsed < 3600:
+                remaining = int((3600 - elapsed) / 60)
+                session.close()
+                return False, f"🍺 Hai già bevuto abbastanza! Torna tra {remaining} minuti."
+
         if user.points < 50:
             session.close()
-            return False, "Una birra artigianale costa 50 Wumpa!"
+            return False, f"Una birra artigianale costa 50 {PointsName}!"
             
         user.points -= 50
+        user.last_health_restore = now
+        
         # Heal 10% HP
         heal_amount = int(user.max_health * 0.1)
-        user.current_hp = min(user.current_hp + heal_amount, user.max_health)
+        user.current_hp = min((user.current_hp or 0) + heal_amount, user.max_health)
+        
+        # Potion bonus: 10% base + 5% per level above 1
+        potion_bonus_pct = 10 + (guild['inn_level'] - 1) * 5
         
         session.commit()
         session.close()
-        return True, f"🍺 Hai bevuto una Birra Artigianale di {guild['name']}! Ti senti rinvigorito (+{heal_amount} HP). Le tue pozioni saranno più efficaci del {int((guild['inn_level']-1)*10)}%!"
+        return True, f"🍺 Hai bevuto una Birra Artigianale di {guild['name']}! Ti senti rinvigorito (+{heal_amount} HP).\n\n✨ Grazie all'atmosfera della Locanda (Lv. {guild['inn_level']}), le tue pozioni saranno più efficaci del **{potion_bonus_pct}%**!"
+
+    def get_inn_image(self, inn_level):
+        """Get the image path for the inn based on its level"""
+        # We found images/locanda.png in the project!
+        return "images/locanda.png"
 
     def get_guilds_list(self):
         """Get all guilds sorted by level and member ratio"""
@@ -496,3 +516,24 @@ class GuildService:
         guild_name = guild.name
         session.close()
         return True, f"Benvenuto nella gilda {guild_name}!"
+
+    def leave_guild(self, user_id):
+        """Leave the current guild"""
+        session = self.db.get_session()
+        member = session.query(GuildMember).filter_by(user_id=user_id).first()
+        
+        if not member:
+            session.close()
+            return False, "Non fai parte di nessuna gilda!"
+            
+        if member.role == "Leader":
+            session.close()
+            return False, "Il capogilda non può abbandonare la gilda! Devi prima cedere il ruolo o sciogliere la gilda."
+            
+        guild = session.query(Guild).filter_by(id=member.guild_id).first()
+        guild_name = guild.name
+        
+        session.delete(member)
+        session.commit()
+        session.close()
+        return True, f"Hai lasciato la gilda {guild_name}."
