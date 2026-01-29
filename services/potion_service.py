@@ -71,7 +71,7 @@ class PotionService:
         discount_msg = f" (Sconto Premium 50%: {potion['prezzo']} → {price} 🍑)" if user.premium == 1 else ""
         return True, f"Hai acquistato {potion_name} per {price} 🍑!{discount_msg}"
     
-    def apply_potion_effect(self, user, potion_name):
+    def apply_potion_effect(self, user, potion_name, session=None):
         """Apply potion effect without consuming item (internal use)"""
         potion = self.get_potion_by_name(potion_name)
         if not potion:
@@ -81,16 +81,16 @@ class PotionService:
         valore = potion['effetto_valore']
         
         if tipo == 'health_potion':
-            restored = self.user_service.restore_health(user, valore)
+            restored = self.user_service.restore_health(user, valore, session=session)
             return True, f"💚 Hai recuperato {restored} HP!"
             
         elif tipo == 'mana_potion':
-            restored = self.user_service.restore_mana(user, valore)
+            restored = self.user_service.restore_mana(user, valore, session=session)
             return True, f"💙 Hai recuperato {restored} Mana!"
             
         elif tipo == 'full_restore':
-            hp_restored = self.user_service.restore_health(user, 999)
-            mana_restored = self.user_service.restore_mana(user, 999)
+            hp_restored = self.user_service.restore_health(user, 999, session=session)
+            mana_restored = self.user_service.restore_mana(user, 999, session=session)
             return True, f"✨ Hai recuperato {hp_restored} HP e {mana_restored} Mana!"
             
         return False, "Tipo di pozione sconosciuto."

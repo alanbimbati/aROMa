@@ -1,13 +1,46 @@
 version: "3.9"
 
 services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:14-alpine
+    container_name: aroma_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aroma_bot
+      POSTGRES_USER: alan
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-asd1XD2LoL3}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alan -d aroma_bot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Aroma Bot
   aroma_bot:
     build: .
     container_name: aroma_bot
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - .:/app
+      - ./data:/app/data
+      - ./images:/app/images
     env_file:
       - .env
     environment:
       - TZ=Europe/Rome
+      - DB_TYPE=postgresql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=aroma_bot
+      - DB_USER=alan
+      - DB_PASSWORD=${DB_PASSWORD:-asd1XD2LoL3}
+
+volumes:
+  postgres_data:
+    driver: local
