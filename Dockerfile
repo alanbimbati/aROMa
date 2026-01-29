@@ -1,19 +1,35 @@
-############ Sposta questo file nella cartella padre! Qui è solo come backup
+# Multi-stage build for smaller, more secure images
+FROM python:3.10-slim as builder
 
-# Usa un'immagine base di Python
+# Install build dependencies
+WORKDIR /build
+COPY requirements.txt .
+RUN pip install --user --no-cache-dir -r requirements.txt
+
+# Runtime stage
 FROM python:3.10-slim
 
-# Imposta la directory di lavoro all'interno del container
+# Create non-root user for security
+RUN useradd --create-home --shell /bin/bash aroma
+
+# Copy dependencies from builder
+COPY --from=builder /root/.local /home/aroma/.local
+
+# Set working directory
 WORKDIR /app
 
-# Copia i file nel container
-COPY . /app
+# Copy application code
+COPY --chown=aroma:aroma . /app
 
-# Imposta la directory di lavoro
-WORKDIR /app
+# Switch to non-root user
+USER aroma
 
-# Installa le dipendenze
-RUN pip install --no-cache-dir -r requirements.txt
+# Add local bin to PATH
+ENV PATH=/home/aroma/.local/bin:$PATH
 
-# Definisci il comando di avvio del bot
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD python3 -c "import sys; from database import Database; db = Database(); sys.exit(0 if db else 1)" || exit 1
+
+# Run the bot
 CMD ["python3", "main.py"]

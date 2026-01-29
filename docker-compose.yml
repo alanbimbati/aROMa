@@ -3,33 +3,51 @@ version: "3.9"
 services:
   # PostgreSQL Database
   postgres:
-    image: postgres:14-alpine
+    image: postgres:15-alpine
     container_name: aroma_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: aroma_bot
-      POSTGRES_USER: alan
+      POSTGRES_DB: ${DB_NAME:-aroma_bot}
+      POSTGRES_USER: ${DB_USER:-alan}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-asd1XD2LoL3}
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U alan -d aroma_bot"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-alan} -d ${DB_NAME:-aroma_bot}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    networks:
+      - aroma_network
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   # Aroma Bot
   aroma_bot:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aroma-bot:latest
     container_name: aroma_bot
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
-      - .:/app
+      # Data persistence
       - ./data:/app/data
       - ./images:/app/images
+      # For development: mount code (comment out in production)
+      # - .:/app
     env_file:
       - .env
     environment:
@@ -38,9 +56,32 @@ services:
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=aroma_bot
-      - DB_USER=alan
+      - DB_USER=${DB_USER:-alan}
       - DB_PASSWORD=${DB_PASSWORD:-asd1XD2LoL3}
+      - TEST=0
+      - TEST_DB=0
+    networks:
+      - aroma_network
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
 volumes:
   postgres_data:
     driver: local
+
+networks:
+  aroma_network:
+    driver: bridge
