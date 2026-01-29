@@ -1,0 +1,63 @@
+# Ignore files that shouldn't be in Docker image
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+.pytest_cache
+.coverage
+htmlcov
+.tox
+.env
+.venv
+venv/
+ENV/
+
+# Documentation
+*.md
+!README.md
+docs/
+guides/
+
+# Development files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# Backup files
+*.backup
+backups/
+dump.pg
+
+# Logs
+*.log
+test_output.log
+
+# Database files (use volumes instead)
+*.db
+points.db
+
+# Scripts not needed in container
+*.sh
+ci_test.sh
+deploy_dietpi.sh
+rollback_dietpi.sh
+
+# Docker files
+Dockerfile
+docker-compose*.yml
+.dockerignore
