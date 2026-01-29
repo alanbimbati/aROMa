@@ -23,4 +23,7 @@ class DungeonParticipant(Base):
     __tablename__ = "dungeon_participant"
     id = Column(Integer, primary_key=True)
     dungeon_id = Column(Integer, ForeignKey('dungeon.id'))
-    user_id = Column(BigInteger, nullable=False) # Telegram ID
+    user_id = Column(BigInteger, ForeignKey('utente.id_Telegram'), nullable=False) # Telegram ID
+    
+    from sqlalchemy.orm import relationship
+    user = relationship("Utente", backref="dungeon_participations")

@@ -52,45 +52,13 @@ class ItemService:
         session.close()
         return inventario
 
-    def add_item(self, id_telegram, item, quantita=1):
-        session = self.db.get_session()
+    def add_item(self, id_telegram, item, quantita=1, session=None):
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         try:
-            for _ in range(quantita):
-                collezionabile = Collezionabili()
-                collezionabile.id_telegram = str(id_telegram)
-                collezionabile.oggetto = item
-                collezionabile.data_acquisizione = datetime.datetime.today()
-                collezionabile.quantita = 1 # Each row is 1 item in this schema? No, schema has quantita.
-                # Wait, original code had quantita column but also inserted multiple rows?
-                # Original code: collezionabile.quantita = quantita.
-                # But getInventarioUtente does count(Collezionabili.oggetto).
-                # This implies one row per item instance, or grouped?
-                # "func.count(Collezionabili.oggetto)" implies multiple rows.
-                # But "collezionabile.quantita = quantita" implies one row with count.
-                # Let's check original code again.
-                # Original CreateCollezionabile sets quantita=quantita.
-                # Original getInventarioUtente counts rows.
-                # This is inconsistent. If I insert 1 row with quantita=5, count is 1.
-                # I should probably insert N rows or change getInventarioUtente to sum(quantita).
-                # Let's stick to inserting 1 row with quantita for now, but fix getInventarioUtente to sum.
-                # Actually, looking at original code: "func.count(Collezionabili.oggetto)"
-                # This counts how many rows have that object name.
-                # So if I have 5 apples, I should have 5 rows?
-                # But CreateCollezionabile inserts 1 row with quantita=N.
-                # This seems like a bug in original code or I misunderstood.
-                # Let's assume 1 row per item for now to be safe with "count".
-                # Or better, let's fix it to be consistent.
-                # I will insert N rows if quantita > 1.
-                pass
-            
-            # Let's follow the original CreateCollezionabile logic but be careful.
-            # Original: collezionabile.quantita = quantita.
-            # If I insert 1 row with quantita=5.
-            # getInventarioUtente: count(*) group by oggetto. -> returns 1.
-            # So the user sees 1 item.
-            # So the original code was likely buggy or I am misinterpreting "quantita" column usage.
-            # Let's just insert N rows.
-            
             for _ in range(quantita):
                  c = Collezionabili()
                  c.id_telegram = str(id_telegram)
@@ -100,23 +68,29 @@ class ItemService:
                  c.data_utilizzo = None
                  session.add(c)
             
-            session.commit()
+            if local_session:
+                session.commit()
+            else:
+                session.flush()
             
             # Log event for achievements
             self.event_dispatcher.log_event(
                 event_type='item_gain',
                 user_id=int(id_telegram),
                 value=quantita,
-                context={'item_name': item}
+                context={'item_name': item},
+                session=session
             )
             
             return True
         except Exception as e:
             print(e)
-            session.rollback()
+            if local_session:
+                session.rollback()
             return False
         finally:
-            session.close()
+            if local_session:
+                session.close()
 
     def use_item(self, id_telegram, oggetto, session=None):
         local_session = False
@@ -278,7 +252,7 @@ class ItemService:
             
             # Add new turbo
             effects.append({
-                'id': 'turbo',
+                'effect': 'turbo',
                 'expires': (datetime.datetime.now() + datetime.timedelta(minutes=30)).isoformat()
             })
             
@@ -299,11 +273,10 @@ class ItemService:
         elif item_name == "Nitro" or item_name == "TNT":
             # Can be used as Trap (no target) or Weapon (target)
             if target_mob:
-                # Vs Mob: Drop 5% of Wumpa pool
-                # We need to calculate this. 
-                # Since we don't have the mob instance here easily with full loot info, 
-                # we will return a special instruction and handle the drop in main.py or pve_service
-                return f"Hai lanciato {item_name} contro {target_mob.name}!", {'type': 'mob_drop', 'percent': 0.05, 'mob_id': target_mob.id}
+                # Vs Mob: Drop 15% of Wumpa pool (was 5%)
+                # Also deal 10% of max HP as damage
+                damage = int(target_mob.max_health * 0.10)
+                return f"Hai lanciato {item_name} contro {target_mob.name}! Boom! 💥", {'type': 'mob_drop', 'percent': 0.15, 'mob_id': target_mob.id, 'damage': damage}
             
             elif target_user:
                 # Vs Player: Drop 1-50 Wumpa
@@ -316,7 +289,8 @@ class ItemService:
             
             else:
                 # Trap logic: Places a trap in the group
-                return f"{item_name} piazzata! Il prossimo che scrive esploderà!", {'type': 'trap', 'trap_type': item_name}
+                # NEW: Also support "next_mob_effect" for the next spawned mob
+                return f"{item_name} piazzata! Il prossimo che scrive esploderà (o il prossimo mob che appare subirà danni)!", {'type': 'next_mob_effect', 'effect': item_name}
         
         elif item_name == "Mira un giocatore":
             if target_user:
