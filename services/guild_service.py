@@ -461,3 +461,38 @@ class GuildService:
             item_service.add_item(user_id, item_name)
             
         return True, f"Hai prelevato {quantity}x {item_name} dal magazzino."
+
+    def join_guild(self, user_id, guild_id):
+        """Join a guild if there is space"""
+        session = self.db.get_session()
+        
+        # Check if user is already in a guild
+        existing_member = session.query(GuildMember).filter_by(user_id=user_id).first()
+        if existing_member:
+            session.close()
+            return False, "Fai già parte di una gilda!"
+            
+        # Get guild
+        guild = session.query(Guild).filter_by(id=guild_id).first()
+        if not guild:
+            session.close()
+            return False, "Gilda non trovata."
+            
+        # Check member limit
+        member_count = session.query(GuildMember).filter_by(guild_id=guild_id).count()
+        if member_count >= guild.member_limit:
+            session.close()
+            return False, "La gilda è al completo!"
+            
+        # Add member
+        new_member = GuildMember(
+            guild_id=guild_id,
+            user_id=user_id,
+            role="Member"
+        )
+        session.add(new_member)
+        session.commit()
+        
+        guild_name = guild.name
+        session.close()
+        return True, f"Benvenuto nella gilda {guild_name}!"

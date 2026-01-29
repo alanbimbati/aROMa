@@ -57,6 +57,7 @@ from services.achievement_tracker import AchievementTracker
 
 
 from services.equipment_service import EquipmentService
+from services.guide_service import GuideService
 
 # Initialize Services
 user_service = UserService()
@@ -72,6 +73,7 @@ stats_service = StatsService()
 drop_service = DropService()
 dungeon_service = DungeonService()
 equipment_service = EquipmentService()
+guide_service = GuideService()
 
 # Track last viewed character for admins (for image upload feature)
 admin_last_viewed_character = {}
@@ -232,7 +234,8 @@ def get_main_menu():
     
     # Row 5: Dungeon
     markup.add(
-        types.KeyboardButton("🏰 Dungeon")
+        types.KeyboardButton("🏰 Dungeon"),
+        types.KeyboardButton("📖 Guida")
     )
     
     return markup
@@ -288,13 +291,23 @@ def handle_dungeon_button(message):
     cmd = BotCommands(message, bot)
     cmd.handle_dungeons_list()
 
+@bot.message_handler(func=lambda message: message.text == "📖 Guida")
+def handle_guide_button(message):
+    # Show main guide menu
+    categories = guide_service.get_categories()
+    markup = types.InlineKeyboardMarkup()
+    for key, title in categories:
+        markup.add(types.InlineKeyboardButton(title, callback_data=f"guide_cat|{key}"))
+    
+    bot.send_message(message.chat.id, "📚 **Guida di aROMa**\n\nSeleziona un argomento per saperne di più:", reply_markup=markup, parse_mode='markdown')
+
 @bot.message_handler(commands=['dungeons'])
 def handle_dungeons_cmd(message):
     """Show dungeons list"""
     cmd = BotCommands(message, bot)
     cmd.handle_dungeons_list()
 
-@bot.message_handler(commands=['info', 'profilo'])
+@bot.message_handler(commands=['info', 'profilo', 'me'])
 def handle_info_cmd(message):
     """Show user profile using the original handler"""
     cmd = BotCommands(message, bot)
@@ -3650,6 +3663,44 @@ def callback_query(call):
     # Track activity for mob targeting IMMEDIATELY
     user_service.track_activity(user_id, chat_id)
     
+    # Guide Navigation
+    if call.data.startswith("guide_"):
+        safe_answer_callback(call.id)
+        
+        if call.data == "guide_main":
+            # Back to main menu
+            categories = guide_service.get_categories()
+            markup = types.InlineKeyboardMarkup()
+            for key, title in categories:
+                markup.add(types.InlineKeyboardButton(title, callback_data=f"guide_cat|{key}"))
+            bot.edit_message_text("📚 **Guida di aROMa**\n\nSeleziona un argomento per saperne di più:", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+            
+        elif call.data.startswith("guide_cat|"):
+            cat_key = call.data.split("|")[1]
+            category = guide_service.get_category(cat_key)
+            if category:
+                markup = types.InlineKeyboardMarkup()
+                for key, item in category['items'].items():
+                    markup.add(types.InlineKeyboardButton(item['title'], callback_data=f"guide_item|{cat_key}|{key}"))
+                markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guide_main"))
+                
+                msg = f"**{category['title']}**\n\n{category['description']}"
+                bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+                
+        elif call.data.startswith("guide_item|"):
+            parts = call.data.split("|")
+            cat_key = parts[1]
+            item_key = parts[2]
+            item = guide_service.get_item(cat_key, item_key)
+            
+            if item:
+                markup = types.InlineKeyboardMarkup()
+                markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data=f"guide_cat|{cat_key}"))
+                
+                msg = f"**{item['title']}**\n\n{item['text']}"
+                bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+        return
+
     if call.data == "stat_alloc":
         try:
             safe_answer_callback(call.id)
@@ -4001,6 +4052,15 @@ def callback_query(call):
         success, msg = dungeon_service.leave_dungeon(call.message.chat.id, call.from_user.id)
         safe_answer_callback(call.id, "Tentativo di fuga...", show_alert=False)
         bot.send_message(call.message.chat.id, f"🏃 @{call.from_user.username or call.from_user.first_name}: {msg}", parse_mode='markdown')
+        return
+        
+    elif call.data.startswith("guild_join|"):
+        _, guild_id = call.data.split("|")
+        success, msg = guild_service.join_guild(call.from_user.id, int(guild_id))
+        safe_answer_callback(call.id, msg, show_alert=True)
+        if success:
+            # Refresh guild view
+            handle_guild_cmd(call.message)
         return
 
     elif call.data.startswith("guild_withdraw|"):
@@ -5784,6 +5844,8 @@ def callback_query(call):
     elif action.startswith("invoke|"):
         # Invoke dragon from inventory
         dragon = action.split("|")[1]
+        from services.wish_service import WishService
+        wish_service = WishService()
         has_shenron, has_porunga = wish_service.check_dragon_balls(utente)
         
         if dragon == "shenron" and has_shenron:
@@ -5806,6 +5868,9 @@ def callback_query(call):
         dragon = parts[1]
         wish = parts[2]
         
+        from services.wish_service import WishService
+        wish_service = WishService()
+        
         try:
             msg = wish_service.grant_wish(utente, wish, dragon)
             bot.send_message(call.message.chat.id, msg)
@@ -5820,6 +5885,9 @@ def callback_query(call):
         parts = action.split("|")
         wish_number = int(parts[1])
         wish_choice = parts[2]
+        
+        from services.wish_service import WishService
+        wish_service = WishService()
         
         try:
             # Grant this wish
