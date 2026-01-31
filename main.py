@@ -58,6 +58,7 @@ from services.achievement_tracker import AchievementTracker
 
 from services.equipment_service import EquipmentService
 from services.guide_service import GuideService
+from utils.markup_utils import get_combat_markup
 
 # Initialize Services
 user_service = UserService()
@@ -219,10 +220,19 @@ def get_main_menu():
         types.KeyboardButton("🎒 Inventario"),
         types.KeyboardButton("🧪 Negozio Pozioni")
     )
+
+    # Row 2.5: Mercato
+    markup.add(
+        types.KeyboardButton("🏪 Mercato Globale")
+    )
     
     # Row 3: Achievement e Stagione
     markup.add(
         types.KeyboardButton("🏆 Achievement"),
+        types.KeyboardButton("🏆 Classifica")
+    )
+    
+    markup.add(
         types.KeyboardButton("🌟 Stagione")
     )
     
@@ -232,9 +242,8 @@ def get_main_menu():
         types.KeyboardButton("🏨 Locanda")
     )
     
-    # Row 5: Dungeon
+    # Row 5: Guide only (Dungeon now runs automatically)
     markup.add(
-        types.KeyboardButton("🏰 Dungeon"),
         types.KeyboardButton("📖 Guida")
     )
     
@@ -286,10 +295,12 @@ def handle_gilda_button(message):
 def handle_locanda_button(message):
     handle_inn_cmd(message)
 
-@bot.message_handler(func=lambda message: message.text == "🏰 Dungeon")
-def handle_dungeon_button(message):
-    cmd = BotCommands(message, bot)
-    cmd.handle_dungeons_list()
+# Dungeon button removed - dungeons now start automatically
+# @bot.message_handler(func=lambda message: message.text == "🏰 Dungeon")
+# def handle_dungeon_button(message):
+#     cmd = BotCommands(message, bot)
+#     cmd.handle_dungeons_list()
+
 
 @bot.message_handler(func=lambda message: message.text == "📖 Guida")
 def handle_guide_button(message):
@@ -300,6 +311,12 @@ def handle_guide_button(message):
         markup.add(types.InlineKeyboardButton(title, callback_data=f"guide_cat|{key}"))
     
     bot.send_message(message.chat.id, "📚 **Guida di aROMa**\n\nSeleziona un argomento per saperne di più:", reply_markup=markup, parse_mode='markdown')
+
+@bot.message_handler(commands=['classifica', 'ranking', 'top'])
+def handle_ranking_cmd(message):
+    """Show ranking"""
+    cmd = BotCommands(message, bot)
+    cmd.handle_classifica()
 
 @bot.message_handler(commands=['dungeons'])
 def handle_dungeons_cmd(message):
@@ -997,7 +1014,6 @@ class BotCommands:
             "🎫 Compra un gioco steam": self.handle_buy_steam_game,
             "👤 Scegli il personaggio": self.handle_choose_character,
             "👤 Profilo": self.handle_profile,
-            "🛒 Negozio Personaggi": self.handle_shop_characters,
             "🧪 Negozio Pozioni": self.handle_shop_potions,
             "Compra abbonamento Premium (1 mese)": self.handle_buy_premium,
             "✖️ Disattiva rinnovo automatico": self.handle_disattiva_abbonamento_premium,
@@ -1013,8 +1029,10 @@ class BotCommands:
             "💰 Listino & Guida": self.handle_guide_costs,
             "🏆 Achievement": self.handle_achievements,
             "🌟 Stagione": self.handle_season,
+            "🏆 Classifica": self.handle_classifica,
             "🌐 Dashboard Web": self.handle_web_dashboard,
             "📄 Classifica": self.handle_classifica,
+            "🏪 Mercato Globale": self.handle_market,
         }
 
         self.comandi_admin = {
@@ -1056,6 +1074,8 @@ class BotCommands:
             "/help": self.handle_help,
             "!help": self.handle_help,
             "/join": self.handle_join_dungeon,
+            "🏆 Classifica": self.handle_classifica,
+            "📄 Classifica": self.handle_classifica,
         }
 
     def safe_answer_callback(self, call_id, text=None, show_alert=False):
@@ -1350,15 +1370,17 @@ Per acquistare un gioco che vedi in un canale o gruppo:
             return
             
         d_real_id, msg = dungeon_service.create_dungeon(self.message.chat.id, d_id, self.chatid)
-        if not d_real_id:
-            self.bot.reply_to(self.message, f"❌ {msg}", parse_mode='markdown')
-        else:
-            self.bot.send_message(self.message.chat.id, msg, parse_mode='markdown')
+        self.bot.reply_to(self.message, f"❌ {msg}", parse_mode='markdown')
 
+    # @bot.message_handler(commands=['join'])
+    # def handle_join_dungeon_cmd(self, message):
+    #    """Deprecated: Dungeons are now auto-join"""
+    #    bot.reply_to(message, "I dungeon ora sono automatici! Non serve più fare /join.")
+
+    # Modified to just show a message if users try to use it
     def handle_join_dungeon(self):
         """User command to join current dungeon registration"""
-        success, msg = dungeon_service.join_dungeon(self.message.chat.id, self.chatid)
-        self.bot.reply_to(self.message, msg)
+        self.bot.reply_to(self.message, "⚠️ **Novità!** ⚠️\n\nI Dungeon ora sono eventi automatici!\nTi unirai automaticamente quando il dungeon emerge.\nNon serve più usare comandi.")
 
     def handle_start_dungeon(self):
         """Start the dungeon (Creator or Admin)"""
@@ -1452,33 +1474,9 @@ Per acquistare un gioco che vedi in un canale o gruppo:
     
     def process_dungeon_events(self, events, chat_id):
         """Process a list of dungeon events (messages, delays, spawns)"""
-        import time
-        
-        for event in events:
-            if event['type'] == 'message':
-                self.bot.send_message(chat_id, event['content'], parse_mode='markdown')
-            elif event['type'] == 'delay':
-                seconds = event.get('seconds', 3)
-                # Show typing action during delay
-                self.bot.send_chat_action(chat_id, 'typing')
-                time.sleep(seconds)
-            elif event['type'] == 'spawn':
-                # Display spawned mobs
-                mob_ids = event.get('mob_ids', [])
-                for mob_id in mob_ids:
-                    # Get mob details
-                    mob_data = pve_service.get_mob_details(mob_id)
-                    if mob_data:
-                        # Construct message
-                        msg = f"⚠️ **{mob_data['name']}** è apparso!"
-                        if mob_data['is_boss']:
-                            msg = f"☠️ **BOSS: {mob_data['name']}** è sceso in campo!"
-                        
-                        # Get markup
-                        markup = get_combat_markup("mob", mob_id, chat_id)
-                        
-                        # Send message
-                        send_combat_message(chat_id, msg, mob_data['image_path'], markup, mob_id)
+        process_dungeon_events(events, chat_id)
+
+    # process_dungeon_events moved to global scope at end of file
 
     def handle_find_missing_image(self):
         """Find a random character or mob without an image"""
@@ -1807,6 +1805,229 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         markup.add(types.InlineKeyboardButton("🌐 Apri Dashboard Web", url=dashboard_url))
         
         self.bot.reply_to(self.message, msg, reply_markup=markup, parse_mode='markdown')
+
+    def handle_market(self):
+        """Show market menu"""
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("📜 Mostra Annunci", callback_data="market_list|1"))
+        markup.add(types.InlineKeyboardButton("➕ Vendi Oggetto", callback_data="market_sell_menu"))
+        
+        self.bot.send_message(self.chatid, "🏪 **MERCATO GLOBALE**\n\nBenvenuto nel mercato globale dei giocatori!\nQui puoi vendere i tuoi oggetti o acquistare quelli degli altri.", reply_markup=markup, parse_mode='markdown')
+
+    def handle_market_callback(self, call):
+        """Handle market callbacks"""
+        action = call.data
+        user_id = call.from_user.id
+        self.chatid = user_id
+        
+        from services.market_service import MarketService
+        market_service = MarketService()
+        
+        if action.startswith("market_list|"):
+            try:
+                page_str = action.split("|")[1]
+                page = int(page_str)
+            except (IndexError, ValueError):
+                page = 1
+                
+            limit = 5
+            listings, total = market_service.get_active_listings(page, limit)
+            
+            msg = f"🏪 **MERCATO GLOBALE (Pagina {page})**\n\n"
+            
+            if not listings:
+                msg += "Nessun annuncio disponibile al momento."
+            
+            markup = types.InlineKeyboardMarkup()
+            
+            for l in listings:
+                try:
+                    seller_name = "Utente"
+                    is_owner = False
+                    if l.seller:
+                        seller_name = l.seller.username if l.seller.username else l.seller.nome
+                        if l.seller.id_telegram == str(user_id) or l.seller_id == user_id:
+                            is_owner = True
+                    
+                    price_tot = l.price_per_unit * l.quantity
+                    btn_text = f"{l.quantity}x {l.item_name} - {price_tot}🍑 ({seller_name})"
+                    
+                    if is_owner:
+                        markup.add(types.InlineKeyboardButton(f"❌ Ritira {l.item_name}", callback_data=f"cancel_listing|{l.id}"))
+                    else:
+                        markup.add(types.InlineKeyboardButton(btn_text, callback_data=f"buy_item|{l.id}"))
+                except Exception as e:
+                    print(f"Error rendering listing {l.id}: {e}")
+                    continue
+                
+            import math
+            total_pages = math.ceil(total / limit)
+            nav_row = []
+            if page > 1:
+                nav_row.append(types.InlineKeyboardButton("⬅️ Prec", callback_data=f"market_list|{page-1}"))
+            if page < total_pages:
+                nav_row.append(types.InlineKeyboardButton("Succ ➡️", callback_data=f"market_list|{page+1}"))
+            
+            if nav_row:
+                markup.row(*nav_row)
+            
+            markup.add(types.InlineKeyboardButton("🔙 Menu Mercato", callback_data="market_menu"))
+            
+            try:
+                self.bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+            except:
+                self.bot.send_message(call.message.chat.id, msg, reply_markup=markup, parse_mode='markdown')
+        
+        elif action == "market_menu":
+             markup = types.InlineKeyboardMarkup()
+             markup.add(types.InlineKeyboardButton("📜 Mostra Annunci", callback_data="market_list|1"))
+             markup.add(types.InlineKeyboardButton("➕ Vendi Oggetto", callback_data="market_sell_menu"))
+             msg = "🏪 **MERCATO GLOBALE**"
+             try:
+                self.bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+             except:
+                self.bot.send_message(call.message.chat.id, msg, reply_markup=markup, parse_mode='markdown')
+    
+        elif action.startswith("buy_item|"):
+            try:
+                listing_id = int(action.split("|")[1])
+                success, result_msg = market_service.buy_item(user_id, listing_id)
+                
+                if success:
+                    self.safe_answer_callback(call.id, "Acquisto effettuato!")
+                    self.bot.send_message(call.message.chat.id, result_msg)
+                    call.data = "market_list|1"
+                    self.handle_market_callback(call)
+                else:
+                    self.safe_answer_callback(call.id, result_msg, show_alert=True)
+            except Exception as e:
+                print(f"Error buying item: {e}")
+                self.safe_answer_callback(call.id, "Errore durante l'acquisto.")
+
+        elif action.startswith("cancel_listing|"):
+            try:
+                listing_id = int(action.split("|")[1])
+                success, result_msg = market_service.cancel_listing(user_id, listing_id)
+                
+                if success:
+                    self.safe_answer_callback(call.id, "Annuncio ritirato!")
+                    self.bot.send_message(call.message.chat.id, result_msg)
+                    call.data = "market_list|1"
+                    self.handle_market_callback(call)
+                else:
+                    self.safe_answer_callback(call.id, result_msg, show_alert=True)
+            except Exception as e:
+                print(f"Error cancelling listing: {e}")
+                self.safe_answer_callback(call.id, "Errore durante la cancellazione.")
+
+        elif action == "market_sell_menu":
+             # Implementation for seamless sell flow
+             from services.item_service import ItemService
+             item_svc = ItemService()
+             inventory = item_svc.get_inventory(user_id)
+             
+             if not inventory:
+                 self.safe_answer_callback(call.id, "Non hai oggetti da vendere!", show_alert=True)
+                 return
+                 
+             msg = "🎒 **SELEZIONA OGGETTO DA VENDERE**\n\nScegli cosa vuoi mettere sul mercato:"
+             markup = types.InlineKeyboardMarkup()
+             
+             # Emoji mapping (reused)
+             item_emoji = {
+                "Turbo": "🏎️", "Aku Aku": "🎭", "Uka Uka": "😈", "Nitro": "💣",
+                "Mira un giocatore": "🎯", "Colpisci un giocatore": "💥", "Cassa": "📦"
+             }
+             
+             for item in inventory:
+                 emoji = item_emoji.get(item.oggetto, "🔹")
+                 if "Pozione" in item.oggetto or "Elisir" in item.oggetto:
+                     emoji = "🧪"
+                     
+                 btn_text = f"{emoji} {item.oggetto} (x{item.quantita})"
+                 markup.add(types.InlineKeyboardButton(btn_text, callback_data=f"market_sell_select|{item.oggetto}"))
+             
+             markup.add(types.InlineKeyboardButton("🔙 Menu Mercato", callback_data="market_menu"))
+             
+             try:
+                self.bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+             except:
+                self.bot.send_message(call.message.chat.id, msg, reply_markup=markup, parse_mode='markdown')
+
+        elif action.startswith("market_sell_select|"):
+             item_name = action.split("|")[1]
+             # Start sale wizard
+             msg = self.bot.send_message(call.message.chat.id, f"💰 Hai scelto di vendere **{item_name}**.\n\nQuanti ne vuoi vendere? (Scrivi un numero, es: 1)", parse_mode='markdown')
+             
+             # Store temp context? Or just pass item_name in next_step
+             self.bot.register_next_step_handler(msg, self.process_market_sell_quantity, item_name)
+
+    def process_market_sell_quantity(self, message, item_name):
+        """Step 1: Quantity"""
+        try:
+            qty = int(message.text.strip())
+            if qty <= 0:
+                self.bot.reply_to(message, "❌ Quantità non valida.")
+                return
+                
+            msg = self.bot.reply_to(message, f"💰 Prezzo totale per {qty}x {item_name}?\n(Inserisci il prezzo TOTALE in Wumpa, es: 100)")
+            self.bot.register_next_step_handler(msg, self.process_market_sell_price, item_name, qty)
+        except ValueError:
+             self.bot.reply_to(message, "❌ Inserisci un numero valido.")
+
+    def process_market_sell_price(self, message, item_name, qty):
+        """Step 2: Price and Confirm"""
+        try:
+            price_total = int(message.text.strip())
+            if price_total <= 0:
+                self.bot.reply_to(message, "❌ Prezzo non valido.")
+                return
+            
+            # Calculate price per unit
+            price_per_unit = price_total // qty
+            if price_per_unit < 1:
+                price_per_unit = 1 # Min 1 wumpa per item
+            
+            from services.market_service import MarketService
+            ms = MarketService()
+            user_id = message.from_user.id # or self.chatid? in next_step self.chatid might not be set correctly if class reused? 
+            # self.chatid is instance var. check if reliable. BotCommands is re-instantiated usually? Yes in 'any' it is.
+            # But register_next_step_handler keeps the handler method bound to the *original* instance? 
+            # Actually, `register_next_step_handler` takes a function. `self.process...` is a bound method.
+            # So `self` is the OLD instance. 
+            # `message` is the NEW message.
+            # `user_id` should be taken from `message.from_user.id`.
+            
+            success, res = ms.list_item(message.from_user.id, item_name, qty, price_per_unit)
+            
+            self.bot.reply_to(message, res)
+            
+        except ValueError:
+             self.bot.reply_to(message, "❌ Inserisci un numero valido.")
+
+    def handle_choose_character(self):
+        """Show character selection menu"""
+        utente = user_service.get_user(self.chatid)
+        if not utente:
+             self.bot.reply_to(self.message, "Utente non trovato.")
+             return
+             
+        available = character_service.get_available_characters(utente)
+        
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+        
+        btns = []
+        for c in available:
+            name = c.get('nome', 'Unknown')
+            btns.append(types.KeyboardButton(name))
+            
+        markup.add(*btns)
+        markup.add(types.KeyboardButton("🔙 Indietro"))
+        
+        msg = f"👤 **SCEGLI IL TUO PERSONAGGIO**\n\nEcco i personaggi che hai sbloccato. Selezionane uno per equipaggiarlo:"
+        
+        self.bot.send_message(self.chatid, msg, reply_markup=markup, parse_mode='markdown')
+        self.bot.register_next_step_handler(self.message, process_character_selection)
 
     def handle_profile(self, target_user=None):
         """Show comprehensive user profile with stats and transformations"""
@@ -2168,35 +2389,100 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         user_service.update_user(self.chatid, {'abbonamento_attivo': 1})
         self.bot.reply_to(self.message, "Rinnovo automatico attivato.")
 
-    def handle_classifica(self):
-        users = user_service.get_users()
-        # Sort logic: EXP (descending)
-        users.sort(key=lambda x: x.exp, reverse=True)
+    def handle_classifica(self, ranking_type="global"):
+        """Show ranking (global or seasonal)"""
         
-        msg = "🏆 **CLASSIFICA** 🏆\n\n"
+        msg = ""
+        markup = types.InlineKeyboardMarkup()
         
-        # Pre-load character data to avoid N queries
-        from services.character_loader import get_character_loader
-        char_loader = get_character_loader()
+        if ranking_type == "global":
+            users = user_service.get_users()
+            # Sort logic: EXP (descending), treating None as 0
+            users.sort(key=lambda x: x.exp if x.exp is not None else 0, reverse=True)
+            
+            msg = "🌍 **CLASSIFICA GLOBALE** 🌍\n\n"
+            
+            # Pre-load character data to avoid N queries
+            from services.character_loader import get_character_loader
+            char_loader = get_character_loader()
+            
+            for i, u in enumerate(users[:15]): # Show top 15
+                # Get character name
+                char_name = "N/A"
+                if u.livello_selezionato:
+                    char = char_loader.get_character_by_id(u.livello_selezionato)
+                    if char:
+                        char_name = char['nome']
+                
+                nome_display = u.game_name or u.username or u.nome or f"Eroe {u.id_telegram}"
+                # Escape markdown in name
+                if nome_display:
+                    nome_display = nome_display.replace("_", "\\_").replace("*", "\\*").replace("[", "\\[")
+                
+                msg += f"{i+1}. **{nome_display}**\n"
+                msg += f"   Lv. {u.livello or 1} - {char_name}\n"
+                msg += f"   ✨ EXP: {u.exp or 0} | 🍑 {u.points or 0}\n\n"
+            
+            # Buttons
+            markup.row(types.InlineKeyboardButton("🌟 Classifica Stagione", callback_data="ranking|season"))
+                
+        elif ranking_type == "season":
+            from services.season_manager import SeasonManager
+            manager = SeasonManager()
+            ranking, season_name = manager.get_season_ranking(limit=15)
+            
+            if not ranking:
+                msg = "⚠️ Nessuna stagione attiva o nessun partecipante al momento."
+            else:
+                msg = f"🏆 **CLASSIFICA STAGIONE** 🏆\n"
+                msg += f"🌟 **{season_name}** 🌟\n\n"
+                
+                emojis = ["🥇", "🥈", "🥉"]
+                
+                for i, data in enumerate(ranking):
+                    rank_emoji = emojis[i] if i < 3 else f"#{i+1}"
+                    name = data['game_name'] or data['username'] or data['nome'] or "Eroe"
+                    # Escape markdown
+                    if name:
+                        name = name.replace("_", "\\_").replace("*", "\\*").replace("[", "\\[")
+                    
+                    msg += f"{rank_emoji} **{name}**\n"
+                    msg += f"   ├ 🏅 Grado: {data['level']}\n"
+                    msg += f"   └ 📊 Lv. Eroe: {data['user_level']}\n\n"
+            
+            # Buttons
+            markup.row(types.InlineKeyboardButton("🌍 Classifica Globale", callback_data="ranking|global"))
         
-        for i, u in enumerate(users[:15]): # Show top 15
-            # Get character name
-            char_name = "N/A"
-            if u.livello_selezionato:
-                char = char_loader.get_character_by_id(u.livello_selezionato)
-                if char:
-                    char_name = char['nome']
-            
-            nome_display = u.username if u.username else u.nome
-            # Escape markdown in name
-            if nome_display:
-                nome_display = nome_display.replace("_", "\\_").replace("*", "\\*").replace("[", "\\[")
-            
-            msg += f"{i+1}. **{nome_display}**\n"
-            msg += f"   Lv. {u.livello} - {char_name}\n"
-            msg += f"   ✨ EXP: {u.exp} | 🍑 {u.points}\n\n"
-            
-        self.bot.reply_to(self.message, msg, parse_mode='markdown')
+        # Add common buttons if any needed (e.g. Back)
+        
+        # Send or Edit
+        # Check if we are in a callback context (self.message is the original message)
+        # We need to determine if we edit or send new.
+        # Usually handle_* methods in BotCommands check context or are called with context.
+        # But here we pass ranking_type.
+        # If we are called from callback handler, we should EDIT.
+        # If called from command /classifica, we send NEW.
+        
+        # Simple heuristic: if we have a callback query ID in context (not available here directly unless passed)
+        # OR we rely on caller to set self.is_callback or similar.
+        # But BotCommands instance is created per request.
+        
+        # Let's try to edit if existing message looks like a ranking, otherwise send.
+        # Or just use reply_to / edit_message_text based on whether it was a button click.
+        # But we don't know here.
+        
+        # Actually, self.message is available.
+        # We can try to edit self.message if it was sent by bot (which is true for callbacks).
+        # But self.message in callback is the message FROM user? No, call.message is message with buttons.
+        # BotCommands is init with call.message if callback.
+        
+        try:
+            # Try to edit first (if it's a callback update)
+            self.bot.edit_message_text(msg, self.message.chat.id, self.message.message_id, reply_markup=markup, parse_mode='markdown')
+        except Exception as e:
+            # If edit fails (e.g. content same, or not bot message), send new
+            # print(f"Edit failed (expected for new command): {e}")
+            self.bot.send_message(self.message.chat.id, msg, reply_markup=markup, parse_mode='markdown')
 
     def handle_nome_in_game(self):
         # Logic for game names
@@ -3279,8 +3565,20 @@ def any(message):
              return
              
     # Private Chat Catch-all: If we are here, the message was not handled by specific handlers
-    # We reply with the new menu to force update
     if message.chat.type == 'private':
+        # Try to handle it via BotCommands dispatcher (manual dispatch)
+        cmd = BotCommands(message, bot)
+        # Check if the text matches a private command key
+        if message.text in cmd.comandi_privati:
+            # Execute handler directly
+            try:
+                cmd.comandi_privati[message.text]()
+                return
+            except Exception as e:
+                print(f"[ERROR] Error executing private command {message.text}: {e}")
+                # Fallthrough to error message
+        
+        # If not handled:
         bot.send_message(message.chat.id, "❌ Comando non riconosciuto o menu scaduto.\nUsa il menu qui sotto per navigare:", reply_markup=get_main_menu())
         return
              
@@ -3555,41 +3853,6 @@ def any(message):
     bothandler = BotCommands(message, bot)
     bothandler.handle_all_commands()
 
-def get_combat_markup(enemy_type, enemy_id, chat_id, can_use_items=None):
-    """Generate combat markup with all required buttons"""
-    if can_use_items is None:
-        # Auto-detect if it's a "next mob" (ID > 237)
-        mob = pve_service.get_mob_details(enemy_id)
-        can_use_items = mob and mob['id'] > 237
-        
-    markup = types.InlineKeyboardMarkup()
-    # Standard attack buttons
-    markup.add(
-        types.InlineKeyboardButton("⚔️ Attacca", callback_data=f"attack_enemy|{enemy_type}|{enemy_id}"),
-        types.InlineKeyboardButton("✨ Speciale", callback_data=f"special_attack_enemy|{enemy_type}|{enemy_id}")
-    )
-    # Defend button
-    markup.add(types.InlineKeyboardButton("🛡️ Difesa", callback_data="defend_mob"))
-    
-    # AoE buttons (only if >= 2 mobs)
-    mob_count = pve_service.get_active_mobs_count(chat_id)
-    if mob_count >= 2:
-        markup.add(
-            types.InlineKeyboardButton("💥 AoE", callback_data=f"aoe_attack_enemy|{enemy_type}|{enemy_id}"),
-            types.InlineKeyboardButton("🌟 Speciale AoE", callback_data=f"special_aoe_attack_enemy|{enemy_type}|{enemy_id}")
-        )
-    
-    # Nitro and TNT buttons (only for "next mobs")
-    if can_use_items:
-        markup.add(
-            types.InlineKeyboardButton("🧨 Nitro", callback_data=f"use_item_mob|Nitro|{enemy_id}"),
-            types.InlineKeyboardButton("💣 TNT", callback_data=f"use_item_mob|TNT|{enemy_id}")
-        )
-    
-    # Always show Flee button (requested by user)
-    markup.add(types.InlineKeyboardButton("🏃 Fuggi", callback_data=f"flee_enemy|{enemy_type}|{enemy_id}"))
-        
-    return markup
 
 def display_mob_spawn(bot, chat_id, mob_id):
     """Helper to display a spawned mob with image and buttons"""
@@ -3743,6 +4006,17 @@ def callback_query(call):
     
     # Track activity for mob targeting IMMEDIATELY
     user_service.track_activity(user_id, chat_id)
+
+    # --- Ranking Callbacks ---
+    if call.data.startswith("ranking|"):
+        cmd = BotCommands(call.message, bot)
+        # Patch for callback user ID logic
+        cmd.chatid = user_id
+        cmd.user_id = user_id
+        
+        _, r_type = call.data.split("|", 1)
+        cmd.handle_classifica(ranking_type=r_type)
+        return
     
     # Guide Navigation
     if call.data.startswith("guide_"):
@@ -3793,6 +4067,15 @@ def callback_query(call):
         bot_cmds.chatid = user_id 
         bot_cmds.message = call.message 
         bot_cmds.handle_stats(is_callback=True)
+        return
+
+    # Market callbacks delegation
+    if call.data.startswith("market_") or call.data.startswith("buy_item") or call.data.startswith("cancel_listing") or call.data == "market_menu":
+        bot_cmds = BotCommands(call.message, bot)
+        bot_cmds.chatid = user_id
+        bot_cmds.message = call.message
+        # We need to manually handle this dispatch in BotCommands or exposing handle_market_callback
+        bot_cmds.handle_market_callback(call)
         return
 
     if call.data == "title_menu":
@@ -6549,3 +6832,130 @@ def handle_spawn_cmd(message):
             
     except Exception as e:
         bot.reply_to(message, f"❌ Errore durante lo spawn: {e}")
+
+# --- Global Helpers ---
+def process_dungeon_events(events, chat_id):
+    """Global function to process dungeon events"""
+    import time
+    
+    for event in events:
+        if event['type'] == 'message':
+            bot.send_message(chat_id, event['content'], parse_mode='markdown')
+        elif event['type'] == 'delay':
+            seconds = event.get('seconds', 3)
+            try:
+                bot.send_chat_action(chat_id, 'typing')
+            except: pass
+            time.sleep(seconds)
+        elif event['type'] == 'spawn':
+            # Display spawned mobs
+            mob_ids = event.get('mob_ids', [])
+            for mob_id in mob_ids:
+                # Use global pve_service
+                mob_data = pve_service.get_mob_details(mob_id)
+                if mob_data:
+                    # Construct message
+                    msg = f"⚠️ **{mob_data['name']}** è apparso!"
+                    if mob_data['is_boss']:
+                        msg = f"☠️ **BOSS: {mob_data['name']}** è sceso in campo!"
+                    
+                    # Get markup (need global helper)
+                    # Assuming get_combat_markup and send_combat_message are global
+                    markup = get_combat_markup("mob", mob_id, chat_id)
+                    send_combat_message(chat_id, msg, mob_data['image_path'], markup, mob_id)
+
+# --- Scheduler Logic ---
+def job_dungeon_check():
+    """Periodic check for dungeon events"""
+    try:
+        # Check triggers
+        # We handle result which might be event string or dict
+        result = dungeon_service.check_daily_dungeon_trigger(GRUPPO_AROMA)
+        
+        if result:
+            if result == "DUNGEON_PREANNOUNCED":
+                bot.send_message(GRUPPO_AROMA, "🌑 **L'aria nel gruppo si fa pesante...**\nUn'energia instabile attraversa il canale.\nQualcosa sta per emergere...\n\n⚠️ **Preparatevi!**", parse_mode='markdown')
+            
+            elif isinstance(result, dict) and result.get("type") == "DUNGEON_STARTED":
+                # Dungeon Started!
+                name = result['dungeon_name']
+                count = result['participant_count']
+                events = result['events']
+                
+                msg = f"💥 **IL DUNGEON È EMERSO: {name}** 💥\n\nTutti i presenti ({count} eroi) sono stati trascinati all'interno!\n\n"
+                bot.send_message(GRUPPO_AROMA, msg, parse_mode='markdown')
+                
+                # Send spawn messages
+                process_dungeon_events(events, GRUPPO_AROMA)
+                
+    except Exception as e:
+        print(f"[ERROR] job_dungeon_check: {e}")
+
+def job_weekly_ranking():
+    """Weekly Season Ranking Announcement"""
+    print("[SCHEDULER] Running weekly ranking job...")
+    try:
+        from services.season_manager import SeasonManager
+        manager = SeasonManager()
+        
+        ranking, season_name = manager.get_season_ranking(limit=10)
+        
+        if not ranking:
+            return
+            
+        msg = f"🏆 **CLASSIFICA SETTIMANALE STAGIONE** 🏆\n"
+        msg += f"🌟 **{season_name}** 🌟\n\n"
+        
+        emojis = ["🥇", "🥈", "🥉"]
+        
+        for i, data in enumerate(ranking):
+            rank_emoji = emojis[i] if i < 3 else f"#{i+1}"
+            name = data['game_name'] or data['username'] or data['nome'] or "Eroe"
+            # Escape markdown
+            if name:
+                name = name.replace("_", "\\_").replace("*", "\\*")
+            
+            msg += f"{rank_emoji} **{name}**\n"
+            msg += f"   ├ 🏅 Grado Stagione: {data['level']}\n"
+            msg += f"   └ 📊 Livello Eroe: {data['user_level']}\n\n"
+            
+        msg += "🔥 Continuate a combattere per scalare la vetta!\n"
+        msg += "Usa `/season` per vedere i tuoi progressi dettagliati."
+        
+        bot.send_message(GRUPPO_AROMA, msg, parse_mode='markdown')
+    except Exception as e:
+        print(f"[ERROR] Failed to send weekly ranking: {e}")
+
+# Schedule the check every minute
+schedule.every(1).minutes.do(job_dungeon_check)
+# Also schedule mana regen if not present
+schedule.every(1).hours.do(regenerate_mana_job)
+# Weekly Ranking
+schedule.every().sunday.at("20:00").do(job_weekly_ranking)
+
+def schedule_checker():
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
+if __name__ == '__main__':
+    print("Starting aROMa Bot...")
+    
+    # Initialize DB (if needed)
+    db = Database()
+    db.create_all_tables()
+    
+    # NEW: Validate user stats on startup
+    user_service.validate_and_fix_user_stats()
+    
+    # Start Scheduler in background
+    threading.Thread(target=schedule_checker, daemon=True).start()
+    
+    # Start Bot Polling (Main Thread)
+    # Using the defined wrapper if exists, or direct.
+    # bot_polling_thread() calls infinity_polling.
+    try:
+        bot.infinity_polling(timeout=10, long_polling_timeout=5)
+    except Exception as e:
+        print(f"Bot polling crash: {e}")
+

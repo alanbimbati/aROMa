@@ -60,37 +60,19 @@ class TargetingService:
                 session.close()
     
     def _is_valid_target(self, user_id, mob, session):
-        """
-        Check if a user is a valid target for a mob.
-        
-        A user is valid if:
-        - They exist
-        - They are not resting
-        - They have HP > 0 (not dead)
-        - They haven't fled from this mob
-        - For world mobs: they are not in a dungeon
-        - For dungeon mobs: they are a participant in the dungeon
-        
-        Args:
-            user_id: User ID to check
-            mob: Mob object
-            session: Database session
-            
-        Returns:
-            bool: True if user can be targeted
-        """
-        # Get user
-        user = self.user_service.get_user(user_id)
+        """Check if a user is a valid target for a mob."""
+        # Use session to query user
+        user = session.query(Utente).filter_by(id_telegram=user_id).first()
         if not user:
             return False
         
         # Check if resting
-        is_resting = self.user_service.get_resting_status(user.id_telegram)
+        is_resting = self.user_service.get_resting_status(user.id_telegram, session=session)
         if is_resting:
             return False
         
         # Check if alive (HP > 0)
-        current_hp = user.current_hp if user.current_hp is not None else (user.health or 0)
+        current_hp = user.current_hp if (hasattr(user, 'current_hp') and user.current_hp is not None) else (user.health or 0)
         if current_hp <= 0:
             return False
         
@@ -104,20 +86,18 @@ class TargetingService:
             return False
         
         # Dungeon-specific checks
+        from services.dungeon_service import DungeonService
+        ds = DungeonService()
         if mob.dungeon_id:
             # For dungeon mobs, user must be a participant
-            from services.dungeon_service import DungeonService
-            ds = DungeonService()
-            participants = ds.get_dungeon_participants(mob.dungeon_id)
+            participants = ds.get_dungeon_participants(mob.dungeon_id, session=session)
             participant_ids = [p.user_id for p in participants]
             
             if user_id not in participant_ids:
                 return False
         else:
             # For world mobs, user must NOT be in any dungeon
-            from services.dungeon_service import DungeonService
-            ds = DungeonService()
-            if ds.get_user_active_dungeon(user_id):
+            if ds.get_user_active_dungeon(user_id, session=session):
                 return False
         
         return True
