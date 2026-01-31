@@ -6,3 +6,4 @@ python-dotenv
 sqlalchemy>=2.0.30
 psycopg2-binary
 python-dateutil
+alembic
