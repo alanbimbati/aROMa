@@ -140,11 +140,29 @@ class StatAggregator:
                 self._increment_stat(session, user_id, stat_key, 1)
                 self._increment_stat(session, user_id, 'total_characters_unlocked', 1)
 
+
         elif event_type == 'character_equip':
             char_name = context.get('char_name')
             if char_name:
                 stat_key = f"use_{char_name.lower().replace(' ', '_')}"
                 self._increment_stat(session, user_id, stat_key, 1)
+
+        # --- MARKET EVENTS ---
+        elif event_type == 'ITEM_LISTED':
+            self._increment_stat(session, user_id, 'items_listed', 1)
+            
+        elif event_type == 'ITEM_SOLD':
+            self._increment_stat(session, user_id, 'items_sold', 1)
+            
+        elif event_type == 'ITEM_BOUGHT':
+            self._increment_stat(session, user_id, 'items_bought', 1)
+            self._increment_stat(session, user_id, 'total_spent_market', value)
+            
+        elif event_type == 'MARKET_VIEWED':
+            self._increment_stat(session, user_id, 'market_views', 1)
+            
+        elif event_type == 'QUICK_SALE':
+            self._increment_stat(session, user_id, 'quick_sales', 1)
 
     def _increment_stat(self, session, user_id, stat_key, amount):
         """

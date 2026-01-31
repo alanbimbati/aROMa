@@ -92,6 +92,39 @@ class ItemService:
             if local_session:
                 session.close()
 
+    def remove_item(self, id_telegram, item, quantita=1, session=None):
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
+        try:
+            # We need to remove 'quantita' rows of this item for this user
+            from models.items import Collezionabili
+            items_to_remove = session.query(Collezionabili).filter_by(
+                id_telegram=str(id_telegram),
+                oggetto=item,
+                data_utilizzo=None
+            ).limit(quantita).all()
+            
+            if len(items_to_remove) < quantita:
+                return False # Not enough items
+                
+            for it in items_to_remove:
+                session.delete(it)
+                
+            if local_session:
+                session.commit()
+            return True
+        except Exception as e:
+            print(e)
+            if local_session:
+                session.rollback()
+            return False
+        finally:
+            if local_session:
+                session.close()
+
     def use_item(self, id_telegram, oggetto, session=None):
         local_session = False
         if not session:

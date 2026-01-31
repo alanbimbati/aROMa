@@ -8,7 +8,6 @@ Telegram bot avanzato per la gestione di punti, giochi e un sistema RPG completo
 - **Targeting Modulare**: Sistema di targeting intelligente con `TargetingService` dedicato
 - **Fatigue System**: Meccanica di affaticamento realistica al 5% HP
 - **Azioni Multiple**: Attacco, difesa (cura 2-3% HP), abilità speciali, fuga
-- **Combat AI**: Intelligenza artificiale avanzata per i nemici
 
 ### Infrastruttura Robusta
 - **CI/CD Pipeline**: Deployment automatizzato con test e rollback automatico
@@ -51,7 +50,8 @@ docker-compose up -d
 
 ### Sistema RPG
 - **Combattimento PvE**: Affronta mob giornalieri e raid boss
-- **260+ Personaggi**: Sblocca e equipaggia personaggi da Dragon Ball, Naruto, One Piece e altri
+- **260+ Personaggi**: Sblocca e equipaggia personaggi da Dragon Ball, Pokemon o personaggi dalla Playstation
+- **Trasformazioni**: Sblocca forme potenziate per i tuoi personaggi
 - **Statistiche Avanzate**: Salute, mana, danno, velocità, resistenza, critico
 - **Abilità Speciali**: Ogni personaggio ha abilità uniche e trasformazioni
 - **Sistema di Fatigue**: Gestione realistica dell'affaticamento in combattimento
@@ -68,12 +68,17 @@ docker-compose up -d
 - **Sistema di Drop**: Oggetti, pozioni e collezionabili dai mob
 - **Sfere del Drago**: Raccogli 7 sfere per esprimere desideri potenti
 - **Equipment**: Equipaggiamento che potenzia le tue statistiche
+- **Anti Farming**: Sistema di controllo per prevenire farming
 
 ### Gilde e Sociale
 - **Sistema di Gilde**: Crea o unisciti a una gilda
 - **Raid Boss**: Affronta boss potenti insieme alla tua gilda
 - **Dungeon Cooperativi**: Esplora dungeon con altri giocatori
 - **Classifiche**: Compete per il primo posto nelle classifiche globali
+
+### In sviluppo
+- **Mercato**: Compra o vendi oggetti al mercato
+
 
 ## 🛠️ Architettura Tecnica
 

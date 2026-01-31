@@ -24,8 +24,9 @@ class PvEService:
         self.db = Database()
         self.user_service = UserService()
         self.item_service = ItemService()
-        from services.battle_service import BattleService
-        self.battle_service = BattleService()
+        from services.combat_service import CombatService
+        self.combat_service = CombatService()
+        from services.reward_service import RewardService
         
         # NEW: Enhanced combat services
         self.event_dispatcher = EventDispatcher()
@@ -45,6 +46,7 @@ class PvEService:
         self.season_manager = SeasonManager()
         self.guild_service = GuildService()
         self.equipment_service = EquipmentService()
+        self.reward_service = RewardService(self.db, self.user_service, self.item_service, self.season_manager)
         
         self.mob_data = self.load_mob_data()
         self.boss_data = self.load_boss_data()
@@ -112,7 +114,7 @@ class PvEService:
                 
             try:
                 self.user_service.update_user(user.id_telegram, {'mana': user.mana - mana_cost}, session=session)
-                success, msg, extra_data = self.attack_mob(user, base_damage=special_damage, use_special=True, session=session)
+                success, msg, extra_data = self.attack_mob(user, base_damage=special_damage, use_special=True, chat_id=chat_id, session=session)
                 
                 if not success:
                     # Refund mana if attack failed (e.g. no mob)
@@ -136,17 +138,26 @@ class PvEService:
     def defend(self, user):
         """
         Enter defensive stance.
-        - Increases resistance by 50% (capped at 75%) for next attack.
+        - Increases resistance by 5% (capped at 75%) for next attack.
         - Heals 2-3% HP.
         - Shares cooldown with attack.
         """
         session = self.db.get_session()
         try:
+            # Re-fetch user in this session to ensure updates persist
+            # (The passed user object might be detached or from another session)
+            db_user = session.merge(user)
+            
+            # Check if dead
+            if (db_user.health or 0) <= 0:
+                session.close()
+                return False, "💀 Non puoi difenderti se sei morto!"
+
             # Check Cooldown (Shared with attack)
-            user_speed = getattr(user, 'speed', 0) or 0
+            user_speed = getattr(db_user, 'speed', 0) or 0
             cooldown_seconds = 60 / (1 + user_speed * 0.01)
             
-            last_attack = getattr(user, 'last_attack_time', None)
+            last_attack = getattr(db_user, 'last_attack_time', None)
             if last_attack:
                 elapsed = (datetime.datetime.now() - last_attack).total_seconds()
                 if elapsed < cooldown_seconds:
@@ -155,20 +166,24 @@ class PvEService:
                     return False, f"⏳ Sei stanco! (CD: {int(cooldown_seconds)}s)\nDevi riposare ancora per {remaining}s."
             
             # Apply Defense Up Effect
-            StatusEffect.apply_status(user, 'defense_up', duration=1)
+            StatusEffect.apply_status(db_user, 'defense_up', duration=1)
             
             # Heal 2-3% HP
             heal_percent = random.uniform(0.02, 0.03)
-            heal_amount = int(user.max_health * heal_percent)
+            heal_amount = int(db_user.max_health * heal_percent)
             
-            user.health = min((user.health or 0) + heal_amount, user.max_health)
-            user.current_hp = user.health
+            old_hp = db_user.health or 0
+            new_hp = min(old_hp + heal_amount, db_user.max_health)
+            db_user.health = new_hp
+            db_user.current_hp = new_hp
+            
+            real_healed = new_hp - old_hp
             
             # Update last action time
-            self.user_service.update_user(user.id_telegram, {'last_attack_time': datetime.datetime.now()}, session=session)
+            self.user_service.update_user(db_user.id_telegram, {'last_attack_time': datetime.datetime.now()}, session=session)
             
             session.commit()
-            return True, f"🛡️ **{user.nome}** usa **Difesa**!\nResistenza aumentata del 5% e recuperati {heal_amount} HP."
+            return True, f"🛡️ **{db_user.nome}** usa **Difesa**!\nResistenza aumentata del 5% e recuperati {real_healed} HP."
             
         except Exception as e:
             session.rollback()
@@ -176,22 +191,29 @@ class PvEService:
         finally:
             session.close()
 
-    def flee_mob(self, user, mob_id):
+    def flee_mob(self, user, mob_id, session=None):
         """
         Allow a user to flee from a mob with a chance based on level ratio.
         If threshold reached, mob is removed for everyone.
         """
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         try:
             mob = session.query(Mob).filter_by(id=mob_id).first()
             if not mob:
+                if local_session: session.close()
                 return False, "Mostro non trovato."
             if mob.is_dead:
+                if local_session: session.close()
                 return False, "Il mostro è già fuggito o è stato sconfitto."
             
             # Check if user already fled
             participation = session.query(CombatParticipation).filter_by(mob_id=mob_id, user_id=user.id_telegram).first()
             if participation and participation.has_fled:
+                if local_session: session.close()
                 return False, "Sei già fuggito da questo mostro!"
             
             # Check if mob belongs to a dungeon
@@ -201,16 +223,18 @@ class PvEService:
                 ds = DungeonService()
                 
                 # Check if user is actually in this dungeon
-                active_dungeon = ds.get_user_active_dungeon(user.id_telegram)
+                active_dungeon = ds.get_user_active_dungeon(user.id_telegram, session=session)
                 if active_dungeon and active_dungeon.id == mob.dungeon_id:
-                    success, msg = ds.leave_dungeon(mob.chat_id, user.id_telegram)
+                    success, msg = ds.leave_dungeon(mob.chat_id, user.id_telegram, session=session)
                     if success:
+                        if local_session: session.commit()
                         return True, f"🏃 **{user.nome}** è fuggito dal dungeon!\n\n{msg}"
                     elif "Non sei un partecipante" in msg:
                         # Ghost participant case: User is targeted but not actually in dungeon (DB mismatch)
                         # Allow standard flee to break the loop
                         pass 
                     else:
+                        if local_session: session.close()
                         return False, f"Non sei riuscito a fuggire dal dungeon: {msg}"
             
             # Calculate flee chance: 0.5 * (mob_level / user_level)
@@ -346,7 +370,10 @@ class PvEService:
                 level = max(1, reference_level + random.randint(-10, 10))
             else:
                 difficulty = int(mob_data.get('difficulty', 1))
-                level = difficulty * random.randint(1, 5)
+                # New Logic: Diff X -> Level range ((X-1)*10 + 1) to (X*10)
+                min_lvl = (difficulty - 1) * 10 + 1
+                max_lvl = difficulty * 10
+                level = random.randint(min_lvl, max_lvl)
         else:
             # Random mob based on level and difficulty
             if not self.mob_data:
@@ -494,7 +521,10 @@ class PvEService:
                 level = reference_level + random.randint(5, 12)
             else:
                 difficulty = int(boss_data.get('difficulty', 5))
-                level = difficulty * random.randint(5, 10)
+                # New Logic: Bosses usage same tier logic but usually higher difficulty tiers
+                min_lvl = (difficulty - 1) * 10 + 1
+                max_lvl = difficulty * 10
+                level = random.randint(min_lvl, max_lvl)
         else:
             # Random boss based on level and difficulty
             if not self.boss_data:
@@ -649,8 +679,8 @@ class PvEService:
         session.close()
         return data
 
-    def attack_mob(self, user, base_damage=0, use_special=False, ability=None, mob_id=None, mana_cost=0, session=None):
-        """Attack current mob using BattleService"""
+    def attack_mob(self, user, base_damage=0, use_special=False, ability=None, mob_id=None, chat_id=None, mana_cost=0, session=None):
+        """Attack current mob using CombatService"""
         local_session = False
         if not session:
             session = self.db.get_session()
@@ -677,8 +707,12 @@ class PvEService:
                     session.close()
                 return False, "Sei fuggito da questo mostro! Non puoi più attaccarlo.", None
         else:
-            # Attack first alive mob
-            mob = session.query(Mob).filter_by(is_dead=False).first()
+            # Attack first alive mob (preferring this chat if provided)
+            query = session.query(Mob).filter_by(is_dead=False)
+            if chat_id:
+                query = query.filter_by(chat_id=chat_id)
+            mob = query.first()
+            
             if not mob:
                 if local_session:
                     session.close()
@@ -689,14 +723,14 @@ class PvEService:
         ds = DungeonService()
         
         if mob.dungeon_id:
-            participants = ds.get_dungeon_participants(mob.dungeon_id)
+            participants = ds.get_dungeon_participants(mob.dungeon_id, session=session)
             if user.id_telegram not in [p.user_id for p in participants]:
                 if local_session:
                     session.close()
                 return False, "🔒 Non puoi attaccare questo mob! Appartiene a un dungeon a cui non sei iscritto.", None
         else:
             # World mob: check if user is in a dungeon
-            if ds.get_user_active_dungeon(user.id_telegram):
+            if ds.get_user_active_dungeon(user.id_telegram, session=session):
                 if local_session:
                     session.close()
                 return False, "🔒 Sei impegnato in un dungeon! Non puoi attaccare i mostri del mondo esterno.", None
@@ -741,7 +775,7 @@ class PvEService:
         char_loader = get_character_loader()
         character = char_loader.get_character_by_id(user.livello_selezionato)
         
-        # Prepare attacker object wrapper for BattleService
+        # Prepare attacker object wrapper for CombatService
         class AttackerWrapper:
             def __init__(self, user, char, base_dmg):
                 self.damage_total = base_dmg
@@ -781,7 +815,7 @@ class PvEService:
         defender = DefenderWrapper(mob)
         
         # Calculate damage
-        combat_result = self.battle_service.calculate_damage(attacker, defender, ability)
+        combat_result = self.combat_service.calculate_damage(attacker, defender, ability)
         damage = combat_result['damage']
         
         # Apply Mob Resistance
@@ -910,196 +944,46 @@ class PvEService:
             
             # Rewards based on difficulty and level (already captured)
             reward_details = []
+            total_wumpa = 0
+            total_xp = 0
             
-            # Bosses give much better rewards
-            if is_boss:
-                reward_details, total_wumpa, total_xp = self.distribute_boss_rewards(mob_id, user, damage, session=session)
-                msg += f"\n\n🏆 **Ricompense Boss Distribuite!** ({total_wumpa} {PointsName} totali)\n"
-            else:
-                # Normal mob rewards distributed among participants
-                participants = self.get_combat_participants(mob_id, session=session)
-                total_damage = sum(p.damage_dealt for p in participants)
-                
-                actual_total_wumpa = 0
-                actual_total_xp = 0
-                
-                rewards_to_distribute = []
-                try:
-                    for p in participants:
-                        share = p.damage_dealt / total_damage if total_damage > 0 else 1/len(participants)
-                        wumpa_per_damage = 0.05 * difficulty # Reverted to 0.05
-                        base_wumpa = int(p.damage_dealt * wumpa_per_damage)
-                        if base_wumpa < 1 and p.damage_dealt > 0:
-                            base_wumpa = 1
-                            
-                        mob_hp = mob_max_health if mob_max_health else 30
-                        if difficulty >= 4: # Hard
-                            base_exp_pool = random.randint(100, 300) * difficulty # Reverted to 100-300
-                        elif difficulty == 3: # Medium
-                            base_exp_pool = random.randint(100, 300) * difficulty
-                        elif difficulty <= 2 and mob_hp >= 50: # Easy
-                            base_exp_pool = random.randint(100, 300) * difficulty
-                        else: # Trash
-                            base_exp_pool = random.randint(100, 300) * difficulty
-                            
-                        base_exp = int(base_exp_pool * share)
-                        mob_level = level if level else (difficulty * 5)
-                        u_part = session.query(Utente).filter_by(id_telegram=p.user_id).first()
-                        user_level = u_part.livello if u_part and u_part.livello is not None else 1
-                        
-                        penalty_factor_xp = 1.0
-                        penalty_factor_wumpa = 1.0
-                        if user_level > mob_level + 10:
-                            penalty_factor_xp = 0.5
-                            penalty_factor_wumpa = 0.25
-                        
-                        p_xp = int(base_exp * penalty_factor_xp)
-                        p_wumpa = int(base_wumpa * penalty_factor_wumpa)
-                        try:
-                            p_user_check = session.query(Utente).filter_by(id_telegram=p.user_id).first()
-                            print(f"[DEBUG] distribute_rewards: Checking user {p.user_id}. Found: {p_user_check is not None}")
-                        except Exception as e:
-                            print(f"[ERROR] Failed to query user {p.user_id}: {e}")
-                            p_user_check = None
-                        
-                        is_stunned = False
-                        has_turbo = False
-                        is_dead = False
-                        
-                        if p_user_check:
-                            if p_user_check.active_status_effects:
-                                try:
-                                    effects = json.loads(p_user_check.active_status_effects)
-                                    for effect in effects:
-                                        if effect.get('id') == 'stunned': is_stunned = True
-                                        elif effect.get('id') == 'turbo': has_turbo = True
-                                except: pass
-                            if (p_user_check.daily_wumpa_earned or 0) >= 300:
-                                p_wumpa = int(p_wumpa * 0.9)
-                        
-                            if is_stunned:
-                                p_xp = 0
-                                p_wumpa = 0
-                            
-                            # Check if user is dead (0 HP)
-                            current_hp = p_user_check.current_hp if hasattr(p_user_check, 'current_hp') and p_user_check.current_hp is not None else p_user_check.health
-                            if current_hp <= 0:
-                                is_dead = True
-                                p_xp = 0
-                                p_wumpa = 0
-                        else:
-                            # User not found, skip rewards or set to 0
-                            p_xp = 0
-                            p_wumpa = 0
-
-                        if has_turbo:
-                            p_xp = int(p_xp * 1.2)
-                        if p_xp < 1 and not is_stunned and not is_dead: p_xp = 1
-                        
-                        p_name = f"User {p.user_id}"
-                        if p_user_check:
-                            p_name = p_user_check.game_name if p_user_check.game_name else (p_user_check.nome if p_user_check.nome else (p_user_check.username if p_user_check.username else f"User {p.user_id}"))
-                        
-                        rewards_to_distribute.append({
-                            'user_id': p.user_id,
-                            'p_xp': p_xp,
-                            'p_wumpa': p_wumpa,
-                            'p_name': p_name,
-                            'damage_dealt': p.damage_dealt,
-                            'is_dead': is_dead,
-                            'is_stunned': is_stunned
-                        })
-                        actual_total_wumpa += p_wumpa
-                        actual_total_xp += p_xp
-                finally:
-                    pass
-                
-                # Distribute Rewards
-                for reward in rewards_to_distribute:
-                    user_id = reward['user_id']
-                    p_xp = reward['p_xp']
-                    p_wumpa = reward['p_wumpa']
-                    p_name = reward['p_name']
-                    damage_dealt = reward['damage_dealt']
-                    
-                    level_up_info = self.user_service.add_exp_by_id(user_id, p_xp, session=session)
-                    self.user_service.add_points_by_id(user_id, p_wumpa, is_drop=True, session=session)
-                    
-                    # Handle seasonal exp and potential season end
-                    season_result = self.season_manager.add_seasonal_exp(user_id, p_xp)
-                    if isinstance(season_result, tuple) and len(season_result) == 2:
-                        rewards, season_end_msg = season_result
-                    else:
-                        rewards = season_result
-                        season_end_msg = None
-                    
-                    display_damage = min(damage_dealt, mob_max_health)
-                    reward_line = f"👤 **{p_name}**: {display_damage}/{mob_max_health} dmg -> {p_xp} Exp, {p_wumpa} {PointsName}"
-                    
-                    if season_end_msg:
-                        reward_line += f"\n\n{season_end_msg}"
-                    
-                    if p_xp == 0 and p_wumpa == 0 and not is_stunned:
-                         # Check if it was due to death (we don't have is_dead here easily without re-checking or passing it)
-                         # But we know 0 xp/wumpa usually means stun or death or penalty.
-                         # Let's re-check quickly or just assume if 0 and not stunned it might be death.
-                         # Actually, let's pass is_dead in the reward dict.
-                         pass
-                    
-                    if reward.get('is_dead'):
-                        reward_line += " 💀 (Morto)"
-                    elif reward.get('is_stunned'):
-                        reward_line += " 💫 (Stordito)"
-                    if level_up_info['leveled_up']:
-                        reward_line += f"\n   🎉 **LEVEL UP!** Ora sei livello {level_up_info['new_level']}!"
-                        if level_up_info['next_level_exp']:
-                            reward_line += f" (Prossimo livello: {level_up_info['next_level_exp']} Exp)"
-                        reward_line += f" (+2 punti statistica)"
-                    
-                    # Ensure health is capped (just in case)
-                    u_final = self.user_service.get_user(user_id)
-                    if u_final and (u_final.health > u_final.max_health or (u_final.current_hp and u_final.current_hp > u_final.max_health)):
-                        self.user_service.recalculate_stats(user_id)
-                        
-                    reward_details.append(reward_line)
-                
-                msg += f"\n\n💰 **Ricompense Distribuite!** ({actual_total_wumpa} {PointsName} totali)\n"
+            # Rewards (Unified via RewardService)
+            # Ensure participants are fetched
+            participants = self.get_combat_participants(mob.id, session=session)
             
-            msg += "\n".join(reward_details)
-            
-            # Item reward
-            item_chance = 0.30 if is_boss else 0.10 # Increased from 0.20 and 0.05
-            if random.random() < item_chance:
-                items_data = self.item_service.load_items_from_csv()
-                if items_data:
-                    weights = [1/float(item['rarita']) for item in items_data]
-                    reward_item = random.choices(items_data, weights=weights, k=1)[0]
-                    self.item_service.add_item(user_id, reward_item['nome'])
-                    msg += f"\n\n✨ **Oggetto Raro Trovato!**\nHai ottenuto: **{reward_item['nome']}**"
+            # Calculate and Distribute
+            try:
+                rewards_data = self.reward_service.calculate_rewards(mob, participants)
+                reward_msg = self.reward_service.distribute_rewards(rewards_data, mob, session)
+                msg += f"\n\n{reward_msg}"
+            except Exception as e:
+                print(f"[ERROR] Reward distribution failed: {e}")
+                rewards_data = []
             
             # Dungeon advancement
             if dungeon_id:
-                from services.dungeon_service import DungeonService
-                ds = DungeonService()
-                
-                # Check for deaths among participants to record stats
-                # We iterate over rewards_to_distribute which contains is_dead flag
-                for reward in rewards_to_distribute:
-                    if reward.get('is_dead'):
-                        ds.record_death(dungeon_id)
+                try:
+                    from services.dungeon_service import DungeonService
+                    ds = DungeonService()
+                    
+                    # Record deaths for stats
+                    if rewards_data:
+                        for reward in rewards_data:
+                            if reward.get('is_dead'):
+                                ds.record_death(dungeon_id, session=session)
 
-                dungeon_events, new_mob_ids = ds.check_step_completion(dungeon_id, session=session)
-                
-                if dungeon_events:
-                    # If it's a list (events), pass it to extra_data
-                    if isinstance(dungeon_events, list):
-                        extra_data['dungeon_events'] = dungeon_events
-                    else:
-                        # Fallback if it's a string (shouldn't happen with new DS but safe)
-                        msg += f"\n\n{dungeon_events}"
-                
-                if new_mob_ids:
-                    extra_data['new_mob_ids'] = new_mob_ids
+                    dungeon_events, new_mob_ids = ds.check_step_completion(dungeon_id, session=session)
+                    
+                    if dungeon_events:
+                        if isinstance(dungeon_events, list):
+                            extra_data['dungeon_events'] = dungeon_events
+                        else:
+                            msg += f"\n\n{dungeon_events}"
+                    
+                    if new_mob_ids:
+                        extra_data['new_mob_ids'] = new_mob_ids
+                except Exception as e:
+                    print(f"[ERROR] Dungeon advancement error: {e}")
         else:
             # Add status card only if alive
             card = self.get_status_card(mob)
@@ -1144,7 +1028,7 @@ class PvEService:
         # Dungeon Isolation for AoE
         from services.dungeon_service import DungeonService
         ds = DungeonService()
-        active_dungeon = ds.get_user_active_dungeon(user.id_telegram)
+        active_dungeon = ds.get_user_active_dungeon(user.id_telegram, session=session)
         
         if active_dungeon:
             # User is in a dungeon: only attack mobs from THAT dungeon
@@ -1251,7 +1135,7 @@ class PvEService:
             defender = DefenderWrapper(mob)
             
             # Calculate damage
-            combat_result = self.battle_service.calculate_damage(attacker, defender)
+            combat_result = self.combat_service.calculate_damage(attacker, defender)
             damage = combat_result['damage']
             
             # Apply Mob Resistance
@@ -1300,53 +1184,19 @@ class PvEService:
         if local_session:
             session.commit()
         
-        # Handle rewards for dead mobs (simplified for AoE to avoid massive spam)
-        # We'll just distribute basic rewards without the full detailed breakdown for each if many die
+        # Handle rewards for dead mobs (Aggregated via RewardService)
         dead_mobs = [m for m in mobs if m.is_dead]
         if dead_mobs:
-            summary_msg += "\n\n💰 **Ricompense ottenute!**"
-            total_wumpa = 0
-            total_xp = 0
-            
+            mobs_rewards_map = {}
             for mob in dead_mobs:
-                difficulty = mob.difficulty_tier if mob.difficulty_tier else 1
-                participants = self.get_combat_participants(mob.id)
-                total_damage = sum(p.damage_dealt for p in participants)
-                
-                if total_damage <= 0: continue
-                
-                for p in participants:
-                    share = p.damage_dealt / total_damage
-                    
-                    # Proportional Wumpa
-                    wumpa = int(p.damage_dealt * 0.05 * difficulty) # Reverted to 0.05
-                    if wumpa < 1: wumpa = 1
-                    
-                    # Flat XP based on difficulty and share
-                    base_xp_pool = random.randint(100, 300) * difficulty # Reverted to 100-300
-                    xp = int(base_xp_pool * share)
-                    if xp < 1: xp = 1
-                    
-                    # Apply rewards
-                    level_up_info = self.user_service.add_exp_by_id(p.user_id, xp, session=session)
-                    self.user_service.add_points_by_id(p.user_id, wumpa, is_drop=True, session=session)
-                    self.season_manager.add_seasonal_exp(p.user_id, xp)
-                    
-                    # Ensure health is capped for participants too (just in case)
-                    p_user = self.user_service.get_user(p.user_id)
-                    if p_user and (p_user.health > p_user.max_health or (p_user.current_hp and p_user.current_hp > p_user.max_health)):
-                        self.user_service.recalculate_stats(p.user_id)
-                    
-                    if level_up_info['leveled_up']:
-                        p_name = self.user_service.get_user(p.user_id).game_name or f"User {p.user_id}"
-                        summary_msg += f"\n🎉 **{p_name}** è salito al livello **{level_up_info['new_level']}**!"
-                    
-                    if p.user_id == user.id_telegram:
-                        total_wumpa += wumpa
-                        total_xp += xp
+                participants = self.get_combat_participants(mob.id, session=session)
+                rewards_data = self.reward_service.calculate_rewards(mob, participants)
+                if rewards_data:
+                    mobs_rewards_map[mob] = rewards_data
             
-            summary_msg += f"\n✨ Hai ricevuto: +{total_xp} Exp, +{total_wumpa} {PointsName}"
-            summary_msg += f"\n👥 Ricompense distribuite a tutti i partecipanti!"
+            if mobs_rewards_map:
+                reward_msg = self.reward_service.distribute_aggregated_rewards(mobs_rewards_map, session)
+                summary_msg += f"\n\n{reward_msg}"
             
         # Dungeon advancement check
         dungeon_id = None
@@ -1362,9 +1212,9 @@ class PvEService:
             
             # Record deaths for stats
             for m in dead_mobs:
-                ds.record_death(dungeon_id)
+                ds.record_death(dungeon_id, session=session)
                 
-            dungeon_events, new_mob_ids = ds.check_step_completion(dungeon_id)
+            dungeon_events, new_mob_ids = ds.check_step_completion(dungeon_id, session=session)
             if dungeon_events:
                 if isinstance(dungeon_events, list):
                     extra_data['dungeon_events'] = dungeon_events
@@ -1416,6 +1266,9 @@ class PvEService:
             session = self.db.get_session()
             local_session = True
         
+        from services.dungeon_service import DungeonService
+        ds = DungeonService()
+        
         try:
             if specific_mob_id:
                 mobs = session.query(Mob).filter_by(id=specific_mob_id).all()
@@ -1425,7 +1278,8 @@ class PvEService:
                 mobs = session.query(Mob).filter_by(is_dead=False).all()
                 
             if not mobs:
-                session.close()
+                if local_session:
+                    session.close()
                 return []
                 
             attack_events = []
@@ -1489,7 +1343,7 @@ class PvEService:
                         target_ids = random.sample(targets_pool, target_count)
                         primary_target_id = target_ids[0]
                         for tid in target_ids:
-                            t = self.user_service.get_user(tid)
+                            t = session.query(Utente).filter_by(id_telegram=tid).first()
                             if t: targets.append(t)
                     else:
                         target_id = None
@@ -1514,7 +1368,7 @@ class PvEService:
                             else:
                                 target_id = random.choice(available_users)
                         
-                        target = self.user_service.get_user(target_id)
+                        target = session.query(Utente).filter_by(id_telegram=target_id).first()
                         if target:
                             targets.append(target)
                             mob.last_target_id = target.id_telegram
@@ -1527,28 +1381,8 @@ class PvEService:
                     death_messages = []
                     
                     for target in targets:
-                        multiplier = 1.0
-                        if is_aoe:
-                            multiplier = 0.7 if target.id_telegram == primary_target_id else 0.5
-                        
-                        user_level = getattr(target, 'livello', 1) or 1
-                        level_factor = 1 + (user_level * 0.02)
-                        adjusted_damage = int((base_damage * 0.5 * multiplier) / level_factor)
-                        damage = int(adjusted_damage * random.uniform(0.8, 1.2))
-                        
-                        user_res = getattr(target, 'allocated_resistance', 0) or 0
-                        
-                        # Check for Defense Up status
-                        if StatusEffect.has_effect(target, 'defense_up'):
-                            # Add 5% resistance, capped at 75% total
-                            user_res += 5
-                            
-                        # Hard cap at 75%
-                        user_res = min(user_res, 75)
-                        
-                        if user_res > 0:
-                            reduction_factor = 100 / (100 + user_res)
-                            damage = int(damage * reduction_factor)
+                        is_aoe_target = is_aoe
+                        damage = self.combat_service.calculate_mob_damage_to_user(mob, target, is_aoe=is_aoe_target, is_boss=mob.is_boss)
                         
                         new_hp, died = self.user_service.damage_health(target, damage, session=session)
                         
@@ -1568,7 +1402,7 @@ class PvEService:
                             
                             # Check if dungeon failed (all players dead)
                             if mob.dungeon_id:
-                                is_failed, fail_msg = ds.check_dungeon_failure(mob.dungeon_id)
+                                is_failed, fail_msg = ds.check_dungeon_failure(mob.dungeon_id, session=session)
                                 if is_failed and fail_msg:
                                     death_messages.append(fail_msg)
                     
@@ -1594,7 +1428,7 @@ class PvEService:
                         
                         # Pass the first target's ID to check for Scouter
                         target_id_for_scouter = targets[0].id_telegram if targets else None
-                        card = self.get_status_card(mob, user_id=target_id_for_scouter)
+                        card = self.get_status_card(mob, user_id=target_id_for_scouter, session=session)
                         msg += f"\n\n{card}\n⏳ Cooldown: {int(cooldown_seconds)}s"
                     
                     if death_messages:
@@ -1654,7 +1488,7 @@ class PvEService:
         if not boss or not boss.is_boss:
             if local_session:
                 session.close()
-            return []
+            return [], 0, 0
         
         # Get boss loot from data
         boss_info = next((b for b in self.boss_data if b['nome'] == boss.name), None)
@@ -1903,7 +1737,7 @@ class PvEService:
                  
         return image_path
 
-    def get_status_card(self, entity, is_user=False, user_id=None):
+    def get_status_card(self, entity, is_user=False, user_id=None, session=None):
         """Generate a premium status card for a mob or user"""
         if is_user:
             name = entity.nome if entity.username is None else entity.username
@@ -1931,7 +1765,7 @@ class PvEService:
             # Check Scouter
             has_scouter = False
             if user_id:
-                equipped = self.equipment_service.get_equipped_items(user_id)
+                equipped = self.equipment_service.get_equipped_items(user_id, session=session)
                 for ui, item in equipped:
                     if item.special_effect_id == 'scouter_scan':
                         has_scouter = True

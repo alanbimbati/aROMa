@@ -582,6 +582,71 @@ class UserService:
         
         return True, f"Statistiche resettate! {points_to_refund} punti restituiti."
 
+    def validate_and_fix_user_stats(self):
+        """Startup check to reset stats for users who have more points than allowed"""
+        print("[STARTUP] Validating user stat allocations...")
+        session = self.db.get_session()
+        try:
+            users = session.query(Utente).all()
+            fixed_count = 0
+            
+            for user in users:
+                if not user.livello:
+                    continue
+                
+                # Total allowed points: Level * 2
+                allowed_total = user.livello * 2
+                
+                # Current allocated points
+                allocated = (
+                    (user.allocated_health or 0) +
+                    (user.allocated_mana or 0) +
+                    (user.allocated_damage or 0) +
+                    (user.allocated_resistance or 0) +
+                    (user.allocated_crit or 0) +
+                    (user.allocated_speed or 0)
+                )
+                
+                # Current available points
+                available = user.stat_points or 0
+                
+                # Total they actually HAVE
+                actual_total = allocated + available
+                
+                if actual_total > allowed_total:
+                    print(f"[FIX] User {user.id_telegram} ({user.nome}) has {actual_total} pts, but level {user.livello} only allows {allowed_total}. Resetting...")
+                    
+                    # Reset stats (using the same logic as reset_stats but without Wumpa cost)
+                    user.allocated_health = 0
+                    user.allocated_mana = 0
+                    user.allocated_damage = 0
+                    user.allocated_resistance = 0
+                    user.allocated_crit = 0
+                    user.allocated_speed = 0
+                    user.resistance = 0
+                    user.crit_chance = 0
+                    user.speed = 0
+                    user.stat_points = allowed_total
+                    
+                    # Flush changes to allow recalculate to work correctly
+                    session.flush()
+                    
+                    # Recalculate will fix max_health, max_mana, and base_damage based on level
+                    self.recalculate_stats(user.id_telegram, session=session)
+                    fixed_count += 1
+            
+            if fixed_count > 0:
+                session.commit()
+                print(f"[STARTUP] Fixed stat points for {fixed_count} users.")
+            else:
+                print("[STARTUP] Stat validation complete. No issues found.")
+                
+        except Exception as e:
+            print(f"[ERROR] validate_and_fix_user_stats: {e}")
+            session.rollback()
+        finally:
+            session.close()
+
     def recalculate_stats(self, user_id, session=None):
         """Recalculate total stats (Base + Allocations + Equipment)"""
         local_session = False
@@ -628,7 +693,7 @@ class UserService:
             total_speed = alloc_speed
             
             # 3. Add Equipment Bonuses
-            equip_stats = self.equipment_service.calculate_equipment_stats(user_id)
+            equip_stats = self.equipment_service.calculate_equipment_stats(user_id, session=session)
             
             total_hp += equip_stats.get('max_health', 0)
             total_mana += equip_stats.get('max_mana', 0)
@@ -687,74 +752,105 @@ class UserService:
         if success:
             self.recalculate_stats(user_id)
         return success, msg
-    def start_resting(self, user_id):
+    def start_resting(self, user_id, session=None):
         """Start resting in the public inn"""
-        session = self.db.get_session()
-        user = session.query(Utente).filter_by(id_telegram=user_id).first()
-        if not user:
-            session.close()
-            return False, "Utente non trovato."
-        
-        if user.resting_since:
-            session.close()
-            return False, "Stai già riposando!"
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
             
-        user.resting_since = datetime.datetime.now()
-        session.commit()
-        session.close()
-        return True, "Hai iniziato a riposare nella Locanda Pubblica. Recupererai 1 HP e 1 Mana al minuto."
+        try:
+            user = session.query(Utente).filter_by(id_telegram=user_id).first()
+            if not user:
+                return False, "Utente non trovato."
+            
+            if user.resting_since:
+                return False, "Stai già riposando!"
+                
+            user.resting_since = datetime.datetime.now()
+            if local_session:
+                session.commit()
+            else:
+                session.flush()
+            return True, "Hai iniziato a riposare nella Locanda Pubblica. Recupererai 1 HP e 1 Mana al minuto."
+        except Exception as e:
+            if local_session:
+                session.rollback()
+            raise e
+        finally:
+            if local_session:
+                session.close()
 
-    def get_resting_status(self, user_id):
+    def get_resting_status(self, user_id, session=None):
         """Check how much HP/Mana would be recovered if resting stopped now"""
-        session = self.db.get_session()
-        user = session.query(Utente).filter_by(id_telegram=user_id).first()
-        if not user or not user.resting_since:
-            session.close()
-            return None
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
             
-        now = datetime.datetime.now()
-        elapsed_minutes = int((now - user.resting_since).total_seconds() / 60)
-        
-        # 1 HP and 1 Mana per minute
-        current_hp = user.current_hp if user.current_hp is not None else user.health
-        hp_to_recover = min(elapsed_minutes, user.max_health - current_hp)
-        mana_to_recover = min(elapsed_minutes, user.max_mana - user.mana)
-        
-        session.close()
-        return {
-            'minutes': elapsed_minutes,
-            'hp': hp_to_recover,
-            'mana': mana_to_recover
-        }
+        try:
+            user = session.query(Utente).filter_by(id_telegram=user_id).first()
+            if not user or not user.resting_since:
+                return None
+                
+            now = datetime.datetime.now()
+            elapsed_minutes = int((now - user.resting_since).total_seconds() / 60)
+            
+            # 1 HP and 1 Mana per minute
+            current_hp = user.current_hp if user.current_hp is not None else user.health
+            hp_to_recover = min(elapsed_minutes, user.max_health - current_hp)
+            mana_to_recover = min(elapsed_minutes, user.max_mana - user.mana)
+            
+            return {
+                'minutes': elapsed_minutes,
+                'hp': hp_to_recover,
+                'mana': mana_to_recover
+            }
+        finally:
+            if local_session:
+                session.close()
 
-    def stop_resting(self, user_id):
+    def stop_resting(self, user_id, session=None):
         """Stop resting and apply recovery"""
-        session = self.db.get_session()
-        user = session.query(Utente).filter_by(id_telegram=user_id).first()
-        if not user or not user.resting_since:
-            session.close()
-            return False, "Non stai riposando."
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
             
-        status = self.get_resting_status(user_id)
-        
-        # Update HP
-        if hasattr(user, 'current_hp') and user.current_hp is not None:
-            user.current_hp = min(user.current_hp + status['hp'], user.max_health)
-            # For tests: if we were resting for a long time, ensure full heal
-            if status['hp'] >= 1000: user.current_hp = user.max_health
-        else:
-            user.health = min(user.health + status['hp'], user.max_health)
-            if status['hp'] >= 1000: user.health = user.max_health
+        try:
+            user = session.query(Utente).filter_by(id_telegram=user_id).first()
+            if not user or not user.resting_since:
+                return False, "Non stai riposando."
+                
+            status = self.get_resting_status(user_id, session=session)
             
-        # Update Mana
-        user.mana = min(user.mana + status['mana'], user.max_mana)
-        if status['mana'] >= 1000: user.mana = user.max_mana
-        
-        # Clear resting status
-        user.resting_since = None
-        
-        session.commit()
-        session.close()
+            # Update HP
+            if hasattr(user, 'current_hp') and user.current_hp is not None:
+                user.current_hp = min(user.current_hp + status['hp'], user.max_health)
+                # For tests: if we were resting for a long time, ensure full heal
+                if status['hp'] >= 1000: user.current_hp = user.max_health
+            else:
+                user.health = min(user.health + status['hp'], user.max_health)
+                if status['hp'] >= 1000: user.health = user.max_health
+                
+            # Update Mana
+            user.mana = min(user.mana + status['mana'], user.max_mana)
+            if status['mana'] >= 1000: user.mana = user.max_mana
+            
+            # Clear resting status
+            user.resting_since = None
+            
+            if local_session:
+                session.commit()
+            else:
+                session.flush()
+        except Exception as e:
+            if local_session:
+                session.rollback()
+            raise e
+        finally:
+            if local_session:
+                session.close()
         
         # Log events for achievements
         # 1. Time Rested
@@ -790,7 +886,7 @@ class UserService:
                 event_type='rest_sessions_10hp',
                 user_id=user_id,
                 value=1, # Increment count by 1
-                session=None
+                session=session
             )
             
         return True, f"Hai smesso di riposare. Hai recuperato {status['hp']} HP e {status['mana']} Mana in {status['minutes']} minuti."

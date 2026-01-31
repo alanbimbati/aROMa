@@ -3,6 +3,7 @@ from models.dungeon import Dungeon, DungeonParticipant
 from models.dungeon_progress import DungeonProgress
 from models.pve import Mob
 from models.user import Utente
+from models.system_state import SystemState
 import datetime
 import random
 import csv
@@ -13,6 +14,217 @@ class DungeonService:
     def __init__(self):
         self.db = Database()
         self.dungeons_cache = self.load_dungeons()
+
+    def check_daily_dungeon_trigger(self, chat_id=None):
+        """Checks if a dungeon should start or if hype phase is due. Run periodically."""
+        if not chat_id:
+            from settings import GRUPPO_AROMA
+            chat_id = GRUPPO_AROMA
+        
+        session = self.db.get_session()
+        try:
+            now = datetime.datetime.now()
+            today_date = now.date()
+            
+            # 1. Check if there is an ACTIVE dungeon (running, not registration)
+            # If so, we NEVER start or schedule anything else.
+            active_running = session.query(Dungeon).filter(
+                Dungeon.chat_id == chat_id,
+                Dungeon.status == "active"
+            ).first()
+            
+            if active_running:
+                return
+
+            # 2. Check for a dungeon in 'registration' status
+            reg = session.query(Dungeon).filter(
+                Dungeon.chat_id == chat_id,
+                Dungeon.status == "registration"
+            ).first()
+            
+            if reg:
+                # If active, check if in hype phase and ready to start
+                if reg.is_hype_active:
+                    # 5 minutes hype duration
+                    trigger_time = reg.hype_start_time + datetime.timedelta(minutes=5)
+                    if now >= trigger_time:
+                        print(f"[DUNGEON] Hype finished. Starting dungeon!")
+                        session.close()
+                        return self.start_dungeon_auto(chat_id)
+                else:
+                    # If Hype is NOT active, check if it's time to start hype.
+                    if reg.scheduled_for and now >= reg.scheduled_for:
+                             print(f"[DUNGEON] Triggering Hype Phase for {reg.name}")
+                             session.close()
+                             return self.start_hype_phase(chat_id)
+
+                session.close()
+                return
+
+            # 3. No active or registration dungeon. Schedule if needed.
+            today_count = session.query(Dungeon).filter(
+                Dungeon.chat_id == chat_id,
+                Dungeon.created_at >= datetime.datetime.combine(today_date, datetime.time.min)
+            ).count()
+            
+            if today_count < 3 and 8 <= now.hour < 22:
+                 last = session.query(Dungeon).filter(Dungeon.chat_id == chat_id).order_by(Dungeon.created_at.desc()).first()
+                 if not last or last.status in ["completed", "failed"]:
+                     if last and last.completed_at:
+                         if now < last.completed_at + datetime.timedelta(hours=3):
+                             return
+                     self.schedule_daily_dungeon(chat_id, session=session)
+        except Exception as e:
+            print(f"Error in check_daily_dungeon_trigger: {e}")
+        finally:
+            if 'session' in locals() and session: session.close()
+
+    def schedule_daily_dungeon(self, chat_id, session=None):
+        """Schedules a dungeon start in the near future (30-120 mins)"""
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
+        try:
+            now = datetime.datetime.now()
+            
+            # Determine next dungeon index from SystemState
+            current_idx_str = SystemState.get_val(session, 'current_dungeon_index', '1')
+            current_idx = int(current_idx_str)
+            
+            # Validation: cap at 20 or go random
+            dungeon_def_id = current_idx
+            if dungeon_def_id > 20:
+                dungeon_def_id = random.randint(1, 20)
+                
+            dungeon_def = self.get_dungeon_def(dungeon_def_id)
+            if not dungeon_def:
+                print(f"[ERROR] Could find dungeon def {dungeon_def_id}. Resetting to 1.")
+                dungeon_def_id = 1
+                dungeon_def = self.get_dungeon_def(1)
+            
+            # Schedule for 30-120 minutes from now
+            delay_mins = random.randint(30, 120)
+            scheduled_time = now + datetime.timedelta(minutes=delay_mins)
+            
+            if scheduled_time.hour >= 23:
+                return
+
+            print(f"[DUNGEON] Scheduling next dungeon: {dungeon_def['name']} (ID {dungeon_def_id}) at {scheduled_time}")
+            
+            new_dungeon = Dungeon(
+                name=dungeon_def['name'],
+                chat_id=chat_id,
+                total_stages=len(dungeon_def['steps']),
+                status="registration",
+                dungeon_def_id=dungeon_def_id,
+                stats=json.dumps({'damage_taken': 0, 'deaths': 0, 'items_used': 0}),
+                score=None,
+                scheduled_for=scheduled_time,
+                is_hype_active=False
+            )
+            session.add(new_dungeon)
+            session.commit()
+            
+        except Exception as e:
+            print(f"Error in schedule_daily_dungeon: {e}")
+            session.rollback()
+        finally:
+            if local_session:
+                session.close()
+
+    def start_hype_phase(self, chat_id):
+        """Sends the hype message and starts the countdown state"""
+        session = self.db.get_session()
+        dungeon = session.query(Dungeon).filter(
+            Dungeon.chat_id == chat_id,
+            Dungeon.status == "registration",
+            Dungeon.is_hype_active == False
+        ).first()
+        
+        if not dungeon:
+            session.close()
+            return
+            
+        dungeon.is_hype_active = True
+        dungeon.hype_start_time = datetime.datetime.now()
+        session.commit()
+        session.close()
+        
+        # We need to send the message. Ideally return an event?
+        # Or just print/return it here and let caller handle.
+        # But `check_daily_dungeon_trigger` is called by scheduler.
+        # We probably need a way to send messages from here or return events.
+        # For now, let's return the event info.
+        return "DUNGEON_PREANNOUNCED"
+
+    def start_dungeon_auto(self, chat_id):
+        """Automatically starts the dungeon and joins ALL users."""
+        session = self.db.get_session()
+        try:
+            dungeon = session.query(Dungeon).filter(
+                Dungeon.chat_id == chat_id,
+                Dungeon.status == "registration"
+            ).first()
+            
+            if not dungeon:
+                print(f"[ERROR] start_dungeon_auto: No registration dungeon found for chat {chat_id}")
+                session.close()
+                return
+                
+            print(f"[DUNGEON] Starting Auto-Join for dungeon {dungeon.id} ({dungeon.name})")
+            
+            # Auto-Join Logic
+            # Strategy: Join all users who have a record in Utente table.
+            # Ideally we filter by those who are present in the chat, but we lack a strict mapping.
+            # If we assume the bot is mono-group or primarily for this group:
+            all_users = session.query(Utente).all()
+            
+            count = 0
+            for user in all_users:
+                # Check if already joined (shouldn't be, but safety first)
+                exists = session.query(DungeonParticipant).filter_by(
+                    dungeon_id=dungeon.id,
+                    user_id=user.id_telegram
+                ).first()
+                
+                if not exists:
+                    dp = DungeonParticipant(
+                        dungeon_id=dungeon.id, 
+                        user_id=user.id_telegram
+                    )
+                    session.add(dp)
+                    count += 1
+            
+            session.flush()
+            print(f"[DUNGEON] Auto-joined {count} users.")
+            
+            # Start Dungeon
+            dungeon.status = "active"
+            dungeon.current_stage = 1
+            dungeon.start_time = datetime.datetime.now()
+            
+            # Spawn Step 1
+            # We call spawn_step using the SAME session to ensure atomicity
+            events, mob_ids = self.spawn_step(dungeon.id, 1, session=session)
+            
+            session.commit()
+            
+            # Return Event for Main to handle messaging
+            return {
+                "type": "DUNGEON_STARTED",
+                "dungeon_name": dungeon.name,
+                "participant_count": count,
+                "events": events
+            }
+            
+        except Exception as e:
+            print(f"[ERROR] start_dungeon_auto failed: {e}")
+            session.rollback()
+            return None
+        finally:
+            session.close()
 
     def load_dungeons(self):
         """Load dungeons from CSV"""
@@ -479,34 +691,37 @@ class DungeonService:
         for m in mobs:
             m.is_dead = True
             m.health = 0
-            
-        if local_session:
-            session.commit()
-        else:
-            session.flush()
-        
-        # Distribute Rewards (Daily limit check needed?)
-        # For now, just give rewards defined in CSV
-        dungeon_def = self.get_dungeon_def(dungeon.dungeon_def_id)
-        print(f"[DEBUG] complete_dungeon: dungeon_def_id={dungeon.dungeon_def_id}, dungeon_def found={dungeon_def is not None}")
-        rewards = dungeon_def.get('rewards', {}) if dungeon_def else {}
+
+        # Distribute Rewards
+        d_def = self.get_dungeon_def(dungeon.dungeon_def_id)
+        rewards = d_def.get('rewards', {}) if d_def else {}
         wumpa = rewards.get('wumpa', 0)
         exp = rewards.get('exp', 0)
-        print(f"[DEBUG] complete_dungeon: rewards={rewards}, wumpa={wumpa}, exp={exp}")
         
         from services.user_service import UserService
         us = UserService()
         
-        reward_msg = []
-        print(f"[DEBUG] complete_dungeon: participants count={len(participants)}")
         for p in participants:
-            print(f"[DEBUG] complete_dungeon: Distributing to user {p.user_id}")
             us.add_points_by_id(p.user_id, wumpa, session=session)
             us.add_exp_by_id(p.user_id, exp, session=session)
-            reward_msg.append(f"User {p.user_id}: +{wumpa} Wumpa, +{exp} EXP")
             
         if local_session:
+            session.commit()
+            
+        # NEW: Advance global index upon successful completion
+        try:
+             current_idx_str = SystemState.get_val(session, 'current_dungeon_index', '1')
+             current_idx = int(current_idx_str)
+             if current_idx <= 20:
+                 SystemState.set_val(session, 'current_dungeon_index', current_idx + 1)
+                 print(f"[DUNGEON] Advanced global index to {current_idx + 1}")
+        except Exception as e:
+             print(f"[ERROR] Failed to advance dungeon index: {e}")
+
+        if local_session:
             session.close()
+        else:
+            session.flush()
         
         return f"🏆 **DUNGEON COMPLETATO!** 🏆\n\n**Rango: {score}**\n{details}\n\nRicompense:\n+{wumpa} Wumpa, +{exp} EXP a tutti!"
 
@@ -552,18 +767,30 @@ class DungeonService:
         details = f"Tempo: {int(duration_mins)}m (Atteso: {expected_time}m)\nMorti: {deaths}\nOggetti: {items}\nPunteggio: {points}"
         return rank, details
 
-    def record_death(self, dungeon_id):
-        session = self.db.get_session()
+    def record_death(self, dungeon_id, session=None):
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         dungeon = session.query(Dungeon).filter_by(id=dungeon_id).first()
         if dungeon:
             try:
                 stats = json.loads(dungeon.stats)
             except:
                 stats = {'damage_taken': 0, 'deaths': 0, 'items_used': 0}
-            stats['deaths'] += 1
+            
+            # Note: This seems to track mob deaths if called from pve_service? 
+            # Or player deaths if called from elsewhere? 
+            # Given pve_service calls it for dead_mobs, it counts mob deaths as 'deaths'?
+            stats['deaths'] = stats.get('deaths', 0) + 1
             dungeon.stats = json.dumps(stats)
-            session.commit()
-        session.close()
+            
+            if local_session:
+                session.commit()
+        
+        if local_session:
+            session.close()
 
     def record_item_use(self, dungeon_id):
         session = self.db.get_session()
@@ -700,13 +927,18 @@ class DungeonService:
             session.close()
         return True, msg
 
-    def check_dungeon_failure(self, dungeon_id):
+    def check_dungeon_failure(self, dungeon_id, session=None):
         """Checks if all dungeon participants are dead. If so, fails the dungeon."""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         dungeon = session.query(Dungeon).filter_by(id=dungeon_id).first()
         
         if not dungeon or dungeon.status != "active":
-            session.close()
+            if local_session:
+                session.close()
             return False, None
 
         participants = session.query(DungeonParticipant).filter_by(dungeon_id=dungeon.id).all()
@@ -732,8 +964,10 @@ class DungeonService:
                 m.is_dead = True
                 m.health = 0
             
-            session.commit()
+            if local_session:
+                session.commit()
             msg = "\n\n💀 **GAME OVER!**\nTutti gli eroi sono caduti. Il dungeon è fallito!"
             
-        session.close()
+        if local_session:
+            session.close()
         return all_dead, msg

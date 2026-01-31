@@ -18,15 +18,19 @@ class EquipmentService:
         finally:
             session.close()
             
-    def get_equipped_items(self, user_id):
+    def get_equipped_items(self, user_id, session=None):
         """Get currently equipped items"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         try:
             items = session.query(UserItem, Item).join(Item, UserItem.item_id == Item.id)\
                 .filter(UserItem.user_id == user_id, UserItem.is_equipped == True).all()
             return items
         finally:
-            session.close()
+            if local_session:
+                session.close()
             
     def equip_item(self, user_id, user_item_id):
         """Equip an item, unequip conflicting slot if needed"""
@@ -96,9 +100,13 @@ class EquipmentService:
         finally:
             session.close()
             
-    def calculate_equipment_stats(self, user_id):
+    def calculate_equipment_stats(self, user_id, session=None):
         """Calculate total stats from all equipped items + sets"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         try:
             equipped = session.query(UserItem, Item).join(Item, UserItem.item_id == Item.id)\
                 .filter(UserItem.user_id == user_id, UserItem.is_equipped == True).all()
@@ -138,7 +146,8 @@ class EquipmentService:
                                 
             return total_stats
         finally:
-            session.close()
+            if local_session:
+                session.close()
 
     def add_item_to_user(self, user_id, item_id):
         """Give an item to a user"""

@@ -18,6 +18,11 @@ class Dungeon(Base):
     stats = Column(String, default="{}") # JSON: {damage_taken, deaths, items_used}
     start_time = Column(DateTime, nullable=True)
     score = Column(String, nullable=True) # F, E, D, C, B, A, S, Z
+    
+    # Event Driven Fields
+    hype_start_time = Column(DateTime, nullable=True)
+    is_hype_active = Column(Boolean, default=False)
+    scheduled_for = Column(DateTime, nullable=True) # When the dungeon was scheduled to run today
 
 class DungeonParticipant(Base):
     __tablename__ = "dungeon_participant"

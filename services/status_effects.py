@@ -86,7 +86,7 @@ class StatusEffect:
     }
     
     @staticmethod
-    def apply_status(target, effect_name, duration=None, source_level=1):
+    def apply_status(target, effect_name, duration=None, source_level=1, source_id=None):
         """
         Apply status effect to target
         
@@ -95,6 +95,7 @@ class StatusEffect:
             effect_name: Name of effect to apply
             duration: Override duration (optional)
             source_level: Level of source for damage scaling
+            source_id: ID of the source (User ID or Mob ID)
             
         Returns:
             Boolean success
@@ -119,13 +120,17 @@ class StatusEffect:
             else:
                 # Refresh duration
                 existing['duration'] = duration or effect_config['duration']
+                # Update source if new application overwrites
+                if source_id:
+                     existing['source_id'] = source_id
         else:
             # Add new effect
             effects.append({
                 'effect': effect_name,
                 'duration': duration or effect_config['duration'],
                 'stacks': 1,
-                'source_level': source_level
+                'source_level': source_level,
+                'source_id': source_id
             })
         
         target.active_status_effects = json.dumps(effects)

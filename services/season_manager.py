@@ -16,9 +16,13 @@ class SeasonManager:
         self.user_service = UserService()
         self.character_service = CharacterService()
         
-    def get_active_season(self):
+    def get_active_season(self, session=None):
         """Get the currently active season"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         try:
             now = datetime.datetime.now()
             return session.query(Season).filter(
@@ -27,7 +31,8 @@ class SeasonManager:
                 Season.end_date >= now
             ).first()
         finally:
-            session.close()
+            if local_session:
+                session.close()
             
     def get_or_create_progress(self, user_id, season_id):
         """Get or create user progress for a season"""
@@ -67,13 +72,17 @@ class SeasonManager:
         finally:
             session.close()
             
-    def add_seasonal_exp(self, user_id, amount):
+    def add_seasonal_exp(self, user_id, amount, session=None):
         """Add EXP to user's seasonal progress. Returns (rewards, season_end_msg)"""
-        season = self.get_active_season()
+        season = self.get_active_season(session=session)
         if not season:
             return [], None
             
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         try:
             progress = session.query(SeasonProgress).filter_by(
                 user_id=user_id,
@@ -116,8 +125,6 @@ class SeasonManager:
             if progress.current_level >= self.MAX_RANK:
                 progress.current_exp = 0
                 
-            # session.commit() # Moved to end
-            
             rewards = []
             season_end_msg = None
             
@@ -128,14 +135,20 @@ class SeasonManager:
                 if progress.current_level >= self.MAX_RANK:
                     season_end_msg = self.end_season(season.id, user_id, session)
             
-            session.commit()
+            if local_session:
+                session.commit()
+            else:
+                session.flush()
+                
             return rewards, season_end_msg
         except Exception as e:
-            session.rollback()
+            if local_session:
+                session.rollback()
             print(f"Error adding seasonal exp: {e}")
             return [], None
         finally:
-            session.close()
+            if local_session:
+                session.close()
 
     def end_season(self, season_id, winner_user_id, session=None):
         """End the season, calculate stats, award top 3, and return summary message"""
@@ -399,5 +412,35 @@ class SeasonManager:
         session = self.db.get_session()
         try:
             return session.query(SeasonReward).filter_by(season_id=season_id).order_by(SeasonReward.level_required).all()
+        finally:
+            session.close()
+
+    def get_season_ranking(self, limit=10):
+        """Get top ranking users for current active season"""
+        season = self.get_active_season()
+        if not season:
+            return None, "Nessuna stagione attiva."
+            
+        session = self.db.get_session()
+        try:
+            # Join with Utente to get names
+            top_users = session.query(SeasonProgress, Utente).join(Utente, SeasonProgress.user_id == Utente.id_telegram)\
+                .filter(SeasonProgress.season_id == season.id)\
+                .order_by(SeasonProgress.current_level.desc(), SeasonProgress.current_exp.desc())\
+                .limit(limit).all()
+                
+            results = []
+            for progress, user in top_users:
+                results.append({
+                    'username': user.username,
+                    'nome': user.nome, # Fallback
+                    'game_name': user.game_name, # Preferred
+                    'level': progress.current_level, # Season Rank
+                    'exp': progress.current_exp,
+                    'user_level': user.livello # Global User Level
+                })
+                
+            return results, season.name
+            
         finally:
             session.close()
