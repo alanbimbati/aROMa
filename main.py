@@ -1076,6 +1076,8 @@ class BotCommands:
             "/join": self.handle_join_dungeon,
             "🏆 Classifica": self.handle_classifica,
             "📄 Classifica": self.handle_classifica,
+            "/stopdungeon": self.handle_stop_dungeon,
+            "/killdungeon": self.handle_stop_dungeon,
         }
 
     def safe_answer_callback(self, call_id, text=None, show_alert=False):
@@ -1628,7 +1630,16 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         for i in range(1, 8):
             item_service.add_item(self.chatid, f"La Sfera del Drago Porunga {i}")
         
-        self.bot.reply_to(self.message, "✅ Ti ho dato tutte le 14 sfere del drago (7 Shenron + 7 Porunga) per testare!\n\nUsa /wish o vai in inventario per evocarli.")
+
+    def handle_stop_dungeon(self):
+        """Admin command to force stop the current dungeon"""
+        utente = user_service.get_user(self.chatid)
+        if not user_service.is_admin(utente):
+            self.bot.reply_to(self.message, "❌ Comando disponibile solo per gli admin!")
+            return
+            
+        success, msg = dungeon_service.force_close_dungeon(self.message.chat.id)
+        self.bot.reply_to(self.message, f"{'✅' if success else '❌'} {msg}")
 
 
     def handle_buy_box_wumpa(self):

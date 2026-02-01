@@ -967,7 +967,38 @@ class DungeonService:
             if local_session:
                 session.commit()
             msg = "\n\n💀 **GAME OVER!**\nTutti gli eroi sono caduti. Il dungeon è fallito!"
-            
         if local_session:
             session.close()
         return all_dead, msg
+
+    def force_close_dungeon(self, chat_id):
+        """Forces any active dungeon in the chat to close (fails it)"""
+        session = self.db.get_session()
+        try:
+            # Find active or registration dungeon
+            dungeon = session.query(Dungeon).filter(
+                Dungeon.chat_id == chat_id,
+                Dungeon.status.in_(['active', 'registration'])
+            ).first()
+            
+            if not dungeon:
+                return False, "Nessun dungeon attivo trovato in questa chat."
+            
+            # Mark as failed
+            dungeon.status = 'failed'
+            dungeon.completed_at = datetime.datetime.now()
+            
+            # Kill all mobs
+            mobs = session.query(Mob).filter_by(dungeon_id=dungeon.id, is_dead=False).all()
+            for m in mobs:
+                m.is_dead = True
+                m.health = 0
+                
+            session.commit()
+            return True, f"Dungeon '{dungeon.name}' terminato forzatamente."
+        except Exception as e:
+            print(f"[ERROR] force_close_dungeon: {e}")
+            session.rollback()
+            return False, f"Errore durante la chiusura forzata: {e}"
+        finally:
+            session.close()
