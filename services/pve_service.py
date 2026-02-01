@@ -723,17 +723,11 @@ class PvEService:
         ds = DungeonService()
         
         if mob.dungeon_id:
-            participants = ds.get_dungeon_participants(mob.dungeon_id, session=session)
-            if user.id_telegram not in [p.user_id for p in participants]:
-                if local_session:
-                    session.close()
-                return False, "🔒 Non puoi attaccare questo mob! Appartiene a un dungeon a cui non sei iscritto.", None
+            ds.register_participant_if_needed(user.id_telegram, mob.dungeon_id, session=session)
+            # participants check removed to allow dynamic join
         else:
-            # World mob: check if user is in a dungeon
-            if ds.get_user_active_dungeon(user.id_telegram, session=session):
-                if local_session:
-                    session.close()
-                return False, "🔒 Sei impegnato in un dungeon! Non puoi attaccare i mostri del mondo esterno.", None
+            # World mob: NO restriction (users can attack world mobs even if in dungeon)
+            pass
         
         # Check fatigue
         if self.user_service.check_fatigue(user):

@@ -423,6 +423,45 @@ class DungeonService:
             session.close()
         return True, "Ti sei iscritto con successo al dungeon! ⚔️"
 
+    def register_participant_if_needed(self, user_id, dungeon_id, session=None):
+        """Automatically registers a user as participant if not already registered"""
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
+        try:
+            # Check if active dungeon exists
+            dungeon = session.query(Dungeon).filter_by(id=dungeon_id).first()
+            if not dungeon or dungeon.status not in ['active', 'registration']:
+                if local_session: session.close()
+                return False
+
+            # Check if participant exists
+            exists = session.query(DungeonParticipant).filter_by(
+                dungeon_id=dungeon_id,
+                user_id=user_id
+            ).first()
+            
+            if not exists:
+                # Check prerequisites only if not active (if active, we assume open entry)
+                # OR relaxed requirement: everyone can join active dungeon
+                
+                participant = DungeonParticipant(dungeon_id=dungeon_id, user_id=user_id)
+                session.add(participant)
+                if local_session:
+                    session.commit()
+                else:
+                    session.flush()
+                return True
+                
+        except Exception as e:
+            print(f"[ERROR] register_participant_if_needed: {e}")
+            
+        if local_session:
+            session.close()
+        return False
+
     def start_dungeon(self, chat_id, session=None):
         """Starts the dungeon and spawns the first step mobs"""
         print(f"[DEBUG] start_dungeon called for chat_id: {chat_id}")
@@ -441,11 +480,12 @@ class DungeonService:
                 session.close()
             return False, "Non c'è nessun dungeon in fase di iscrizione.", []
             
-        participants = session.query(DungeonParticipant).filter_by(dungeon_id=dungeon.id).all()
-        if not participants:
-            if local_session:
-                session.close()
-            return False, "Nessun partecipante iscritto! Almeno una persona deve partecipare.", []
+        # ALLOW START WITHOUT PARTICIPANTS (Join on Attack)
+        # participants = session.query(DungeonParticipant).filter_by(dungeon_id=dungeon.id).all()
+        # if not participants:
+        #     if local_session:
+        #         session.close()
+        #     return False, "Nessun partecipante iscritto! Almeno una persona deve partecipare.", []
             
         dungeon.status = "active"
         dungeon.current_stage = 1
