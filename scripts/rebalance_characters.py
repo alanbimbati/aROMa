@@ -13,17 +13,26 @@ ROLE_BALANCED = 'balanced' # Mix
 
 # Heuristics for Role Assignment
 TANK_KEYWORDS = ['Bowser', 'Hulk', 'Shield', 'Golem', 'Knight', 'Wall', 'Armored', 'Big', 'Tank', 'Heavy', 'Freezer', 'Cell']
-MAGE_KEYWORDS = ['Zelda', 'Mage', 'Witch', 'Wizard', 'Psionic', 'Magic', 'Strange', 'Vivi', 'Yuna', 'Aerith', 'Palutena', 'Rosalina', 'Mewtwo']
+MAGE_KEYWORDS = ['Zelda', 'Mage', 'Witch', 'Wizard', 'Psionic', 'Magic', 'Strange', 'Vivi', 'Yuna', 'Aerith', 'Palutena', 'Rosalina', 'Mewtwo', 'Goku'] # Goku needs mana!
 SPEED_KEYWORDS = ['Sonic', 'Shadow', 'Flash', 'Quick', 'Ninja', 'Speed', 'Tracer', 'Scout', 'Fox', 'Falco', 'Gohan']
-DPS_KEYWORDS = ['Goku', 'Vegeta', 'Sora', 'Cloud', 'Sephiroth', 'Link', 'Dante', 'Kratos', 'Doom', 'Samus', 'Zero']
+DPS_KEYWORDS = ['Vegeta', 'Sora', 'Cloud', 'Sephiroth', 'Link', 'Dante', 'Kratos', 'Doom', 'Samus', 'Zero']
+
+# Stat Conversion Rates (1 Point = X Stat)
+CONVERSION = {
+    'health': 10,
+    'mana': 5,
+    'damage': 2,
+    'resistance': 1, # Max 75%
+    'crit': 1,
+    'speed': 1 
+}
 
 def get_role(name, group):
     name_lower = name.lower()
     
     # Specific overrides
-    if 'doom' in name_lower: return ROLE_TANK # Doom Slayer is tough
-    if 'gohan' in name_lower: return ROLE_SPEED # User request
-    if 'goku' in name_lower: return ROLE_MAGE # Needs lots of mana for Kamehameha, strictly speaking DPS/Mage hybrid but lets ensure mana
+    if 'doom' in name_lower: return ROLE_TANK # Doom Slayer: Tanky DPS
+    if 'gohan' in name_lower: return ROLE_SPEED 
     
     for kw in TANK_KEYWORDS:
         if kw.lower() in name_lower: return ROLE_TANK
@@ -31,58 +40,70 @@ def get_role(name, group):
         if kw.lower() in name_lower: return ROLE_MAGE
     for kw in SPEED_KEYWORDS:
         if kw.lower() in name_lower: return ROLE_SPEED
+    for kw in DPS_KEYWORDS:
+        if kw.lower() in name_lower: return ROLE_DPS
         
-    return ROLE_BALANCED # Default fallback, handles most DPS well enough or we tune Balanced to be slightly DPS-leaning
+    return ROLE_BALANCED
 
-def calculate_bonuses(role, level, special_cost):
-    # Base Stats (Same for everyone)
-    # HP: 100, Mana: 50, Dmg: 10
-    
-    bonuses = {
-        'bonus_health': 0,
-        'bonus_mana': 0,
-        'bonus_damage': 0,
-        'bonus_resistance': 0,
-        'bonus_crit': 0,
-        'bonus_speed': 0
+def calculate_distribution(role, total_points):
+    # Distribution Weights (Must sum to 1.0)
+    weights = {
+        'health': 0.0,
+        'mana': 0.0,
+        'damage': 0.0,
+        'resistance': 0.0,
+        'crit': 0.0,
+        'speed': 0.0
     }
     
-    # Multipliers per Level
-    hp_mult = 5
-    mana_mult = 2
-    dmg_mult = 1
-    
     if role == ROLE_TANK:
-        hp_mult = 10 # Lv 40 -> +400 HP
-        bonuses['bonus_resistance'] = min(25, int(level * 0.5)) # Cap 25% res from char
-        dmg_mult = 0.8
+        weights = {'health': 0.5, 'mana': 0.0, 'damage': 0.2, 'resistance': 0.2, 'crit': 0.0, 'speed': 0.1}
     elif role == ROLE_MAGE:
-        hp_mult = 4
-        mana_mult = 5 # Lots of mana
-        dmg_mult = 1.2
+        weights = {'health': 0.2, 'mana': 0.4, 'damage': 0.3, 'resistance': 0.0, 'crit': 0.1, 'speed': 0.0}
+    elif role == ROLE_DPS:
+        weights = {'health': 0.2, 'mana': 0.1, 'damage': 0.4, 'resistance': 0.0, 'crit': 0.1, 'speed': 0.2}
     elif role == ROLE_SPEED:
-        hp_mult = 5
-        bonuses['bonus_speed'] = int(level * 0.5)
-        dmg_mult = 1.1
-    elif role == ROLE_BALANCED:
-        hp_mult = 6
-        dmg_mult = 1.0
+        weights = {'health': 0.2, 'mana': 0.1, 'damage': 0.2, 'resistance': 0.0, 'crit': 0.1, 'speed': 0.4}
+    else: # Balanced
+        weights = {'health': 0.3, 'mana': 0.1, 'damage': 0.3, 'resistance': 0.1, 'crit': 0.1, 'speed': 0.1}
         
-    # Calculate Raw Bonuses
-    bonuses['bonus_health'] = int(level * hp_mult)
-    bonuses['bonus_mana'] = int(level * mana_mult)
-    bonuses['bonus_damage'] = int(level * dmg_mult)
+    # Distribute Points
+    points = {}
+    remaining = total_points
     
-    # Mana Fix: Ensure at least 2x Special Attacks
-    # Total Mana = 50 + Alloc + Bonus. We ignore Alloc for minimum guarantee.
-    # Needed = Cost * 2.
-    # Bonus >= (Cost * 2) - 50.
-    needed_mana = (special_cost * 2) - 50
-    if bonuses['bonus_mana'] < needed_mana:
-        bonuses['bonus_mana'] = max(bonuses['bonus_mana'], needed_mana)
-        # Ensure it's not negative if cost is low
-        if bonuses['bonus_mana'] < 0: bonuses['bonus_mana'] = 0
+    # Pass 1: Assign integer points based on weights
+    for stat, weight in weights.items():
+        p = int(total_points * weight)
+        points[stat] = p
+        remaining -= p
+        
+    # Pass 2: Distribute remaining points to highest weight stat
+    if remaining > 0:
+        # Sort by weight desc
+        sorted_stats = sorted(weights.items(), key=lambda x: x[1], reverse=True)
+        for stat, _ in sorted_stats:
+            if remaining <= 0: break
+            points[stat] += 1
+            remaining -= 1
+            
+    return points
 
+def calculate_bonuses(role, level):
+    total_points = level # 1 Point per Level
+    
+    # Limit Total Points if level > 100 to avoid craziness? No, user wants linear scaling.
+    
+    points_dist = calculate_distribution(role, total_points)
+    
+    bonuses = {
+        'bonus_health': points_dist['health'] * CONVERSION['health'],
+        'bonus_mana': points_dist['mana'] * CONVERSION['mana'],
+        'bonus_damage': points_dist['damage'] * CONVERSION['damage'],
+        'bonus_resistance': points_dist['resistance'] * CONVERSION['resistance'],
+        'bonus_crit': points_dist['crit'] * CONVERSION['crit'],
+        'bonus_speed': points_dist['speed'] * CONVERSION['speed']
+    }
+    
     return bonuses
 
 def process_csv():
@@ -105,17 +126,17 @@ def process_csv():
             name = row['nome']
             group = row['character_group']
             level = int(row['livello'])
-            special_cost = int(row.get('special_attack_mana_cost', 0) or 0)
             
             role = get_role(name, group)
-            bonuses = calculate_bonuses(role, level, special_cost)
+            bonuses = calculate_bonuses(role, level)
             
             # Update row
             for k, v in bonuses.items():
                 row[k] = v
                 
             writer.writerow(row)
-            print(f"Update {name} (Lv {level}, {role}): HP+{bonuses['bonus_health']}, Mana+{bonuses['bonus_mana']}")
+            if 'Doom' in name or 'Goku' in name:
+                print(f"Update {name} (Lv {level}, {role}): {bonuses}")
 
 if __name__ == "__main__":
     process_csv()
