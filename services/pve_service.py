@@ -148,10 +148,12 @@ class PvEService:
             # (The passed user object might be detached or from another session)
             db_user = session.merge(user)
             
-            # Check if dead
-            if (db_user.health or 0) <= 0:
+            # Check if dead (Robust check)
+            current_hp = db_user.current_hp if hasattr(db_user, 'current_hp') and db_user.current_hp is not None else (db_user.health or 0)
+            
+            if current_hp <= 0:
                 session.close()
-                return False, "💀 Non puoi difenderti se sei morto!"
+                return False, "💀 Sei morto! Non puoi difenderti. Devi curarti alla Locanda."
 
             # Check Cooldown (Shared with attack)
             user_speed = getattr(db_user, 'speed', 0) or 0
@@ -686,8 +688,18 @@ class PvEService:
             session = self.db.get_session()
             local_session = True
         extra_data = {}
-        rewards_to_distribute = [] # Initialize here to avoid UnboundLocalError later
+        rewards_to_distribute = []
         
+        # 0. STRICT DEATH CHECK (User)
+        # Handle detached instances by merging or querying fresh if needed, but 'user' here acts as our object.
+        # Ideally we use the session to check fresh state if we suspect desync.
+        # But 'user' passed to this function usually comes from user_service.get_user which is fresh.
+        current_hp = user.current_hp if hasattr(user, 'current_hp') and user.current_hp is not None else (user.health or 0)
+        if current_hp <= 0:
+            if local_session:
+                session.close()
+            return False, "💀 Sei morto! Non puoi attaccare. Devi curarti alla Locanda.", None
+
         if mob_id:
             # Attack specific mob by ID
             mob = session.query(Mob).filter_by(id=mob_id).first()
@@ -729,11 +741,11 @@ class PvEService:
             # World mob: NO restriction (users can attack world mobs even if in dungeon)
             pass
         
-        # Check fatigue
+        # Check fatigue (HP < 5%)
         if self.user_service.check_fatigue(user):
             if local_session:
                 session.close()
-            return False, "Sei troppo affaticato per combattere! Riposa.", None
+            return False, "😫 **Sei troppo stanco!** (HP < 5%)\nSei affaticato e non riesci ad attaccare. **Difenditi** per recuperare forze!", None
             
         # Check Cooldown based on Speed
         # Speed is the raw value (e.g. 15). 1 point = 5 speed.
@@ -994,12 +1006,31 @@ class PvEService:
             'new_mob_ids': extra_data.get('new_mob_ids', [])
         }
         
-        # NEW: Process achievements BEFORE closing session
-        self.achievement_tracker.process_pending_events(limit=10, session=session)
-        
         if local_session:
             session.commit()
-            session.close()
+            session.close() # Close session BEFORE checking achievements to prevent transaction coupling
+            
+            # ACHIEVEMENT FIX: Process events using a NEW session after the main transaction is secure.
+            # This prevents specific errors in achievement logic from rolling back the damage/kill.
+            try:
+                # We need a new session for this since we closed the local one
+                self.achievement_tracker.process_pending_events(limit=10) 
+            except Exception as e:
+                print(f"[ERROR] Achievement processing failed (non-critical): {e}")
+
+        else:
+            # If session was passed in, we can't close it, but we should flush at least.
+            # Ideally the caller handles commit. We can still try to process safe events.
+            # But process_pending_events uses its own session management if none passed? 
+            # No, it takes optional session.
+            # To be safe and avoid recursion, we might want to defer this?
+            # For now, let's just NOT process here if session is external, 
+            # relying on the caller or a background job. 
+            # OR we process using the passed session but wrap in try/except.
+            try:
+                self.achievement_tracker.process_pending_events(limit=10, session=session)
+            except Exception as e:
+                print(f"[ERROR] External session achievement processing failed: {e}")
         
         return True, msg, final_extra_data
 
@@ -1264,22 +1295,25 @@ class PvEService:
         ds = DungeonService()
         
         try:
+            mobs_to_process = []
             if specific_mob_id:
-                mobs = session.query(Mob).filter_by(id=specific_mob_id).all()
+                mob = session.query(Mob).filter_by(id=specific_mob_id).first()
+                if mob and not mob.is_dead:
+                    mobs_to_process.append(mob)
             elif chat_id:
-                mobs = session.query(Mob).filter_by(chat_id=chat_id, is_dead=False).all()
+                mobs_to_process = session.query(Mob).filter_by(chat_id=chat_id, is_dead=False).all()
             else:
-                mobs = session.query(Mob).filter_by(is_dead=False).all()
+                mobs_to_process = session.query(Mob).filter_by(is_dead=False).all()
                 
-            if not mobs:
+            if not mobs_to_process:
                 if local_session:
                     session.close()
                 return []
                 
             attack_events = []
-            print(f"[DEBUG] mob_random_attack called for {len(mobs)} mobs. Chat ID: {chat_id}")
+            print(f"[DEBUG] mob_random_attack called for {len(mobs_to_process)} mobs. Chat ID: {chat_id}")
             
-            for mob in mobs:
+            for mob in mobs_to_process:
                 try:
                     # Dungeon Check: If mob belongs to a dungeon, check if it's still active
                     if mob.dungeon_id:
@@ -1331,37 +1365,96 @@ class PvEService:
                     
                     targets = []
                     primary_target_id = None
+                    
+                    # --- AGGRO SYSTEM IMPLEMENTATION ---
+                    # 1. Fetch Aggro Data (Damage Dealt)
+                    try:
+                        # Get damage dealt by valid targets
+                        participations = session.query(CombatParticipation).filter(
+                            CombatParticipation.mob_id == mob.id,
+                            CombatParticipation.user_id.in_(targets_pool)
+                        ).all()
+                        
+                        damage_map = {p.user_id: p.damage_dealt for p in participations}
+                    except Exception as e:
+                        print(f"Error fetching aggro data: {e}")
+                        damage_map = {}
+                        
+                    # 2. Calculate Weights
+                    candidates = []
+                    weights = []
+                    
+                    for uid in targets_pool:
+                        weight = 10.0 # Base aggro
+                        
+                        # Damage Aggro
+                        dmg = damage_map.get(uid, 0)
+                        weight += (dmg * 0.1) # 10 dmg = 1 aggro point
+                        
+                        # Defense Aggro (Taunt Status)
+                        # We need to check if user has 'defense_up'
+                        # We can't easily check status effect inside this loop efficiently without pre-loading
+                        # But targeting_service already filters valid targets.
+                        # Let's trust user_service.get_user to be cached or fast enough?
+                        # Or query active_status_effects?
+                        try:
+                            t_user = session.query(Utente).filter_by(id_telegram=uid).first()
+                            if t_user:
+                                effects = StatusEffect.get_active_effects(t_user)
+                                # Check for Defense Up (Shield)
+                                if any(e.get('effect') == 'defense_up' for e in effects):
+                                    weight *= 2.0 # 2x Aggro (User request: not too high, just increased attention)
+                        except:
+                            pass
+                            
+                        candidates.append(uid)
+                        weights.append(weight)
+                        
+                    # 3. Select Target
+                    target_id = None
+                    
                     if is_aoe:
-                        max_targets = min(5, len(targets_pool))
-                        target_count = random.randint(1, max_targets)
-                        target_ids = random.sample(targets_pool, target_count)
-                        primary_target_id = target_ids[0]
+                        max_targets = min(5, len(candidates))
+                        # Weighted selection for multiple targets is tricky with replacement
+                        # Use random.sample for unique if weights are uniform, but here they aren't.
+                        # Simple approach: Pick primary weighted, then neighbors or randoms.
+                        # For now, let's just pick random weighted samples (allowing duplicates? No)
+                        
+                        # Workaround: Pick primary target weighted, rest random
+                        if candidates:
+                             primary_target_id = random.choices(candidates, weights=weights, k=1)[0]
+                             targets_set = {primary_target_id}
+                             
+                             # Fill absolute randoms for the rest (Splash damage)
+                             remaining = [c for c in candidates if c != primary_target_id]
+                             if remaining:
+                                 needed = max_targets - 1
+                                 active_count = len(remaining)
+                                 fillers = random.sample(remaining, min(needed, active_count))
+                                 targets_set.update(fillers)
+                                 
+                             target_ids = list(targets_set)
+                        else:
+                            target_ids = []
+                            
                         for tid in target_ids:
                             t = session.query(Utente).filter_by(id_telegram=tid).first()
                             if t: targets.append(t)
                     else:
-                        target_id = None
+                        # Single Target Logic
                         if mob.aggro_target_id and mob.aggro_end_time and mob.aggro_end_time > datetime.datetime.now():
+                            # Taunt override
                             if mob.aggro_target_id in targets_pool:
                                 target_id = mob.aggro_target_id
                             else:
+                                # Taunter fled or died
                                 mob.aggro_target_id = None
-                                mob.aggro_end_time = None
-                                target_id = random.choice(targets_pool)
+                                target_id = random.choices(candidates, weights=weights, k=1)[0] if candidates else None
                         else:
-                            available_users = [uid for uid in targets_pool if uid != mob.last_target_id]
-                            if not available_users:
-                                available_users = targets_pool
+                            # Standard Weighted Aggro
+                            if candidates:
+                                target_id = random.choices(candidates, weights=weights, k=1)[0]
                             
-                            if len(available_users) >= 2:
-                                recent_pool = available_users[-3:]
-                                if random.random() < 0.8:
-                                    target_id = random.choice(recent_pool)
-                                else:
-                                    target_id = random.choice(available_users)
-                            else:
-                                target_id = random.choice(available_users)
-                        
                         target = session.query(Utente).filter_by(id_telegram=target_id).first()
                         if target:
                             targets.append(target)
