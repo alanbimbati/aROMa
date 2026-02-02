@@ -65,7 +65,15 @@ class CharacterLoader:
                         'base_character_id': safe_int(row.get('base_character_id'), None) if row.get('base_character_id', '').strip() else None,
                         'transformation_mana_cost': safe_int(row.get('transformation_mana_cost'), 0),
                         'transformation_duration_days': safe_int(row.get('transformation_duration_days'), 0),
+                        'transformation_duration_days': safe_int(row.get('transformation_duration_days'), 0),
                         'special_attack_gif': row.get('special_attack_gif', ''),
+                        # Stat Bonuses
+                        'bonus_health': safe_int(row.get('bonus_health'), 0),
+                        'bonus_mana': safe_int(row.get('bonus_mana'), 0),
+                        'bonus_damage': safe_int(row.get('bonus_damage'), 0),
+                        'bonus_resistance': safe_int(row.get('bonus_resistance'), 0),
+                        'bonus_crit': safe_int(row.get('bonus_crit'), 0),
+                        'bonus_speed': safe_int(row.get('bonus_speed'), 0),
                     }
                     characters.append(char)
                     
