@@ -27,7 +27,8 @@ class GuideService:
                                 "   - Attacco Normale: Danno x2.0\n"
                                 "   - Attacco Speciale: Moltiplicatore variabile in base al personaggio.\n"
                                 "⚡ **Velocità**: Riduce il tempo di attesa (Cooldown) tra un attacco e l'altro (+1 per punto).\n"
-                                "   - Formula: Ogni punto aumenta la velocità di recupero del 5%."
+                                "   - Formula: Ogni punto aumenta la velocità di recupero del 5%.\n\n"
+                                "💡 **Novità**: Quando selezioni un personaggio, ora puoi vedere le **Statistiche Totali Previste** (Base + Equip + Bonus) prima di equipaggiarlo, anche se il personaggio è di basso livello!"
                     },
                     "elements": {
                         "title": "🔥 Elementi (In Sviluppo)",
