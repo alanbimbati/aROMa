@@ -661,14 +661,29 @@ class UserService:
                     session.close()
                 return
 
-            # 1. Calculate Base Stats
-            # Level 1 Base: HP 100, Mana 50, Dmg 10
-            # Growth: HP +5/lv, Mana +2/lv, Dmg +1/lv
-            level = utente.livello
+            # 1. Calculate Base Stats (Fixed + Character Bonus)
+            # New Formula: Base(100) + CharBonus + Alloc + Equip
             
-            base_hp = 100 + (level * 5)
-            base_mana = 50 + (level * 2)
-            base_dmg = 10 + (level * 1)
+            # Fixed Base
+            base_hp = 100
+            base_mana = 50
+            base_dmg = 10
+            base_res = 0
+            base_crit = 0
+            base_speed = 0
+            
+            # Character Bonuses
+            from services.character_loader import get_character_loader
+            char_loader = get_character_loader()
+            character = char_loader.get_character_by_id(utente.livello_selezionato)
+            
+            if character:
+                base_hp += character.get('bonus_health', 0)
+                base_mana += character.get('bonus_mana', 0)
+                base_dmg += character.get('bonus_damage', 0)
+                base_res += character.get('bonus_resistance', 0)
+                base_crit += character.get('bonus_crit', 0)
+                base_speed += character.get('bonus_speed', 0)
             
             # 2. Add Allocations
             # Health: +10 per point
@@ -688,9 +703,9 @@ class UserService:
             total_hp = base_hp + alloc_hp
             total_mana = base_mana + alloc_mana
             total_dmg = base_dmg + alloc_dmg
-            total_res = alloc_res
-            total_crit = alloc_crit
-            total_speed = alloc_speed
+            total_res = base_res + alloc_res
+            total_crit = base_crit + alloc_crit
+            total_speed = base_speed + alloc_speed
             
             # 3. Add Equipment Bonuses
             equip_stats = self.equipment_service.calculate_equipment_stats(user_id, session=session)
