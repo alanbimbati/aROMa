@@ -647,6 +647,76 @@ class UserService:
         finally:
             session.close()
 
+    def get_projected_stats(self, utente, override_character_id=None):
+        """
+        Calculate total stats for a user, optionally overriding the character.
+        Returns a dict of final stats.
+        """
+        # 1. Base Stats
+        base_hp = 100
+        base_mana = 50
+        base_dmg = 10
+        base_res = 0
+        base_crit = 0
+        base_speed = 0
+        
+        # 2. Character Bonuses
+        from services.character_loader import get_character_loader
+        char_loader = get_character_loader()
+        
+        # Use override ID if provided, otherwise current user selection
+        char_id = override_character_id if override_character_id is not None else utente.livello_selezionato
+        character = char_loader.get_character_by_id(char_id)
+        
+        if character:
+            base_hp += character.get('bonus_health', 0)
+            base_mana += character.get('bonus_mana', 0)
+            base_dmg += character.get('bonus_damage', 0)
+            base_res += character.get('bonus_resistance', 0)
+            base_crit += character.get('bonus_crit', 0)
+            base_speed += character.get('bonus_speed', 0)
+        
+        # 3. Allocations
+        alloc_hp = (utente.allocated_health or 0) * 10
+        alloc_mana = (utente.allocated_mana or 0) * 5
+        alloc_dmg = (utente.allocated_damage or 0) * 2
+        alloc_res = (utente.allocated_resistance or 0) * 1
+        alloc_crit = (utente.allocated_crit or 0) * 1
+        alloc_speed = (utente.allocated_speed or 0) * 1
+        
+        total_hp = base_hp + alloc_hp
+        total_mana = base_mana + alloc_mana
+        total_dmg = base_dmg + alloc_dmg
+        total_res = base_res + alloc_res
+        total_crit = base_crit + alloc_crit
+        total_speed = base_speed + alloc_speed
+        
+        # 4. Equipment Bonuses
+        # We need to calculate this. equip_service needs session?
+        # calculate_equipment_stats uses a new session if none provided, 
+        # but here we might pass a user object detached or attached.
+        # Ideally we fetch fresh equip stats for the user ID.
+        equip_stats = self.equipment_service.calculate_equipment_stats(utente.id_telegram)
+        
+        total_hp += equip_stats.get('max_health', 0)
+        total_mana += equip_stats.get('max_mana', 0)
+        total_dmg += equip_stats.get('base_damage', 0)
+        total_res += equip_stats.get('resistance', 0)
+        total_crit += equip_stats.get('crit_chance', 0)
+        total_speed += equip_stats.get('speed', 0)
+        
+        # 5. Caps
+        total_res = min(total_res, 75)
+        
+        return {
+            'max_health': int(total_hp),
+            'max_mana': int(total_mana),
+            'base_damage': int(total_dmg),
+            'resistance': int(total_res),
+            'crit_chance': int(total_crit),
+            'speed': int(total_speed)
+        }
+
     def recalculate_stats(self, user_id, session=None):
         """Recalculate total stats (Base + Allocations + Equipment)"""
         local_session = False
@@ -661,93 +731,44 @@ class UserService:
                     session.close()
                 return
 
-            # 1. Calculate Base Stats (Fixed + Character Bonus)
-            # New Formula: Base(100) + CharBonus + Alloc + Equip
+            # Use projected stats (no override)
+            stats = self.get_projected_stats(utente)
             
-            # Fixed Base
-            base_hp = 100
-            base_mana = 50
-            base_dmg = 10
-            base_res = 0
-            base_crit = 0
-            base_speed = 0
-            
-            # Character Bonuses
-            from services.character_loader import get_character_loader
-            char_loader = get_character_loader()
-            character = char_loader.get_character_by_id(utente.livello_selezionato)
-            
-            if character:
-                base_hp += character.get('bonus_health', 0)
-                base_mana += character.get('bonus_mana', 0)
-                base_dmg += character.get('bonus_damage', 0)
-                base_res += character.get('bonus_resistance', 0)
-                base_crit += character.get('bonus_crit', 0)
-                base_speed += character.get('bonus_speed', 0)
-            
-            # 2. Add Allocations
-            # Health: +10 per point
-            # Mana: +5 per point
-            # Damage: +2 per point
-            # Resistance: +1% per point
-            # Crit: +1% per point
-            # Speed: +5 per point
-            
-            alloc_hp = (utente.allocated_health or 0) * 10
-            alloc_mana = (utente.allocated_mana or 0) * 5
-            alloc_dmg = (utente.allocated_damage or 0) * 2
-            alloc_res = (utente.allocated_resistance or 0) * 1
-            alloc_crit = (utente.allocated_crit or 0) * 1
-            alloc_speed = (utente.allocated_speed or 0) * 1
-            
-            total_hp = base_hp + alloc_hp
-            total_mana = base_mana + alloc_mana
-            total_dmg = base_dmg + alloc_dmg
-            total_res = base_res + alloc_res
-            total_crit = base_crit + alloc_crit
-            total_speed = base_speed + alloc_speed
-            
-            # 3. Add Equipment Bonuses
-            equip_stats = self.equipment_service.calculate_equipment_stats(user_id, session=session)
-            
-            total_hp += equip_stats.get('max_health', 0)
-            total_mana += equip_stats.get('max_mana', 0)
-            total_dmg += equip_stats.get('base_damage', 0)
-            total_res += equip_stats.get('resistance', 0)
-            total_crit += equip_stats.get('crit_chance', 0)
-            total_speed += equip_stats.get('speed', 0)
-            
-            # 4. Apply Caps
-            total_res = min(total_res, 75) # Hard cap 75%
-            
-            # 5. Update User
-            utente.max_health = int(total_hp)
-            utente.max_mana = int(total_mana)
-            utente.base_damage = int(total_dmg)
-            utente.resistance = int(total_res)
-            utente.crit_chance = int(total_crit)
-            utente.speed = int(total_speed)
+            # Update User
+            utente.max_health = stats['max_health']
+            utente.max_mana = stats['max_mana']
+            utente.base_damage = stats['base_damage']
+            utente.resistance = stats['resistance']
+            utente.crit_chance = stats['crit_chance']
+            utente.speed = stats['speed']
             
             # Ensure current values don't exceed max
             if utente.health > utente.max_health:
                 utente.health = utente.max_health
+            
+            # Handle current_hp/mana logic
             if hasattr(utente, 'current_hp') and utente.current_hp is not None:
                 if utente.current_hp > utente.max_health:
                     utente.current_hp = utente.max_health
             else:
-                # Sync current_hp if it was None
-                utente.current_hp = utente.health
+                utente.current_hp = utente.max_health
                 
-            if utente.mana > utente.max_mana:
-                utente.mana = utente.max_mana
+            if hasattr(utente, 'current_mana') and utente.current_mana is not None:
+                if utente.current_mana > utente.max_mana:
+                    utente.current_mana = utente.max_mana
+            else:
+                utente.current_mana = utente.max_mana
                 
-            print(f"Recalculated stats for {user_id}: HP {total_hp}, Dmg {total_dmg}")
+            print(f"Recalculated stats for {user_id}: HP {utente.max_health}, Dmg {utente.base_damage}")
+            
             if local_session:
                 session.commit()
             else:
                 session.flush()
         except Exception as e:
             print(f"Error recalculating stats: {e}")
+            import traceback
+            traceback.print_exc()
             if local_session:
                 session.rollback()
         finally:

@@ -2067,11 +2067,11 @@ Per acquistare un gioco che vedi in un canale o gruppo:
             
         msg += "\n╔═══🕹═══╗\n"
         nome_utente = utente.nome if utente.username is None else utente.username
-        msg += f"👤 **{nome_utente}**: {utente.points} {PointsName}\n"
+        msg += f"👤 **{escape_markdown(nome_utente)}**: {utente.points} {PointsName}\n"
         
         # Show title if user has one
         if hasattr(utente, 'title') and utente.title:
-            msg += f"👑 **{utente.title}**\n"
+            msg += f"👑 **{escape_markdown(utente.title)}**\n"
         
         # Calculate next level exp
         next_lv_num = utente.livello + 1
@@ -2179,10 +2179,6 @@ Per acquistare un gioco che vedi in un canale o gruppo:
 
         
         if not image_sent:
-            # Escape markdown in username
-            username = utente.username if utente.username else utente.nome
-            username = escape_markdown(username)
-            
             self.bot.send_message(self.message.chat.id, msg, parse_mode='markdown', reply_markup=markup)
 
 
@@ -4912,37 +4908,14 @@ def callback_query(call):
         # Format character card
         lock_icon = "" if is_unlocked else "🔒 "
         saga_info = f"[{char_group}] " if char_group else ""
-        type_info = f" ({char_element})" if char_element else ""
-        msg = f"**{lock_icon}{saga_info}{char_name}{type_info}**"
         
-        if is_equipped:
-            msg += " ⭐ *EQUIPAGGIATO*"
+        # Use centralized formatter with user projection
+        msg = f"{lock_icon}{saga_info}"
+        msg += character_service.format_character_card(char, show_price=True, is_equipped=is_equipped, user=utente)
         
-        msg += "\n\n"
-        msg += f"📊 Livello Richiesto: {char_level}\n"
-        
-        if char_lv_premium == 1:
-            msg += f"👑 Richiede Premium\n"
-        elif char_lv_premium == 2 and char_price > 0:
-            price = char_price
-            if utente.premium == 1:
-                price = int(price * 0.5)
-            msg += f"💰 Prezzo: {price} {PointsName}"
-            if utente.premium == 1:
-                msg += f" ~~{char_price}~~"
-            msg += "\n"
-        
-        if char.get('special_attack_name'):
-            msg += f"\n✨ **Abilità Speciale:**\n"
-            msg += f"🔮 {char.get('special_attack_name')}\n"
-            msg += f"⚔️ Danno: {char.get('special_attack_damage')}\n"
-            msg += f"💙 Costo Mana: {char.get('special_attack_mana_cost')}\n"
-        
-        if char.get('description'):
-            msg += f"\n📝 {char.get('description')}\n"
-        
+        # Append lock info
         if not is_unlocked:
-            msg += "\n🔒 **PERSONAGGIO BLOCCATO**\n"
+            msg += "\n\n🔒 **PERSONAGGIO BLOCCATO**\n"
             if char_level > utente.livello:
                 msg += f"Raggiungi livello {char_level} per sbloccarlo!\n"
             elif char_lv_premium == 1:
@@ -5039,6 +5012,10 @@ def callback_query(call):
             else:
                 markup.add(types.InlineKeyboardButton("⭐ Già Equipaggiato", callback_data="char_already_equipped"))
         elif char_lv_premium == 2 and char_price > 0:
+             # Re-calculate price for button
+             price = char_price
+             if utente.premium == 1:
+                 price = int(price * 0.5)
              markup.add(types.InlineKeyboardButton(f"🛒 Compra ({price} 🍑)", callback_data=f"char_buy|{char_id}"))
         
         # Send image if available
@@ -5129,40 +5106,17 @@ def callback_query(call):
         
         # Format character card
         lock_icon = "" if is_unlocked else "🔒 "
-        type_info = f" ({char_element})" if char_element else ""
-        msg = f"**{lock_icon}{char_name}{type_info}**"
         
-        if is_equipped:
-            msg += " ⭐ *EQUIPAGGIATO*"
+        # Use centralized formatter with user projection
+        msg = f"{lock_icon}"
+        msg += character_service.format_character_card(char, show_price=True, is_equipped=is_equipped, user=utente)
         
-        msg += "\n\n"
-        msg += f"📊 Livello Richiesto: {char_level}\n"
-        
-        if char_lv_premium == 1:
-            msg += f"👑 Richiede Premium\n"
-        elif char_lv_premium == 2 and char_price > 0:
-            price = char_price
-            if utente.premium == 1:
-                price = int(price * 0.5)
-            msg += f"💰 Prezzo: {price} {PointsName}"
-            if utente.premium == 1:
-                msg += f" ~~{char_price}~~"
-            msg += "\n"
-        
-        if char.get('special_attack_name'):
-            msg += f"\n✨ **Abilità Speciale:**\n"
-            msg += f"🔮 {char.get('special_attack_name')}\n"
-            msg += f"⚔️ Danno: {char.get('special_attack_damage')}\n"
-            msg += f"💙 Costo Mana: {char.get('special_attack_mana_cost')}\n"
-        
-        if char.get('description'):
-            msg += f"\n📝 {char.get('description')}\n"
-        
+        # Append lock info
         if not is_unlocked:
-            msg += "\n🔒 **PERSONAGGIO BLOCCATO**\n"
-            if char_level > utente.livello:
-                msg += f"Raggiungi livello {char_level} per sbloccarlo!\n"
-            elif char_lv_premium == 1:
+            msg += "\n\n🔒 **PERSONAGGIO BLOCCATO**\n"
+            if char['livello'] > utente.livello:
+                msg += f"Raggiungi livello {char['livello']} per sbloccarlo!\n"
+            elif char['lv_premium'] == 1:
                 msg += "Richiede abbonamento Premium!\n"
         
         msg += f"\n📚 **{saga_name}** - {char_idx + 1}/{len(saga_chars)}"
@@ -5203,6 +5157,10 @@ def callback_query(call):
             else:
                 markup.add(types.InlineKeyboardButton("⭐ Già Equipaggiato", callback_data="char_already_equipped"))
         elif char_lv_premium == 2 and char_price > 0:
+             # Re-calculate price for button
+             price = char_price
+             if utente.premium == 1:
+                 price = int(price * 0.5)
              markup.add(types.InlineKeyboardButton(f"🛒 Compra ({price} 🍑)", callback_data=f"char_buy|{char_id}"))
         
         # Delete old message and send new with image
@@ -5232,44 +5190,24 @@ def callback_query(call):
             return
         
         char = page_chars[0]
-        is_unlocked = character_service.is_character_unlocked(utente, char.id)
-        is_equipped = (utente.livello_selezionato == char.id)
+        # Ensure char is treated as dict
+        char_id = char['id']
+        is_unlocked = character_service.is_character_unlocked(utente, char_id)
+        is_equipped = (utente.livello_selezionato == char_id)
         
-        # Format character card (same as above)
+        # Format character card
         lock_icon = "" if is_unlocked else "🔒 "
-        msg = f"**{lock_icon}{char.nome}**"
         
-        if is_equipped:
-            msg += " ⭐ *EQUIPAGGIATO*"
+        # Use centralized formatter with user projection
+        msg = f"{lock_icon}"
+        msg += character_service.format_character_card(char, show_price=True, is_equipped=is_equipped, user=utente)
         
-        msg += "\n\n"
-        msg += f"📊 Livello Richiesto: {char.livello}\n"
-        
-        if char.lv_premium == 1:
-            msg += f"👑 Richiede Premium\n"
-        elif char.lv_premium == 2 and char.price > 0:
-            price = char.price
-            if utente.premium == 1:
-                price = int(price * 0.5)
-            msg += f"💰 Prezzo: {price} {PointsName}"
-            if utente.premium == 1:
-                msg += f" ~~{char.price}~~"
-            msg += "\n"
-        
-        if char.special_attack_name:
-            msg += f"\n✨ **Abilità Speciale:**\n"
-            msg += f"🔮 {char.special_attack_name}\n"
-            msg += f"⚔️ Danno: {char.special_attack_damage}\n"
-            msg += f"💙 Costo Mana: {char.special_attack_mana_cost}\n"
-        
-        if char.description:
-            msg += f"\n📝 {char.description}\n"
-        
+        # Append lock info if needed (format_character_card doesn't handle locked reason text)
         if not is_unlocked:
-            msg += "\n🔒 **PERSONAGGIO BLOCCATO**\n"
-            if char.livello > utente.livello:
-                msg += f"Raggiungi livello {char.livello} per sbloccarlo!\n"
-            elif char.lv_premium == 1:
+            msg += "\n\n🔒 **PERSONAGGIO BLOCCATO**\n"
+            if char['livello'] > utente.livello:
+                msg += f"Raggiungi livello {char['livello']} per sbloccarlo!\n"
+            elif char['lv_premium'] == 1:
                 msg += "Richiede abbonamento Premium!\n"
         
         msg += f"\n📄 Personaggio {current_page + 1} di {total_pages}"

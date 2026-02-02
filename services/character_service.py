@@ -207,6 +207,9 @@ class CharacterService:
         
         session.commit()
         
+        # Recalculate stats to apply new character bonuses immediately
+        self.user_service.recalculate_stats(user.id_telegram)
+        
         # Extract name again just in case
         char_name = character['nome']
         
@@ -242,9 +245,10 @@ class CharacterService:
             'description': f"{character['special_attack_name']}: {character['special_attack_damage']} danni, {character['special_attack_mana_cost']} mana"
         }
     
-    def format_character_card(self, character, show_price=False, is_equipped=False, show_all_skills=True):
+    def format_character_card(self, character, show_price=False, is_equipped=False, show_all_skills=True, user=None):
         """
         Format character details for display in UI
+        If user is provided, shows projected total stats.
         Returns formatted message string
         """
         # Character name with saga
@@ -262,17 +266,76 @@ class CharacterService:
         # Level requirement
         msg += f"📊 Livello Richiesto: {character['livello']}\n"
         
+        
+        # Calculate projected stats if user is provided
+        projected = None
+        if user:
+            projected = self.user_service.get_projected_stats(user, override_character_id=character['id'])
+
         # Bonus Stats
         bonuses = []
-        if character.get('bonus_health'): bonuses.append(f"❤️ Vita: +{character['bonus_health']}")
-        if character.get('bonus_mana'): bonuses.append(f"💙 Mana: +{character['bonus_mana']}")
-        if character.get('bonus_damage'): bonuses.append(f"⚔️ Danno: +{character['bonus_damage']}")
-        if character.get('bonus_resistance'): bonuses.append(f"🛡️ Res: +{character['bonus_resistance']}%")
-        if character.get('bonus_crit'): bonuses.append(f"🎯 Crit: +{character['bonus_crit']}%")
-        if character.get('bonus_speed'): bonuses.append(f"⚡ Vel: +{character['bonus_speed']}")
+        
+        
+        # Helper to format stat line with projection
+        def fmt_stat(label, key, proj_key, is_perc=False):
+            bonus_val = character.get(key, 0)
+            
+            # If we have projected stats, we ALWAYS show the line for ALL stats
+            # irrespective of whether they are 0 or not, as per user request.
+            show_line = False
+            
+            if projected:
+                # Always show if we are showing projections
+                show_line = True
+            elif bonus_val != 0:
+                # Fallback for when we only show card without user context: show only if bonus exists
+                show_line = True
+            
+            if not show_line:
+                return None
+            
+            # Build string
+            line = f"{label}: "
+            
+            # Show bonus part if it exists or if we want to be explicit about +0?
+            # User wants to see total.
+            # "Vita: 1200 (+10 da Pichu)" or "Vita: +10 (Tot: 1200)"
+            
+            if bonus_val > 0:
+                line += f"+{bonus_val}"
+            else:
+                line += f"+0"
+                
+            if is_perc: line += "%"
+            
+            if projected and proj_key in projected:
+                total_val = projected[proj_key]
+                line += f" (Tot: {total_val}{'%' if is_perc else ''})"
+            
+            return line
+
+        val = fmt_stat("❤️ Vita", 'bonus_health', 'max_health')
+        if val: bonuses.append(val)
+        
+        val = fmt_stat("💙 Mana", 'bonus_mana', 'max_mana')
+        if val: bonuses.append(val)
+        
+        val = fmt_stat("⚔️ Danno", 'bonus_damage', 'base_damage')
+        if val: bonuses.append(val)
+        
+        val = fmt_stat("🛡️ Res", 'bonus_resistance', 'resistance', True)
+        if val: bonuses.append(val)
+        
+        val = fmt_stat("🎯 Crit", 'bonus_crit', 'crit_chance', True)
+        if val: bonuses.append(val)
+        
+        val = fmt_stat("⚡ Vel", 'bonus_speed', 'speed')
+        if val: bonuses.append(val)
         
         if bonuses:
-            msg += f"📈 **Bonus:** {', '.join(bonuses)}\n"
+            msg += f"📈 **Statistiche:**\n"
+            msg += "\n".join(bonuses) + "\n"
+
         
         # Premium/Price info
         if character['lv_premium'] == 1:

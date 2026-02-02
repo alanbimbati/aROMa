@@ -79,16 +79,31 @@ class TestItems(unittest.TestCase):
         self.user.current_hp = 50
         self.session.commit()
         
-        # Use item
-        result = self.item_service.use_item(self.user.id_telegram, potion.name)
-        if isinstance(result, tuple):
-            success, msg = result
-        else:
-            success, msg = result, ""
-        self.assertTrue(success)
+        # Patch PotionService to recognize the potion
+        from unittest.mock import patch
         
-        self.session.refresh(self.user)
-        self.assertEqual(self.user.current_hp, 100) # 50 + 50
+        test_potions = [{
+            'nome': 'Pozione Grande',
+            'tipo': 'health_potion',
+            'effetto_valore': 100, # Should restore 50 (capped at max 100)
+            'prezzo': 10,
+            'descrizione': 'Heals 100 HP',
+            'rarita': 1
+        }]
+        
+        with patch('services.potion_service.PotionService.load_potions', return_value=test_potions):
+            # Use item
+            result = self.item_service.use_item(self.user.id_telegram, potion.name, session=self.session)
+            
+            if isinstance(result, tuple):
+                success, msg = result
+            else:
+                success, msg = result, ""
+            
+            self.assertTrue(success, f"Item use failed: {msg}")
+            
+            self.session.refresh(self.user)
+            self.assertEqual(self.user.current_hp, 100, f"HP not restored. Current: {self.user.current_hp}") # 50 + 50
         
         # Check quantity reduced (data_utilizzo set)
         inv = self.session.query(Collezionabili).filter_by(id_telegram=str(self.user.id_telegram), oggetto=potion.name).first()

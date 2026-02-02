@@ -21,7 +21,8 @@ def handle_scegli_cmd(message):
     character = characters[0]
     
     # Format character card
-    card_msg = char_service.format_character_card(character, show_price=False, is_equipped=(character['id'] == utente.livello_selezionato))
+    # Format character card
+    card_msg = char_service.format_character_card(character, show_price=False, is_equipped=(character['id'] == utente.livello_selezionato), user=utente)
     
     # Create navigation buttons
     markup = types.InlineKeyboardMarkup()
