@@ -52,8 +52,8 @@ class Database:
             # PostgreSQL engine with optimized settings
             self.engine = create_engine(
                 connection_string,
-                pool_size=20,           # Increased pool size for concurrency
-                max_overflow=40,        # Allow more connections during peaks
+                pool_size=5,            # Reduced pool size for DietPi/low-resource
+                max_overflow=10,        # Reduced overflow
                 pool_pre_ping=True,     # Verify connections before use
                 pool_recycle=3600,      # Recycle connections every hour
                 echo=False              # Set to True for SQL debugging

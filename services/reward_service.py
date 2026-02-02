@@ -79,10 +79,10 @@ class RewardService:
                 continue
 
             # Check status (e.g. Dead users get nothing? Or just reduced?)
-            # PveService logic: if dead (HP<=0) -> 0 rewards.
-            # If stunned -> 0 rewards (unless we want to change this policy, but sticking to existing logic for now)
+            # Use current_hp if available, otherwise fallback to health
+            user_hp = user.current_hp if user.current_hp is not None else user.health
             
-            is_dead = (user.health <= 0)
+            is_dead = (user_hp <= 0)
             is_stunned = StatusEffect.has_effect(user, 'stun')
             
             if is_dead or is_stunned:
@@ -178,7 +178,11 @@ class RewardService:
             user = session.query(Utente).filter_by(id_telegram=user_id).first()
             if not user: continue
             
-            is_dead = (user.health <= 0)
+            is_dead = False
+            user_hp = user.current_hp if user.current_hp is not None else user.health
+            if user_hp <= 0:
+                is_dead = True
+                
             is_stunned = StatusEffect.has_effect(user, 'stun')
             
             if is_dead or is_stunned:
