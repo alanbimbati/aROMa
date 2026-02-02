@@ -1410,7 +1410,7 @@ class PvEService:
                         
                         # Damage Aggro
                         dmg = damage_map.get(uid, 0)
-                        weight += (dmg * 0.1) # 10 dmg = 1 aggro point
+                        weight += (dmg * 0.5) # 2 damage = 1 aggro point (Significantly increased from 0.1)
                         
                         # Defense Aggro (Taunt Status)
                         # We need to check if user has 'defense_up'
@@ -1424,7 +1424,7 @@ class PvEService:
                                 effects = StatusEffect.get_active_effects(t_user)
                                 # Check for Defense Up (Shield)
                                 if any(e.get('effect') == 'defense_up' for e in effects):
-                                    weight *= 2.0 # 2x Aggro (User request: not too high, just increased attention)
+                                    weight *= 5.0 # 5x Aggro (Massive increase to ensure Tank role works)
                         except:
                             pass
                             
