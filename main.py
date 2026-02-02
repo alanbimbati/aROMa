@@ -39,6 +39,24 @@ except ImportError:
     PIL_AVAILABLE = False
     print("⚠️ PIL/Pillow not available, grayscale images will not work")
 
+def tnt_timeout(chat_id):
+    """Callback when TNT timer expires. Sets trap to volatile."""
+    try:
+        bot.send_message(chat_id, "⚠️ **LA TNT È INSTABILE!**\n🔥 **IL PROSSIMO CHE PARLA ESPLODE!** 💥", parse_mode='markdown')
+    except Exception as e:
+        print(f"[ERROR] TNT Timeout send failed: {e}")
+
+def nitro_timeout(chat_id):
+    """Callback when Nitro activates"""
+    try:
+        bot.send_message(chat_id, "🟩 **LA NITRO È INSTABILE!**\n🔥 **IL PROSSIMO CHE PARLA ESPLODE!** 💥", parse_mode='markdown')
+    except Exception as e:
+        print(f"[ERROR] Nitro Timeout send failed: {e}")
+
+# Trap Service
+from services.trap_service import TrapService
+trap_service = TrapService()
+
 # Services
 from services.user_service import UserService
 from services.item_service import ItemService
@@ -79,9 +97,6 @@ guide_service = GuideService()
 # Track last viewed character for admins (for image upload feature)
 admin_last_viewed_character = {}
 
-# Active Traps (ChatID -> {type, user_id, time})
-active_traps = {}
-
 # --- MONKEY PATCH: Auto-delete command messages ---
 _original_message_handler = bot.message_handler
 
@@ -120,51 +135,39 @@ def _auto_delete_message_handler(*args, **kwargs):
 bot.message_handler = _auto_delete_message_handler
 # --------------------------------------------------
 
-@bot.message_handler(func=lambda m: m.chat.id in active_traps, content_types=['text', 'photo', 'sticker', 'video', 'voice'])
+@bot.message_handler(func=lambda m: trap_service.has_volatile_trap(m.chat.id), content_types=['text', 'photo', 'sticker', 'video', 'voice'])
 def handle_trap_explosion(message):
-    """Handle trap explosion when someone writes in a trapped chat"""
-    chat_id = message.chat.id
-    if chat_id not in active_traps:
-        return
-
-    trap = active_traps.pop(chat_id)
-    trap_type = trap.get('type', 'TNT')
-    setter_id = trap.get('user_id')
+    """Handle Trap explosion (TNT/Nitro)"""
+    # Trigger and consume trap
+    trap = trap_service.trigger_trap(message.chat.id, message.from_user.id)
+    if not trap: return
     
-    user = message.from_user
-    victim_name = user.username or user.first_name
+    trap_type = trap.get('trap_type', 'TNT')
     
-    # Calculate damage/effect
-    dmg = random.randint(10, 30)
+    user_id = message.from_user.id
+    username = message.from_user.username or message.from_user.first_name
     
-    # Apply damage to victim
-    victim = user_service.get_user(user.id)
-    if victim:
-        user_service.damage_health(victim, dmg)
-        # Also lose some Wumpa
-        wumpa_loss = random.randint(5, 15)
-        if victim.points >= wumpa_loss:
-            user_service.add_points(victim, -wumpa_loss)
-        else:
-            wumpa_loss = 0
+    try:
+        # Damage 30% HP
+        db_user = user_service.get_user(user_id)
+        if db_user:
+            current_hp = db_user.current_hp if db_user.current_hp is not None else db_user.health
+            damage = int(db_user.max_health * 0.30)
+            new_hp = max(0, current_hp - damage)
             
-        msg = f"💥 **BOOOM!** 💥\n"
-        msg += f"@{victim_name} ha fatto scattare una **{trap_type}**!\n"
-        msg += f"💔 Hai subito **{dmg}** danni!\n"
-        if wumpa_loss > 0:
-            msg += f"💸 Nell'esplosione hai perso **{wumpa_loss}** {PointsName}!"
+            # Sync health/current_hp
+            user_service.update_user(user_id, {'current_hp': new_hp, 'health': new_hp})
             
-        bot.reply_to(message, msg, parse_mode='markdown')
-        
-        # Give Wumpa to trap setter? (Optional, maybe half)
-        if wumpa_loss > 0 and setter_id and setter_id != user.id:
-            setter = user_service.get_user(setter_id)
-            if setter:
-                user_service.add_points(setter, wumpa_loss)
-                try:
-                    bot.send_message(setter_id, f"😈 La tua {trap_type} è esplosa! Hai guadagnato {wumpa_loss} {PointsName} da {victim_name}!")
-                except:
-                    pass
+            icon = "🟩" if trap_type == 'NITRO' else "💥"
+            trap_name = "la NITRO" if trap_type == 'NITRO' else "la TNT"
+            
+            msg = f"{icon} **BOOM!** @{username} ha fatto esplodere {trap_name}!\n💔 Hai perso {damage} HP (30%)!"
+            if new_hp == 0:
+                msg += "\n💀 Sei morto carbonizzato!"
+            
+            bot.reply_to(message, msg, parse_mode='markdown')
+    except Exception as e:
+        print(f"[ERROR] Trap Explosion: {e}")
 
 
 @bot.message_handler(content_types=['left_chat_member'])
@@ -564,7 +567,9 @@ def handle_guild_cmd(message):
     else:
         # Show guild status
         msg = f"🏰 **Gilda: {guild['name']}**\n"
-        msg += f"👑 **Capo**: {guild['leader_id']}\n"
+        leader = user_service.get_user(guild['leader_id'])
+        leader_name = f"@{leader.username}" if leader and leader.username else (leader.nome if leader else f"{guild['leader_id']}")
+        msg += f"👑 **Capo**: {leader_name}\n"
         msg += f"💰 **Banca**: {guild['wumpa_bank']} Wumpa\n"
         msg += f"👥 **Membri**: {guild['member_limit']} (max)\n\n"
         msg += f"🏠 **Locanda**: Lv. {guild['inn_level']}\n"
@@ -4446,9 +4451,60 @@ def callback_query(call):
         return
 
     elif call.data == "flee":
+        # Show confirmation
+        markup = types.InlineKeyboardMarkup()
+        markup.add(
+            types.InlineKeyboardButton("✅ Fuggire", callback_data="flee_confirm"),
+            types.InlineKeyboardButton("❌ Annulla", callback_data="flee_cancel")
+        )
+        safe_answer_callback(call.id, "Sei sicuro?", show_alert=False)
+        bot.edit_message_text("⚠️ **SEI SICURO DI VOLER FUGGIRE?**\n\nAbbandonando lo scontro, non riceverai le ricompense di fine battaglia.", 
+                              call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+        return
+
+    elif call.data == "flee_confirm":
         success, msg = dungeon_service.leave_dungeon(call.message.chat.id, call.from_user.id)
-        safe_answer_callback(call.id, "Tentativo di fuga...", show_alert=False)
+        safe_answer_callback(call.id, "Fuga completata!", show_alert=False)
         bot.send_message(call.message.chat.id, f"🏃 @{call.from_user.username or call.from_user.first_name}: {msg}", parse_mode='markdown')
+        # We can't edit the original message easily to 'restore' lobby for others if it was PM, 
+        # but here it's likely a group chat. The user left, so valid.
+        try:
+             bot.delete_message(call.message.chat.id, call.message.message_id) 
+        except:
+             pass
+        return
+
+    elif call.data == "flee_cancel":
+        # Restore Lobby UI
+        session = user_service.db.get_session()
+        active_dungeon = dungeon_service.get_active_dungeon(call.message.chat.id, session=session)
+        
+        if active_dungeon and active_dungeon.status in ["registration", "active"]:
+             markup = types.InlineKeyboardMarkup()
+             if active_dungeon.status == "registration":
+                 markup.add(types.InlineKeyboardButton("➕ Unisciti", callback_data=f"dungeon_join|{active_dungeon.id}"))
+                 markup.add(types.InlineKeyboardButton("▶️ Avvia (Admin)", callback_data=f"dungeon_start|{active_dungeon.id}"))
+             elif active_dungeon.status == "active":
+                 markup.add(types.InlineKeyboardButton("👁️ Mostra Nemici", callback_data=f"dungeon_show_mobs|{active_dungeon.id}"))
+                 markup.add(types.InlineKeyboardButton("🏃 Fuggire", callback_data="flee"))
+             
+             msg = f"🏰 **DUNGEON ATTIVO: {active_dungeon.name}**\n"
+             msg += f"Status: {active_dungeon.status}\n"
+                 
+             # Get participants
+             participants = dungeon_service.get_dungeon_participants(active_dungeon.id, session=session)
+             msg += f"\n👥 Partecipanti ({len(participants)}):\n"
+             for p in participants:
+                 u = user_service.get_user(p.user_id)
+                 name = f"@{u.username}" if u and u.username else (u.nome if u else f"Utente {p.user_id}")
+                 msg += f"- {name}\n"
+             
+             bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+        else:
+             bot.edit_message_text("Il dungeon non è più attivo.", call.message.chat.id, call.message.message_id)
+        
+        session.close()
+        safe_answer_callback(call.id, "Fuga annullata")
         return
         
     elif call.data.startswith("guild_join|"):
@@ -4524,6 +4580,47 @@ def callback_query(call):
             effect_msg, extra_data = item_service.apply_effect(utente, item_name)
             safe_answer_callback(call.id, f"✅ {item_name} utilizzato!")
             
+            # TNT Trap Logic
+            if extra_data and extra_data.get('type') == 'tnt_trap':
+                import uuid
+                sticker = extra_data.get('sticker')
+                if sticker:
+                    bot.send_sticker(call.message.chat.id, sticker)
+                
+                # Drop Wumpa
+                dropped_wumpa = extra_data.get('wumpa_drop', 0)
+                if dropped_wumpa > 0:
+                    markup_w = types.InlineKeyboardMarkup()
+                    buttons = []
+                    # Create buttons for picking up
+                    for i in range(min(dropped_wumpa, 20)): # Cap buttons
+                        uid = str(uuid.uuid4())[:8]
+                        buttons.append(types.InlineKeyboardButton("🍑", callback_data=f"steal|{uid}"))
+                    
+                    # Row of 5
+                    for i in range(0, len(buttons), 5):
+                        markup_w.row(*buttons[i:i+5])
+                        
+                    bot.send_message(call.message.chat.id, f"💰 **{dropped_wumpa} Wumpa** sono caduti a terra!", reply_markup=markup_w, parse_mode='markdown')
+
+                # Send Timer Message
+                markup_t = types.InlineKeyboardMarkup()
+                markup_t.add(types.InlineKeyboardButton("✂️ DISINNESCA", callback_data="defuse_tnt"))
+                
+                sent_msg = bot.send_message(call.message.chat.id, "💣 **TNT ATTIVATA!**\n⏳ **3 secondi all'esplosione!**", reply_markup=markup_t, parse_mode='markdown')
+                
+                # Arm Trap
+                trap_service.arm_trap(call.message.chat.id, user_id, duration=3.0, on_timeout=tnt_timeout)
+            
+            elif extra_data and extra_data.get('type') == 'nitro_trap':
+                sticker = extra_data.get('sticker')
+                if sticker:
+                    bot.send_sticker(call.message.chat.id, sticker)
+                    
+                bot.send_message(call.message.chat.id, "🟩 **NITRO PIAZZATA!**\n☠️ **Esplosione Imminente!**", parse_mode='markdown')
+                
+                # Arm Trap (Instant/Fast)
+                trap_service.arm_trap(call.message.chat.id, user_id, duration=0.5, on_timeout=nitro_timeout, trap_type='NITRO')
             # Update inventory display
             inventory = item_service.get_inventory(user_id)
             if not inventory:
@@ -4615,6 +4712,25 @@ def callback_query(call):
                 pve_service.pending_mob_effects[chat_id].append(extra_data.get('effect'))
         else:
             safe_answer_callback(call.id, "❌ Errore nell'uso dell'oggetto!", show_alert=True)
+        return
+
+    elif call.data == "defuse_tnt":
+        chat_id = call.message.chat.id
+        success, code = trap_service.defuse_trap(chat_id, call.from_user.id)
+        
+        if success:
+             user_name = call.from_user.username or call.from_user.first_name
+             bot.edit_message_text(f"✂️ **{user_name}** ha disinnescato la TNT! Siamo salvi! 😌", chat_id, call.message.message_id, parse_mode='markdown')
+             safe_answer_callback(call.id, "Disinnescata!")
+        else:
+             if code == "volatile":
+                 safe_answer_callback(call.id, "È troppo tardi! È instabile!", show_alert=True)
+                 try: bot.delete_message(chat_id, call.message.message_id)
+                 except: pass
+             else:
+                 safe_answer_callback(call.id, "Già disinnescata o esplosa.", show_alert=True)
+                 try: bot.delete_message(chat_id, call.message.message_id)
+                 except: pass
         return
 
     elif call.data.startswith("use_item_mob|"):
@@ -4737,7 +4853,9 @@ def callback_query(call):
         guild = guild_service.get_user_guild(call.from_user.id)
         if guild:
             msg = f"🏰 **Gilda: {guild['name']}**\n"
-            msg += f"👑 **Capo**: {guild['leader_id']}\n"
+            leader = user_service.get_user(guild['leader_id'])
+            leader_name = f"@{leader.username}" if leader and leader.username else (leader.nome if leader else f"{guild['leader_id']}")
+            msg += f"👑 **Capo**: {leader_name}\n"
             msg += f"💰 **Banca**: {guild['wumpa_bank']} Wumpa\n"
             msg += f"👥 **Membri**: {guild['member_limit']} (max)\n\n"
             msg += f"🏠 **Locanda**: Lv. {guild['inn_level']}\n"
@@ -6149,7 +6267,7 @@ def callback_query(call):
 
     elif action == "defend_mob":
         utente = user_service.get_user(user_id)
-        success, msg = pve_service.defend(utente)
+        success, msg = pve_service.defend(utente, chat_id=call.message.chat.id)
         
         if success:
             try:

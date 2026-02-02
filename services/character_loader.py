@@ -302,10 +302,18 @@ def get_character_loader() -> CharacterLoader:
                 os.remove(temp_file)
             return False
 
+import io
+try:
+    from PIL import Image, ImageOps
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+
 def get_character_image(character: Dict[str, Any], is_locked: bool = False):
     """
     Get image for character.
-    Returns an open file object or None if not found.
+    Returns an open file object or BytesIO (if processed) or None if not found.
+    If is_locked is True, returns grayscale image.
     """
     if not character:
         return None
@@ -315,13 +323,33 @@ def get_character_image(character: Dict[str, Any], is_locked: bool = False):
     safe_name = character['nome'].lower().replace(' ', '_')
     
     # Check possible extensions
-    for ext in ['.png', '.jpg', '.jpeg']:
+    for ext in ['.png', '.jpg', '.jpeg', '.webp']:
         path = f"images/{safe_name}{ext}"
         if os.path.exists(path):
             try:
-                return open(path, 'rb')
+                if is_locked and PIL_AVAILABLE:
+                    # Convert to grayscale
+                    try:
+                        with Image.open(path) as img:
+                            # Convert to grayscale
+                            gray = img.convert('L')
+                            # Create BytesIO object
+                            bio = io.BytesIO()
+                            # Determine format (original or PNG)
+                            fmt = img.format if img.format else 'PNG'
+                            gray.save(bio, format=fmt)
+                            bio.seek(0)
+                            return bio
+                    except Exception as e:
+                        print(f"Grayscale conversion failed for {path}: {e}")
+                        # Fallback to normal image
+                        return open(path, 'rb')
+                else:
+                    return open(path, 'rb')
             except Exception as e:
                 print(f"Error opening image {path}: {e}")
                 return None
+                
+    return None
                 
     return None

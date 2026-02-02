@@ -321,9 +321,20 @@ class ItemService:
                     return f"Hai lanciato {item_name} contro {target_user.username}, ma non ha abbastanza {PointsName}.", None
             
             else:
-                # Trap logic: Places a trap in the group
-                # NEW: Also support "next_mob_effect" for the next spawned mob
-                return f"{item_name} piazzata! Il prossimo che scrive esploderà (o il prossimo mob che appare subirà danni)!", {'type': 'next_mob_effect', 'effect': item_name}
+                if item_name == "TNT":
+                    # Specialized TNT Trap
+                    meta = self.get_item_metadata(item_name)
+                    sticker = meta.get('sticker')
+                    # Drop Wumpa immediately
+                    wumpa_amount = random.randint(5, 15)
+                    return f"TNT Piazzata!", {'type': 'tnt_trap', 'sticker': sticker, 'wumpa_drop': wumpa_amount}
+                elif item_name == "Nitro":
+                    # Specialized Nitro Trap (Instant Volatile)
+                    meta = self.get_item_metadata(item_name)
+                    sticker = meta.get('sticker')
+                    return f"Nitro Piazzata!", {'type': 'nitro_trap', 'sticker': sticker}
+                else:
+                    return f"{item_name} used!", None
         
         elif item_name == "Mira un giocatore":
             if target_user:

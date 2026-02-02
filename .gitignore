@@ -10,7 +10,7 @@ settings.sync-conflict-*
 images/
 Stickers/
 .obsidian/
-*.txt
+
 points
 *.bak
 migrate_dietpi_schema.py
