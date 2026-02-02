@@ -96,9 +96,9 @@ class TargetingService:
             if user_id not in participant_ids:
                 return False
         else:
-            # For world mobs, user must NOT be in any dungeon
-            if ds.get_user_active_dungeon(user_id, session=session):
-                return False
+            # For world mobs, there is no restriction. They can attack anyone active in the chat.
+            # User said: "boss deve attaccare tutti... si possono mescolare".
+            pass
         
         return True
     

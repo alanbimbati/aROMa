@@ -1056,16 +1056,37 @@ class PvEService:
         active_dungeon = ds.get_user_active_dungeon(user.id_telegram, session=session)
         
         if active_dungeon:
-            # User is in a dungeon: only attack mobs from THAT dungeon
-            mobs = [m for m in all_mobs if m.dungeon_id == active_dungeon.id]
+            # User is in a dungeon: prioritize mobs from THAT dungeon, then world mobs
+            # Mobs from OTHER dungeons should probably be ignored or low priority (usually invisible in chat anyway)
+            
+            # Sort mobs: Active Dungeon > World > Other Dungeons
+            def get_priority(m):
+                if m.dungeon_id == active_dungeon.id: return 0
+                if m.dungeon_id is None: return 1
+                return 2
+                
+            mobs = sorted(all_mobs, key=get_priority)
         else:
-            # User is NOT in a dungeon: only attack world mobs
-            mobs = [m for m in all_mobs if m.dungeon_id is None]
+            # User is NOT in a dungeon: ignore mobs from dungeons (they are "inside" instances)
+            # User said: "AoE attacca più nemici attivi, che siano nel dungoen o meno." -> "AoE attacks active enemies, whether in dungeon or not".
+            # This implies if I am outside, I might hit a dungeon mob if it's "mescolato" (mixed)?
+            # But usually dungeon mobs are logically "in" the dungeon. 
+            # However, if they are spawned in the chat, they are visible.
+            # Let's target ALL mobs in chat, but prioritize World.
+            
+            def get_priority(m):
+                if m.dungeon_id is None: return 0
+                return 1
+            
+            mobs = sorted(all_mobs, key=get_priority)
+
+        # Filter out mobs that are strictly "private" or "invalid"? 
+        # For now, just rely on chat_id visibility.
             
         if not mobs:
             if local_session:
                 session.close()
-            msg = "Non ci sono mostri del dungeon da colpire!" if active_dungeon else "Non ci sono mostri selvatici da colpire!"
+            msg = "Non ci sono mostri da colpire!"
             return False, msg, None, []
             
         # Filter out mobs the user has fled from
