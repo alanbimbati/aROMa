@@ -262,6 +262,18 @@ class CharacterService:
         # Level requirement
         msg += f"📊 Livello Richiesto: {character['livello']}\n"
         
+        # Bonus Stats
+        bonuses = []
+        if character.get('bonus_health'): bonuses.append(f"❤️ Vita: +{character['bonus_health']}")
+        if character.get('bonus_mana'): bonuses.append(f"💙 Mana: +{character['bonus_mana']}")
+        if character.get('bonus_damage'): bonuses.append(f"⚔️ Danno: +{character['bonus_damage']}")
+        if character.get('bonus_resistance'): bonuses.append(f"🛡️ Res: +{character['bonus_resistance']}%")
+        if character.get('bonus_crit'): bonuses.append(f"🎯 Crit: +{character['bonus_crit']}%")
+        if character.get('bonus_speed'): bonuses.append(f"⚡ Vel: +{character['bonus_speed']}")
+        
+        if bonuses:
+            msg += f"📈 **Bonus:** {', '.join(bonuses)}\n"
+        
         # Premium/Price info
         if character['lv_premium'] == 1:
             msg += f"👑 Richiede Premium\n"
