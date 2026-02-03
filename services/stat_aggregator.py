@@ -164,6 +164,16 @@ class StatAggregator:
         elif event_type == 'QUICK_SALE':
             self._increment_stat(session, user_id, 'quick_sales', 1)
 
+        # --- CRAFTING EVENTS ---
+        elif event_type == 'RESOURCE_DROP':
+            self._increment_stat(session, user_id, 'resources_collected', value if value > 0 else 1)
+            
+        elif event_type == 'CRAFTING_COMPLETE':
+            self._increment_stat(session, user_id, 'items_crafted', 1)
+            
+        elif event_type == 'PROFESSION_LEVELUP':
+            self._set_stat(session, user_id, 'profession_level', value)
+
     def _increment_stat(self, session, user_id, stat_key, amount):
         """
         Helper to safely increment a UserStat.

@@ -47,8 +47,19 @@ class TestNameError(unittest.TestCase):
         self.session.commit()
 
     def tearDown(self):
-        self.session.query(Dungeon).filter_by(chat_id=self.chat_id).delete()
+        from models.combat import CombatParticipation
+        self.session.rollback()
+        
+        from sqlalchemy import text
+        try:
+            self.session.execute(text("TRUNCATE dungeon_participant CASCADE"))
+            self.session.execute(text("TRUNCATE combat_participation CASCADE"))
+        except:
+            pass
+        self.session.commit()
+        
         self.session.query(Mob).filter_by(chat_id=self.chat_id).delete()
+        self.session.query(Dungeon).filter_by(chat_id=self.chat_id).delete()
         self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()
         self.session.commit()
         self.session.close()
@@ -60,7 +71,7 @@ class TestNameError(unittest.TestCase):
         
         # This should NOT raise NameError
         try:
-            success, msg, extra_data = self.pve_service.attack_mob(user, base_damage=10, mob_id=mob.id)
+            success, msg, extra_data = self.pve_service.attack_mob(user, base_damage=10, mob_id=mob.id, session=self.session)
             self.assertTrue(success)
         except NameError as e:
             self.fail(f"attack_mob raised NameError: {e}")

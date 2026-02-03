@@ -71,14 +71,26 @@ class TestFullFlow(unittest.TestCase):
 
     def cleanup(self):
         try:
-            self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()
-            self.session.query(Mob).filter_by(chat_id=self.chat_id).delete()
+            # Delete dependent records first to avoid FK violations
             self.session.query(CombatParticipation).filter_by(user_id=self.user_id).delete()
-            self.session.query(Collezionabili).filter_by(id_telegram=str(self.user_id)).delete()
-            self.session.query(UserTransformation).filter_by(user_id=self.user_id).delete()
+            # Also delete participation for mobs in this chat (if any other users existed)
+            # Find mobs in this chat to delete their participation
+            mobs = self.session.query(Mob).filter_by(chat_id=self.chat_id).all()
+            for m in mobs:
+                self.session.query(CombatParticipation).filter_by(mob_id=m.id).delete()
+            
+            self.session.query(Mob).filter_by(chat_id=self.chat_id).delete()
+            
             self.session.query(DungeonParticipant).filter(DungeonParticipant.user_id == self.user_id).delete()
             self.session.query(Dungeon).filter(Dungeon.chat_id == self.chat_id).delete()
+            
+            self.session.query(Collezionabili).filter_by(id_telegram=str(self.user_id)).delete()
+            self.session.query(UserTransformation).filter_by(user_id=self.user_id).delete()
             self.session.query(CharacterTransformation).filter(CharacterTransformation.transformation_name.like("Test%")).delete()
+            
+            # Finally delete user
+            self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()
+            
             self.session.commit()
         except Exception as e:
             print(f"Cleanup error: {e}")
@@ -131,6 +143,8 @@ class TestFullFlow(unittest.TestCase):
         # 2. Special Attack (Requires Mana)
         # Give mana
         self.user.mana = 100
+        # Reset cooldown to ensure attack is possible
+        self.user.last_attack_time = datetime.datetime.now() - datetime.timedelta(minutes=5)
         self.session.commit()
         
         result = self.pve_service.use_special_attack(self.user, chat_id=self.chat_id, session=self.session)
@@ -179,7 +193,7 @@ class TestFullFlow(unittest.TestCase):
         # Since we mocked it, it won't update the DB.
         # So we must manually update the user in the test or mock side_effect.
         
-        def side_effect_apply(user, item_name):
+        def side_effect_apply(user, item_name, session=None):
             user.current_hp = min(user.max_health, user.current_hp + 50)
             self.session.commit()
             return True, "Guarito!"

@@ -16,6 +16,7 @@ class Guild(Base):
     armory_level = Column(Integer, default=0)
     village_level = Column(Integer, default=1)
     bordello_level = Column(Integer, default=0)
+    brewery_level = Column(Integer, default=1)
     
     # Location on pixelated map
     map_x = Column(Integer, nullable=True)

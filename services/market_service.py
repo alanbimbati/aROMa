@@ -21,9 +21,13 @@ class MarketService:
         session = self.db.get_session()
         try:
             # Check inventory
+            print(f"[DEBUG] Market List: Checking user {user_id} (type: {type(user_id)})")
             user = session.query(Utente).filter_by(id_telegram=user_id).first()
             if not user:
-                return False, "Utente non trovato."
+                print(f"[DEBUG] Market List: User {user_id} NOT FOUND in DB.")
+                all_ids = session.query(Utente.id_telegram).all()
+                # print(f"[DEBUG] IDs in DB: {[i[0] for i in all_ids]}") # Too spammy if many users
+                return False, f"Utente non trovato (ID: {user_id})"
 
             # Calculate total quantity available
             total_qty = session.query(Collezionabili).filter_by(

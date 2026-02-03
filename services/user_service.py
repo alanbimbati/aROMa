@@ -16,11 +16,13 @@ class UserService:
     # Class-level dictionary to track activity with timestamps
     # Format: {(user_id, chat_id): timestamp}
     _recent_activities = {}
+    _last_db_updates = {} # {user_id: timestamp} - Track when we wrote to DB last
     _exp_required_column_exists = None  # Cache per verificare se la colonna esiste
 
     def __init__(self):
         self.db = Database()
         self.recent_activities = UserService._recent_activities
+        self.last_db_updates = UserService._last_db_updates
         self.event_dispatcher = EventDispatcher()
         self.equipment_service = EquipmentService()
 
@@ -114,9 +116,31 @@ class UserService:
         except (ValueError, TypeError):
             pass
             
+        now = datetime.datetime.now()
         key = (user_id, chat_id)
-        self.recent_activities[key] = datetime.datetime.now()
+        self.recent_activities[key] = now
+        
+        # Throttled DB update (once per hour per user)
+        last_db_upd = self.last_db_updates.get(user_id)
+        if not last_db_upd or (now - last_db_upd).total_seconds() > 3600:
+            self._update_last_activity_db(user_id, now)
+            self.last_db_updates[user_id] = now
+            
         print(f"[DEBUG] track_activity: user_id={user_id}, chat_id={chat_id}")
+        
+    def _update_last_activity_db(self, user_id, timestamp):
+        """Update last_activity in database"""
+        session = self.db.get_session()
+        try:
+            session.query(Utente).filter_by(id_telegram=user_id).update(
+                {'last_activity': timestamp}
+            )
+            session.commit()
+        except Exception as e:
+            print(f"[ERROR] Failed to update last_activity for {user_id}: {e}")
+            session.rollback()
+        finally:
+            session.close()
         
     def get_recent_users(self, chat_id=None, minutes=30):
         """Get users active within the last N minutes, sorted by recency (most recent first)"""
@@ -817,7 +841,7 @@ class UserService:
             if local_session:
                 session.close()
 
-    def get_resting_status(self, user_id, session=None):
+    def get_resting_status(self, user_id, session=None, recovery_multiplier=1.0):
         """Check how much HP/Mana would be recovered if resting stopped now"""
         local_session = False
         if not session:
@@ -832,10 +856,17 @@ class UserService:
             now = datetime.datetime.now()
             elapsed_minutes = int((now - user.resting_since).total_seconds() / 60)
             
-            # 1 HP and 1 Mana per minute
+            # Base: 1 HP and 1 Mana per minute
+            # Apply multiplier
+            hp_gain_per_min = 1.0 * recovery_multiplier
+            mana_gain_per_min = 1.0 * recovery_multiplier
+            
+            total_hp_gain = int(elapsed_minutes * hp_gain_per_min)
+            total_mana_gain = int(elapsed_minutes * mana_gain_per_min)
+            
             current_hp = user.current_hp if user.current_hp is not None else user.health
-            hp_to_recover = min(elapsed_minutes, user.max_health - current_hp)
-            mana_to_recover = min(elapsed_minutes, user.max_mana - user.mana)
+            hp_to_recover = min(total_hp_gain, user.max_health - current_hp)
+            mana_to_recover = min(total_mana_gain, user.max_mana - user.mana)
             
             return {
                 'minutes': elapsed_minutes,
@@ -846,7 +877,7 @@ class UserService:
             if local_session:
                 session.close()
 
-    def stop_resting(self, user_id, session=None):
+    def stop_resting(self, user_id, session=None, recovery_multiplier=1.0):
         """Stop resting and apply recovery"""
         local_session = False
         if not session:
@@ -858,7 +889,7 @@ class UserService:
             if not user or not user.resting_since:
                 return False, "Non stai riposando."
                 
-            status = self.get_resting_status(user_id, session=session)
+            status = self.get_resting_status(user_id, session=session, recovery_multiplier=recovery_multiplier)
             
             # Update HP
             if hasattr(user, 'current_hp') and user.current_hp is not None:

@@ -46,13 +46,51 @@ class TargetingService:
             if recent_users is None:
                 recent_users = self.user_service.get_recent_users(chat_id=chat_id)
             
+            # Prepare candidates list
+            all_candidates = set(recent_users) if recent_users else set()
+            print(f"[DEBUG] Targeting: mob_id={mob.id}, dungeon_id={mob.dungeon_id}, initial_candidates={len(all_candidates)}")
+            
+            # If mob is in a dungeon, add only ACTIVE dungeon participants
+            if mob.dungeon_id:
+                from services.dungeon_service import DungeonService
+                import datetime
+                ds = DungeonService()
+                
+                # Get dungeon participants
+                participants = ds.get_dungeon_participants(mob.dungeon_id, session=session)
+                
+                # Filter for active users only (last activity within 6 months)
+                six_months_ago = datetime.datetime.now() - datetime.timedelta(days=180)
+                active_participant_ids = []
+                
+                for p in participants:
+                    # Check if user exists and is active
+                    user = session.query(Utente).filter_by(id_telegram=p.user_id).first()
+                    if user:
+                        last_activity = getattr(user, 'last_activity', None)
+                        if last_activity and last_activity >= six_months_ago:
+                            active_participant_ids.append(p.user_id)
+                        elif not last_activity:
+                            # If no last_activity recorded, include them (new user)
+                            active_participant_ids.append(p.user_id)
+                
+                print(f"[DEBUG] Targeting: Dungeon mode. Found {len(active_participant_ids)} active participants (filtered from {len(participants)} total) in dungeon {mob.dungeon_id}.")
+                for pid in active_participant_ids:
+                    all_candidates.add(pid)
+            
+            print(f"[DEBUG] Targeting: Total candidates to check: {len(all_candidates)}")
+            
             # Filter users based on eligibility
             valid_targets = []
             
-            for uid in recent_users:
-                if self._is_valid_target(uid, mob, session):
+            for uid in list(all_candidates):
+                is_valid = self._is_valid_target(uid, mob, session)
+                if is_valid:
                     valid_targets.append(uid)
+                else:
+                    print(f"[DEBUG] Targeting: User {uid} rejected by _is_valid_target")
             
+            print(f"[DEBUG] Targeting: Final valid targets: {valid_targets}")
             return valid_targets
             
         finally:
@@ -65,6 +103,14 @@ class TargetingService:
         user = session.query(Utente).filter_by(id_telegram=user_id).first()
         if not user:
             return False
+        
+        # Check if account is too old (inactive for 6+ months = auto-deleted)
+        if hasattr(user, 'last_activity') and user.last_activity:
+            import datetime
+            six_months_ago = datetime.datetime.now() - datetime.timedelta(days=180)
+            if user.last_activity < six_months_ago:
+                print(f"[DEBUG] User {user_id} inactive for 6+ months, skipping")
+                return False
         
         # Check if resting
         is_resting = self.user_service.get_resting_status(user.id_telegram, session=session)
@@ -96,8 +142,8 @@ class TargetingService:
             if user_id not in participant_ids:
                 return False
         else:
-            # For world mobs, there is no restriction. They can attack anyone active in the chat.
-            # User said: "boss deve attaccare tutti... si possono mescolare".
+            # For world mobs, user must be in recent_users (active in group)
+            # This check is implicit since we only add recent_users to candidates in get_valid_targets
             pass
         
         return True

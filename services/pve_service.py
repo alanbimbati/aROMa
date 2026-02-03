@@ -135,7 +135,7 @@ class PvEService:
                     session.close()
 
 
-    def defend(self, user):
+    def defend(self, user, chat_id=None):
         """
         Enter defensive stance.
         - Increases resistance by 5% (capped at 75%) for next attack.
@@ -148,12 +148,24 @@ class PvEService:
             # (The passed user object might be detached or from another session)
             db_user = session.merge(user)
             
+            # Check if Resting (Inn)
+            if db_user.resting_since:
+                session.close()
+                return False, "💤 Sei alla Locanda! Non puoi combattere mentre riposi. Usa /locanda per uscire."
+
             # Check if dead (Robust check)
             current_hp = db_user.current_hp if hasattr(db_user, 'current_hp') and db_user.current_hp is not None else (db_user.health or 0)
             
             if current_hp <= 0:
                 session.close()
                 return False, "💀 Sei morto! Non puoi difenderti. Devi curarti alla Locanda."
+
+            # Check if there are active mobs in chat (if chat_id provided)
+            if chat_id:
+                mobs_count = session.query(Mob).filter_by(chat_id=chat_id, is_dead=False).count()
+                if mobs_count == 0:
+                    session.close()
+                    return False, "Non c'è nessuno da cui difendersi! I nemici sono stati sconfitti."
 
             # Check Cooldown (Shared with attack)
             user_speed = getattr(db_user, 'speed', 0) or 0
@@ -1406,11 +1418,11 @@ class PvEService:
                     weights = []
                     
                     for uid in targets_pool:
-                        weight = 10.0 # Base aggro
-                        
-                        # Damage Aggro
+                        # Damage Aggro - Primary factor
                         dmg = damage_map.get(uid, 0)
-                        weight += (dmg * 0.5) # 2 damage = 1 aggro point (Significantly increased from 0.1)
+                        # If user has dealt damage, use damage as weight
+                        # If no damage, give minimal weight (1) so they can still be randomly targeted
+                        weight = max(dmg, 1.0) if dmg > 0 else 1.0
                         
                         # Defense Aggro (Taunt Status)
                         # We need to check if user has 'defense_up'
@@ -1430,6 +1442,7 @@ class PvEService:
                             
                         candidates.append(uid)
                         weights.append(weight)
+                        print(f"[DEBUG AGGRO] User {uid}: damage={dmg}, weight={weight}")
                         
                     # 3. Select Target
                     target_id = None
@@ -1463,23 +1476,35 @@ class PvEService:
                             if t: targets.append(t)
                     else:
                         # Single Target Logic
-                        if mob.aggro_target_id and mob.aggro_end_time and mob.aggro_end_time > datetime.datetime.now():
-                            # Taunt override
-                            if mob.aggro_target_id in targets_pool:
-                                target_id = mob.aggro_target_id
-                            else:
-                                # Taunter fled or died
-                                mob.aggro_target_id = None
-                                target_id = random.choices(candidates, weights=weights, k=1)[0] if candidates else None
+                        
+                        # 15% Chance to attack RANDOM target (ignoring aggro/taunt)
+                        random_roll = random.random()
+                        if random_roll < 0.15 and len(candidates) > 1:
+                            # Pure random choice from valid candidates
+                            target_id = random.choice(candidates)
+                            print(f"[DEBUG AGGRO] 15% Random triggered (roll={random_roll:.3f}), selected {target_id}")
                         else:
-                            # Standard Weighted Aggro
-                            if candidates:
+                            # Standard Aggro Logic (85%)
+                            if mob.aggro_target_id and mob.aggro_end_time and mob.aggro_end_time > datetime.datetime.now():
+                                # Taunt is active
+                                if mob.aggro_target_id in targets_pool:
+                                    target_id = mob.aggro_target_id
+                                    print(f"[DEBUG AGGRO] Taunt active, targeting {target_id}")
+                                else:
+                                    # Taunt target invalid, fallback to weights
+                                    target_id = random.choices(candidates, weights=weights, k=1)[0]
+                                    print(f"[DEBUG AGGRO] Taunt invalid, weighted choice: {target_id}")
+                            else:
+                                # No taunt, use weighted aggro
                                 target_id = random.choices(candidates, weights=weights, k=1)[0]
-                            
-                        target = session.query(Utente).filter_by(id_telegram=target_id).first()
-                        if target:
-                            targets.append(target)
-                            mob.last_target_id = target.id_telegram
+                                total_weight = sum(weights)
+                                selected_weight = weights[candidates.index(target_id)] if target_id in candidates else 0
+                                print(f"[DEBUG AGGRO] Weighted aggro: selected {target_id} (weight {selected_weight}/{total_weight})")
+                                
+                        if target_id:
+                            t = session.query(Utente).filter_by(id_telegram=target_id).first()
+                            if t: targets.append(t)
+                            mob.last_target_id = target_id
                     
                     if not targets:
                         continue
@@ -1504,6 +1529,8 @@ class PvEService:
                         
                         username = target.username.lstrip('@') if target.username else None
                         tag = f"@{username}" if username else target.nome
+                        if damage == 0 and self.user_service.is_invincible(target):
+                            tag += " (INVINCIBILE! 🎭)"
                         damage_results.append({'tag': tag, 'damage': damage})
                         if died:
                             death_messages.append(f"💀 **{tag}** è caduto in battaglia!")
@@ -1671,8 +1698,17 @@ class PvEService:
                     # Fatigue: 10% reduction (90% efficiency)
                     p_wumpa = int(p_wumpa * 0.9)
             
-            # Apply Item Effects
-            if is_stunned:
+            # Check status and fleeing
+            has_fled = getattr(p, 'has_fled', False)
+            user_hp = p_user_check.current_hp if p_user_check.current_hp is not None else p_user_check.health
+            is_dead = (user_hp <= 0)
+
+            # Apply Status Effects and Flee/Death rules
+            if has_fled:
+                # Fled players receive NO rewards
+                p_xp = 0
+                p_wumpa = 0
+            elif is_stunned:
                 # Redirect rewards
                 if stun_attacker_id:
                     if stun_attacker_id not in redirected_rewards:
@@ -1682,8 +1718,11 @@ class PvEService:
                 
                 p_xp = 0
                 p_wumpa = 0
+            elif is_dead:
+                # Dead players receive Wumpa but NO EXP
+                p_xp = 0
             
-            if has_turbo:
+            if has_turbo and not has_fled and not is_stunned and not is_dead:
                 p_xp = int(p_xp * 1.2)
             
             actual_total_wumpa += p_wumpa
@@ -1715,6 +1754,13 @@ class PvEService:
             # Cap displayed damage at mob's max HP to avoid confusion
             display_damage = min(p.damage_dealt, boss.max_health)
             reward_line = f"👤 **{p_name}**: {display_damage}/{boss.max_health} dmg -> {p_xp} Exp, {p_wumpa} {PointsName}"
+            
+            if has_fled:
+                reward_line += " 🏃 (Fuggito)"
+            elif is_dead:
+                reward_line += " 💀 (Morto)"
+            elif is_stunned:
+                reward_line += " 💫 (Stordito)"
             
             # Add level-up notification if applicable
             if level_up_info['leveled_up']:

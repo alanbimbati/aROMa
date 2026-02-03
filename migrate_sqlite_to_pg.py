@@ -99,6 +99,24 @@ def migrate():
         else:
             print("📭 Vuota")
 
+    print("\n🔄 Aggiornamento sequenze PostgreSQL...")
+    with pg_engine.connect() as conn:
+        for table_name in tables:
+            if table_name not in Base.metadata.tables: continue
+            
+            # Check if table has an 'id' column (primary key usually)
+            table = Base.metadata.tables[table_name]
+            if 'id' in table.columns:
+                try:
+                    # Reset sequence to max(id) + 1
+                    seq_name = f"{table_name}_id_seq"
+                    sql = text(f"SELECT setval('{seq_name}', (SELECT MAX(id) FROM {table_name}));")
+                    conn.execute(sql)
+                    print(f"  🔢 Sequenza aggiornata per {table_name}")
+                except Exception as e:
+                    print(f"  ⚠️ Impossibile aggiornare sequenza per {table_name}: {e}")
+        conn.commit()
+
     print("\n🎉 Migrazione completata con successo!")
     sqlite_session.close()
     pg_session.close()

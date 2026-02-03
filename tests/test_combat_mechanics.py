@@ -48,8 +48,19 @@ class TestCombatMechanics(unittest.TestCase):
         self.session.commit()
         
     def tearDown(self):
-        self.session.query(Utente).filter_by(id_telegram=16001).delete()
-        self.session.query(Mob).filter_by(id=self.mob.id).delete()
+        self.session.rollback()
+        mob_id = self.mob.id
+        user_id = 16001
+        
+        from sqlalchemy import text
+        try:
+            self.session.execute(text("TRUNCATE combat_participation CASCADE"))
+        except:
+            self.session.execute(text("DELETE FROM combat_participation"))
+        self.session.commit()
+        
+        self.session.query(Utente).filter_by(id_telegram=user_id).delete()
+        self.session.query(Mob).filter_by(id=mob_id).delete()
         self.session.commit()
         self.session.close()
         
@@ -60,7 +71,7 @@ class TestCombatMechanics(unittest.TestCase):
         # We can't easily test exact random values, but we can check range
         
         initial_hp = self.mob.health
-        success, msg, extra = self.pve_service.attack_mob(self.user, 50, mob_id=self.mob.id)
+        success, msg, extra = self.pve_service.attack_mob(self.user, 50, mob_id=self.mob.id, session=self.session)
         
         self.assertTrue(success)
         self.session.refresh(self.mob)
@@ -119,7 +130,8 @@ class TestCombatMechanics(unittest.TestCase):
             base_damage=100, 
             use_special=True, 
             mob_id=self.mob.id, 
-            mana_cost=mana_cost
+            mana_cost=mana_cost,
+            session=self.session
         )
         
         self.session.refresh(self.user)

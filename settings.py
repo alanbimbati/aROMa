@@ -1,33 +1,8 @@
-PROMOZIONI = {
-    "Halloween":    {
-        "nome":                 "Halloween",
-        "periodo_inizio":       "20231030",
-        "periodo_fine":         "20231105",
-        "COSTO_PREMIUM":        150,
-        "COSTO_MANTENIMENTO":   25
-
-    },
-    "Natale": {
-        "nome":                 "Natale",
-        "periodo_inizio":       "20231224",
-        "periodo_fine":         "20240108",
-        "COSTO_PREMIUM":        100,
-        "COSTO_MANTENIMENTO":   25
-    },
-    "SanValentino": {
-        "nome":                 "SanValentino",
-        "periodo_inizio":       "20240214",
-        "periodo_fine":         "20240214",
-        "COSTO_PREMIUM":        125,
-        "COSTO_MANTENIMENTO":   25
-    },    
-}
-
 CANALE_LOG          =    '-1001469821841'
 TEST                =    1
 
-TEST_TOKEN      = '5481883387:AAFtNcThJmjUA0Rt8jXnS8JgsZxpLbrWhY8'
-AROMA_TOKEN     = '1354552262:AAE6wbRbpA_b5SE_MzzA5yfy6DORBu7Vfp4'
+TEST_TOKEN      = '5481883387:AAGTJ1nxa1JUt-kIapuoV1l8C8W3KihMq4c'
+AROMA_TOKEN     = '1354552262:AAEqcMo6worCz7a19X-XRtOw5uL3ecY3SH4'
 
 TEST_GRUPPO     = -1001721979634
 AROMA_GRUPPO    = -1001457029650

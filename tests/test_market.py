@@ -1,7 +1,7 @@
 import unittest
 import sys
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, ANY
 
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -252,6 +252,54 @@ class TestMarket(unittest.TestCase):
         
         self.assertGreaterEqual(len(listings), 2)
         self.assertGreaterEqual(total, 2)
+
+
+    def test_market_achievement_events(self):
+        """Verify that market actions trigger achievement events"""
+        # Mock EventDispatcher
+        self.market_service.event_dispatcher = MagicMock()
+        
+        # 1. Test Listing Event
+        self.item_service.add_item(self.seller_id, "Pozione", 5)
+        self.market_service.list_item(
+            user_id=self.seller_id,
+            item_name="Pozione",
+            quantity=1,
+            price_per_unit=50
+        )
+        
+        # Verify ITEM_LISTED event
+        self.market_service.event_dispatcher.log_event.assert_any_call(
+            event_type='ITEM_LISTED',
+            user_id=self.seller_id,
+            value=1,
+            context=ANY
+        )
+        
+        # 2. Test Buying Event
+        session = self.db.get_session()
+        listing = session.query(MarketListing).filter_by(seller_id=self.seller_id, status='active').first()
+        listing_id = listing.id
+        session.close()
+        
+        self.market_service.buy_item(
+            buyer_id=self.buyer_id,
+            listing_id=listing_id
+        )
+        
+        # Verify ITEM_BOUGHT and ITEM_SOLD events
+        self.market_service.event_dispatcher.log_event.assert_any_call(
+            event_type='ITEM_BOUGHT',
+            user_id=self.buyer_id,
+            value=50, # Price
+            context=ANY
+        )
+        self.market_service.event_dispatcher.log_event.assert_any_call(
+            event_type='ITEM_SOLD',
+            user_id=self.seller_id,
+            value=50, # Price
+            context=ANY
+        )
 
 if __name__ == '__main__':
     unittest.main()

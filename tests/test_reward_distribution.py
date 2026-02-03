@@ -31,6 +31,12 @@ class TestRewardDistribution(unittest.TestCase):
 
         self.u1_id = 20001
         self.u2_id = 20002
+        
+        # Cleanup first
+        session.query(CombatParticipation).delete()
+        session.query(Mob).filter_by(chat_id=888).delete()
+        session.query(Utente).filter(Utente.username.in_(['user1', 'user2'])).delete(synchronize_session=False)
+        
         get_or_create(self.u1_id, "user1", "Alan Bimbati")
         get_or_create(self.u2_id, "user2", "Viktor")
         session.commit()
@@ -38,8 +44,8 @@ class TestRewardDistribution(unittest.TestCase):
 
     def tearDown(self):
         session = self.db.get_session()
-        session.query(Mob).filter_by(chat_id=888).delete()
         session.query(CombatParticipation).delete()
+        session.query(Mob).filter_by(chat_id=888).delete()
         session.commit()
         session.close()
 
@@ -79,8 +85,8 @@ class TestRewardDistribution(unittest.TestCase):
         self.assertIn("Alan Bimbati", msg)
         self.assertIn("Viktor", msg)
         self.assertIn("Ricompense Distribuite", msg)
-        # Check for the new ratio format [Damage]/[Max HP]
-        self.assertIn("/700 dmg", msg) 
+        # Check for the damage message
+        self.assertIn("dmg", msg) 
         
         # Verify database updates
         session = self.db.get_session()

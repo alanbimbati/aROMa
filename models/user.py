@@ -68,6 +68,10 @@ class Utente(Base):
     # Inn / Resting
     resting_since = Column(DateTime, nullable=True)
     vigore_until = Column(DateTime, nullable=True)
+    
+    # Guild Inn Limits
+    last_beer_usage = Column(DateTime, nullable=True)
+    last_brothel_usage = Column(DateTime, nullable=True)
 
     # Platform (iOS, Android, Web)
     platform = Column(String, nullable=True)
@@ -81,7 +85,13 @@ class Utente(Base):
     # Economy / Anti-Inflation
     daily_wumpa_earned = Column(Integer, default=0)
     last_wumpa_reset = Column(DateTime, nullable=True)
+    daily_wumpa_earned = Column(Integer, default=0)
+    last_wumpa_reset = Column(DateTime, nullable=True)
     last_chat_drop_time = Column(DateTime, nullable=True)
+    
+    # Activity Tracking
+    last_activity = Column(DateTime, nullable=True)
+
 
 class Admin(Base):
     __tablename__ = "admin"
