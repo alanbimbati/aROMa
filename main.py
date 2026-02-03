@@ -2,8 +2,8 @@ from telebot import types, util
 from settings import *
 import schedule
 import time
-import threading
 import datetime
+import threading
 import os
 import random
 import socket
@@ -1173,7 +1173,7 @@ def handle_craft_view_resources(call):
     
     try:
         resources = session.execute(text("""
-            SELECT r.name, r.emoji, ur.quantity
+            SELECT r.name, ur.quantity
             FROM user_resources ur
             JOIN resources r ON ur.resource_id = r.id
             WHERE ur.user_id = :uid AND ur.quantity > 0
@@ -1182,8 +1182,8 @@ def handle_craft_view_resources(call):
         
         msg = "📦 **Le Tue Risorse**\n\n"
         if resources:
-            for name, emoji, quantity in resources:
-                emoji_display = emoji if emoji else '📦'
+            for name, quantity in resources:
+                emoji_display = '📦' # Default emoji since r.emoji is no longer selected
                 msg += f"{emoji_display} {name}: **x{quantity}**\n"
         else:
             msg += "_Nessuna risorsa disponibile._\n"
