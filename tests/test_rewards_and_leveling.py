@@ -37,6 +37,10 @@ class TestRewardsAndLeveling(unittest.TestCase):
         self.user_id = 17001
         
         # Ensure clean state: delete if exists
+        self.session.query(CombatParticipation).filter_by(user_id=self.user_id).delete()
+        self.session.query(Mob).filter_by(chat_id=self.chat_id).delete()
+        self.session.query(DungeonParticipant).filter_by(user_id=self.user_id).delete()
+        self.session.query(Dungeon).filter_by(chat_id=self.chat_id).delete()
         self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()
         self.session.commit()
         
@@ -62,11 +66,11 @@ class TestRewardsAndLeveling(unittest.TestCase):
         self.session.commit()
         
     def tearDown(self):
-        self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()
+        self.session.query(CombatParticipation).filter_by(user_id=self.user_id).delete()
         self.session.query(Mob).filter_by(chat_id=self.chat_id).delete()
         self.session.query(DungeonParticipant).delete()
         self.session.query(Dungeon).filter_by(chat_id=self.chat_id).delete()
-        self.session.query(CombatParticipation).filter_by(user_id=self.user_id).delete()
+        self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()
         self.session.commit()
         self.session.close()
 
@@ -131,9 +135,10 @@ class TestRewardsAndLeveling(unittest.TestCase):
         # Verify final rewards
         self.session.expire_all()
         updated_user = self.session.query(Utente).filter_by(id_telegram=self.user_id).first()
-        self.assertGreater(updated_user.exp, initial_exp)
-        self.assertGreater(updated_user.points, initial_points)
-        print(f"Dungeon Completion Rewards: EXP Gain={updated_user.exp - initial_exp}, Wumpa Gain={updated_user.points - initial_points}")
+        print(f"DEBUG: initial_exp={initial_exp}, current_exp={updated_user.exp}")
+        print(f"DEBUG: initial_points={initial_points}, current_points={updated_user.points}")
+        self.assertGreater(updated_user.exp, initial_exp, f"EXP should increase after dungeon completion. Msg: {msg}")
+        self.assertGreater(updated_user.points, initial_points, "Points should increase after dungeon completion")
 
     def test_level_up_logic(self):
         """Test that reaching EXP threshold triggers level up and full heal"""

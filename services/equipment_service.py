@@ -1,8 +1,9 @@
 from database import Database
-from models.item import Item, ItemSet, ItemSlot
-from models.inventory import UserItem
+from models.equipment import Equipment, UserEquipment
+from models.item import ItemSet
 from sqlalchemy import func
 import random
+import json
 
 class EquipmentService:
     def __init__(self):
@@ -12,9 +13,10 @@ class EquipmentService:
         """Get all items owned by user"""
         session = self.db.get_session()
         try:
-            items = session.query(UserItem, Item).join(Item, UserItem.item_id == Item.id)\
-                .filter(UserItem.user_id == user_id).all()
-            return items # Returns list of (UserItem, Item) tuples
+            # Join UserEquipment and Equipment
+            items = session.query(UserEquipment, Equipment).join(Equipment, UserEquipment.equipment_id == Equipment.id)\
+                .filter(UserEquipment.user_id == user_id).all()
+            return items # Returns list of (UserEquipment, Equipment) tuples
         finally:
             session.close()
             
@@ -25,8 +27,8 @@ class EquipmentService:
             session = self.db.get_session()
             local_session = True
         try:
-            items = session.query(UserItem, Item).join(Item, UserItem.item_id == Item.id)\
-                .filter(UserItem.user_id == user_id, UserItem.is_equipped == True).all()
+            items = session.query(UserEquipment, Equipment).join(Equipment, UserEquipment.equipment_id == Equipment.id)\
+                .filter(UserEquipment.user_id == user_id, UserEquipment.equipped == True).all()
             return items
         finally:
             if local_session:
@@ -37,43 +39,55 @@ class EquipmentService:
         session = self.db.get_session()
         try:
             # Get the item to equip
-            target = session.query(UserItem, Item).join(Item, UserItem.item_id == Item.id)\
-                .filter(UserItem.id == user_item_id, UserItem.user_id == user_id).first()
+            target = session.query(UserEquipment, Equipment).join(Equipment, UserEquipment.equipment_id == Equipment.id)\
+                .filter(UserEquipment.id == user_item_id, UserEquipment.user_id == user_id).first()
                 
             if not target:
                 return False, "Oggetto non trovato."
                 
             user_item, item = target
             
-            if user_item.is_equipped:
+            if user_item.equipped:
                 return False, "Oggetto già equipaggiato."
                 
             # Check slot restrictions
             slot = item.slot
             
-            # Get currently equipped in that slot
-            equipped = session.query(UserItem, Item).join(Item, UserItem.item_id == Item.id)\
-                .filter(UserItem.user_id == user_id, UserItem.is_equipped == True, Item.slot == slot).all()
-            
             # Logic for slots
+            # If Ring or Earring, we might have 2 slots: "Ring_1", "Ring_2"
+            # Logic: If 1 ring equipped, go to slot 2. If 2 equipped, replace oldest/first?
+            # Or ask user? For now, auto-replace logic.
+            
             to_unequip = []
+            target_slot_in_db = slot # Default
+            
+            # Get currently equipped in that generic slot type
+            equipped = session.query(UserEquipment, Equipment).join(Equipment, UserEquipment.equipment_id == Equipment.id)\
+                .filter(UserEquipment.user_id == user_id, UserEquipment.equipped == True, Equipment.slot == slot).all()
             
             if slot in ["Ring", "Earring"]:
-                # Allow 2 max
-                if len(equipped) >= 2:
-                    # Unequip the first one (or oldest?)
-                    to_unequip.append(equipped[0][0])
+                 if len(equipped) >= 2:
+                     # Unequip the first one found
+                     to_unequip.append(equipped[0][0])
+                     target_slot_in_db = f"{slot}_1" # Fallback or keep same
+                 elif len(equipped) == 1:
+                     target_slot_in_db = f"{slot}_2" # Use second slot
+                 else:
+                     target_slot_in_db = f"{slot}_1"
             else:
-                # Allow 1 max
+                # 1 max for others
                 if len(equipped) >= 1:
                     to_unequip.append(equipped[0][0])
+                target_slot_in_db = slot
             
             # Unequip old
             for old_item in to_unequip:
-                old_item.is_equipped = False
+                old_item.equipped = False
+                old_item.slot_equipped = None
                 
             # Equip new
-            user_item.is_equipped = True
+            user_item.equipped = True
+            user_item.slot_equipped = target_slot_in_db
             session.commit()
             
             return True, f"Hai equipaggiato: {item.name}"
@@ -87,14 +101,15 @@ class EquipmentService:
         """Unequip an item"""
         session = self.db.get_session()
         try:
-            user_item = session.query(UserItem).filter_by(id=user_item_id, user_id=user_id).first()
+            user_item = session.query(UserEquipment).filter_by(id=user_item_id, user_id=user_id).first()
             if not user_item:
                 return False, "Oggetto non trovato."
                 
-            if not user_item.is_equipped:
+            if not user_item.equipped:
                 return False, "Oggetto non equipaggiato."
                 
-            user_item.is_equipped = False
+            user_item.equipped = False
+            user_item.slot_equipped = None
             session.commit()
             return True, "Oggetto rimosso."
         finally:
@@ -108,37 +123,41 @@ class EquipmentService:
             local_session = True
             
         try:
-            equipped = session.query(UserItem, Item).join(Item, UserItem.item_id == Item.id)\
-                .filter(UserItem.user_id == user_id, UserItem.is_equipped == True).all()
+            # Query UserEquipment joined with Equipment
+            equipped = session.query(UserEquipment, Equipment).join(Equipment, UserEquipment.equipment_id == Equipment.id)\
+                .filter(UserEquipment.user_id == user_id, UserEquipment.equipped == True).all()
                 
             total_stats = {}
             set_counts = {}
             
             # 1. Sum Item Stats
             for u_item, item in equipped:
-                # Base stats
-                for stat, value in item.stats.items():
+                # Base stats from JSON
+                stats = item.stats_json
+                if isinstance(stats, str):
+                    try:
+                        stats = json.loads(stats)
+                    except:
+                        stats = {}
+                elif not isinstance(stats, dict):
+                    stats = {}
+                
+                for stat, value in stats.items():
                     total_stats[stat] = total_stats.get(stat, 0) + value
                     
-                # Level scaling (e.g. +5% per level? or flat?)
-                # Let's say +10% stats per upgrade level for now
-                if u_item.level > 0:
-                    multiplier = 1 + (u_item.level * 0.1)
-                    for stat in total_stats:
-                        # Only apply to stats from this item? 
-                        # Simpler: Apply to total? No, that's wrong.
-                        # Re-calculate:
-                        pass 
+                # No level scaling usually for equipment unless it's upgraded (+1)
+                # Assuming 'min_level' is requirement, not item level
                 
-                # Count sets
-                if item.set_id:
-                    set_counts[item.set_id] = set_counts.get(item.set_id, 0) + 1
+                # Count sets (by Name)
+                if item.set_name:
+                    set_counts[item.set_name] = set_counts.get(item.set_name, 0) + 1
             
             # 2. Apply Set Bonuses
-            for set_id, count in set_counts.items():
-                item_set = session.query(ItemSet).filter_by(id=set_id).first()
+            for set_name, count in set_counts.items():
+                # Look up ItemSet by Name
+                item_set = session.query(ItemSet).filter_by(name=set_name).first()
                 if item_set and item_set.bonuses:
-                    # Check thresholds (e.g. "2", "4")
+                    # Check thresholds (e.g. "2", "4", "6")
                     for threshold, bonus_stats in item_set.bonuses.items():
                         if count >= int(threshold):
                             for stat, value in bonus_stats.items():
@@ -149,11 +168,11 @@ class EquipmentService:
             if local_session:
                 session.close()
 
-    def add_item_to_user(self, user_id, item_id):
+    def add_item_to_user(self, user_id, equipment_id):
         """Give an item to a user"""
         session = self.db.get_session()
         try:
-            new_item = UserItem(user_id=user_id, item_id=item_id)
+            new_item = UserEquipment(user_id=user_id, equipment_id=equipment_id)
             session.add(new_item)
             session.commit()
             return True

@@ -13,33 +13,35 @@ class GuideService:
                                 "✨ **Attacco Speciale**: Un attacco potente che consuma Mana. L'effetto e il danno dipendono dal personaggio equipaggiato.\n"
                                 "💥 **Attacco ad Area (AoE)**: Colpisce fino a 5 nemici contemporaneamente!\n"
                                 "   - **Danno**: Infligge il 70% del danno al bersaglio principale e il 50% agli altri.\n"
-                                "   - **Cooldown**: Il tempo di recupero è **doppio** rispetto a un attacco normale.\n"
-                                "   - **Speciale AoE**: Alcuni personaggi possono lanciare la loro abilità speciale ad area!"
+                                "   - **Cooldown**: Il tempo di recupero è **doppio** rispetto a un attacco normale.\n\n"
+                                "🔥 **Aggro**: I nemici attaccano chi fa più danno, ma i Tank possono attirare l'attenzione (Aggro) usando abilità difensive."
                     },
                     "stats": {
                         "title": "📊 Statistiche",
-                        "text": "Puoi allocare i punti statistica ottenuti salendo di livello (/stats) per personalizzare il tuo personaggio:\n\n"
-                                "❤️ **Vita (HP)**: Aumenta la tua salute massima (+10 per punto). Più vita hai, più colpi puoi subire.\n"
-                                "💙 **Mana (MP)**: Aumenta il tuo mana massimo (+5 per punto). Il mana serve per usare le abilità speciali.\n"
-                                "⚔️ **Danno Base**: Aumenta i danni inflitti dai tuoi attacchi fisici (+2 per punto).\n"
-                                "🛡️ **Resistenza**: Riduce i danni subiti in percentuale (+1% per punto, MAX 75%). Fondamentale per sopravvivere ai boss.\n"
-                                "💥 **Critico**: Aumenta la probabilità di infliggere danni critici (+1% per punto).\n"
-                                "   - Attacco Normale: Danno x2.0\n"
-                                "   - Attacco Speciale: Moltiplicatore variabile in base al personaggio.\n"
-                                "⚡ **Velocità**: Riduce il tempo di attesa (Cooldown) tra un attacco e l'altro (+1 per punto).\n"
-                                "   - Formula: Ogni punto aumenta la velocità di recupero del 5%.\n\n"
-                                "💡 **Novità**: Quando selezioni un personaggio, ora puoi vedere le **Statistiche Totali Previste** (Base + Equip + Bonus) prima di equipaggiarlo, anche se il personaggio è di basso livello!"
+                        "text": "Puoi allocare i punti statistica (/stats) per personalizzare il tuo personaggio:\n\n"
+                                "❤️ **Vita (HP)**: +10 HP per punto.\n"
+                                "💙 **Mana (MP)**: +5 MP per punto.\n"
+                                "⚔️ **Danno**: +2 Danno fisico per punto.\n"
+                                "🛡️ **Resistenza**: +1% resist (Max 75%).\n"
+                                "💥 **Critico**: +1% probabilità.\n"
+                                "⚡ **Velocità**: Riduce il tempo tra turni."
                     },
-                    "elements": {
-                        "title": "🔥 Elementi (In Sviluppo)",
-                        "text": "Ogni personaggio e nemico ha un elemento.\n\n🔥 Fuoco > 🍃 Erba\n🍃 Erba > 💧 Acqua\n💧 Acqua > 🔥 Fuoco\n\nSfrutta il vantaggio elementale per fare più danni! (Funzione in fase di sviluppo)"
+                    "armory": {
+                        "title": "⚒️ Armeria & Crafting",
+                        "text": "Nell'Armeria di Gilda puoi creare equipaggiamento potente.\n"
+                                "Più alto è il livello dell'Armeria, migliore è la rarità che puoi creare:\n\n"
+                                "⚪ **Comune**: Armeria Lv. 1\n"
+                                "🟢 **Non Comune**: Armeria Lv. 2\n"
+                                "🔵 **Raro**: Armeria Lv. 3\n"
+                                "🟣 **Epico**: Armeria Lv. 4\n"
+                                "🟠 **Leggendario**: Armeria Lv. 5\n\n"
+                                "Gli oggetti craftati hanno statistiche casuali basate sulla loro rarità!"
                     },
                     "dragonballs": {
                         "title": "🐉 Sfere del Drago",
-                        "text": "Esistono due set di Sfere del Drago, ognuno con un drago diverso:\n\n"
-                                "🐉 **Shenron**: Il drago della Terra. Esaudisce desideri classici come ricchezza (Wumpa) o esperienza.\n"
-                                "🐲 **Porunga**: Il drago di Namecc. È più potente e può esaudire 3 desideri alla volta, offrendo ricompense diverse o più rare.\n\n"
-                                "Le sfere possono essere trovate casualmente scrivendo in chat (con un pizzico di fortuna) o sconfiggendo i nemici."
+                        "text": "Trova le sfere per esprimere desideri!\n"
+                                "🐉 **Shenron**: Desideri classici (Wumpa, EXP).\n"
+                                "🐲 **Porunga**: 3 desideri alla volta (Nomek)."
                     }
                 }
             },
@@ -49,46 +51,65 @@ class GuideService:
                 "items": {
                     "potions": {
                         "title": "🧪 Pozioni",
-                        "text": "❤️ **Pozione Salute**: Ripristina una parte dei tuoi HP.\n"
-                                "💙 **Pozione Mana**: Ripristina una parte dei tuoi MP.\n"
-                                "💖 **Elisir Completo**: Ripristina completamente HP e MP."
+                        "text": "Recupera le tue forze in battaglia o fuori:\n\n"
+                                "❤️ **Pozione Piccola**: 30 HP\n"
+                                "❤️ **Pozione Media**: 60 HP\n"
+                                "❤️ **Pozione Grande**: 100 HP\n"
+                                "❤️ **Pozione Completa**: Full HP\n\n"
+                                "💙 **Pozione Mana Piccola**: 30 MP\n"
+                                "💙 **Pozione Mana Media**: 60 MP\n"
+                                "💙 **Pozione Mana Grande**: 100 MP\n"
+                                "💙 **Pozione Mana Completa**: Full MP\n\n"
+                                "💖 **Elisir**: Full HP + Full MP (+ Rimuove status)"
+                    },
+                    "special": {
+                        "title": "✨ Oggetti Speciali",
+                        "text": "Oggetti unici con effetti passivi:\n\n"
+                                "👓 **Scouter / Visore**: Se equipaggiato (Accessorio), ti permette di vedere le statistiche esatte dei nemici! Rispondi al messaggio di un mostro per analizzarlo.\n"
+                                "👂 **Orecchini Potara**: (In Sviluppo) Permetteranno la fusione tra due guerrieri.\n"
+                                "📕 **Libri Abilità**: Insegnano nuove mosse o passived."
                     },
                     "utility": {
                         "title": "🛠️ Utilità",
-                        "text": "📦 **Cassa**: Contiene una quantità casuale di Wumpa Fruit.\n"
-                                "🚀 **Turbo**: Aumenta l'esperienza guadagnata del 20% per 30 minuti.\n"
-                                "🎭 **Aku Aku / Uka Uka**: Ti rende INVINCIBILE per 10 minuti, proteggendoti da danni e trappole."
+                        "text": "📦 **Cassa Wumpa**: Contiene Wumpa casuali.\n"
+                                "🚀 **Turbo**: +20% EXP per 30 min.\n"
+                                "🎭 **Aku Aku / Uka Uka**: Invincibilità 30 min.\n"
+                                "🧨 **TNT/Nitro**: Trappole o danni diretti."
+                    }
+                }
+            },
+            "guilds": {
+                "title": "🏰 Gilde",
+                "description": "Unisciti agli altri giocatori!",
+                "items": {
+                    "structures": {
+                        "title": "🏗️ Strutture Gilda",
+                        "text": "Ogni Gilda ha un hub con strutture potenziabili:\n\n"
+                                "🏠 **Locanda**: Dove i membri riposano. Più alto è il livello, più veloce è il recupero HP/Mana (fino a 3.5x!).\n"
+                                "🍻 **Birrificio**: Migliora la qualità della Birra. Al Lv.5, la Birra potenzia le pozioni del 40%!\n"
+                                "🔞 **Bordello delle Elfe**: Fornisce il buff 'Vigore' (Mana cost -50%). Più alto è il livello, più dura l'effetto (fino a 2 ore).\n"
+                                "🏘️ **Villaggio**: Determina quanti membri può ospitare la gilda. (Max Lv. 5).\n"
+                                "⚒️ **Armeria**: Sblocca il crafting di rarità superiori."
                     },
-                    "offensive": {
-                        "title": "💣 Offensivi & Trappole",
-                        "text": "🧨 **TNT / Nitro**: Possono essere usati in due modi:\n"
-                                "1. **Contro un giocatore**: Gli fa perdere Wumpa Fruit.\n"
-                                "2. **Contro un nemico**: Fa cadere Wumpa Fruit extra dal nemico.\n"
-                                "3. **Come trappola**: Se usati senza bersaglio, esplodono al prossimo messaggio in chat!\n\n"
-                                "🎯 **Mira un giocatore**: Ruba Wumpa Fruit a un altro giocatore.\n"
-                                "🥊 **Colpisci un giocatore**: Fa perdere Wumpa a un giocatore, facendoli cadere a terra per chiunque li raccolga."
+                    "roles": {
+                        "title": "👥 Ruoli",
+                        "text": "👑 **Leader**: Può costruire, potenziare e gestire i membri.\n"
+                                "👮 **Officer**: Può invitare e kickare.\n"
+                                "👤 **Membro**: Può depositare Wumpa e usare le strutture."
                     }
                 }
             },
             "features": {
-                "title": "🌟 Funzionalità",
-                "description": "Scopri cosa puoi fare nel mondo di aROMa.",
+                "title": "🌟 Modalità",
+                "description": "Attività di gioco.",
                 "items": {
                     "dungeons": {
                         "title": "🏰 Dungeon",
-                        "text": "Affronta serie di nemici e boss in dungeon tematici. I dungeon offrono ricompense uniche e sono il modo migliore per salire di livello."
-                    },
-                    "guilds": {
-                        "title": "🏰 Gilde (In Sviluppo)",
-                        "text": "Crea o unisciti a una Gilda per giocare con gli amici. Le gilde offriranno bonus passivi, un magazzino condiviso e raid esclusivi. (Funzione in fase di sviluppo)"
+                        "text": "Affronta serie di nemici e boss per loot epico. I Dungeon scalano con il livello medio del gruppo."
                     },
                     "seasons": {
                         "title": "📅 Stagioni",
-                        "text": "Le Stagioni sono eventi periodici che trasformano il mondo di gioco. Ogni stagione ha un tema unico, cambia le meccaniche, i nemici e offre un Pass Stagionale con ricompense esclusive."
-                    },
-                    "market": {
-                        "title": "🏪 Mercato (In Sviluppo)",
-                        "text": "🚧 **IN SVILUPPO** 🚧\n\nIl Mercato permetterà ai giocatori di vendere e comprare oggetti tra di loro usando i Wumpa Fruit. Sarà il cuore dell'economia di gioco!"
+                        "text": "Eventi periodici con classifiche e premi esclusivi."
                     }
                 }
             }

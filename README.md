@@ -72,9 +72,16 @@ docker-compose up -d
 
 ### Gilde e Sociale
 - **Sistema di Gilde**: Crea o unisciti a una gilda
+- **Locanda di Gilda**: Struttura upgradabile per riposare e recuperare HP/Mana/Vigore
+- **Upgrade Strutture**: Capigilda possono potenziare Birrificio, Bordello, Armeria e Villaggio
 - **Raid Boss**: Affronta boss potenti insieme alla tua gilda
 - **Dungeon Cooperativi**: Esplora dungeon con altri giocatori
-- **Classifiche**: Compete per il primo posto nelle classifiche globali
+- **Classifiche**: Compete per il primo posto nelle classifiche globali o stagionali
+
+### Guida e Aiuto
+- **Nuovo Comando /guida**: Manuale completo con dettagli su meccaniche, oggetti e statistiche
+- **Scouter**: Strumento per analizzare i nemici e vedere i loro HP/Statistiche
+- **Wiki In-Game**: Informazioni dettagliate su ogni aspetto del gioco
 
 ### In sviluppo
 - **Mercato**: Compra o vendi oggetti al mercato

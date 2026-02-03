@@ -294,9 +294,9 @@ class ItemService:
         
         elif item_name == "Aku Aku" or item_name == "Uka Uka":
             # Invincibility
-            until = datetime.datetime.now() + datetime.timedelta(minutes=10) # 10 mins invincibility
+            until = datetime.datetime.now() + datetime.timedelta(minutes=30) # 30 mins invincibility (rare item!)
             self.user_service.update_user(user.id_telegram, {'invincible_until': until})
-            return f"✨ {item_name} attivato! Sei INVINCIBILE per 10 minuti! Non subirai danni da mob o trappole.", None
+            return f"✨ {item_name} attivato! Sei INVINCIBILE per 30 minuti! Non subirai danni da mob o trappole.", None
             
         elif item_name == "Cassa":
             wumpa = random.randint(5, 15)

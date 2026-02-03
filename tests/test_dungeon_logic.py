@@ -16,8 +16,18 @@ class TestDungeonLogic(unittest.TestCase):
         self.pve_service = PvEService()
         self.dungeon_service = DungeonService()
         
+        from models.combat import CombatParticipation
+        
         # Create test users
         session = self.db.get_session()
+        
+        # Clean up in correct order
+        session.query(CombatParticipation).delete()
+        session.query(Mob).filter_by(chat_id=130001).delete()
+        session.query(DungeonParticipant).delete()
+        session.query(Dungeon).filter_by(chat_id=130001).delete()
+        session.query(Utente).filter(Utente.id_telegram.in_([13001, 13002, 13003])).delete()
+        session.commit()
         
         def get_or_create(uid, username, nome, vita_val):
             u = session.query(Utente).filter_by(id_telegram=uid).first()
@@ -50,7 +60,10 @@ class TestDungeonLogic(unittest.TestCase):
         self.user_service.track_activity(13003, chat_id=130001)
 
     def tearDown(self):
+        from models.combat import CombatParticipation
         session = self.db.get_session()
+        # Clean up in correct order
+        session.query(CombatParticipation).delete()
         session.query(Mob).filter_by(chat_id=130001).delete()
         session.query(DungeonParticipant).delete()
         session.query(Dungeon).filter_by(chat_id=130001).delete()

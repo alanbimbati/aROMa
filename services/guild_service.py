@@ -173,6 +173,11 @@ class GuildService:
             return False, "Solo il capogilda può gestire gli upgrade!"
             
         guild = session.query(Guild).filter_by(id=member.guild_id).first()
+        
+        if guild.village_level >= 5:
+            session.close()
+            return False, "Il Villaggio è già al livello massimo (Lv. 5)!"
+            
         cost = guild.village_level * 1000
         
         if guild.wumpa_bank < cost:
@@ -197,6 +202,11 @@ class GuildService:
             return False, "Solo il capogilda può gestire gli upgrade!"
             
         guild = session.query(Guild).filter_by(id=member.guild_id).first()
+        
+        if guild.armory_level >= 5:
+            session.close()
+            return False, "L'Armeria è già al livello massimo (Lv. 5)!"
+            
         cost = (guild.armory_level + 1) * 750
         
         if guild.wumpa_bank < cost:
@@ -211,13 +221,83 @@ class GuildService:
         session.close()
         return True, f"Armeria potenziata al livello {new_level}!"
 
+    def upgrade_brewery(self, leader_id):
+        """Upgrade the brewery"""
+        session = self.db.get_session()
+        member = session.query(GuildMember).filter_by(user_id=leader_id, role="Leader").first()
+        if not member:
+            session.close()
+            return False, "Solo il capogilda può gestire gli upgrade!"
+            
+        guild = session.query(Guild).filter_by(id=member.guild_id).first()
+        
+        # Initialize default if null (from new column)
+        if guild.brewery_level is None: guild.brewery_level = 1
+        
+        if guild.brewery_level >= 5:
+            session.close()
+            return False, "Il Birrificio è già al livello massimo (Lv. 5)!"
+            
+        cost = (guild.brewery_level + 1) * 600
+        
+        if guild.wumpa_bank < cost:
+            session.close()
+            return False, f"Servono {cost} Wumpa nella banca della gilda per questo upgrade!"
+            
+        guild.wumpa_bank -= cost
+        guild.brewery_level += 1
+        new_level = guild.brewery_level
+        
+        session.commit()
+        session.close()
+        return True, f"Birrificio potenziato al livello {new_level}!"
+
+    def upgrade_brothel(self, leader_id):
+        """Build or Upgrade the brothel"""
+        session = self.db.get_session()
+        member = session.query(GuildMember).filter_by(user_id=leader_id, role="Leader").first()
+        if not member:
+            session.close()
+            return False, "Solo il capogilda può gestire gli upgrade!"
+            
+        guild = session.query(Guild).filter_by(id=member.guild_id).first()
+        
+        if guild.bordello_level >= 5:
+            session.close()
+            return False, "Il Bordello delle Elfe è già al livello massimo (Lv. 5)!"
+            
+        # Cost: 2000 to build (Lv 0->1), then scaling
+        if guild.bordello_level == 0:
+            cost = 2000
+        else:
+            cost = (guild.bordello_level + 1) * 1000
+        
+        if guild.wumpa_bank < cost:
+            session.close()
+            return False, f"Servono {cost} Wumpa nella banca della gilda per questo upgrade!"
+            
+        guild.wumpa_bank -= cost
+        guild.bordello_level += 1
+        new_level = guild.bordello_level
+        
+        session.commit()
+        session.close()
+        if new_level == 1:
+            return True, "👙 Hai costruito il **Bordello delle Elfe**! I tuoi membri ora possono ottenere il buff Vigore!"
+        return True, f"Bordello potenziato al livello {new_level}!"
+
     def get_potion_bonus(self, user_id):
         """Get potion effectiveness bonus based on inn level"""
         guild = self.get_user_guild(user_id)
         if not guild:
             return 1.0
-        # 10% bonus per inn level above 1
-        return 1.0 + (guild['inn_level'] - 1) * 0.1
+        # Brewery bonus logic
+        # Lv 1: +20% (1.20)
+        # Lv 5: +40% (1.40)
+        # Formula: 1.0 + (15 + (brewery_level * 5)) / 100
+        brew_level = guild.get('brewery_level', 1) or 1
+        bonus_pct = 15 + (brew_level * 5)
+        return 1.0 + (bonus_pct / 100.0)
 
     def buy_craft_beer(self, user_id):
         """Buy a craft beer for a fun bonus (and healing)"""
@@ -229,32 +309,30 @@ class GuildService:
             session.close()
             return False, "Non fai parte di nessuna gilda!"
             
-        # Cooldown check: 1 hour using repurposed last_health_restore
+        # Daily limit check (reset at midnight)
         now = datetime.datetime.now()
-        if user.last_health_restore:
-            elapsed = (now - user.last_health_restore).total_seconds()
-            if elapsed < 3600:
-                remaining = int((3600 - elapsed) / 60)
-                session.close()
-                return False, f"🍺 Hai già bevuto abbastanza! Torna tra {remaining} minuti."
+        if user.last_beer_usage and user.last_beer_usage.date() == now.date():
+             session.close()
+             return False, "🍺 Hai già bevuto la tua birra giornaliera! Torna domani."
 
-        if user.points < 50:
-            session.close()
-            return False, f"Una birra artigianale costa 50 {PointsName}!"
-            
-        user.points -= 50
-        user.last_health_restore = now
+        # No cost
+        # user.points -= 50
+        user.last_beer_usage = now
         
         # Heal 10% HP
         heal_amount = int(user.max_health * 0.1)
         user.current_hp = min((user.current_hp or 0) + heal_amount, user.max_health)
         
-        # Potion bonus: 10% base + 5% per level above 1
-        potion_bonus_pct = 10 + (guild['inn_level'] - 1) * 5
+        # Brewery bonus logic
+        # Lv 1: 20%
+        # Lv 5: 40%
+        # Formula: 15 + (brewery_level * 5)
+        brew_level = guild['brewery_level'] if guild['brewery_level'] else 1
+        potion_bonus_pct = 15 + (brew_level * 5)
         
         session.commit()
         session.close()
-        return True, f"🍺 Hai bevuto una Birra Artigianale di {guild['name']}! Ti senti rinvigorito (+{heal_amount} HP).\n\n✨ Grazie all'atmosfera della Locanda (Lv. {guild['inn_level']}), le tue pozioni saranno più efficaci del **{potion_bonus_pct}%**!"
+        return True, f"🍺 Hai bevuto una Birra Artigianale di {guild['name']}! Ti senti rinvigorito (+{heal_amount} HP).\n\n✨ Le tue pozioni saranno più efficaci del **{potion_bonus_pct}%** per 30 minuti!"
 
     def get_inn_image(self, inn_level):
         """Get the image path for the inn based on its level"""
@@ -342,17 +420,26 @@ class GuildService:
             session.close()
             return False, "La tua gilda non ha ancora un Bordello delle Elfe!"
             
-        cost = 200 # Fixed cost for now
-        if user.points < cost:
-            session.close()
-            return False, f"Ti servono {cost} Wumpa per passare del tempo con le elfe!"
+        # Daily limit
+        now = datetime.datetime.now()
+        if user.last_brothel_usage and user.last_brothel_usage.date() == now.date():
+             session.close()
+             return False, "🔞 Hai già visitato il Bordello oggi! Torna domani."
             
-        user.points -= cost
-        user.vigore_until = datetime.datetime.now() + datetime.timedelta(minutes=10)
+        # cost = 200 # Removed
+        # if user.points < cost: ...
+            
+        # Limit 1 per day
+        user.last_brothel_usage = now
+        # Duration: 60 mins base + 15 mins per level above 1
+        # Lv 1: 60
+        # Lv 5: 120 (2h)
+        duration_minutes = 60 + (guild.bordello_level - 1) * 15
+        user.vigore_until = datetime.datetime.now() + datetime.timedelta(minutes=duration_minutes)
         
         session.commit()
         session.close()
-        return True, "✨ Hai passato del tempo con le Elfe del Piacere. Ti senti pieno di Vigore! Per i prossimi 10 minuti, il costo in Mana delle tue abilità sarà ridotto del 50%."
+        return True, f"✨ Hai passato del tempo con le Elfe del Piacere. Ti senti pieno di Vigore! Per {duration_minutes} minuti, il costo in Mana delle tue abilità sarà ridotto del 50%."
 
     def get_mana_cost_multiplier(self, user_id):
         """Get mana cost multiplier (0.5 if Vigore is active)"""

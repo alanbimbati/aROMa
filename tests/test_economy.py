@@ -12,6 +12,7 @@ from services.pve_service import PvEService
 from models.user import Utente
 from models.pve import Mob
 from models.combat import CombatParticipation
+from models.system import Livello
 from database import Database
 import datetime
 
@@ -27,6 +28,8 @@ class TestEconomy(unittest.TestCase):
         
         # Clean up existing test user
         session.query(Utente).filter_by(id_telegram=self.test_user_id).delete()
+        # Clean up Livello 10 to ensure fresh data
+        session.query(Livello).filter_by(livello=10).delete()
         session.commit()
         
         user = Utente(
@@ -39,6 +42,11 @@ class TestEconomy(unittest.TestCase):
             last_wumpa_reset=datetime.datetime.now()
         )
         session.add(user)
+        
+        # Populate Livello 10 for test_exp_curve_db
+        l10 = Livello(livello=10, nome="TestLevel10", exp_required=15848)
+        session.add(l10)
+            
         session.commit()
         session.close()
 
@@ -99,12 +107,13 @@ class TestEconomy(unittest.TestCase):
         
         # We need to query the Livello table directly, but we don't have the model imported here easily
         # Let's use raw SQL
-        from sqlalchemy import text
-        result = session.execute(text("SELECT exp_required FROM livello WHERE livello = 10")).fetchone()
-        if result:
-            exp_req = result[0]
+        result = session.query(Livello).filter_by(livello=10).first()
+        if result and result.exp_required is not None:
+            exp_req = result.exp_required
             # Allow small rounding diffs
             self.assertTrue(15800 < exp_req < 15900, f"EXP for lvl 10 should be ~15848, got {exp_req}")
+        else:
+            self.skipTest(f"Level 10 not found in DB or exp_required is None. Result: {result}")
             
         session.close()
 

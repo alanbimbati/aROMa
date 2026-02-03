@@ -32,9 +32,10 @@ class TestCombatActions(unittest.TestCase):
         self.chat_id = 999999
         
         # Cleanup
-        self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()
-        self.session.query(Mob).filter_by(chat_id=self.chat_id).delete()
+        # Cleanup
         self.session.query(CombatParticipation).filter_by(user_id=self.user_id).delete()
+        self.session.query(Mob).filter_by(chat_id=self.chat_id).delete()
+        self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()
         self.session.commit()
         
         # Create user (Level 10 to have enough mana for special)
@@ -55,8 +56,13 @@ class TestCombatActions(unittest.TestCase):
         self.session.commit()
 
     def tearDown(self):
-        self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()
+        from sqlalchemy import text
+        self.session.execute(text("DELETE FROM combat_participation WHERE user_id = :uid"), {'uid': self.user_id})
+        self.session.execute(text("DELETE FROM combat_participation WHERE mob_id IN (SELECT id FROM mob WHERE chat_id = :cid)"), {'cid': self.chat_id})
+        self.session.commit()
+        
         self.session.query(Mob).filter_by(chat_id=self.chat_id).delete()
+        self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()
         self.session.commit()
         self.session.close()
 
@@ -72,7 +78,7 @@ class TestCombatActions(unittest.TestCase):
         user.current_hp = 100
         self.session.commit()
         
-        success, msg, extra = self.pve_service.attack_mob(user, base_damage=20, mob_id=mob.id)
+        success, msg, extra = self.pve_service.attack_mob(user, base_damage=20, mob_id=mob.id, session=self.session)
         
         self.assertTrue(success, f"Attack failed: {msg}")
         self.assertIn("Hai inflitto", msg)
@@ -95,7 +101,7 @@ class TestCombatActions(unittest.TestCase):
         self.session.commit()
         
         # use_special_attack returns: success, msg, extra_data, attack_events
-        result = self.pve_service.use_special_attack(user, chat_id=self.chat_id)
+        result = self.pve_service.use_special_attack(user, chat_id=self.chat_id, session=self.session)
         self.assertEqual(len(result), 4, "use_special_attack should return 4 values")
         
         success, msg, extra_data, attack_events = result
@@ -123,7 +129,7 @@ class TestCombatActions(unittest.TestCase):
         self.session.commit()
         
         # attack_aoe returns: success, summary_msg, extra_data, attack_events
-        success, msg, extra_data, attack_events = self.pve_service.attack_aoe(user, base_damage=30, chat_id=self.chat_id)
+        success, msg, extra_data, attack_events = self.pve_service.attack_aoe(user, base_damage=30, chat_id=self.chat_id, session=self.session)
         
         self.assertTrue(success, f"AoE attack failed: {msg}")
         self.assertIn("ATTACCO AD AREA", msg)
@@ -143,15 +149,19 @@ class TestCombatActions(unittest.TestCase):
         self.session.add_all([mob1, mob2])
         self.session.commit()
         
+        # Cache IDs after commit (objects are refreshed if session still open)
+        mob1_id = mob1.id
+        mob2_id = mob2.id
+        
         user = self.session.query(Utente).filter_by(id_telegram=self.user_id).first()
         
         with mock.patch('random.random', return_value=0.01): # Force success
-            success, msg = self.pve_service.flee_mob(user, mob1.id)
+            success, msg = self.pve_service.flee_mob(user, mob1_id, session=self.session)
             self.assertTrue(success, f"Flee success test failed: {msg}")
             self.assertIn("fuggito con successo", msg)
             
         with mock.patch('random.random', return_value=0.99): # Force failure
-            success, msg = self.pve_service.flee_mob(user, mob2.id)
+            success, msg = self.pve_service.flee_mob(user, mob2_id, session=self.session)
             self.assertFalse(success, "Flee failure test should return False")
             self.assertIn("rimasto bloccato", msg)
 

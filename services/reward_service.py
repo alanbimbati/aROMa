@@ -55,7 +55,8 @@ class RewardService:
                 'base_xp': xp,
                 'base_wumpa': wumpa,
                 'damage_dealt': p.damage_dealt,
-                'share': share
+                'share': share,
+                'has_fled': getattr(p, 'has_fled', False)
             })
             
         return rewards
@@ -84,8 +85,17 @@ class RewardService:
             
             is_dead = (user_hp <= 0)
             is_stunned = StatusEffect.has_effect(user, 'stun')
+            has_fled = reward.get('has_fled', False)
             
-            if is_dead or is_stunned:
+            if has_fled:
+                # Fled players receive NO rewards
+                xp = 0
+                wumpa = 0
+            elif is_dead:
+                # Dead players receive Wumpa but NO EXP
+                xp = 0
+            elif is_stunned:
+                # Stunned players receive NO rewards
                 xp = 0
                 wumpa = 0
             
@@ -110,7 +120,9 @@ class RewardService:
             user_name = user.game_name or user.nome or f"User {user_id}"
             line = f"👤 **{user_name}**: {damage} dmg -> {xp} Exp, {wumpa} {PointsName}"
             
-            if is_dead:
+            if has_fled:
+                line += " 🏃 (Fuggito)"
+            elif is_dead:
                 line += " 💀 (Morto)"
             elif is_stunned:
                 line += " 💫 (Stordito)"
@@ -158,15 +170,19 @@ class RewardService:
                 wumpa = reward['base_wumpa']
                 
                 if user_id not in aggregated_users:
-                    aggregated_users[user_id] = {'xp': 0, 'wumpa': 0, 'items': [], 'name': ""}
+                    aggregated_users[user_id] = {'xp': 0, 'wumpa': 0, 'items': [], 'name': "", 'has_fled': False}
                 
                 aggregated_users[user_id]['xp'] += xp
                 aggregated_users[user_id]['wumpa'] += wumpa
+                if reward.get('has_fled'):
+                    aggregated_users[user_id]['has_fled'] = True
                 
                 # Items
-                item_msg = self._handle_item_drop(user_id, mob.is_boss, session=session)
-                if item_msg:
-                    aggregated_users[user_id]['items'].append(item_msg)
+                # Only roll for items if NOT fled
+                if not reward.get('has_fled'):
+                    item_msg = self._handle_item_drop(user_id, mob.is_boss, session=session)
+                    if item_msg:
+                        aggregated_users[user_id]['items'].append(item_msg)
 
         summary_lines = []
         
@@ -184,8 +200,14 @@ class RewardService:
                 is_dead = True
                 
             is_stunned = StatusEffect.has_effect(user, 'stun')
+            has_fled = data.get('has_fled', False)
             
-            if is_dead or is_stunned:
+            if has_fled:
+                amount_xp = 0
+                amount_wumpa = 0
+            elif is_dead:
+                amount_xp = 0
+            elif is_stunned:
                 amount_xp = 0
                 amount_wumpa = 0
             
@@ -204,7 +226,8 @@ class RewardService:
             p_name = user.game_name or user.nome or f"User {user_id}"
             line = f"👤 **{p_name}**: +{amount_xp} Exp, +{amount_wumpa} {PointsName}"
             
-            if is_dead: line += " 💀"
+            if has_fled: line += " 🏃"
+            elif is_dead: line += " 💀"
             elif is_stunned: line += " 💫"
             
             if level_up_info['leveled_up']:

@@ -157,8 +157,12 @@ class AchievementTracker:
             user_stats = session.query(UserStat).filter_by(user_id=user_id).all()
             stats_map = {s.stat_key: s.value for s in user_stats}
             
+            # Pre-fetch user achievements to avoid N+1 queries and reduce race conditions
+            user_achievements = session.query(UserAchievement).filter_by(user_id=user_id).all()
+            user_ach_map = {ua.achievement_key: ua for ua in user_achievements}
+            
             for achievement in all_achievements:
-                self._check_single_achievement(session, user_id, achievement, stats_map, rewards_to_award)
+                self._check_single_achievement(session, user_id, achievement, stats_map, rewards_to_award, user_ach_map)
             
             if local_session:
                 session.commit()
@@ -176,17 +180,22 @@ class AchievementTracker:
         for reward_data in rewards_to_award:
             self._apply_reward(user_id, reward_data)
 
-    def _check_single_achievement(self, session, user_id, achievement, stats_map, rewards_to_award):
+    def _check_single_achievement(self, session, user_id, achievement, stats_map, rewards_to_award, user_ach_map=None):
         """
         Check if a specific achievement should be unlocked or upgraded.
         """
         current_val = stats_map.get(achievement.stat_key, 0)
         
         # Get user's current progress
-        user_ach = session.query(UserAchievement).filter_by(
-            user_id=user_id, 
-            achievement_key=achievement.achievement_key
-        ).first()
+        user_ach = None
+        if user_ach_map:
+            user_ach = user_ach_map.get(achievement.achievement_key)
+        else:
+            # Fallback for legacy calls
+            user_ach = session.query(UserAchievement).filter_by(
+                user_id=user_id, 
+                achievement_key=achievement.achievement_key
+            ).first()
         
         if not user_ach:
             user_ach = UserAchievement(
@@ -195,6 +204,10 @@ class AchievementTracker:
                 current_tier=None,
                 progress_value=current_val
             )
+            # Add to map if provided to avoid re-adding if called multiple times in same context (unlikely but safe)
+            if user_ach_map is not None:
+                user_ach_map[achievement.achievement_key] = user_ach
+            
             session.add(user_ach)
         
         # Update progress snapshot

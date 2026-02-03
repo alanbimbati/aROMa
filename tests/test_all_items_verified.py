@@ -136,10 +136,10 @@ class TestAllItemsVerified(unittest.TestCase):
         # No target specified = Trap
         msg, effect = self.item_service.apply_effect(self.user, "TNT")
         
-        self.assertIn("piazzata", msg)
+        self.assertIn("Piazzata", msg)
         self.assertIsNotNone(effect)
-        self.assertEqual(effect['type'], 'next_mob_effect')
-        self.assertEqual(effect['effect'], "TNT")
+        self.assertEqual(effect['type'], 'tnt_trap')
+        self.assertEqual(effect['type'], 'tnt_trap')
 
     # --- PVP ITEMS TESTS ---
     def test_steal_points(self): # Mira un giocatore

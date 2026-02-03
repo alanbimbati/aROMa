@@ -81,12 +81,36 @@ class PotionService:
         valore = potion['effetto_valore']
         
         if tipo == 'health_potion':
-            restored = self.user_service.restore_health(user, valore, session=session)
-            return True, f"💚 Hai recuperato {restored} HP!"
+            # Apply Brewery Bonus
+            from services.guild_service import GuildService
+            guild_service = GuildService()
+            bonus_mult = guild_service.get_potion_bonus(user.id_telegram)
+            
+            effective_val = int(valore * bonus_mult)
+            bonus_amount = effective_val - valore
+            
+            restored = self.user_service.restore_health(user, effective_val, session=session)
+            
+            msg = f"💚 Hai recuperato {restored} HP!"
+            if bonus_amount > 0:
+                msg += f" (Bonus Birra: +{bonus_amount})"
+            return True, msg
             
         elif tipo == 'mana_potion':
-            restored = self.user_service.restore_mana(user, valore, session=session)
-            return True, f"💙 Hai recuperato {restored} Mana!"
+            # Apply Brewery Bonus
+            from services.guild_service import GuildService
+            guild_service = GuildService()
+            bonus_mult = guild_service.get_potion_bonus(user.id_telegram)
+            
+            effective_val = int(valore * bonus_mult)
+            bonus_amount = effective_val - valore
+            
+            restored = self.user_service.restore_mana(user, effective_val, session=session)
+            
+            msg = f"💙 Hai recuperato {restored} Mana!"
+            if bonus_amount > 0:
+                msg += f" (Bonus Birra: +{bonus_amount})"
+            return True, msg
             
         elif tipo == 'full_restore':
             hp_restored = self.user_service.restore_health(user, 999, session=session)

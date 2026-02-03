@@ -37,12 +37,38 @@ class CharacterService:
                 char = self.char_loader.get_character_by_id(char_id)
                 if char:
                     purchased_chars.append(char)
+        
+        # 3. FUSION UNLOCK: Check if user has 2+ Potara in inventory
+        fusion_char_ids = [146, 122, 110]  # Vegito Blue, Gogeta SSJ4, Gotenks SSJ3
+        potara_unlocked_chars = []
+        
+        try:
+            from sqlalchemy import text
+            # Count Potara items in inventory (effect_type = 'fusion')
+            potara_count = session.execute(text("""
+                SELECT COUNT(*) FROM user_equipment ue
+                JOIN equipment e ON ue.equipment_id = e.id
+                WHERE ue.user_id = :uid AND e.effect_type = 'fusion'
+            """), {"uid": user.id_telegram}).scalar()
+            
+            if potara_count >= 2:
+                # Unlock fusion characters if not already purchased/unlocked
+                for fusion_id in fusion_char_ids:
+                    if fusion_id not in purchased_ids:
+                        char = self.char_loader.get_character_by_id(fusion_id)
+                        if char:
+                            potara_unlocked_chars.append(char)
+        except Exception as e:
+            print(f"Error checking Potara unlock: {e}")
+            # Continue without fusion unlock if error
             
         # Combine and deduplicate by ID
         all_chars_dict = {}
         for c in level_chars:
             all_chars_dict[c['id']] = c
         for c in purchased_chars:
+            all_chars_dict[c['id']] = c
+        for c in potara_unlocked_chars:
             all_chars_dict[c['id']] = c
             
         result = list(all_chars_dict.values())

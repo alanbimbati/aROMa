@@ -8,8 +8,10 @@ import datetime
 sys.path.append(os.getcwd())
 
 from services.dungeon_service import DungeonService
+from models.user import Utente
 from models.dungeon import Dungeon, DungeonParticipant
 from models.pve import Mob
+from models.combat import CombatParticipation
 from database import Database
 
 class TestDungeonSpawn(unittest.TestCase):
@@ -21,13 +23,24 @@ class TestDungeonSpawn(unittest.TestCase):
         self.user_id = 12345
         
         # Cleanup
-        self.session.query(Dungeon).filter_by(chat_id=self.chat_id).delete()
+        self.session.query(CombatParticipation).delete()
+        self.session.query(DungeonParticipant).delete()
         self.session.query(Mob).filter_by(chat_id=self.chat_id).delete()
+        self.session.query(Dungeon).filter_by(chat_id=self.chat_id).delete()
+        self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()
+        self.session.commit()
+        
+        # Create test user
+        user = Utente(id_telegram=self.user_id, username="testuser", nome="Test User")
+        self.session.add(user)
         self.session.commit()
 
     def tearDown(self):
-        self.session.query(Dungeon).filter_by(chat_id=self.chat_id).delete()
+        self.session.query(CombatParticipation).delete()
+        self.session.query(DungeonParticipant).delete()
         self.session.query(Mob).filter_by(chat_id=self.chat_id).delete()
+        self.session.query(Dungeon).filter_by(chat_id=self.chat_id).delete()
+        self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()
         self.session.commit()
         self.session.close()
 

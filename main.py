@@ -39,6 +39,38 @@ except ImportError:
     PIL_AVAILABLE = False
     print("⚠️ PIL/Pillow not available, grayscale images will not work")
 
+def format_mob_stats(mob, show_full=False):
+    """Format mob stats, obscuring sensitive info if not authorized"""
+    level = mob.get('level', 1)
+    
+    if show_full:
+        # Full stats (Scouter active)
+        hp_text = f"{mob['health']}/{mob['max_health']}"
+        speed_text = f"{mob.get('speed', 30)}"
+        res_text = f"{mob.get('resistance', 0)}%"
+        atk_text = f"{mob['attack']}"
+        # extra = "👁️ **Scouter Attivo**: Statistiche complete visibili!"
+        extra = ""
+    else:
+        # Obscured stats (Default)
+        hp_text = "???"
+        speed_text = "???"
+        res_text = "???"
+        atk_text = "???"
+        extra = ""
+
+    return f"📊 Lv. {level} | ⚡ Vel: {speed_text} | 🛡️ Res: {res_text}\n❤️ Salute: {hp_text} HP\n⚔️ Danno: {atk_text}\n{extra}"
+
+def get_rarity_emoji(rarity):
+    """Get emoji for rarity level (1-5)"""
+    rarity = int(rarity) if rarity else 1
+    if rarity == 1: return "⚪" # Comune
+    if rarity == 2: return "🟢" # Non Comune
+    if rarity == 3: return "🔵" # Raro
+    if rarity == 4: return "🟣" # Epico
+    if rarity == 5: return "🟠" # Leggendario
+    return "⚪"
+
 def tnt_timeout(chat_id):
     """Callback when TNT timer expires. Sets trap to volatile."""
     try:
@@ -55,6 +87,7 @@ def nitro_timeout(chat_id):
 
 # Trap Service
 from services.trap_service import TrapService
+from services.backup_service import BackupService
 trap_service = TrapService()
 
 # Services
@@ -71,6 +104,7 @@ from services.stats_service import StatsService
 from services.drop_service import DropService
 from services.dungeon_service import DungeonService
 from services.achievement_tracker import AchievementTracker
+from services.crafting_service import CraftingService
 
 
 
@@ -93,6 +127,8 @@ drop_service = DropService()
 dungeon_service = DungeonService()
 equipment_service = EquipmentService()
 guide_service = GuideService()
+crafting_service = CraftingService()
+achievement_tracker = AchievementTracker()
 
 # Track last viewed character for admins (for image upload feature)
 admin_last_viewed_character = {}
@@ -579,6 +615,7 @@ def handle_guild_cmd(message):
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("👥 Membri", callback_data=f"guild_members|{guild['id']}"))
         markup.add(types.InlineKeyboardButton("🏨 Locanda", callback_data="guild_inn_view"))
+        markup.add(types.InlineKeyboardButton("🔨 Armeria", callback_data="guild_armory_view"))
         markup.add(types.InlineKeyboardButton("📦 Magazzino", callback_data="guild_warehouse"))
         markup.add(types.InlineKeyboardButton("💰 Deposita Wumpa", callback_data="guild_deposit_start"))
         if guild['role'] == "Leader":
@@ -705,17 +742,62 @@ def handle_guild_inn_view(call):
     if not guild:
         safe_answer_callback(call.id, "Non fai parte di nessuna gilda!", show_alert=True)
         return
+    
+    # Defaults
+    brewery_level = guild.get('brewery_level', 1) or 1
+    bordello_level = guild.get('bordello_level', 0)
+    
+    # Bonuses
+    beer_bonus = 15 + (brewery_level * 5)
+    vigore_duration = 60 + (bordello_level - 1) * 15 if bordello_level > 0 else 60
         
     msg = f"🏠 **Locanda della Gilda: {guild['name']}** (Lv. {guild['inn_level']})\n\n"
-    msg += "Qui puoi riposare, bere una birra artigianale o passare del tempo nel bordello (se disponibile).\n\n"
-    msg += f"🍺 **Birra Artigianale**: Ti cura del 10% e potenzia le tue pozioni!\n"
-    if guild['bordello_level'] > 0:
-        msg += f"🔞 **Bordello delle Elfe**: Ottieni il bonus Vigore!\n"
+    msg += "Qui puoi riposare, bere una birra o visitare le strutture annesse.\n\n"
+    
+    msg += f"🍻 **Birrificio (Lv. {brewery_level})**\n"
+    msg += f"La Birra Artigianale potenzia le pozioni del **{beer_bonus}%** per 30 min.\n"
+    
+    if bordello_level > 0:
+        msg += f"\n🔞 **Bordello delle Elfe (Lv. {bordello_level})**\n"
+        msg += f"Il buff Vigore dura **{vigore_duration} minuti**.\n"
+    else:
+        msg += "\n🔞 **Bordello delle Elfe**: Non costruito.\n"
+    
+    # Check resting
+    resting_status = user_service.get_resting_status(user_id)
     
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(f"🍺 Bevi Birra (50 {PointsName})", callback_data="guild_buy_beer"))
-    if guild['bordello_level'] > 0:
-        markup.add(types.InlineKeyboardButton(f"🔞 Bordello (200 {PointsName})", callback_data="guild_buy_vigore"))
+    if resting_status:
+        # Show resting stats
+        mult = 1.0 + (guild['inn_level'] * 0.5)
+        hp_min = int(1 * mult)
+        mana_min = int(1 * mult)
+        msg += f"\n💤 **Stai riposando!**\n⏱️ Tempo: {resting_status['minutes']} min\n"
+        msg += f"💖 Recupero: {hp_min} HP/min, {mana_min} Mana/min\n"
+        markup.add(types.InlineKeyboardButton("🛌 Svegliati", callback_data="guild_wakeup"))
+    else:
+        markup.add(types.InlineKeyboardButton("🛌 Riposa", callback_data="guild_rest"))
+
+    markup.add(types.InlineKeyboardButton(f"🍺 Bevi Birra", callback_data="guild_buy_beer"))
+    if bordello_level > 0:
+        markup.add(types.InlineKeyboardButton(f"🔞 Bordello", callback_data="guild_buy_vigore"))
+    
+    # Leader Upgrades
+    is_leader = guild_service.is_guild_leader(user_id)
+    if is_leader:
+        if brewery_level < 5:
+            cost = (brewery_level + 1) * 600
+            markup.add(types.InlineKeyboardButton(f"⬆️ Potenzia Birrificio ({cost} W)", callback_data="guild_upgrade_brewery"))
+            
+        if bordello_level < 5:
+            if bordello_level == 0:
+                cost = 2000
+                lbl = "Costruisci Bordello"
+            else:
+                cost = (bordello_level + 1) * 1000
+                lbl = "Potenzia Bordello"
+            markup.add(types.InlineKeyboardButton(f"⬆️ {lbl} ({cost} W)", callback_data="guild_upgrade_brothel"))
+            
     markup.add(types.InlineKeyboardButton("🔙 Torna alla Gilda", callback_data="guild_view"))
     
     image_path = guild_service.get_inn_image(guild['inn_level'])
@@ -737,10 +819,9 @@ def handle_guild_buy_beer(call):
     safe_answer_callback(call.id, msg, show_alert=not success)
     
     if success:
-        # Refresh the inn view to update wumpa/cooldown if we had it in text
-        # For now, just answer callback is enough as the msg is an alert or reply
-        # But let's send a message too if it was successful
         bot.send_message(call.message.chat.id, msg, parse_mode='markdown')
+        # Refresh view? No, message is enough. Or refresh logic.
+        handle_guild_inn_view(call)
 
 @bot.callback_query_handler(func=lambda call: call.data == "guild_buy_vigore")
 def handle_guild_buy_vigore(call):
@@ -751,6 +832,411 @@ def handle_guild_buy_vigore(call):
     
     if success:
         bot.send_message(call.message.chat.id, msg, parse_mode='markdown')
+        handle_guild_inn_view(call)
+
+@bot.callback_query_handler(func=lambda call: call.data == "guild_upgrade_brewery")
+def handle_guild_upgrade_brewery(call):
+    """Upgrade brewery button"""
+    user_id = call.from_user.id
+    success, msg = guild_service.upgrade_brewery(user_id)
+    safe_answer_callback(call.id, msg, show_alert=not success)
+    if success:
+        bot.send_message(call.message.chat.id, msg, parse_mode='markdown')
+        handle_guild_inn_view(call)
+
+@bot.callback_query_handler(func=lambda call: call.data == "guild_upgrade_brothel")
+def handle_guild_upgrade_brothel(call):
+    """Upgrade brothel button"""
+    user_id = call.from_user.id
+    success, msg = guild_service.upgrade_brothel(user_id)
+    safe_answer_callback(call.id, msg, show_alert=not success)
+    if success:
+        bot.send_message(call.message.chat.id, msg, parse_mode='markdown')
+        handle_guild_inn_view(call)
+
+@bot.callback_query_handler(func=lambda call: call.data == "guild_armory_view")
+def handle_guild_armory_view(call):
+    """View guild armory and crafting queue"""
+    safe_answer_callback(call.id)
+    guild = guild_service.get_user_guild(call.from_user.id)
+    
+    if not guild:
+        bot.answer_callback_query(call.id, "Non fai parte di nessuna gilda!", show_alert=True)
+        return
+    
+    from services.crafting_service import CraftingService
+    from sqlalchemy import text
+    from datetime import datetime
+    crafting_service = CraftingService()
+        
+    msg = f"🔨 **Armeria della Gilda: {guild['name']}** (Lv. {guild['armory_level']})\n\n"
+    msg += f"**Slot Crafting**: {guild['armory_level']}\n"
+    msg += f"**Velocità**: -{(1 - (0.65 + guild['armory_level'] * 0.05)) * 100:.0f}% tempo base\n\n"
+    
+    # Show active crafting jobs
+    session = crafting_service.db.get_session()
+    try:
+        active_jobs = session.execute(text("""
+            SELECT cq.id, cq.completion_time, e.name, cq.user_id
+            FROM crafting_queue cq
+            JOIN equipment e ON cq.equipment_id = e.id
+            WHERE cq.guild_id = :gid AND cq.status = 'in_progress'
+            ORDER BY cq.completion_time ASC
+        """), {"gid": guild['id']}).fetchall()
+        
+        if active_jobs:
+            msg += "🔧 **Crafting in Corso**:\n"
+            now = datetime.now()
+            for job_id, completion_time, eq_name, user_id in active_jobs:
+                time_left = completion_time - now
+                if time_left.total_seconds() > 0:
+                    minutes = int(time_left.total_seconds() // 60)
+                    seconds = int(time_left.total_seconds() % 60)
+                    # Show username only if it's the current user
+                    user_marker = "📌" if user_id == call.from_user.id else "👤"
+                    msg += f"⏱️ {user_marker} {eq_name} - {minutes}m {seconds}s\n"
+                else:
+                    user_marker = "📌" if user_id == call.from_user.id else "👤"
+                    msg += f"✅ {user_marker} {eq_name} - Pronto!\n"
+            msg += "\n"
+        else:
+            msg += "💤 Nessun crafting in corso\n\n"
+        
+        # Get available equipment to craft
+        equipment_list = session.execute(text("""
+            SELECT id, name, rarity, min_level, crafting_time, crafting_requirements
+            FROM equipment
+            ORDER BY rarity ASC, min_level ASC
+            LIMIT 10
+        """)).fetchall()
+        
+        if equipment_list:
+            msg += "📜 **Equipaggiamento Disponibile**:\n"
+            rarity_symbols = {1: '●', 2: '◆', 3: '★', 4: '✦', 5: '✪'}
+            for eq in equipment_list:
+                eq_id, name, rarity, min_lvl, craft_time, requirements = eq
+                symbol = rarity_symbols.get(rarity, '●')
+                msg += f"{symbol} {name} (Lv.{min_lvl}, {craft_time//60}min)\n"
+        else:
+            msg += "_Nessun equipaggiamento disponibile._\n"
+    finally:
+        session.close()
+    
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("⚒️ Inizia Crafting", callback_data="craft_select_equipment"))
+    markup.add(types.InlineKeyboardButton("📦 Risorse", callback_data="craft_view_resources"))
+    
+    # Add claim button if there are completed crafts
+    completed_count = session.execute(text("""
+        SELECT COUNT(*) FROM crafting_queue
+        WHERE guild_id = :gid AND status = 'in_progress' 
+        AND completion_time <= NOW()
+    """), {"gid": guild['id']}).scalar() or 0
+    
+    if completed_count > 0:
+        markup.add(types.InlineKeyboardButton(f"✅ Riscuoti {completed_count} Crafting Completati", callback_data="craft_claim_all"))
+    
+    markup.add(types.InlineKeyboardButton("🔙 Torna alla Gilda", callback_data="guild_back_main"))
+    
+    bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, 
+                         reply_markup=markup, parse_mode='markdown')
+
+def handle_craft_select_equipment(call):
+    """Show Set selection for crafting (Filtered by Armory Level)"""
+    print("[DEBUG] handle_craft_select_equipment called")
+    safe_answer_callback(call.id)
+    guild = guild_service.get_user_guild(call.from_user.id)
+    
+    if not guild:
+        bot.answer_callback_query(call.id, "Non fai parte di nessuna gilda!", show_alert=True)
+        return
+        
+    armory_level = guild['armory_level']
+    
+    from services.crafting_service import CraftingService
+    from sqlalchemy import text
+    crafting_service = CraftingService()
+    session = crafting_service.db.get_session()
+    
+    try:
+        # Get distinct sets that have at least one craftable item (rarity <= armory_level)
+        sets = session.execute(text("""
+            SELECT DISTINCT set_name FROM equipment 
+            WHERE set_name IS NOT NULL AND rarity <= :lvl
+            ORDER BY set_name ASC
+        """), {"lvl": armory_level}).fetchall()
+        
+        # Count misc items craftable
+        misc_count = session.execute(text("""
+            SELECT COUNT(*) FROM equipment 
+            WHERE set_name IS NULL AND rarity <= :lvl
+        """), {"lvl": armory_level}).scalar()
+        
+        msg = f"🔨 **Armeria della Gilda (Lv. {armory_level})**\n\n"
+        msg += "Ecco i Set che puoi craftare con il livello attuale dell'armeria.\n"
+        msg += "Il Fabbro mostra solo ciò che è in grado di forgiare!\n\n"
+        msg += "I **Set** forniscono bonus speciali se indossi 2, 4 o 6 pezzi dello stesso tipo!\n"
+        
+        markup = types.InlineKeyboardMarkup()
+        
+        if not sets and misc_count == 0:
+             msg += "⚠️ _Nessun oggetto disponibile per questo livello di armeria._"
+        
+        # Add buttons for Sets
+        for row in sets:
+            set_name = row[0]
+            # Emojis for flavor
+            emoji = "🛡️" if "Kaioshin" in set_name else "⚔️" if "Saiyan" in set_name else "🔮" if "Androide" in set_name else "📦"
+            
+            safe_set_name = escape_markdown(set_name)
+            markup.add(types.InlineKeyboardButton(f"{emoji} {set_name}", callback_data=f"craft_view_set|{set_name}"))
+            
+        if misc_count > 0:
+            markup.add(types.InlineKeyboardButton("🎒 Equipaggiamento Vario", callback_data="craft_view_set|MISC"))
+            
+        markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guild_armory_view"))
+        
+        bot.edit_message_text(msg, call.message.chat.id, call.message.message_id,
+                             reply_markup=markup, parse_mode='markdown')
+    finally:
+        session.close()
+
+def handle_craft_view_set(call):
+    """Show items in a specific Set (Filtered by Armory Level)"""
+    print(f"[DEBUG] handle_craft_view_set called: {call.data}")
+    safe_answer_callback(call.id)
+    
+    set_name_arg = call.data.split("|")[1]
+    is_misc = (set_name_arg == "MISC")
+    guild = guild_service.get_user_guild(call.from_user.id)
+    armory_level = guild['armory_level'] if guild else 1
+    
+    from services.crafting_service import CraftingService
+    from models.item import ItemSet
+    from sqlalchemy import text
+    import json
+    
+    crafting_service = CraftingService()
+    session = crafting_service.db.get_session()
+    
+    try:
+        msg = ""
+        markup = types.InlineKeyboardMarkup()
+        
+        if is_misc:
+            msg = f"🎒 **Equipaggiamento Vario** (Max Rarity {armory_level})\n\n"
+            msg += "Oggetti singoli senza bonus set.\n\n"
+            
+            items = session.execute(text("""
+                SELECT id, name, rarity, min_level, stats_json, slot
+                FROM equipment
+                WHERE set_name IS NULL AND rarity <= :lvl
+                ORDER BY rarity ASC, min_level ASC
+            """), {"lvl": armory_level}).fetchall()
+        else:
+            set_name = set_name_arg
+            # Query ItemSet for bonuses
+            item_set = session.query(ItemSet).filter_by(name=set_name).first()
+            
+            safe_set_name = escape_markdown(set_name)
+            msg = f"🛡️ **{safe_set_name}**\n\n"
+            if item_set and item_set.bonuses:
+                msg += "**Bonus Set:**\n"
+                for threshold, bonuses in item_set.bonuses.items():
+                    bonus_list = []
+                    for stat, val in bonuses.items():
+                        bonus_list.append(f"+{val} {stat.title()}")
+                    bonus_str = ", ".join(bonus_list)
+                    msg += f"🔹 **{threshold} Pezzi**: {escape_markdown(bonus_str)}\n"
+            else:
+                msg += "_Nessun bonus set definito._\n"
+            msg += "\n"
+            
+            # Get Items in Set filtered by rarity
+            items = session.execute(text("""
+                SELECT id, name, rarity, min_level, stats_json, slot
+                FROM equipment
+                WHERE set_name = :sname AND rarity <= :lvl
+                ORDER BY min_level ASC, slot ASC
+            """), {"sname": set_name, "lvl": armory_level}).fetchall()
+            
+        # Display Items
+        rarity_symbols = {1: '●', 2: '◆', 3: '★', 4: '✦', 5: '✪'}
+        slot_emoji = {
+            'head': '🎩', 'chest': '👕', 'main_hand': '⚔️', 'off_hand': '🛡️',
+            'legs': '👖', 'feet': '👞',
+            'accessory1': '💍', 'accessory2': '🔗'
+        }
+        
+        if not items:
+            msg += "⚠️ _Nessun oggetto di questo set sbloccato a questo livello di armeria._\n"
+            msg += f"Current Armory Lv. {armory_level}"
+        
+        for eq in items:
+            eq_id, name, rarity, min_lvl, stats_json, slot = eq
+            
+            symbol = rarity_symbols.get(rarity, '●')
+            slot_icon = slot_emoji.get(slot, '📦')
+            
+            # Parse stats
+            if isinstance(stats_json, dict):
+                stats = stats_json
+            elif isinstance(stats_json, str):
+                try:
+                    stats = json.loads(stats_json) if stats_json else {}
+                except:
+                    stats = {}
+            else:
+                stats = {}
+            
+            stats_str = ", ".join([f"+{v} {escape_markdown(k.title())}" for k, v in stats.items()])
+            
+            safe_name = escape_markdown(name)
+            msg += f"{symbol} {slot_icon} **{safe_name}** (Lv.{min_lvl})\n"
+            msg += f"   └ {stats_str}\n"
+            
+            markup.add(types.InlineKeyboardButton(f"🔨 Crafta {name}", callback_data=f"craft_item|{eq_id}"))
+            
+        markup.add(types.InlineKeyboardButton("🔙 Lista Set", callback_data="craft_select_equipment"))
+        
+        bot.edit_message_text(msg, call.message.chat.id, call.message.message_id,
+                             reply_markup=markup, parse_mode='markdown')
+                             
+    except Exception as e:
+        print(f"Error viewing set: {e}")
+        import traceback
+        traceback.print_exc()
+        bot.answer_callback_query(call.id, "Errore caricamento set", show_alert=True)
+    finally:
+        session.close()
+
+def handle_craft_item(call):
+    print(f"[DEBUG] handle_craft_item called with data: {call.data}")
+    """Show crafting confirmation for specific item"""
+    safe_answer_callback(call.id)
+    equipment_id = int(call.data.split("|")[1])
+    print(f"[DEBUG] Parsed equipment_id: {equipment_id}")
+    
+    from services.crafting_service import CraftingService
+    from sqlalchemy import text
+    crafting_service = CraftingService()
+    
+    # Start crafting
+    guild = guild_service.get_user_guild(call.from_user.id)
+    if not guild:
+        print(f"[DEBUG] User not in guild")
+        bot.answer_callback_query(call.id, "Non fai parte di nessuna gilda!", show_alert=True)
+        return
+    
+    print(f"[DEBUG] Guild found: {guild['id']}, calling start_crafting...")
+    
+    # Attempt to start crafting
+    try:
+        result = crafting_service.start_crafting(guild['id'], call.from_user.id, equipment_id)
+        print(f"[DEBUG] start_crafting returned: {result}")
+        
+        if result.get('success'):
+            print(f"[DEBUG] Crafting SUCCESS")
+            bot.answer_callback_query(call.id, "✅ Crafting avviato!", show_alert=False)
+            completion_time = result['completion_time'].strftime('%H:%M:%S')
+            msg_result = f"⚒️ **Crafting Avviato!**\n\n"
+            msg_result += f"🎯 Item: {result['equipment_name']}\n"
+            msg_result += f"⏱️ Completamento: {completion_time} ({result['crafting_time']//60}min)\n"
+            bot.send_message(call.message.chat.id, msg_result, parse_mode='markdown')
+            # Return to armory view
+            handle_guild_armory_view(call)
+        else:
+            error_msg = result.get('error', 'Unknown error')
+            print(f"[DEBUG] Crafting FAILED: {error_msg}")
+            
+            # For long error messages, send as message instead of alert
+            if len(error_msg) > 100 or '\n' in error_msg:
+                bot.answer_callback_query(call.id, "❌ Impossibile craftare", show_alert=False)
+                bot.send_message(call.message.chat.id, error_msg, parse_mode='markdown')
+            else:
+                bot.answer_callback_query(call.id, error_msg, show_alert=True)
+    except Exception as e:
+        print(f"[DEBUG] Exception in handle_craft_item: {e}")
+        import traceback
+        traceback.print_exc()
+        bot.answer_callback_query(call.id, f"❌ Errore: {str(e)}", show_alert=True)
+
+def handle_craft_view_resources(call):
+    print("[DEBUG] handle_craft_view_resources called")
+    """Show user's crafting resources"""
+    safe_answer_callback(call.id)
+    
+    from services.crafting_service import CraftingService
+    from sqlalchemy import text
+    crafting_service = CraftingService()
+    session = crafting_service.db.get_session()
+    
+    try:
+        resources = session.execute(text("""
+            SELECT r.name, r.emoji, ur.quantity
+            FROM user_resources ur
+            JOIN resources r ON ur.resource_id = r.id
+            WHERE ur.user_id = :uid AND ur.quantity > 0
+            ORDER BY r.rarity ASC
+        """), {"uid": call.from_user.id}).fetchall()
+        
+        msg = "📦 **Le Tue Risorse**\n\n"
+        if resources:
+            for name, emoji, quantity in resources:
+                emoji_display = emoji if emoji else '📦'
+                msg += f"{emoji_display} {name}: **x{quantity}**\n"
+        else:
+            msg += "_Nessuna risorsa disponibile._\n"
+    finally:
+        session.close()
+    
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guild_armory_view"))
+    
+    bot.edit_message_text(msg, call.message.chat.id, call.message.message_id,
+                         reply_markup=markup, parse_mode='markdown')
+
+def handle_craft_claim_all(call):
+    """Claim all completed crafting jobs"""
+    print("[DEBUG] handle_craft_claim_all called")
+    safe_answer_callback(call.id)
+    
+    guild = guild_service.get_user_guild(call.from_user.id)
+    if not guild:
+        bot.answer_callback_query(call.id, "Non fai parte di nessuna gilda!", show_alert=True)
+        return
+    
+    # Process the queue manually
+    from services.crafting_service import CraftingService
+    crafting_service = CraftingService()
+    
+    try:
+        results = crafting_service.process_queue()
+        
+        if results:
+            msg = f"✅ **Crafting Riscossi!**\n\n"
+            msg += f"Hai riscosso {len(results)} item craftati:\n\n"
+            
+            for res in results:
+                if res.get('success'):
+                    item_name = res.get('item_name')
+                    quality = res.get('quality', 'Normal')
+                    msg += f"🎯 {item_name} ({quality})\n"
+            
+            msg += f"\n📦 Gli item sono stati aggiunti al tuo inventario!"
+            bot.send_message(call.message.chat.id, msg, parse_mode='markdown')
+            bot.answer_callback_query(call.id, f"✅ {len(results)} item riscossi!", show_alert=False)
+        else:
+            bot.answer_callback_query(call.id, "Nessun crafting da riscuotere", show_alert=True)
+        
+        # Refresh armory view
+        handle_guild_armory_view(call)
+        
+    except Exception as e:
+        print(f"[DEBUG] Error claiming crafts: {e}")
+        import traceback
+        traceback.print_exc()
+        bot.answer_callback_query(call.id, f"❌ Errore: {str(e)}", show_alert=True)
 
 @bot.message_handler(commands=['armory', 'armeria'])
 def handle_armory_cmd(message):
@@ -1002,12 +1488,18 @@ def handle_dungeon_leave_global(call):
 
 
 class BotCommands:
-    def __init__(self, message, bot):
+    def __init__(self, message, bot, user_id=None):
         self.bot = bot
         self.message = message
         # In callbacks, message.from_user is the bot. We need to be careful.
         # But BotCommands is usually instantiated with the original message if possible.
-        self.user_id = message.from_user.id if message.from_user else message.chat.id
+        if user_id:
+            self.user_id = user_id
+        else:
+            self.user_id = message.from_user.id if message.from_user else message.chat.id
+            
+        print(f"[DEBUG] BotCommands Init: user_id={self.user_id}, message_from={message.from_user.id if message.from_user else 'None'}")
+        
         self.chat_id = message.chat.id
         self.chatid = self.user_id # Keep for backward compatibility during transition
         
@@ -1135,26 +1627,49 @@ Per acquistare un gioco che vedi in un canale o gruppo:
 """
         self.bot.reply_to(self.message, msg, parse_mode='markdown')
 
+    def handle_daily_mob(self):
+        """Handle the daily scheduled mob spawn (manually triggered via command for test)"""
+        if not user_service.is_admin(user_service.get_user(self.chatid)):
+            return
+
+        mob_id, attack_events = pve_service.spawn_daily_mob(chat_id=self.chat_id)
+        if mob_id:
+            # Apply pending effects
+            applied = pve_service.apply_pending_effects(mob_id, self.chat_id)
+            for app in applied:
+                self.bot.send_message(self.chat_id, f"💥 **{app['effect']}** esplode sul nuovo arrivato! Danni: {app['damage']}")
+            
+            mob = pve_service.get_mob_status_by_id(mob_id)
+            if mob:
+                markup = get_combat_markup("mob", mob_id, self.chatid)
+                
+                msg_text = f"⚠️ Un {mob['name']} selvatico è apparso!\n{format_mob_stats(mob, show_full=False)}"
+                
+                # Send with image if available
+                if mob.get('image') and os.path.exists(mob['image']):
+                    try:
+                        with open(mob['image'], 'rb') as photo:
+                            self.bot.reply_to(self.message, photo, caption=msg_text, reply_markup=markup, parse_mode='markdown')
+                    except:
+                        self.bot.reply_to(self.message, msg_text, reply_markup=markup, parse_mode='markdown')
+                else:
+                    self.bot.reply_to(self.message, msg_text, reply_markup=markup, parse_mode='markdown')
+            else:
+                 self.bot.reply_to(self.message, "Errore mob id")
+        else:
+             self.bot.reply_to(self.message, "Nessun mob spawnato.")
+
     def handle_spawn_mob(self):
         """Admin command to manually spawn a mob"""
         utente = user_service.get_user(self.chatid)
         if not user_service.is_admin(utente):
             return
             
-        mob_id, attack_events = pve_service.spawn_daily_mob(chat_id=self.chat_id)
-        if mob_id:
-            # Apply pending effects
-            applied = pve_service.apply_pending_effects(mob_id, self.chat_id)
-            for app in applied:
-                bot.send_message(self.chat_id, f"💥 **{app['effect']}** esplode sul nuovo arrivato! Danni: {app['damage']}")
-                # Trigger drop if needed? User didn't explicitly ask for drop on pending, but it's consistent.
-                # Let's just do damage for now as per "fare anche danno almeno".
-            
             mob = pve_service.get_mob_status_by_id(mob_id)
             if mob:
                 markup = get_combat_markup("mob", mob_id, self.chatid)
                 
-                msg_text = f"⚠️ Un {mob['name']} selvatico è apparso!\n📊 Lv. {mob.get('level', 1)} | ⚡ Vel: {mob.get('speed', 30)} | 🛡️ Res: {mob.get('resistance', 0)}%\n❤️ Salute: {mob['health']}/{mob['max_health']} HP\n⚔️ Danno: {mob['attack']}"
+                msg_text = f"⚠️ Un {mob['name']} selvatico è apparso!\n{format_mob_stats(mob, show_full=False)}"
                 
                 # Send with image if available
                 if mob.get('image') and os.path.exists(mob['image']):
@@ -1994,6 +2509,7 @@ Per acquistare un gioco che vedi in un canale o gruppo:
     def process_market_sell_price(self, message, item_name, qty):
         """Step 2: Price and Confirm"""
         try:
+            print(f"[DEBUG] Market Sell Price: User ID in msg: {message.from_user.id}, Text: {message.text}")
             price_total = int(message.text.strip())
             if price_total <= 0:
                 self.bot.reply_to(message, "❌ Prezzo non valido.")
@@ -2157,6 +2673,7 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         # Only show action buttons if viewing own profile
         if not target_user or target_user.id_telegram == self.chatid:
             markup.add(types.InlineKeyboardButton("📊 Alloca Statistiche", callback_data="stat_alloc"))
+            markup.add(types.InlineKeyboardButton("🎒 Equipaggiamento", callback_data="view_equipment"))
             markup.add(types.InlineKeyboardButton("🏆 Scegli Titolo", callback_data="title_menu"))
             # markup.add(types.InlineKeyboardButton("🔄 Reset Stats (Gratis)", callback_data="stat_reset")) # Removed as per user request
         if character:
@@ -3562,12 +4079,99 @@ def handle_photo(message):
 
 @bot.message_handler(content_types=['text'] + util.content_type_media)
 def any(message):
+    # Initialize services needed
+    from services.pve_service import PvEService
+    pve_service = PvEService()
+
     # Track activity IMMEDIATELY
     user_service.track_activity(message.from_user.id, message.chat.id)
     
-    # Check if message is a forward (Game Purchase)
+    # Check if message is a forward
     if message.forward_from_chat or message.forward_from:
-        # RESTRICTION: Only allow purchases in private chat
+        # SCAN FEATURE: Check if user has Scouter equipped and message contains mob ID
+        if message.chat.type == 'private' and message.text:
+            # Try to extract mob ID from forwarded message
+            # Mob messages typically contain "ID: XXX" or similar pattern
+            import re
+            mob_id_match = re.search(r'ID:\s*(\d+)', message.text)
+            
+            if mob_id_match:
+                mob_id = int(mob_id_match.group(1))
+                user_id = message.from_user.id
+                
+                # Check if user has Scouter equipped
+                from sqlalchemy import text
+                session = user_service.db.get_session()
+                try:
+                    has_scouter = session.execute(text("""
+                        SELECT 1 FROM user_equipment ue
+                        JOIN equipment e ON ue.equipment_id = e.id
+                        WHERE ue.user_id = :uid AND ue.equipped = TRUE 
+                        AND e.effect_type = 'scan'
+                    """), {"uid": user_id}).fetchone()
+                    
+                    if has_scouter:
+                        # Get mob details from PVE service
+                        from services.pve_service import PVEService
+                        pve_service = PVEService(user_service.db)
+                        
+                        # Get mob from active enemies
+                        mob = pve_service.get_mob_by_id(mob_id)
+                        
+                        if mob:
+                            # Build detailed stats message
+                            msg = f"🔍 **SCOUTER SCAN - Analisi Completa**\n\n"
+                            msg += f"📛 **Nome**: {mob.nome}\n"
+                            msg += f"🆔 **ID**: {mob.id}\n"
+                            msg += f"⚡ **Livello**: {mob.livello}\n\n"
+                            msg += f"❤️ **HP**: {mob.current_hp}/{mob.max_health}\n"
+                            msg += f"⚔️ **Attacco**: {mob.base_damage}\n"
+                            msg += f"🛡️ **Difesa**: {mob.defense if hasattr(mob, 'defense') else 0}\n"
+                            msg += f"💨 **Velocità**: {mob.speed if hasattr(mob, 'speed') else 'N/A'}\n\n"
+                            
+                            # Boss status
+                            if mob.is_boss:
+                                msg += f"👑 **BOSS** - Ricompense maggiorate!\n"
+                            
+                            # Elemental info
+                            if hasattr(mob, 'element') and mob.element:
+                                msg += f"🌟 **Elemento**: {mob.element}\n"
+                            
+                            # Resistances
+                            if hasattr(mob, 'resistances') and mob.resistances:
+                                msg += f"🛡️ **Resistenze**: {mob.resistances}\n"
+                            
+                            # Weaknesses
+                            if hasattr(mob, 'weaknesses') and mob.weaknesses:
+                                msg += f"💥 **Debolezze**: {mob.weaknesses}\n"
+                            
+                            # Special abilities
+                            if hasattr(mob, 'special_ability') and mob.special_ability:
+                                msg += f"✨ **Abilità**: {mob.special_ability}\n"
+                            
+                            msg += f"\n💡 *Scouter attivo - Scansione completa*"
+                            
+                            bot.reply_to(message, msg, parse_mode='markdown')
+                            session.close()
+                            return
+                        else:
+                            bot.reply_to(message, "❌ Mob non trovato o già sconfitto!")
+                            session.close()
+                            return
+                    else:
+                        bot.reply_to(message, "🔒 Hai bisogno di uno **Scouter** equipaggiato per analizzare i nemici!", parse_mode='markdown')
+                        session.close()
+                        return
+                        
+                except Exception as e:
+                    print(f"Error in Scan feature: {e}")
+                    import traceback
+                    traceback.print_exc()
+                finally:
+                    if session:
+                        session.close()
+        
+        # GAME PURCHASE: Only allow purchases in private chat
         if message.chat.type != 'private':
             return
 
@@ -3819,7 +4423,7 @@ def any(message):
                 if mob:
                     markup = get_combat_markup("mob", mob_id, message.chat.id)
                     
-                    msg_text = f"⚠️ Un {mob['name']} selvatico è apparso!\n📊 Lv. {mob.get('level', 1)} | ⚡ Vel: {mob.get('speed', 30)} | 🛡️ Res: {mob.get('resistance', 0)}%\n❤️ Salute: {mob['health']}/{mob['max_health']} HP\n⚔️ Danno: {mob['attack']}\n\nSconfiggilo per ottenere ricompense!"
+                    msg_text = f"⚠️ Un {mob['name']} selvatico è apparso!\n{format_mob_stats(mob, show_full=False)}\n\nSconfiggilo per ottenere ricompense!"
                     
                     # Send with image if available
                     sent_msg = None
@@ -4019,9 +4623,31 @@ def callback_query(call):
     # Track activity for mob targeting IMMEDIATELY
     user_service.track_activity(user_id, chat_id)
 
+    # --- Crafting Callbacks (handle before other callbacks) ---
+    if call.data == "craft_select_equipment":
+        print(f"[DEBUG] Catch-all: detected craft_select_equipment")
+        handle_craft_select_equipment(call)
+        return
+    elif call.data.startswith("craft_view_set|"):
+        print(f"[DEBUG] Catch-all: detected craft_view_set")
+        handle_craft_view_set(call)
+        return
+    elif call.data.startswith("craft_item|"):
+        print(f"[DEBUG] Catch-all: detected craft_item| with data: {call.data}")
+        handle_craft_item(call)
+        return
+    elif call.data == "craft_view_resources":
+        print(f"[DEBUG] Catch-all: detected craft_view_resources")
+        handle_craft_view_resources(call)
+        return
+    elif call.data == "craft_claim_all":
+        print(f"[DEBUG] Catch-all: detected craft_claim_all")
+        handle_craft_claim_all(call)
+        return
+
     # --- Ranking Callbacks ---
     if call.data.startswith("ranking|"):
-        cmd = BotCommands(call.message, bot)
+        cmd = BotCommands(call.message, bot, user_id=call.from_user.id)
         # Patch for callback user ID logic
         cmd.chatid = user_id
         cmd.user_id = user_id
@@ -4075,7 +4701,7 @@ def callback_query(call):
             pass
             
         # Use BotCommands to handle stats
-        bot_cmds = BotCommands(call.message, bot)
+        bot_cmds = BotCommands(call.message, bot, user_id=call.from_user.id)
         bot_cmds.chatid = user_id 
         bot_cmds.message = call.message 
         bot_cmds.handle_stats(is_callback=True)
@@ -4083,17 +4709,348 @@ def callback_query(call):
 
     # Market callbacks delegation
     if call.data.startswith("market_") or call.data.startswith("buy_item") or call.data.startswith("cancel_listing") or call.data == "market_menu":
-        bot_cmds = BotCommands(call.message, bot)
+        bot_cmds = BotCommands(call.message, bot, user_id=call.from_user.id)
         bot_cmds.chatid = user_id
         bot_cmds.message = call.message
         # We need to manually handle this dispatch in BotCommands or exposing handle_market_callback
         bot_cmds.handle_market_callback(call)
         return
 
+    if call.data == "view_equipment":
+        safe_answer_callback(call.id)
+        
+        # Get user equipment from database
+        user_id = call.from_user.id
+        utente = user_service.get_user(user_id)
+        
+        if not utente:
+            bot.answer_callback_query(call.id, "Utente non trovato!")
+            return
+        
+        nome_utente = utente.nome if utente.username is None else utente.username
+        
+        # Get user's equipment from database
+        from sqlalchemy import text
+        session = user_service.db.get_session()
+        
+        try:
+            # Get all user equipment with details
+            items = session.execute(text("""
+                SELECT ue.id, ue.equipped, ue.slot_equipped, e.name, e.slot, 
+                       COALESCE(ue.rarity, e.rarity) as rarity, 
+                       COALESCE(ue.stats_json, e.stats_json) as stats_json
+                FROM user_equipment ue
+                JOIN equipment e ON ue.equipment_id = e.id
+                WHERE ue.user_id = :uid
+                ORDER BY ue.equipped DESC, COALESCE(ue.rarity, e.rarity) DESC
+            """), {"uid": user_id}).fetchall()
+            
+            # Organize by slot
+            slots = {
+                'head': None, 'shoulders': None, 'chest': None, 'wrists': None,
+                'hands': None, 'waist': None, 'legs': None, 'feet': None,
+                'main_hand': None, 'off_hand': None,
+                'accessory1': None, 'accessory2': None
+            }
+            
+            for item in items:
+                item_id, equipped, slot_equipped, name, slot, rarity, stats = item
+                if equipped and slot_equipped and slot_equipped in slots and not slots[slot_equipped]:
+                    symbol = get_rarity_emoji(rarity)
+                    slots[slot_equipped] = f"{symbol} {name}"
+            
+            # ASCII Equipment Display - simplified without right border alignment
+            msg = f"```\n"
+            msg += f"╔════════════════════════════════════\n"
+            
+            # Header with name, level
+            msg += f"║ 🧙 {nome_utente} │ Lv {utente.livello}\n"
+            
+            msg += f"╠════════════════════════════════════\n"
+            msg += f"║\n"
+            
+            # Center figure with emoji
+            msg += f"║            👑\n"
+            msg += f"║            O\n"
+            msg += f"║       💪   /|\\   ⚔️\n"
+            msg += f"║            |\n"
+            msg += f"║            🔗\n"
+            msg += f"║           / \\\n"
+            msg += f"║          👖 👟\n"
+            msg += f"║\n"
+            
+            # Slot list format - simplified
+            def format_slot(emoji, label, item_text):
+                return f"║ [{emoji} {label.ljust(12)}] {item_text}\n"
+            
+            msg += format_slot("👑", "TESTA", slots['head'] or "———")
+            msg += format_slot("🎽", "SPALLINE", slots['shoulders'] or "———")
+            msg += format_slot("⚔️", "ARMA", slots['main_hand'] or "———")
+            msg += format_slot("👔", "TORSO", slots['chest'] or "———")
+            msg += format_slot("🔗", "CINTURA", slots['waist'] or "———")
+            msg += format_slot("👖", "GAMBE", slots['legs'] or "———")
+            msg += format_slot("👟", "PIEDI", slots['feet'] or "———")
+            msg += f"║\n"
+            
+            msg += f"╠═════════════ ACCESSORI ═════════════\n"
+            acc1 = slots['accessory1'] or "⚫ Slot libero"
+            acc2 = slots['accessory2'] or "⚫ Slot libero"
+            msg += f"║ 1️⃣ {acc1}\n"
+            msg += f"║ 2️⃣ {acc2}\n"
+            
+            msg += f"╠════════════════════════════════════\n"
+            
+            # Count inventory items
+            inventory_count = len([i for i in items if not i[1]])  # not equipped
+            equipped_count = len([i for i in items if i[1]])
+            
+            msg += f"║ 📦 Inv: {inventory_count} item   ⚔️ Equip: {equipped_count} / 12\n"
+            msg += f"╚════════════════════════════════════\n"
+            msg += f"```"
+            
+        except Exception as e:
+            print(f"Error loading equipment: {e}")
+            import traceback
+            traceback.print_exc()
+            msg = "❌ Errore nel caricamento dell'equipaggiamento!"
+        finally:
+            session.close()
+        
+        markup = types.InlineKeyboardMarkup()
+        markup.row(
+            types.InlineKeyboardButton("📦 Inventario", callback_data="equip_inventory"),
+            types.InlineKeyboardButton("🔙 Profilo", callback_data="back_to_profile")
+        )
+        
+        try:
+            bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, 
+                                parse_mode='markdown', reply_markup=markup)
+        except:
+            bot.send_message(call.message.chat.id, msg, parse_mode='markdown', reply_markup=markup)
+        return
+
+    if call.data == "equip_inventory":
+        safe_answer_callback(call.id)
+        user_id = call.from_user.id
+        
+        # Get user's unequipped items
+        from sqlalchemy import text
+        session = user_service.db.get_session()
+        
+        try:
+            items = session.execute(text("""
+                SELECT ue.id, e.name, e.slot, e.rarity, e.min_level, e.description
+                FROM user_equipment ue
+                JOIN equipment e ON ue.equipment_id = e.id
+                WHERE ue.user_id = :uid AND ue.equipped = FALSE
+                ORDER BY e.rarity DESC, e.name
+            """), {"uid": user_id}).fetchall()
+            
+            utente = user_service.get_user(user_id)
+            rarity_symbols = {1: '●', 2: '◆', 3: '★', 4: '✦', 5: '✪'}
+            rarity_names = {1: 'Comune', 2: 'Non Comune', 3: 'Rara', 4: 'Epica', 5: 'Leggendaria'}
+            slot_emoji = {
+                'head': '👑', 'shoulders': '🎽', 'chest': '👔', 'wrists': '💪',
+                'hands': '🧤', 'waist': '🔗', 'legs': '👖', 'feet': '👟',
+                'main_hand': '⚔️', 'off_hand': '🛡️', 'accessory1': '💍', 'accessory2': '💍'
+            }
+            
+            if not items:
+                msg = "📦 **Inventario Equipaggiamento**\n\n"
+                msg += "Il tuo inventario è vuoto!\n"
+                msg += "Tutti gli oggetti sono equipaggiati."
+            else:
+                msg = f"📦 **Inventario Equipaggiamento** ({len(items)} item)\n\n"
+                
+            markup = types.InlineKeyboardMarkup(row_width=1)
+            
+            for item in items:
+                item_id, name, slot, rarity, min_level, desc = item
+                symbol = rarity_symbols.get(rarity, '●')
+                emoji = slot_emoji.get(slot, '📦')
+                
+                # Check level requirement
+                can_equip = utente.livello >= min_level
+                lock = "" if can_equip else "🔒 "
+                
+                btn_text = f"{lock}{symbol} {emoji} {name}"
+                if not can_equip:
+                    btn_text += f" (Lv{min_level})"
+                
+                callback = f"equip_item|{item_id}" if can_equip else "equip_locked"
+                markup.add(types.InlineKeyboardButton(btn_text, callback_data=callback))
+            
+            markup.add(types.InlineKeyboardButton("🔙 Equipaggiamento", callback_data="view_equipment"))
+            
+            try:
+                bot.edit_message_text(msg, call.message.chat.id, call.message.message_id,
+                                    parse_mode='markdown', reply_markup=markup)
+            except:
+                bot.send_message(call.message.chat.id, msg, parse_mode='markdown', reply_markup=markup)
+                
+        except Exception as e:
+            print(f"Error loading inventory: {e}")
+            import traceback
+            traceback.print_exc()
+            safe_answer_callback(call.id, "Errore caricamento inventario!")
+        finally:
+            session.close()
+        return
+
+    if call.data.startswith("equip_item|"):
+        item_id = int(call.data.split("|")[1])
+        user_id = call.from_user.id
+        
+        from sqlalchemy import text
+        session = user_service.db.get_session()
+        
+        try:
+            # Get item details
+            item = session.execute(text("""
+                SELECT e.slot, e.name FROM user_equipment ue
+                JOIN equipment e ON ue.equipment_id = e.id
+                WHERE ue.id = :iid AND ue.user_id = :uid
+            """), {"iid": item_id, "uid": user_id}).fetchone()
+            
+            if not item:
+                safe_answer_callback(call.id, "Oggetto non trovato!")
+                return
+            
+            slot, name = item
+            
+            # Unequip current item in that slot
+            session.execute(text("""
+                UPDATE user_equipment
+                SET equipped = FALSE, slot_equipped = NULL
+                WHERE user_id = :uid AND slot_equipped = :slot
+            """), {"uid": user_id, "slot": slot})
+            
+            # Equip new item
+            session.execute(text("""
+                UPDATE user_equipment
+                SET equipped = TRUE, slot_equipped = :slot
+                WHERE id = :iid
+            """), {"iid": item_id, "slot": slot})
+            
+            session.commit()
+            session.close()
+            
+            safe_answer_callback(call.id, f"✅ {name} equipaggiato!")
+            
+            # Refresh to equipment view - just edit message to show updated equipment
+            # Re-fetch updated data and rebuild view
+            from sqlalchemy import text
+            new_session = user_service.db.get_session()
+            try:
+                items = new_session.execute(text("""
+                    SELECT ue.id, ue.equipped, ue.slot_equipped, e.name, e.slot, e.rarity, e.stats_json
+                    FROM user_equipment ue
+                    JOIN equipment e ON ue.equipment_id = e.id
+                    WHERE ue.user_id = :uid
+                    ORDER BY ue.equipped DESC, e.rarity DESC
+                """), {"uid": user_id}).fetchall()
+                
+                slots_new = {
+                    'head': None, 'shoulders': None, 'chest': None, 'wrists': None,
+                    'hands': None, 'waist': None, 'legs': None, 'feet': None,
+                    'main_hand': None, 'off_hand': None,
+                    'accessory1': None, 'accessory2': None
+                }
+                
+                rarity_symbols = {1: '●', 2: '◆', 3: '★', 4: '✦', 5: '✪'}
+                
+                for item in items:
+                    item_id_i, equipped_i, slot_equipped_i, name_i, slot_i, rarity_i, stats_i = item
+                    if equipped_i and slot_equipped_i and slot_equipped_i in slots_new and not slots_new[slot_equipped_i]:
+                        symbol = rarity_symbols.get(rarity_i, '●')
+                        slots_new[slot_equipped_i] = f"{symbol} {name_i}"
+                
+                # Rebuild message
+                msg_refresh = f"```\n"
+                msg_refresh += f"╔════════════════════════════════════\n"
+                msg_refresh += f"║ 🧙 {nome_utente} │ Lv {utente.livello}\n"
+                msg_refresh += f"╠════════════════════════════════════\n"
+                msg_refresh += f"║\n"
+                msg_refresh += f"║            👑\n"
+                msg_refresh += f"║            O\n"
+                msg_refresh += f"║       💪   /|\\   ⚔️\n"
+                msg_refresh += f"║            |\n"
+                msg_refresh += f"║            🔗\n"
+                msg_refresh += f"║           / \\\n"
+                msg_refresh += f"║          👖 👟\n"
+                msg_refresh += f"║\n"
+                
+                def format_slot_refresh(emoji, label, item_text):
+                    return f"║ [{emoji} {label.ljust(12)}] {item_text}\n"
+                
+                msg_refresh += format_slot_refresh("👑", "TESTA", slots_new['head'] or "———")
+                msg_refresh += format_slot_refresh("🎽", "SPALLINE", slots_new['shoulders'] or "———")
+                msg_refresh += format_slot_refresh("⚔️", "ARMA", slots_new['main_hand'] or "———")
+                msg_refresh += format_slot_refresh("👔", "TORSO", slots_new['chest'] or "———")
+                msg_refresh += format_slot_refresh("🔗", "CINTURA", slots_new['waist'] or "———")
+                msg_refresh += format_slot_refresh("👖", "GAMBE", slots_new['legs'] or "———")
+                msg_refresh += format_slot_refresh("👟", "PIEDI", slots_new['feet'] or "———")
+                msg_refresh += f"║\n"
+                
+                msg_refresh += f"╠═════════════ ACCESSORI ═════════════\n"
+                acc1_refresh = slots_new['accessory1'] or "⚫ Slot libero"
+                acc2_refresh = slots_new['accessory2'] or "⚫ Slot libero"
+                msg_refresh += f"║ 1️⃣ {acc1_refresh}\n"
+                msg_refresh += f"║ 2️⃣ {acc2_refresh}\n"
+                
+                msg_refresh += f"╠════════════════════════════════════\n"
+                inv_count = len([i for i in items if not i[1]])
+                eq_count = len([i for i in items if i[1]])
+                msg_refresh += f"║ 📦 Inv: {inv_count} item   ⚔️ Equip: {eq_count} / 12\n"
+                msg_refresh += f"╚════════════════════════════════════\n"
+                msg_refresh += f"```"
+                
+                markup_refresh = types.InlineKeyboardMarkup()
+                markup_refresh.row(
+                    types.InlineKeyboardButton("📦 Inventario", callback_data="equip_inventory"),
+                    types.InlineKeyboardButton("🔙 Profilo", callback_data="back_to_profile")
+                )
+                
+                bot.edit_message_text(msg_refresh, call.message.chat.id, call.message.message_id,
+                                    parse_mode='markdown', reply_markup=markup_refresh)
+            finally:
+                new_session.close()
+            return
+            
+        except Exception as e:
+            print(f"Error equipping item: {e}")
+            import traceback
+            traceback.print_exc()
+            safe_answer_callback(call.id, "Errore equipaggiamento!")
+            session.rollback()
+        finally:
+            if session:
+                session.close()
+        return
+
+    if call.data == "equip_locked":
+        safe_answer_callback(call.id, "🔒 Livello troppo basso!", show_alert=True)
+        return
+
+    if call.data == "back_to_profile":
+        safe_answer_callback(call.id)
+        # Recreate profile display
+        bot_cmds = BotCommands(call.message, bot, user_id=call.from_user.id)
+        bot_cmds.chatid = call.from_user.id
+        bot_cmds.message = call.message
+        
+        # Delete old message and send new profile
+        try:
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except:
+            pass
+        bot_cmds.handle_profile()
+        return
+
     if call.data == "title_menu":
         # Don't answer here, let handle_title_selection do it (to show alert if needed)
         
-        bot_cmds = BotCommands(call.message, bot)
+        bot_cmds = BotCommands(call.message, bot, user_id=call.from_user.id)
         bot_cmds.chatid = user_id
         bot_cmds.message = call.message
         bot_cmds.handle_title_selection(is_callback=True, call_id=call.id)
@@ -4136,7 +5093,7 @@ def callback_query(call):
         safe_answer_callback(call.id, msg)
         
         # Refresh menu
-        bot_cmds = BotCommands(call.message, bot)
+        bot_cmds = BotCommands(call.message, bot, user_id=call.from_user.id)
         bot_cmds.chatid = user_id
         bot_cmds.message = call.message
         bot_cmds.handle_title_selection(is_callback=True, call_id=call.id)
@@ -4202,10 +5159,47 @@ def callback_query(call):
             handle_inn_cmd(call.message)
 
     elif call.data == "inn_rest_stop":
-        success, msg = user_service.stop_resting(call.from_user.id)
+        # Public Inn (No bonus)
+        success, msg = user_service.stop_resting(call.from_user.id, recovery_multiplier=1.0)
         safe_answer_callback(call.id, msg, show_alert=True)
         if success:
             handle_inn_cmd(call.message)
+
+    elif call.data == "guild_rest":
+        # Same check logic as inn_rest_start
+        utente = user_service.get_user(call.from_user.id)
+        last_attack = getattr(utente, 'last_attack_time', None)
+        in_combat = False
+        remaining = 0
+        import datetime
+        if last_attack:
+            elapsed = (datetime.datetime.now() - last_attack).total_seconds()
+            if elapsed < 120: # 2 minutes
+                in_combat = True
+                remaining = int(120 - elapsed)
+        
+        if in_combat:
+            safe_answer_callback(call.id, f"⚔️ Sei in combattimento! Devi aspettare {remaining}s prima di riposare.", show_alert=True)
+            return
+
+        success, msg = user_service.start_resting(call.from_user.id)
+        safe_answer_callback(call.id, msg, show_alert=True)
+        if success:
+            handle_guild_inn_view(call)
+
+    elif call.data == "guild_wakeup":
+        # Calculate bonus
+        from services.guild_service import GuildService
+        gs = GuildService() # Local instance
+        guild = gs.get_user_guild(call.from_user.id)
+        multiplier = 1.0
+        if guild:
+            multiplier = 1.0 + (guild['inn_level'] * 0.5)
+            
+        success, msg = user_service.stop_resting(call.from_user.id, recovery_multiplier=multiplier)
+        safe_answer_callback(call.id, msg, show_alert=True)
+        if success:
+            handle_guild_inn_view(call)
 
     elif call.data == "guild_list_view":
         safe_answer_callback(call.id)
@@ -4404,7 +5398,7 @@ def callback_query(call):
              bot.edit_message_text(f"🚀 **DUNGEON INIZIATO!**", call.message.chat.id, call.message.message_id, parse_mode='markdown')
              
              # Process events
-             cmd = BotCommands(call.message, bot)
+             cmd = BotCommands(call.message, bot, user_id=call.from_user.id)
              cmd.process_dungeon_events(events, call.message.chat.id)
              
              # We need to trigger attack for spawned mobs. 
@@ -4543,7 +5537,7 @@ def callback_query(call):
 
     elif call.data.startswith("wish_summon|"):
         _, dragon_type = call.data.split("|", 1)
-        cmd = BotCommands(call.message, bot)
+        cmd = BotCommands(call.message, bot, user_id=call.from_user.id)
         # Fix: BotCommands uses message.from_user which is the bot in callbacks.
         # We must explicitly set the user ID from the callback.
         cmd.chatid = call.from_user.id
@@ -4865,9 +5859,13 @@ def callback_query(call):
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton("👥 Membri", callback_data=f"guild_members|{guild['id']}"))
             markup.add(types.InlineKeyboardButton("🏨 Locanda", callback_data="guild_inn_view"))
+            markup.add(types.InlineKeyboardButton("🔨 Armeria", callback_data="guild_armory_view"))
+            markup.add(types.InlineKeyboardButton("📦 Magazzino", callback_data="guild_warehouse"))
             markup.add(types.InlineKeyboardButton("💰 Deposita Wumpa", callback_data="guild_deposit_start"))
             if guild['role'] == "Leader":
                 markup.add(types.InlineKeyboardButton("⚙️ Gestisci Gilda", callback_data="guild_manage_menu"))
+            else:
+                markup.add(types.InlineKeyboardButton("🚪 Abbandona Gilda", callback_data="guild_leave_ask"))
             
             bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
         return
@@ -4891,7 +5889,7 @@ def callback_query(call):
             safe_answer_callback(call.id, msg, show_alert=True)
             
     elif call.data.startswith("stat_"):
-        bot_cmds = BotCommands(call.message, bot)
+        bot_cmds = BotCommands(call.message, bot, user_id=call.from_user.id)
         bot_cmds.handle_stat_callback(call)
         return
 
@@ -4919,7 +5917,7 @@ def callback_query(call):
         mobs = pve_service.get_active_mobs(call.message.chat.id)
         
     elif action == "profile":
-        bot_cmds = BotCommands(call.message, bot)
+        bot_cmds = BotCommands(call.message, bot, user_id=call.from_user.id)
         bot_cmds.chatid = call.from_user.id # Fix: Ensure chatid is the user's ID
         bot_cmds.handle_profile()
         return
@@ -5825,7 +6823,7 @@ def callback_query(call):
             # Handle Dungeon Events (Dialogues, Delays, Spawns)
             # Handle Dungeon Events (Dialogues, Delays, Spawns)
             if extra_data and 'dungeon_events' in extra_data:
-                cmd = BotCommands(call.message, bot)
+                cmd = BotCommands(call.message, bot, user_id=call.from_user.id)
                 cmd.process_dungeon_events(extra_data['dungeon_events'], call.message.chat.id)
         except Exception as e:
             import traceback
@@ -5933,7 +6931,7 @@ def callback_query(call):
         # Handle Dungeon Events (Dialogues, Delays, Spawns)
         # Handle Dungeon Events (Dialogues, Delays, Spawns)
         if extra_data and 'dungeon_events' in extra_data:
-            cmd = BotCommands(call.message, bot)
+            cmd = BotCommands(call.message, bot, user_id=call.from_user.id)
             cmd.process_dungeon_events(extra_data['dungeon_events'], call.message.chat.id)
         
         if success:
@@ -6028,7 +7026,7 @@ def callback_query(call):
         # Handle Dungeon Events (Dialogues, Delays, Spawns)
         # Handle Dungeon Events (Dialogues, Delays, Spawns)
         if extra_data and 'dungeon_events' in extra_data:
-            cmd = BotCommands(call.message, bot)
+            cmd = BotCommands(call.message, bot, user_id=call.from_user.id)
             cmd.process_dungeon_events(extra_data['dungeon_events'], call.message.chat.id)
         
         if success:
@@ -6293,7 +7291,7 @@ def callback_query(call):
             msg = bot.send_message(user_id, f"🎯 Hai scelto di usare **{item_name}**.\n\nScrivi il @username del giocatore che vuoi colpire:", parse_mode='markdown')
             
             # Instantiate BotCommands to use its method
-            cmd_handler = BotCommands(call.message, bot)
+            cmd_handler = BotCommands(call.message, bot, user_id=call.from_user.id)
             cmd_handler.chatid = user_id
             bot.register_next_step_handler(msg, cmd_handler.process_item_target, item_name)
             return
@@ -6544,7 +7542,7 @@ def spawn_daily_mob_job():
                     # Get the actual mob ID from spawn_daily_mob return value
                     markup = get_combat_markup("mob", mob_id, GRUPPO_AROMA)
                     
-                    msg_text = f"⚠️ Un {mob['name']} selvatico è apparso!\n📊 Lv. {mob.get('level', 1)} | ⚡ Vel: {mob.get('speed', 30)} | 🛡️ Res: {mob.get('resistance', 0)}%\n❤️ Salute: {mob['health']}/{mob['max_health']} HP\n⚔️ Danno: {mob['attack']}\n\nSconfiggilo per ottenere ricompense!"
+                    msg_text = f"⚠️ Un {mob['name']} selvatico è apparso!\n{format_mob_stats(mob, show_full=False)}\n\nSconfiggilo per ottenere ricompense!"
                     
                     # Send with image if available
                     if mob.get('image') and os.path.exists(mob['image']):
@@ -6707,34 +7705,6 @@ def handle_missing_attack(message):
     msg += f"Rimanenti: {len(missing)}"
     
     bot.reply_to(message, msg, parse_mode='markdown')
-
-if __name__ == "__main__":
-    # Load achievements from CSV on startup
-    try:
-        print("[STARTUP] Loading achievements from CSV...")
-        from services.achievement_tracker import AchievementTracker
-        tracker = AchievementTracker()
-        tracker.load_from_csv()
-    except Exception as e:
-        print(f"[STARTUP ERROR] Could not load achievements: {e}")
-
-    polling_thread = threading.Thread(target=bot_polling_thread)
-    polling_thread.start()
-    
-    # Schedule jobs
-    schedule.every().hour.do(spawn_daily_mob_job)
-    schedule.every().hour.do(regenerate_mana_job)  # +10 mana every hour for all users
-    schedule.every(10).seconds.do(mob_attack_job)
-    schedule.every(30).seconds.do(process_achievements_job) # Process achievements every 30s
-    # schedule.every().sunday.at("20:00").do(spawn_weekly_boss_job) # Disabled as per user request
-    
-    # Sunday reset removed - characters persist permanently
-    
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
-
-
 
 # --- Equipment System Commands ---
 
@@ -6993,12 +7963,120 @@ def job_weekly_ranking():
     except Exception as e:
         print(f"[ERROR] Failed to send weekly ranking: {e}")
 
+def process_crafting_queue_job():
+    """Background job to check and complete finished crafting projects"""
+    from datetime import datetime
+    print(f"[CRAFTING JOB] Running at {datetime.now().strftime('%H:%M:%S')}")
+    try:
+        from services.crafting_service import CraftingService
+        crafting_service = CraftingService()
+        results = crafting_service.process_queue()
+        print(f"[CRAFTING JOB] Processed {len(results)} jobs")
+        
+        for res in results:
+            if res.get('success'):
+                user_id = res['user_id']
+                item_name = res['item_name']
+                rarity = res['base_rarity']
+                final_rarity = res['final_rarity']
+                
+                print(f"[CRAFTING JOB] Notifying user {user_id} about {item_name}")
+                # Notify user
+                try:
+                    rarity_emoji = get_rarity_emoji(final_rarity)
+                    rarity_names = {1: 'Comune', 2: 'Non Comune', 3: 'Raro', 4: 'Epico', 5: 'Leggendario'}
+                    r_name = rarity_names.get(final_rarity, 'Comune')
+                    
+                    msg = f"🔨 **CRAFTING COMPLETATO!**\n\n"
+                    msg += f"Il tuo oggetto **{rarity_emoji} {item_name}** è pronto ed è stato aggiunto al tuo inventario!\n"
+                    
+                    if final_rarity > rarity:
+                        msg += f"✨ **GRANDE SUCCESSO!** L'oggetto è stato migliorato a **{r_name}** {rarity_emoji}!\n"
+                    else:
+                        msg += f"Rarità: **{r_name}** {rarity_emoji}\n"
+                    
+                    # Show stats if available
+                    if 'stats' in res:
+                        msg += "\n📊 **Statistiche Ottenute:**\n"
+                        for stat, val in res['stats'].items():
+                           msg += f"- {stat.capitalize()}: +{val}\n"
+                    
+                    bot.send_message(user_id, msg, parse_mode='markdown')
+                except Exception as e:
+                    print(f"[CRAFTING JOB] Could not notify user {user_id}: {e}")
+                    
+    except Exception as e:
+        print(f"[CRAFTING JOB] Error: {e}")
+        import traceback
+        traceback.print_exc()
+
 # Schedule the check every minute
+# Schedule Jobs
+schedule.every().hour.do(spawn_daily_mob_job)
+schedule.every().hour.do(regenerate_mana_job)
+schedule.every(10).seconds.do(mob_attack_job)
+schedule.every(30).seconds.do(process_achievements_job)
+schedule.every(1).minutes.do(process_crafting_queue_job)
 schedule.every(1).minutes.do(job_dungeon_check)
-# Also schedule mana regen if not present
-schedule.every(1).hours.do(regenerate_mana_job)
-# Weekly Ranking
 schedule.every().sunday.at("20:00").do(job_weekly_ranking)
+schedule.every().day.at("04:00").do(lambda: BackupService().create_backup())  # Daily Backup at 4 AM
+
+@bot.message_handler(content_types=['text'], func=lambda message: message.reply_to_message is not None)
+def scan_mob_reply(message):
+    """Handle replies (e.g. Scanning a mob via Scouter)"""
+    if "⚠️ Un" in message.reply_to_message.caption or "⚠️ Un" in message.reply_to_message.text:
+        # Check for Scouter
+        try:
+            from services.equipment_service import EquipmentService
+            from sqlalchemy import text
+            eq_service = EquipmentService()
+            session = eq_service.db.get_session()
+            
+            chat_id_user = message.from_user.id
+            
+            has_scouter = session.execute(text("""
+                SELECT 1 FROM user_equipment ue
+                JOIN equipment e ON ue.equipment_id = e.id
+                WHERE ue.user_id = :uid AND ue.equipped = TRUE AND e.effect_type = 'scouter'
+            """), {"uid": chat_id_user}).scalar()
+            
+            session.close()
+            
+            if not has_scouter:
+                bot.reply_to(message, "🚫 Non hai uno **Scouter** o un **Visore** equipaggiato!")
+                return
+            
+            # Parse Mob Name
+            original_text = message.reply_to_message.caption or message.reply_to_message.text
+            import re
+            match = re.search(r"⚠️ Un (.+?) selvatico è apparso!", original_text)
+            if match:
+                mob_name = match.group(1)
+                
+                from services.pve_service import PVEService
+                pve_service = PVEService()
+                
+                # Find recent active mob
+                session = eq_service.db.get_session()
+                mob_data = session.execute(text("""
+                    SELECT id FROM mob 
+                    WHERE name = :name AND current_hp > 0
+                    ORDER BY id DESC LIMIT 1
+                """), {"name": mob_name}).first()
+                session.close()
+                
+                if mob_data:
+                    mob = pve_service.get_mob_status_by_id(mob_data[0])
+                    if mob:
+                        txt = f"🔍 **Scansione Completata!**\n\n{format_mob_stats(mob, show_full=True)}"
+                        bot.reply_to(message, txt, parse_mode='markdown')
+                        return
+                        
+            bot.reply_to(message, "Non riesco a scansionare questo bersaglio.")
+            
+        except Exception as e:
+            print(f"Error scanning mob: {e}")
+            bot.reply_to(message, "Errore durante la scansione.")
 
 def schedule_checker():
     while True:
@@ -7012,10 +8090,14 @@ if __name__ == '__main__':
     db = Database()
     db.create_all_tables()
     
+    # Reload achievements from CSV
+    achievement_tracker.load_from_csv()
+    
     # NEW: Validate user stats on startup
     user_service.validate_and_fix_user_stats()
     
-    # Start Scheduler in background
+    # Schedule jobs
+    schedule.every().day.at("04:00").do(BackupService().create_backup)
     threading.Thread(target=schedule_checker, daemon=True).start()
     
     # Start Bot Polling (Main Thread)

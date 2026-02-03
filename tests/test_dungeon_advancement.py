@@ -36,8 +36,21 @@ class TestDungeonAdvancement(unittest.TestCase):
         self.session.commit()
 
     def tearDown(self):
-        self.session.query(Dungeon).filter_by(chat_id=self.chat_id).delete()
+        from models.combat import CombatParticipation
+        from models.dungeon_progress import DungeonProgress
+        self.session.rollback()
+        
+        from sqlalchemy import text
+        try:
+            self.session.execute(text("TRUNCATE dungeon_participant CASCADE"))
+            self.session.execute(text("TRUNCATE combat_participation CASCADE"))
+            self.session.execute(text("TRUNCATE dungeon_progress CASCADE"))
+        except:
+            pass
+        self.session.commit()
+        
         self.session.query(Mob).filter_by(chat_id=self.chat_id).delete()
+        self.session.query(Dungeon).filter_by(chat_id=self.chat_id).delete()
         self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()
         self.session.commit()
         self.session.close()
@@ -45,11 +58,11 @@ class TestDungeonAdvancement(unittest.TestCase):
     def test_aoe_kill_advances_dungeon(self):
         """Test that killing all mobs in a step with AoE advances the dungeon"""
         # 1. Create dungeon registration
-        d_id, msg = self.dungeon_service.create_dungeon(self.chat_id, 1, self.user_id)
+        d_id, msg = self.dungeon_service.create_dungeon(self.chat_id, 1, self.user_id, session=self.session)
         self.assertIsNotNone(d_id)
         
         # 2. Start dungeon (spawns 3 saibaman)
-        success, msg, events = self.dungeon_service.start_dungeon(self.chat_id)
+        success, msg, events = self.dungeon_service.start_dungeon(self.chat_id, session=self.session)
         self.assertTrue(success)
         
         # 3. Verify mobs exist
@@ -65,7 +78,7 @@ class TestDungeonAdvancement(unittest.TestCase):
         # Refresh user from session
         user = self.session.query(Utente).filter_by(id_telegram=self.user_id).first()
         
-        success, msg, extra_data, attack_events = self.pve_service.attack_aoe(user, base_damage=100, chat_id=self.chat_id)
+        success, msg, extra_data, attack_events = self.pve_service.attack_aoe(user, base_damage=100, chat_id=self.chat_id, session=self.session)
         self.assertTrue(success)
         
         # 5. Verify dungeon advanced
