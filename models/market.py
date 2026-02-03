@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, BigInteger
 from sqlalchemy.orm import relationship
 from database import Base
 import datetime
@@ -7,7 +7,7 @@ class MarketListing(Base):
     __tablename__ = 'market_listings'
 
     id = Column(Integer, primary_key=True)
-    seller_id = Column(Integer, ForeignKey('utente.id_Telegram'), nullable=False)
+    seller_id = Column(BigInteger, ForeignKey('utente.id_Telegram'), nullable=False)
     item_name = Column(String, nullable=False)
     quantity = Column(Integer, default=1)
     price_per_unit = Column(Integer, nullable=False)
@@ -17,7 +17,7 @@ class MarketListing(Base):
     # Status: 'active', 'sold', 'cancelled', 'expired'
     status = Column(String, default='active')
     
-    buyer_id = Column(Integer, ForeignKey('utente.id_Telegram'), nullable=True)
+    buyer_id = Column(BigInteger, ForeignKey('utente.id_Telegram'), nullable=True)
     sold_at = Column(DateTime, nullable=True)
 
     # Relationships
