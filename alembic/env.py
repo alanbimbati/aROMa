@@ -31,8 +31,11 @@ from models.legacy_tables import Points, Gruppo, GiocoAroma
 from models.pve import Mob, Raid, RaidParticipation
 from models.seasons import Season, SeasonReward, SeasonClaimedReward, SeasonProgress
 from models.stats import UserStat
-from models.system import Livello, UserCharacter, Domenica # Domenica here
+from models.system import Livello, UserCharacter, Domenica
 from models.system_state import SystemState
+from models.equipment import Equipment, UserEquipment
+from models.crafting import CraftingQueue
+from models.resources import Resource, UserResource
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

@@ -86,7 +86,8 @@ class GuildService:
             'map_x': guild.map_x,
             'map_y': guild.map_y,
             'role': member.role,
-            'bordello_level': guild.bordello_level
+            'bordello_level': guild.bordello_level,
+            'brewery_level': guild.brewery_level
         }
         session.close()
         return guild_data
@@ -624,3 +625,12 @@ class GuildService:
         session.commit()
         session.close()
         return True, f"Hai lasciato la gilda {guild_name}."
+
+    def is_guild_leader(self, user_id):
+        """Check if user is a guild leader"""
+        session = self.db.get_session()
+        try:
+            guild = session.query(Guild).filter_by(leader_id=user_id).first()
+            return guild is not None
+        finally:
+            session.close()

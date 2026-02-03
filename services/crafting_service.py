@@ -65,14 +65,14 @@ class CraftingService:
             session.close()
     
     def get_user_resources(self, user_id):
-        """Get all resources for a user"""
+        """Get all resources for a user (including 0 quantity)"""
         session = self.db.get_session()
         try:
+            # Modified query to show ALL resources, even if user has 0
             resources = session.execute(text("""
-                SELECT r.id, r.name, r.rarity, ur.quantity
-                FROM user_resources ur
-                JOIN resources r ON ur.resource_id = r.id
-                WHERE ur.user_id = :uid AND ur.quantity > 0
+                SELECT r.id, r.name, r.rarity, COALESCE(ur.quantity, 0) as quantity
+                FROM resources r
+                LEFT JOIN user_resources ur ON r.id = ur.resource_id AND ur.user_id = :uid
                 ORDER BY r.rarity DESC, r.name
             """), {"uid": user_id}).fetchall()
             
@@ -312,8 +312,8 @@ class CraftingService:
         session = self.db.get_session()
         try:
             level = session.execute(text("""
-                SELECT level FROM guild_buildings
-                WHERE guild_id = :gid AND building_type = 'armory'
+                SELECT armory_level FROM guilds
+                WHERE id = :gid
             """), {"gid": guild_id}).scalar()
             
             return level or 1  # Default level 1
