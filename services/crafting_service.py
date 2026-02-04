@@ -343,15 +343,43 @@ class CraftingService:
         session = self.db.get_session()
         try:
             resources = session.execute(text("""
-                SELECT id FROM resources
+                SELECT id, image FROM resources
                 WHERE rarity = :rarity AND drop_source IN ('mob', 'both')
                 ORDER BY RANDOM()
                 LIMIT 1
             """), {"rarity": rarity}).fetchone()
             
             if resources:
-                return resources[0]
-            return None
+                return resources[0], resources[1] # Return id, image
+            return None, None
+        finally:
+            session.close()
+
+    def roll_chat_drop(self, chance=5):
+        """
+        Determine if a resource should drop from chat activity.
+        Logic: 5% chance (default)
+        Rarity: mostly common/uncommon, rare chance for rare.
+        """
+        if random.random() * 100 > chance:
+            return None, None
+            
+        # Determine rarity for chat drops
+        # 80% Common, 19% Uncommon, 1% Rare
+        rarity = random.choices([1, 2, 3], weights=[80, 19, 1])[0]
+        
+        session = self.db.get_session()
+        try:
+            resources = session.execute(text("""
+                SELECT id, image FROM resources
+                WHERE rarity = :rarity AND drop_source IN ('chat', 'both')
+                ORDER BY RANDOM()
+                LIMIT 1
+            """), {"rarity": rarity}).fetchone()
+            
+            if resources:
+                return resources[0], resources[1]
+            return None, None
         finally:
             session.close()
 
