@@ -62,22 +62,64 @@ class DungeonService:
                 return
 
             # 3. No active or registration dungeon. Schedule if needed.
+            # Allow up to 5 dungeons per day (8, 11, 14, 17, 20)
             today_count = session.query(Dungeon).filter(
                 Dungeon.chat_id == chat_id,
                 Dungeon.created_at >= datetime.datetime.combine(today_date, datetime.time.min)
             ).count()
             
-            if today_count < 3 and 8 <= now.hour < 22:
+            if today_count < 5 and 8 <= now.hour < 23:
                  last = session.query(Dungeon).filter(Dungeon.chat_id == chat_id).order_by(Dungeon.created_at.desc()).first()
-                 if not last or last.status in ["completed", "failed"]:
-                     if last and last.completed_at:
-                         if now < last.completed_at + datetime.timedelta(hours=3):
-                             return
+                 
+                 # Logic: If no dungeon today, or if 3 hours passed since last CREATION
+                 should_schedule = False
+                 if not last:
+                     should_schedule = True
+                 else:
+                     # Check if last was today
+                     if last.created_at.date() < today_date:
+                         should_schedule = True
+                     else:
+                         # Last was today, check 3 hour gap start-to-start roughly
+                         # We use created_at as the "scheduling time" anchor
+                         if now >= last.created_at + datetime.timedelta(hours=3):
+                             should_schedule = True
+                 
+                 if should_schedule:
                      self.schedule_daily_dungeon(chat_id, session=session)
+
         except Exception as e:
             print(f"Error in check_daily_dungeon_trigger: {e}")
         finally:
             if 'session' in locals() and session: session.close()
+
+    def force_dungeon_flee(self, chat_id):
+        """Forcefully ends any active dungeon at midnight"""
+        session = self.db.get_session()
+        try:
+            dungeon = session.query(Dungeon).filter(
+                Dungeon.chat_id == chat_id,
+                Dungeon.status.in_(['active', 'registration'])
+            ).first()
+            
+            if not dungeon:
+                return None
+                
+            dungeon.status = 'fled'
+            dungeon.completed_at = datetime.datetime.now()
+            
+            # Kill valid mobs
+            mobs = session.query(Mob).filter_by(dungeon_id=dungeon.id, is_dead=False).all()
+            for m in mobs:
+                m.is_dead = True
+                
+            session.commit()
+            return "🌑 **MEZZANOTTE È GIUNTA!**\n\nIl potere del dungeon svanisce e le creature fuggono nell'oscurità...\nFortunatamente siete salvi, ma il bottino è perduto."
+        except Exception as e:
+            print(f"Error fleeing dungeon: {e}")
+            return None
+        finally:
+            session.close()
 
     def schedule_daily_dungeon(self, chat_id, session=None):
         """Schedules a dungeon start in the near future (30-120 mins)"""
