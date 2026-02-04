@@ -7963,6 +7963,18 @@ def job_weekly_ranking():
     except Exception as e:
         print(f"[ERROR] Failed to send weekly ranking: {e}")
 
+def job_dungeon_night_reset():
+    """Midnight Reset: Flee Active Dungeon"""
+    try:
+        from settings import GRUPPO_AROMA
+        msg = dungeon_service.force_dungeon_flee(GRUPPO_AROMA)
+        if msg:
+            bot.send_message(GRUPPO_AROMA, msg, parse_mode='markdown')
+            
+        print("[SCHEDULER] Dungeon Midnight Reset performed.")
+    except Exception as e:
+        print(f"[SCHEDULER] Error in night reset: {e}")
+
 def process_crafting_queue_job():
     """Background job to check and complete finished crafting projects"""
     from datetime import datetime
@@ -8020,6 +8032,7 @@ schedule.every(1).minutes.do(process_crafting_queue_job)
 schedule.every(1).minutes.do(job_dungeon_check)
 schedule.every().sunday.at("20:00").do(job_weekly_ranking)
 schedule.every().day.at("04:00").do(lambda: BackupService().create_backup())  # Daily Backup at 4 AM
+schedule.every().day.at("00:00").do(job_dungeon_night_reset) # Midnight Flee
 
 @bot.message_handler(content_types=['text'], func=lambda message: message.reply_to_message is not None)
 def scan_mob_reply(message):
