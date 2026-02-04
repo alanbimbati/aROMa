@@ -5171,7 +5171,7 @@ def callback_query(call):
         last_attack = getattr(utente, 'last_attack_time', None)
         in_combat = False
         remaining = 0
-        import datetime
+
         if last_attack:
             elapsed = (datetime.datetime.now() - last_attack).total_seconds()
             if elapsed < 120: # 2 minutes
@@ -8077,6 +8077,56 @@ def scan_mob_reply(message):
         except Exception as e:
             print(f"Error scanning mob: {e}")
             bot.reply_to(message, "Errore durante la scansione.")
+
+            bot.reply_to(message, "Errore durante la scansione.")
+            
+@bot.message_handler(func=lambda message: True)
+def handle_general_chat(message):
+    """Handle all other chat messages for resource drops + spam protection"""
+    # 5% chance to drop a resource
+    try:
+        # Check if message is long enough to be considered active chat (anti-spam)
+        if not message.text or len(message.text) < 4:
+            return
+            
+        user_id = message.from_user.id
+        
+        # Initialize service if not global (it should be)
+        from services.crafting_service import CraftingService
+        crafting_service = CraftingService()
+        
+        # Roll drop
+        resource_id, image_path = crafting_service.roll_chat_drop(chance=3) # 3% chance
+        
+        if resource_id:
+             # Add to inventory
+            from sqlalchemy import text
+            session = crafting_service.db.get_session()
+            try:
+                resource_name = session.execute(text("SELECT name FROM resources WHERE id = :id"), {"id": resource_id}).scalar()
+                
+                # Add drop
+                success = crafting_service.add_resource_drop(user_id, resource_id, quantity=1, source="chat")
+                
+                if success and resource_name:
+                     msg = f"✨ Hai trovato **{resource_name}**!"
+                     
+                     # Check if image exists and send it
+                     import os
+                     if image_path and os.path.exists(image_path):
+                         try:
+                             with open(image_path, 'rb') as photo:
+                                 bot.send_photo(message.chat.id, photo, caption=msg, parse_mode='markdown', reply_to_message_id=message.message_id)
+                         except Exception as img_err:
+                             print(f"[IMAGE ERROR] {img_err}")
+                             bot.reply_to(message, msg, parse_mode='markdown')
+                     else:
+                         bot.reply_to(message, msg, parse_mode='markdown')
+            finally:
+                session.close()
+                
+    except Exception as e:
+        print(f"[CHAT DROP ERROR] {e}")
 
 def schedule_checker():
     while True:

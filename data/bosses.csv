@@ -32,3 +32,6 @@ Jeice,4000,95,ranged,Dragon Ball,Il guerriero rosso della Squadra Ginyu,1500,400
 Capitano Ginyu,5500,130,magic,Dragon Ball,Il leader della Squadra Ginyu,2500,600,90,"[154]","tactical","{""50"": ""phase2""}","Dragon Ball",4
 C19,4500,100,magic,Dragon Ball,L'androide che assorbe energia,1800,450,70,"[155]","tactical","{""50"": ""phase2""}","Dragon Ball",4
 C20,4800,105,magic,Dragon Ball,Il Dr. Gelo in forma androide,1900,480,75,"[156]","tactical","{""50"": ""phase2""}","Dragon Ball",4
+Goku Black Rose,12000,300,physical,Dragon Ball,La forma divina di Black,5000,1500,90,"[]","aggressive","{""50"": ""phase2"", ""20"": ""phase3""}","Dragon Ball",6
+Fused Zamasu,20000,450,magic,Dragon Ball,La fusione suprema,10000,3000,100,"[]","boss","{""60"": ""phase2"", ""30"": ""phase3""}","Dragon Ball",8
+Corrupted Zamasu,25000,550,physical,Dragon Ball,La forma corrotta finale,15000,5000,95,"[]","berserk","{""50"": ""phase2""}","Dragon Ball",9

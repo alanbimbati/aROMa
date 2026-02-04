@@ -21,8 +21,8 @@ class BackupService:
         self.event_dispatcher = EventDispatcher()
         
         # Ensure backup directory exists
-        if not os.path.exists(self.backup_dir):
-            os.makedirs(self.backup_dir)
+        #if not os.path.exists(self.backup_dir):
+         #   os.makedirs(self.backup_dir)
 
     def create_backup(self):
         """Creates a new database dump."""

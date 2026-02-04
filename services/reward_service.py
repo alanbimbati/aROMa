@@ -9,6 +9,8 @@ class RewardService:
         self.user_service = user_service
         self.item_service = item_service
         self.season_manager = season_manager
+        from services.crafting_service import CraftingService
+        self.crafting_service = CraftingService()
 
     def calculate_rewards(self, mob, participants):
         """
@@ -116,6 +118,9 @@ class RewardService:
             # Item Drops
             item_msg = self._handle_item_drop(user_id, mob.is_boss, session=session)
             
+            # Resource Drops (NEW using CraftingService)
+            resource_msg = self._handle_resource_drop(user_id, mob, session=session)
+            
             # Format Message
             user_name = user.game_name or user.nome or f"User {user_id}"
             line = f"👤 **{user_name}**: {damage} dmg -> {xp} Exp, {wumpa} {PointsName}"
@@ -133,6 +138,9 @@ class RewardService:
             if item_msg:
                 line += f"\n   {item_msg}"
                 
+            if resource_msg:
+                line += f"\n   {resource_msg}"
+                
             summary_lines.append(line)
             
             # Recalculate stats if needed
@@ -141,6 +149,33 @@ class RewardService:
 
         header = f"💰 **Ricompense Distribuite!** ({total_wumpa_distributed} {PointsName} totali)"
         return header + "\n" + "\n".join(summary_lines)
+
+    def _handle_resource_drop(self, user_id, mob, session=None):
+        """Handle resource drops using CraftingService"""
+        try:
+            # Determine drop
+            mob_level = getattr(mob, 'mob_level', 1)
+            is_boss = mob.is_boss
+            
+            # Roll for resource
+            resource_id, _ = self.crafting_service.roll_resource_drop(mob_level, is_boss)
+            
+            if resource_id:
+                # Add to inventory
+                # We could fetch name here to display it
+                from sqlalchemy import text
+                resource_name = session.execute(text("SELECT name FROM resources WHERE id = :id"), {"id": resource_id}).scalar()
+                
+                # Add drop
+                success = self.crafting_service.add_resource_drop(user_id, resource_id, quantity=1, source="mob")
+                
+                if success and resource_name:
+                    return f"🔩 Risorsa: **{resource_name}**"
+            
+            return None
+        except Exception as e:
+            print(f"[ERROR] Resource drop failed: {e}")
+            return None
 
     def _handle_item_drop(self, user_id, is_boss, session=None):
         chance = 0.30 if is_boss else 0.10
@@ -183,6 +218,11 @@ class RewardService:
                     item_msg = self._handle_item_drop(user_id, mob.is_boss, session=session)
                     if item_msg:
                         aggregated_users[user_id]['items'].append(item_msg)
+                        
+                    # Resource Drops
+                    resource_msg = self._handle_resource_drop(user_id, mob, session=session)
+                    if resource_msg:
+                         aggregated_users[user_id]['items'].append(resource_msg)
 
         summary_lines = []
         

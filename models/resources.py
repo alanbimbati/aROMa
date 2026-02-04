@@ -11,6 +11,7 @@ class Resource(Base):
     rarity = Column(Integer, nullable=False)
     description = Column(Text, nullable=True)
     drop_source = Column(String(20), default='mob') # mob, both
+    image = Column(String(255), nullable=True) # Path to image file
 
 class UserResource(Base):
     """Represents resources owned by a user"""
