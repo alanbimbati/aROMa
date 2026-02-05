@@ -683,10 +683,11 @@ class UserService:
         Calculate total stats for a user, optionally overriding the character.
         Returns a dict of final stats.
         """
-        # 1. Base Stats
-        base_hp = 100
-        base_mana = 50
-        base_dmg = 10
+        # 1. Base Stats (Level-based scaling)
+        level = utente.livello or 1
+        base_hp = 100 + (level * 5)
+        base_mana = 50 + (level * 2)
+        base_dmg = 10 + (level * 1)
         base_res = 0
         base_crit = 0
         base_speed = 0

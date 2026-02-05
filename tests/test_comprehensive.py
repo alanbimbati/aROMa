@@ -80,14 +80,28 @@ class TestComprehensive(unittest.TestCase):
     def cleanup(self):
         try:
             # Delete in correct order to avoid FK issues
+            from models.resources import UserResource
+            from models.guild import GuildMember
+            from models.combat import CombatParticipation
+            
+            self.session.rollback()
             self.session.query(GameEvent).filter_by(user_id=self.user_id).delete()
             self.session.query(UserAchievement).filter_by(user_id=self.user_id).delete()
             self.session.query(UserStat).filter_by(user_id=self.user_id).delete()
             self.session.query(CombatParticipation).filter_by(user_id=self.user_id).delete()
+            
+            # Find mobs in this chat to delete their participation
+            mobs = self.session.query(Mob).filter_by(chat_id=self.chat_id).all()
+            for m in mobs:
+                self.session.query(CombatParticipation).filter_by(mob_id=m.id).delete()
+            
             self.session.query(Collezionabili).filter_by(id_telegram=str(self.user_id)).delete()
             self.session.query(UserTransformation).filter_by(user_id=self.user_id).delete()
             self.session.query(DungeonParticipant).filter(DungeonParticipant.user_id == self.user_id).delete()
             self.session.query(DungeonProgress).filter(DungeonProgress.user_id == self.user_id).delete()
+            self.session.query(UserResource).filter_by(user_id=self.user_id).delete()
+            self.session.query(GuildMember).filter_by(user_id=self.user_id).delete()
+            
             self.session.query(Mob).filter_by(chat_id=self.chat_id).delete()
             self.session.query(Dungeon).filter(Dungeon.chat_id == self.chat_id).delete()
             self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()

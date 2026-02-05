@@ -21,6 +21,17 @@ class TestPvE(unittest.TestCase):
         self.chat_id = 210001
         self.user_id = 21001
         
+        # Cleanup
+        from models.combat import CombatParticipation
+        from models.resources import UserResource
+        self.session.query(CombatParticipation).filter(CombatParticipation.mob_id.in_(
+            self.session.query(Mob.id).filter_by(chat_id=self.chat_id)
+        )).delete(synchronize_session=False)
+        self.session.query(UserResource).filter_by(user_id=self.user_id).delete()
+        self.session.query(Mob).filter_by(chat_id=self.chat_id).delete()
+        self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()
+        self.session.commit()
+        
         self.user = Utente(
             id_telegram=self.user_id, 
             nome="PvETester", 
@@ -34,6 +45,11 @@ class TestPvE(unittest.TestCase):
         self.session.commit()
         
     def tearDown(self):
+        from models.combat import CombatParticipation
+        from models.resources import UserResource
+        self.session.rollback()
+        self.session.query(CombatParticipation).delete()
+        self.session.query(UserResource).filter_by(user_id=self.user_id).delete()
         self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()
         self.session.query(Mob).filter_by(chat_id=self.chat_id).delete()
         self.session.commit()

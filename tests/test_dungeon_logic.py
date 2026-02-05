@@ -3,6 +3,7 @@ from database import Database
 from models.user import Utente
 from models.pve import Mob
 from models.dungeon import Dungeon, DungeonParticipant
+from models.resources import UserResource
 from services.user_service import UserService
 from services.pve_service import PvEService
 from services.dungeon_service import DungeonService
@@ -26,6 +27,7 @@ class TestDungeonLogic(unittest.TestCase):
         session.query(Mob).filter_by(chat_id=130001).delete()
         session.query(DungeonParticipant).delete()
         session.query(Dungeon).filter_by(chat_id=130001).delete()
+        session.query(UserResource).filter(UserResource.user_id.in_([13001, 13002, 13003])).delete()
         session.query(Utente).filter(Utente.id_telegram.in_([13001, 13002, 13003])).delete()
         session.commit()
         
@@ -67,6 +69,7 @@ class TestDungeonLogic(unittest.TestCase):
         session.query(Mob).filter_by(chat_id=130001).delete()
         session.query(DungeonParticipant).delete()
         session.query(Dungeon).filter_by(chat_id=130001).delete()
+        session.query(UserResource).filter(UserResource.user_id.in_([13001, 13002, 13003])).delete()
         session.query(Utente).filter(Utente.id_telegram.in_([13001, 13002, 13003])).delete()
         session.commit()
         session.close()

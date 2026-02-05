@@ -83,6 +83,17 @@ class TestCraftingSystem(unittest.TestCase):
                 VALUES (:gid, 'TestGuild', :uid, 3)
             """), {"gid": cls.test_guild_id, "uid": cls.test_user_id})
             
+            # Ensure essential equipment for crafting tests exists
+            # test_04/05 use ID 1, test_06 uses ID 8
+            for eid, name, req in [(1, 'Gi della Tartaruga', '{"Rottami": 5}'), 
+                                 (8, 'Guanti Vegeta', '{"Pelle Logora": 5}')]:
+                exists = session.execute(text("SELECT id FROM equipment WHERE id = :id"), {"id": eid}).scalar()
+                if not exists:
+                    session.execute(text("""
+                        INSERT INTO equipment (id, name, slot, rarity, min_level, crafting_time, crafting_requirements)
+                        VALUES (:id, :name, 'chest', 1, 1, 10, :req)
+                    """), {"id": eid, "name": name, "req": req})
+            
             session.commit()
             
         finally:
@@ -119,8 +130,9 @@ class TestCraftingSystem(unittest.TestCase):
             
             # Verify it's in inventory
             resources = self.crafting.get_user_resources(self.test_user_id)
-            self.assertEqual(len(resources), 1, "Should have 1 resource type")
-            self.assertEqual(resources[0]['quantity'], 1, "Should have quantity 1")
+            owned_resources = [r for r in resources if r['quantity'] > 0]
+            self.assertEqual(len(owned_resources), 1, "Should have 1 resource type with quantity > 0")
+            self.assertEqual(owned_resources[0]['quantity'], 1, "Should have quantity 1")
             print(f"✅ Dropped: {resources[0]['name']} (Rarity {resources[0]['rarity']})")
         else:
             print("✅ No drop this time (20% chance is working)")
@@ -196,6 +208,15 @@ class TestCraftingSystem(unittest.TestCase):
         
         session = self.db.get_session()
         try:
+            # Ensure equipment 1 exists (it might have been deleted by other tests)
+            exists = session.execute(text("SELECT id FROM equipment WHERE id = 1")).scalar()
+            if not exists:
+                session.execute(text("""
+                    INSERT INTO equipment (id, name, slot, rarity, min_level, crafting_time, crafting_requirements)
+                    VALUES (1, 'Gi della Tartaruga', 'chest', 1, 1, 10, '{"Rottami": 5}')
+                """))
+                session.commit()
+
             # Get crafting info for Gi della Tartaruga (ID 1)
             equipment = session.execute(text("""
                 SELECT id, crafting_requirements FROM equipment WHERE id = 1

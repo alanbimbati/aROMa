@@ -14,7 +14,9 @@ class TestGuildSystem(unittest.TestCase):
     def test_join_guild(self):
         # Mock session
         session = MagicMock()
-        self.guild_service.db.get_session = MagicMock(return_value=session)
+        patcher = patch.object(self.guild_service.db, 'get_session', return_value=session)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         
         # Mock existing guild
         guild = Guild(id=1, name="TestGuild", member_limit=5)
@@ -22,7 +24,8 @@ class TestGuildSystem(unittest.TestCase):
         # and filter_by(guild_id=...).count() returns 1
         
         # Setup side_effect for query
-        def query_side_effect(model):
+        def query_side_effect(*args, **kwargs):
+            model = args[0] if args else None
             query = MagicMock()
             if model == Guild:
                 query.filter_by.return_value.first.return_value = guild
@@ -41,7 +44,9 @@ class TestGuildSystem(unittest.TestCase):
     def test_upgrade_building(self):
         # Mock session
         session = MagicMock()
-        self.guild_service.db.get_session = MagicMock(return_value=session)
+        patcher = patch.object(self.guild_service.db, 'get_session', return_value=session)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         
         # Mock leader member
         member = GuildMember(guild_id=1, user_id=111, role="Leader")
@@ -49,7 +54,8 @@ class TestGuildSystem(unittest.TestCase):
         # Mock guild with funds
         guild = Guild(id=1, name="TestGuild", inn_level=1, wumpa_bank=10000)
         
-        def query_side_effect(model):
+        def query_side_effect(*args, **kwargs):
+            model = args[0] if args else None
             query = MagicMock()
             if model == GuildMember:
                 query.filter_by.return_value.first.return_value = member

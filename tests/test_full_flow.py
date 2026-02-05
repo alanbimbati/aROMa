@@ -19,6 +19,7 @@ from models.combat import CombatParticipation
 from models.items import Collezionabili
 from models.system import CharacterTransformation, UserTransformation, Livello
 from models.dungeon import Dungeon, DungeonParticipant
+from models.resources import UserResource
 from services.user_service import UserService
 from services.pve_service import PvEService
 from services.item_service import ItemService
@@ -87,6 +88,9 @@ class TestFullFlow(unittest.TestCase):
             self.session.query(Collezionabili).filter_by(id_telegram=str(self.user_id)).delete()
             self.session.query(UserTransformation).filter_by(user_id=self.user_id).delete()
             self.session.query(CharacterTransformation).filter(CharacterTransformation.transformation_name.like("Test%")).delete()
+            
+            # Clean FK dependencies before deleting user
+            self.session.query(UserResource).filter_by(user_id=self.user_id).delete()
             
             # Finally delete user
             self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()

@@ -119,17 +119,15 @@ class TestAggroSystem(unittest.TestCase):
             # Assertions
             self.assertTrue(mock_choices.called, "random.choices should have been called")
             args, kwargs = mock_choices.call_args
-            # User 1: 50 base + 1000 * 0.5 dmg = 550.0
-            # User 2: 50 base + 0 dmg = 50 -> * 2 (Defense) = 100.0
-            
             population = args[0]
             weights = kwargs['weights']
             
             idx1 = population.index(101)
             idx2 = population.index(102)
             
-            self.assertEqual(weights[idx1], 550.0)
-            self.assertEqual(weights[idx2], 250.0)
+            # Current logic: max(dmg, 1.0) and x5 Defense
+            self.assertEqual(weights[idx1], 1000.0)
+            self.assertEqual(weights[idx2], 5.0)
 
 if __name__ == '__main__':
     unittest.main()

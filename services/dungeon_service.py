@@ -15,7 +15,7 @@ class DungeonService:
         self.db = Database()
         self.dungeons_cache = self.load_dungeons()
 
-    def check_daily_dungeon_trigger(self, chat_id=None):
+    def check_daily_dungeon_trigger(self, chat_id=None, bot=None):
         """Checks if a dungeon should start or if hype phase is due. Run periodically."""
         if not chat_id:
             from settings import GRUPPO_AROMA
@@ -26,6 +26,32 @@ class DungeonService:
             now = datetime.datetime.now()
             today_date = now.date()
             
+            # 0. AUTO-CLEANUP: Clear extremely stale dungeons (e.g. older than 8 hours)
+            stale_cutoff = now - datetime.timedelta(hours=8)
+            stale_dungeons = session.query(Dungeon).filter(
+                Dungeon.chat_id == chat_id,
+                Dungeon.status.in_(["registration", "active"]),
+                Dungeon.created_at < stale_cutoff
+            ).all()
+            
+            if stale_dungeons:
+                for sd in stale_dungeons:
+                    print(f"[DUNGEON] Cleaning up stale dungeon: {sd.name} (ID: {sd.id}, Status: {sd.status})")
+                    sd.status = "failed"
+                    sd.completed_at = now
+                    # Kill mobs
+                    session.query(Mob).filter_by(dungeon_id=sd.id, is_dead=False).update({Mob.is_dead: True, Mob.health: 0})
+                    
+                    if bot:
+                        try:
+                            check_chat_id = sd.chat_id if sd.chat_id else chat_id
+                            if check_chat_id:
+                                bot.send_message(check_chat_id, f"🕑 **TEMPO SCADUTO!**\n\nI nemici del dungeon **{sd.name}** si sono stancati di aspettare e sono fuggiti col bottino!", parse_mode='markdown')
+                        except Exception as e:
+                            print(f"[ERROR] Failed to send expiration message: {e}")
+                            
+                session.commit()
+
             # 1. Check if there is an ACTIVE dungeon (running, not registration)
             # If so, we NEVER start or schedule anything else.
             active_running = session.query(Dungeon).filter(
@@ -45,18 +71,20 @@ class DungeonService:
             if reg:
                 # If active, check if in hype phase and ready to start
                 if reg.is_hype_active:
-                    # 5 minutes hype duration
-                    trigger_time = reg.hype_start_time + datetime.timedelta(minutes=5)
+                    # 2 minutes hype duration
+                    trigger_time = reg.hype_start_time + datetime.timedelta(minutes=2)
                     if now >= trigger_time:
                         print(f"[DUNGEON] Hype finished. Starting dungeon!")
+                        res = self.start_dungeon_auto(chat_id)
                         session.close()
-                        return self.start_dungeon_auto(chat_id)
+                        return res
                 else:
                     # If Hype is NOT active, check if it's time to start hype.
                     if reg.scheduled_for and now >= reg.scheduled_for:
                              print(f"[DUNGEON] Triggering Hype Phase for {reg.name}")
+                             res = self.start_hype_phase(chat_id)
                              session.close()
-                             return self.start_hype_phase(chat_id)
+                             return res
 
                 session.close()
                 return
@@ -68,10 +96,10 @@ class DungeonService:
                 Dungeon.created_at >= datetime.datetime.combine(today_date, datetime.time.min)
             ).count()
             
-            if today_count < 5 and 8 <= now.hour < 23:
+            if today_count < 40 and 8 <= now.hour < 23:
                  last = session.query(Dungeon).filter(Dungeon.chat_id == chat_id).order_by(Dungeon.created_at.desc()).first()
                  
-                 # Logic: If no dungeon today, or if 3 hours passed since last CREATION
+                 # Logic: If no dungeon today, or if 30 minutes passed since last CREATION
                  should_schedule = False
                  if not last:
                      should_schedule = True
@@ -80,9 +108,9 @@ class DungeonService:
                      if last.created_at.date() < today_date:
                          should_schedule = True
                      else:
-                         # Last was today, check 3 hour gap start-to-start roughly
+                         # Last was today, check 30 minute gap start-to-start roughly
                          # We use created_at as the "scheduling time" anchor
-                         if now >= last.created_at + datetime.timedelta(hours=3):
+                         if now >= last.created_at + datetime.timedelta(minutes=30):
                              should_schedule = True
                  
                  if should_schedule:
@@ -146,8 +174,8 @@ class DungeonService:
                 dungeon_def_id = 1
                 dungeon_def = self.get_dungeon_def(1)
             
-            # Schedule for 30-120 minutes from now
-            delay_mins = random.randint(30, 120)
+            # Schedule for 5-30 minutes from now
+            delay_mins = random.randint(5, 30)
             scheduled_time = now + datetime.timedelta(minutes=delay_mins)
             
             if scheduled_time.hour >= 23:
@@ -253,8 +281,7 @@ class DungeonService:
                      # Better: use a simple heal to max logic.
                      # If user has 'health' column as max (legacy) or stats JSON.
                      # Let's trust user.health as max for now or 100 default.
-                     stats = user.get_stats()
-                     max_hp = stats.get('hp', 100)
+                     max_hp = user.max_health or 100
                      user.current_hp = max_hp
                      user.is_dead = False # If there is such a flag
             
@@ -281,6 +308,13 @@ class DungeonService:
             
         except Exception as e:
             print(f"[ERROR] start_dungeon_auto failed: {e}")
+            if 'dungeon' in locals() and dungeon:
+                 try:
+                     dungeon.status = "failed"
+                     dungeon.completed_at = datetime.datetime.now()
+                     session.commit()
+                 except:
+                     pass
             session.rollback()
             return None
         finally:
@@ -582,19 +616,25 @@ class DungeonService:
         if not dungeon or not dungeon.dungeon_def_id:
             if local_session:
                 session.close()
-            return "Errore dungeon."
+            if local_session:
+                session.close()
+            return "Errore dungeon.", []
             
         dungeon_def = self.get_dungeon_def(dungeon.dungeon_def_id)
         if not dungeon_def:
             if local_session:
                 session.close()
-            return "Definizione dungeon non trovata."
+            if local_session:
+                session.close()
+            return "Definizione dungeon non trovata.", []
             
         steps = dungeon_def['steps']
         if stage_num > len(steps):
             if local_session:
                 session.close()
-            return "Errore stage."
+            if local_session:
+                session.close()
+            return "Errore stage.", []
             
         step_data = steps[stage_num - 1]
         
@@ -916,22 +956,34 @@ class DungeonService:
         return participants
 
     def _cleanup_ghost_dungeons(self, chat_id, session):
-        """Internal helper to fail dungeons with 0 participants"""
+        """
+        Internal helper to fail dungeons that:
+        1. Have 0 participants (registration ghost)
+        2. Are stale (older than 2 hours)
+        """
+        cutoff = datetime.datetime.now() - datetime.timedelta(hours=2)
+        
         ghosts = session.query(Dungeon).filter(
             Dungeon.chat_id == chat_id,
             Dungeon.status.in_(["registration", "active"])
         ).all()
         
+        cleaned_any = False
         for dungeon in ghosts:
             participant_count = session.query(DungeonParticipant).filter_by(dungeon_id=dungeon.id).count()
-            if participant_count == 0:
-                print(f"[DEBUG] _cleanup_ghost_dungeons: Failing ghost dungeon {dungeon.id} ({dungeon.name}) in chat {chat_id}")
+            is_stale = dungeon.created_at < cutoff if hasattr(dungeon, 'created_at') and dungeon.created_at else False
+            
+            if participant_count == 0 or is_stale:
+                reason = "0 participants" if participant_count == 0 else "stale (>2h)"
+                print(f"[DEBUG] _cleanup_ghost_dungeons: Failing ghost dungeon {dungeon.id} ({dungeon.name}) - Reason: {reason}")
                 dungeon.status = "failed"
                 dungeon.end_time = datetime.datetime.now()
                 # Mark associated mobs as dead
-                session.query(Mob).filter_by(dungeon_id=dungeon.id, is_dead=False).update({'is_dead': True})
+                session.query(Mob).filter_by(dungeon_id=dungeon.id, is_dead=False).update({'is_dead': True, 'health': 0})
+                cleaned_any = True
         
-        session.commit()
+        if cleaned_any:
+            session.commit()
 
     def get_active_dungeon(self, chat_id, session=None):
         """Returns the active or registering dungeon for the chat"""
@@ -1096,9 +1148,7 @@ class DungeonService:
                 
             session.commit()
             return True, f"Dungeon '{dungeon.name}' terminato forzatamente."
-        except Exception as e:
-            print(f"[ERROR] force_close_dungeon: {e}")
-            session.rollback()
-            return False, f"Errore durante la chiusura forzata: {e}"
         finally:
             session.close()
+
+

@@ -38,6 +38,10 @@ class TestHealthCap(unittest.TestCase):
     def tearDown(self):
         # Clean up test user
         session = self.db.get_session()
+        from models.combat import CombatParticipation
+        from models.resources import UserResource
+        session.query(CombatParticipation).filter_by(user_id=self.u1_id).delete()
+        session.query(UserResource).filter_by(user_id=self.u1_id).delete()
         session.query(Utente).filter_by(id_telegram=self.u1_id).delete()
         session.commit()
         session.close()
@@ -115,6 +119,8 @@ class TestHealthCap(unittest.TestCase):
         self.assertEqual(user.health, user.max_health)
         
         # Clean up mob
+        from models.combat import CombatParticipation
+        session.query(CombatParticipation).filter_by(mob_id=mob_id).delete()
         session.query(Mob).filter_by(id=mob_id).delete()
         session.commit()
         session.close()

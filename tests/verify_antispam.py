@@ -8,12 +8,11 @@ from sqlalchemy.orm import sessionmaker
 sys.path.append(os.getcwd())
 
 from models.user import Utente
-from database import Base
+from database import Database, Base
 
-# Setup test DB (or use existing for quick check)
-engine = create_engine('sqlite:///points.db')
-Session = sessionmaker(bind=engine)
-session = Session()
+# Setup test DB
+db = Database()
+session = db.get_session()
 
 def test_antispam_logic(user_id):
     user = session.query(Utente).filter_by(id_telegram=user_id).first()

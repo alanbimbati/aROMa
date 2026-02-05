@@ -10,6 +10,8 @@ sys.path.append(os.getcwd())
 from database import Database
 from models.user import Utente
 from models.item import Item
+from models.resources import UserResource
+from models.dungeon import DungeonParticipant
 from services.user_service import UserService
 
 class TestInn(unittest.TestCase):
@@ -54,6 +56,8 @@ class TestInn(unittest.TestCase):
         self.session.commit()
         
     def tearDown(self):
+        self.session.query(DungeonParticipant).filter_by(user_id=18001).delete()
+        self.session.query(UserResource).filter_by(user_id=18001).delete()
         self.session.query(Utente).filter_by(id_telegram=18001).delete()
         self.session.query(Item).filter_by(name="Test Potion").delete() # Added deletion for test item
         self.session.commit()

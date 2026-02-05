@@ -1891,12 +1891,11 @@ class PvEService:
         else:
             # Get the most recently spawned active mob
             mob = session.query(Mob).filter_by(is_dead=False).order_by(desc(Mob.spawn_time)).first()
-        session.close()
-        
         if not mob:
+            session.close()
             return None
         
-        return {
+        result = {
             'name': mob.name,
             'health': mob.health,
             'max_health': mob.max_health,
@@ -1907,6 +1906,8 @@ class PvEService:
             'resistance': mob.resistance if hasattr(mob, 'resistance') else 0,
             'image': self.get_enemy_image_path(mob)
         }
+        session.close()
+        return result
     
     def get_current_boss_status(self):
         """Get current boss (Mob with is_boss=True) info for display"""

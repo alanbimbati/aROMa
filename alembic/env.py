@@ -37,6 +37,7 @@ from models.system_state import SystemState
 from models.equipment import Equipment, UserEquipment
 from models.crafting import CraftingQueue
 from models.resources import Resource, UserResource
+from models.skins import UserSkin
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

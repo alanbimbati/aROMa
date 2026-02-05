@@ -9,6 +9,7 @@ sys.path.append(os.getcwd())
 
 from services.dungeon_service import DungeonService
 from models.dungeon import Dungeon, DungeonParticipant
+from models.user import Utente
 from database import Database
 
 class TestGhostCleanup(unittest.TestCase):
@@ -24,6 +25,8 @@ class TestGhostCleanup(unittest.TestCase):
         self.session.commit()
 
     def tearDown(self):
+        self.session.rollback()
+        self.session.query(DungeonParticipant).delete()
         self.session.query(Dungeon).filter_by(chat_id=self.chat_id).delete()
         self.session.commit()
         self.session.close()
@@ -71,6 +74,13 @@ class TestGhostCleanup(unittest.TestCase):
         self.session.commit()
         ghost_id = ghost.id
         
+        # Ensure user 123 exists for DP reference
+        u = self.session.query(Utente).filter_by(id_telegram=123).first()
+        if not u:
+            u = Utente(id_telegram=123, nome="Creator", username="creator", health=100, max_health=100)
+            self.session.add(u)
+            self.session.commit()
+
         # Try to create a new dungeon (creator_id=123)
         # This should succeed because the ghost is cleaned up
         new_id, msg = self.dungeon_service.create_dungeon(self.chat_id, 1, 123)

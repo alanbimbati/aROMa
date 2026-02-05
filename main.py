@@ -98,6 +98,8 @@ from services.shop_service import ShopService
 from services.wish_service import WishService
 from services.pve_service import PvEService
 from services.guild_service import GuildService
+from services.skin_service import SkinService
+skin_service = SkinService()
 from services.character_service import CharacterService
 from services.transformation_service import TransformationService
 from services.stats_service import StatsService
@@ -105,6 +107,10 @@ from services.drop_service import DropService
 from services.dungeon_service import DungeonService
 from services.achievement_tracker import AchievementTracker
 from services.crafting_service import CraftingService
+
+# Global state for uploads
+pending_attack_upload = {}
+pending_skin_upload = {}
 
 
 
@@ -295,6 +301,179 @@ def get_main_menu():
 def show_menu(message):
     """Show the main menu keyboard"""
     bot.send_message(message.chat.id, "📱 **Menu Principale**\n\nUsa i bottoni qui sotto:", reply_markup=get_main_menu(), parse_mode='markdown')
+
+@bot.message_handler(commands=['missing_attack'])
+def handle_missing_attack(message):
+    """Admin command to upload missing attack GIFs"""
+    # Need to use message.chat.id since it's a message handler
+    chat_id = message.chat.id
+    utente = user_service.get_user(chat_id)
+    if not user_service.is_admin(utente):
+        return
+        
+    from services.character_loader import get_character_loader
+    char_loader = get_character_loader()
+    all_chars = char_loader.get_all_characters()
+    
+    # Find characters with special attack but no GIF
+    missing = []
+    for char in all_chars:
+        has_attack = char.get('special_attack_name') and char['special_attack_name'].strip()
+        has_gif = char.get('special_attack_gif') and char['special_attack_gif'].strip()
+        if has_attack and not has_gif:
+            missing.append(char)
+            
+    if not missing:
+        bot.reply_to(message, "✅ Tutti i personaggi con attacchi speciali hanno una GIF!")
+        return
+        
+    # Pick the first one
+    target = missing[0]
+    
+    # Set pending state
+    global pending_attack_upload
+    pending_attack_upload[chat_id] = target['id']
+    
+    msg = f"🎥 **Upload GIF Attacco**\n\n"
+    msg += f"Personaggio: **{target['nome']}**\n"
+    msg += f"Attacco: **{target['special_attack_name']}**\n\n"
+    msg += "Invia ora la GIF o il Video (MP4) per questo attacco.\n"
+    msg += f"Rimanenti: {len(missing)}"
+    
+    bot.reply_to(message, msg, parse_mode='markdown')
+
+@bot.message_handler(commands=['missing', 'missing_skins'])
+def handle_missing_skins(message):
+    """Admin command to identify characters without ANY skin"""
+    chat_id = message.chat.id
+    utente = user_service.get_user(chat_id)
+    if not user_service.is_admin(utente):
+        return
+
+    from services.character_loader import get_character_loader
+    char_loader = get_character_loader()
+    all_chars = char_loader.get_all_characters()
+    
+    # Get all skins from CSV to see which chars have skins
+    all_skins = skin_service._skins_cache
+    chars_with_skins = set(s['character_id'] for s in all_skins)
+    
+    missing = [c for c in all_chars if c['id'] not in chars_with_skins and c['price'] > 0]
+    
+    if not missing:
+        bot.reply_to(message, "✅ Tutti i personaggi (a pagamento) hanno almeno una skin!")
+        return
+        
+    target = missing[0]
+    global pending_skin_upload
+    pending_skin_upload[chat_id] = {
+        'char_id': target['id'],
+        'waiting_for_name': False
+    }
+    
+    msg = f"🎭 **Aggiunta Skin Animata**\n\n"
+    msg += f"Personaggio: **{target['nome']}** (ID: {target['id']})\n"
+    msg += "Invia ora la GIF o il Video (MP4) per creare la prima skin.\n"
+    msg += f"Rimanenti: {len(missing)}"
+    
+    bot.reply_to(message, msg, parse_mode='markdown')
+
+@bot.message_handler(commands=['addskin'])
+def handle_add_skin_cmd(message):
+    """Admin command to add a skin to a specific character: /addskin [char_id]"""
+    chat_id = message.chat.id
+    utente = user_service.get_user(chat_id)
+    if not user_service.is_admin(utente):
+        return
+
+    args = message.text.split()
+    if len(args) < 2:
+        bot.reply_to(message, "❌ Usa: `/addskin [id_personaggio]`", parse_mode='markdown')
+        return
+        
+    try:
+        char_id = int(args[1])
+    except:
+        bot.reply_to(message, "❌ ID non valido.")
+        return
+
+    from services.character_loader import get_character_loader
+    char = get_character_loader().get_character_by_id(char_id)
+    if not char:
+        bot.reply_to(message, "❌ Personaggio non trovato.")
+        return
+        
+    global pending_skin_upload
+    pending_skin_upload[chat_id] = {
+        'char_id': char_id,
+        'waiting_for_name': False
+    }
+    
+    bot.reply_to(message, f"Invia la GIF per una nuova skin di **{char['nome']}**:", parse_mode='markdown')
+
+@bot.message_handler(commands=['stats', 'me', 'profilo'])
+def command_stats(message):
+    class UserWrapper:
+        def __init__(self, user):
+            self.id_telegram = user.id
+            self.first_name = user.first_name
+            self.username = user.username
+            self.scadenza_premium = "N/A"
+            
+    wrapper = UserWrapper(message.from_user)
+    info = user_service.info_user(wrapper)
+    bot.reply_to(message, info, parse_mode="Markdown")
+
+@bot.message_handler(commands=['inventory', 'inv'])
+def command_inventory(message):
+    user_id = message.from_user.id
+    items = equipment_service.get_user_inventory(user_id)
+    if not items:
+        bot.reply_to(message, "Il tuo inventario è vuoto.")
+        return
+        
+    msg = "🎒 **Inventario**\n\n"
+    for u_item, item in items:
+        status = "✅" if u_item.is_equipped else ""
+        rarity_icon = "⚪️"
+        if item.rarity == "Uncommon": rarity_icon = "🟢"
+        elif item.rarity == "Rare": rarity_icon = "🔵"
+        elif item.rarity == "Epic": rarity_icon = "🟣"
+        elif item.rarity == "Legendary": rarity_icon = "🟠"
+        elif item.rarity == "Mythic": rarity_icon = "🔴"
+        
+        msg += f"{rarity_icon} 🆔 `{u_item.id}` - **{item.name}** ({item.slot}) {status}\n"
+        
+    msg += "\nUsa `/equip <id>` per equipaggiare."
+    bot.reply_to(message, msg, parse_mode="Markdown")
+
+@bot.message_handler(commands=['equip'])
+def command_equip(message):
+    try:
+        args = message.text.split()
+        if len(args) < 2:
+            bot.reply_to(message, "Uso: `/equip <id_oggetto>`")
+            return
+            
+        item_id = int(args[1])
+        success, result = user_service.equip_item(message.from_user.id, item_id)
+        bot.reply_to(message, result)
+    except ValueError:
+        bot.reply_to(message, "ID non valido.")
+
+@bot.message_handler(commands=['unequip'])
+def command_unequip(message):
+    try:
+        args = message.text.split()
+        if len(args) < 2:
+            bot.reply_to(message, "Uso: `/unequip <id_oggetto>`")
+            return
+            
+        item_id = int(args[1])
+        success, result = user_service.unequip_item(message.from_user.id, item_id)
+        bot.reply_to(message, result)
+    except ValueError:
+        bot.reply_to(message, "ID non valido.")
 
 @bot.message_handler(func=lambda message: message.text == "👤 Profilo")
 def handle_profilo_button(message):
@@ -1517,6 +1696,91 @@ def handle_dungeon_leave_global(call):
         safe_answer_callback(call.id, "Errore durante la fuga!", show_alert=True)
         bot.send_message(call.message.chat.id, f"❌ Errore: {msg}")
 
+def get_skin_menu_ui(user_id, char_id):
+    """Generate text and markup for the skin menu"""
+    from services.character_loader import get_character_loader
+    char = get_character_loader().get_character_by_id(char_id)
+    if not char:
+        return "❌ Personaggio non trovato.", None
+
+    owned_skins = skin_service.get_user_skins(user_id, char_id)
+    available_skins = skin_service.get_available_skins(char_id)
+    
+    msg = f"🎭 **Skin Animate: {char['nome']}**\n\n"
+    msg += "Qui puoi acquistare ed equipaggiare versioni animate del tuo personaggio attuale.\n\n"
+    
+    markup = types.InlineKeyboardMarkup()
+    
+    # Owned Skins
+    if owned_skins:
+        msg += "✅ **Le tue Skin:**\n"
+        for us in owned_skins:
+            status = " (Equipaggiata)" if us.is_equipped else ""
+            msg += f"• {us.skin_name}{status}\n"
+            if not us.is_equipped:
+                markup.add(types.InlineKeyboardButton(f"👕 Equipaggia {us.skin_name}", callback_data=f"skin_equip|{us.skin_id}"))
+        msg += "\n"
+        
+        # Option to unequip (revert to static)
+        msg += "ℹ️ Se non equipaggi alcuna skin, verrà mostrata l'immagine statica classica.\n\n"
+        markup.add(types.InlineKeyboardButton("🚫 Rimuovi Skin (Statica)", callback_data="skin_unequip"))
+    
+    # Available for Purchase
+    owned_ids = [us.skin_id for us in owned_skins]
+    to_buy = [s for s in available_skins if s['id'] not in owned_ids]
+    
+    if to_buy:
+        msg += "💰 **Skin Disponibili:**\n"
+        for s in to_buy:
+            msg += f"• **{s['name']}** - {s['price']} Wumpa\n"
+            markup.add(types.InlineKeyboardButton(f"🛒 Compra {s['name']} ({s['price']} W)", callback_data=f"skin_buy|{s['id']}"))
+    else:
+        if not owned_skins:
+            msg += "😞 Non ci sono ancora skin disponibili per questo personaggio."
+        else:
+            msg += "✨ Hai collezionato tutte le skin di questo personaggio!"
+
+    markup.add(types.InlineKeyboardButton("🔙 Back to Profile", callback_data="BotCommands|handle_profile"))
+    return msg, markup
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("skin_menu|"))
+def handle_skin_menu_callback(call):
+    char_id = int(call.data.split("|")[1])
+    text, markup = get_skin_menu_ui(call.from_user.id, char_id)
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("skin_buy|"))
+def handle_skin_buy_callback(call):
+    skin_id = int(call.data.split("|")[1])
+    success, msg = skin_service.purchase_skin(call.from_user.id, skin_id)
+    
+    safe_answer_callback(call.id, msg, show_alert=not success)
+    if success:
+        skin = skin_service.get_skin_by_id(skin_id)
+        text, markup = get_skin_menu_ui(call.from_user.id, skin['character_id'])
+        bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("skin_equip|"))
+def handle_skin_equip_callback(call):
+    skin_id = int(call.data.split("|")[1])
+    success, msg = skin_service.equip_skin(call.from_user.id, skin_id)
+    
+    safe_answer_callback(call.id, msg)
+    if success:
+        skin = skin_service.get_skin_by_id(skin_id)
+        text, markup = get_skin_menu_ui(call.from_user.id, skin['character_id'])
+        bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+
+@bot.callback_query_handler(func=lambda call: call.data == "skin_unequip")
+def handle_skin_unequip_callback(call):
+    success, msg = skin_service.equip_skin(call.from_user.id, None)
+    safe_answer_callback(call.id, msg)
+    
+    from services.user_service import UserService
+    user = UserService().get_user(call.from_user.id)
+    text, markup = get_skin_menu_ui(call.from_user.id, user.livello_selezionato)
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith("potion_use|"))
 def handle_potion_use_callback(call):
     """Handle potion usage from profile buttons"""
@@ -1903,10 +2167,20 @@ Per acquistare un gioco che vedi in un canale o gruppo:
                 # Get participants
                 participants = dungeon_service.get_dungeon_participants(active_dungeon.id, session=session)
                 msg += f"\n👥 Partecipanti ({len(participants)}):\n"
-                for p in participants:
+                
+                # Truncate list to avoid message too long
+                limit = 20
+                displayed_participants = participants[:limit]
+                
+                for p in displayed_participants:
                     u = user_service.get_user(p.user_id)
                     name = f"@{u.username}" if u and u.username else (u.nome if u else f"Utente {p.user_id}")
+                    # Escape markdown
+                    name = name.replace("_", "\\_").replace("*", "\\*")
                     msg += f"- {name}\n"
+                
+                if len(participants) > limit:
+                    msg += f"...e altri {len(participants) - limit} eroi!\n"
                         
                 session.close()
                 self.bot.reply_to(self.message, msg, reply_markup=markup, parse_mode='markdown')
@@ -2865,6 +3139,8 @@ Per acquistare un gioco che vedi in un canale o gruppo:
             markup.add(types.InlineKeyboardButton("📊 Alloca Statistiche", callback_data="stat_edit_start"))
             markup.add(types.InlineKeyboardButton("🎒 Equipaggiamento", callback_data="view_equipment"))
             markup.add(types.InlineKeyboardButton("🏆 Scegli Titolo", callback_data="title_menu"))
+            if character:
+                markup.add(types.InlineKeyboardButton("🎭 Skin Animate", callback_data=f"skin_menu|{character['id']}"))
             # markup.add(types.InlineKeyboardButton("🔄 Reset Stats (Gratis)", callback_data="stat_reset")) # Removed as per user request
         if character:
             # markup.add(types.InlineKeyboardButton("✨ Attacco Speciale", callback_data="special_attack_mob")) # Removed as per user request
@@ -2877,16 +3153,29 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         # Try to send with character image
         image_sent = False
         if character:
-            # Try using helper function
-            from services.character_loader import get_character_image
-            image_data = get_character_image(character, is_locked=False)
-            
-            if image_data:
+            # Check for equipped skin
+            equipped_skin = skin_service.get_equipped_skin(utente.id_telegram, character['id'])
+            if equipped_skin:
                 try:
-                    self.bot.send_photo(self.message.chat.id, image_data, caption=msg, parse_mode='markdown', reply_markup=markup)
-                    image_sent = True
+                    gif_path = f"images/skins/{equipped_skin.gif_path}"
+                    if os.path.exists(gif_path):
+                        with open(gif_path, 'rb') as animation:
+                            self.bot.send_animation(self.message.chat.id, animation, caption=msg, parse_mode='markdown', reply_markup=markup)
+                            image_sent = True
                 except Exception as e:
-                    print(f"Error sending character image: {e}")
+                    print(f"Error sending character skin: {e}")
+
+            if not image_sent:
+                # Try using helper function for static image
+                from services.character_loader import get_character_image
+                image_data = get_character_image(character, is_locked=False)
+                
+                if image_data:
+                    try:
+                        self.bot.send_photo(self.message.chat.id, image_data, caption=msg, parse_mode='markdown', reply_markup=markup)
+                        image_sent = True
+                    except Exception as e:
+                        print(f"Error sending character image: {e}")
         
 
         
@@ -4089,7 +4378,86 @@ def handle_docs_and_media(message):
     """Handle media uploads (specifically for attack GIFs)"""
     chat_id = message.chat.id
     
-    # Check if this is an attack GIF upload
+    # Check if this is a Skin GIF upload
+    global pending_skin_upload
+    if chat_id in pending_skin_upload:
+        pending = pending_skin_upload[chat_id]
+        char_id = pending['char_id']
+        
+        try:
+            # Get file info
+            file_info = None
+            file_name = None
+            
+            if message.document:
+                file_info = bot.get_file(message.document.file_id)
+                file_name = message.document.file_name
+            elif message.animation:
+                file_info = bot.get_file(message.animation.file_id)
+                file_name = message.animation.file_name or "animation.gif"
+            elif message.video:
+                file_info = bot.get_file(message.video.file_id)
+                file_name = message.video.file_name or "video.mp4"
+                
+            if not file_info:
+                bot.reply_to(message, "❌ Errore nel recupero del file.")
+                return
+
+            downloaded_file = bot.download_file(file_info.file_path)
+            
+            # Determine extension
+            ext = os.path.splitext(file_name)[1].lower()
+            if not ext:
+                ext = os.path.splitext(file_info.file_path)[1].lower()
+            
+            if ext not in ['.gif', '.mp4', '.mov']:
+                bot.reply_to(message, "❌ Formato non supportato. Usa GIF o MP4.")
+                return
+
+            # Get character info
+            from services.character_loader import get_character_loader
+            char_loader = get_character_loader()
+            char = char_loader.get_character_by_id(char_id)
+            
+            if not char:
+                bot.reply_to(message, "❌ Errore: Personaggio non trovato.")
+                del pending_skin_upload[chat_id]
+                return
+                
+            # Sanitize filename
+            safe_char = char['nome'].lower().replace(' ', '_')
+            import re
+            safe_char = re.sub(r'[^a-z0-9_]', '', safe_char)
+            
+            # Use timestamp or random to avoid collision in skins
+            import time as time_module
+            new_filename = f"skin_{char_id}_{int(time_module.time())}{ext}"
+            save_path = f"images/skins/{new_filename}"
+            
+            # Ensure directory exists
+            os.makedirs("images/skins", exist_ok=True)
+            
+            # Save file
+            with open(save_path, 'wb') as new_file:
+                new_file.write(downloaded_file)
+                
+            # Update pending with file path and ask for name
+            pending['gif_path'] = new_filename
+            pending['waiting_for_name'] = True
+            
+            msg = f"✅ GIF salvata per **{char['nome']}**!\n"
+            msg += "Ora invia il **NOME** di questa skin (es: 'Classic Glow', 'Gold Edition', ecc.):"
+            bot.reply_to(message, msg, parse_mode='markdown')
+            return
+            
+        except Exception as e:
+            print(f"Error handling skin upload: {e}")
+            bot.reply_to(message, f"❌ Errore durante l'upload: {e}")
+            if chat_id in pending_skin_upload:
+                del pending_skin_upload[chat_id]
+        return
+
+    # Existing document handler logic
     global pending_attack_upload
     if chat_id in pending_attack_upload:
         char_id = pending_attack_upload[chat_id]
@@ -4230,6 +4598,37 @@ def any(message):
 
     # Track activity IMMEDIATELY
     user_service.track_activity(message.from_user.id, message.chat.id)
+    
+    # Check if we are waiting for a skin name
+    global pending_skin_upload
+    if message.chat.id in pending_skin_upload:
+        pending = pending_skin_upload[message.chat.id]
+        if pending.get('waiting_for_name') and message.text:
+            skin_name = message.text.strip()
+            char_id = pending['char_id']
+            gif_path = pending['gif_path']
+            
+            # Price logic: match character price
+            from services.character_loader import get_character_loader
+            char = get_character_loader().get_character_by_id(char_id)
+            price = int(char['price']) if char else 0
+            
+            # Add to CSV
+            skin_id = skin_service.add_new_skin(char_id, skin_name, price, gif_path)
+            
+            if skin_id != -1:
+                bot.reply_to(message, f"✨ Skin **{skin_name}** creata con successo!\nID Skin: `{skin_id}`\nPrezzo: `{price}` Wumpa", parse_mode='markdown')
+                
+                # Automatically give to admin (optional but helpful)
+                # skin_service.purchase_skin(message.from_user.id, skin_id)
+                
+                # Check for more missing
+                del pending_skin_upload[message.chat.id]
+                handle_missing_skins(message)
+            else:
+                bot.reply_to(message, "❌ Errore durante il salvataggio della skin nel CSV.")
+                del pending_skin_upload[message.chat.id]
+            return
     
     # Check if message is a forward
     if message.forward_from_chat or message.forward_from:
@@ -8051,9 +8450,11 @@ def spawn_daily_mob_job():
     # Random check to spawn at any time (Restrictions removed)
     now = datetime.datetime.now()
     
-    # 20% chance every check
-    if random.random() < 0.2: 
-        success, msg, mob_id = pve_service.spawn_specific_mob(chat_id=GRUPPO_AROMA)
+    # 50% chance every check (increased from 20%)
+    if random.random() < 0.5: 
+        # Use service method that already handles spawn + attack logic
+        mob_id, attack_events = pve_service.spawn_daily_mob(chat_id=GRUPPO_AROMA)
+        
         if mob_id:
             # Apply pending effects
             applied = pve_service.apply_pending_effects(mob_id, GRUPPO_AROMA)
@@ -8062,16 +8463,14 @@ def spawn_daily_mob_job():
             
             mob = pve_service.get_current_mob_status(mob_id)
             if mob:
-                # Get the actual mob ID from spawn_daily_mob return value
                 markup = get_combat_markup("mob", mob_id, GRUPPO_AROMA)
-                
                 msg_text = f"⚠️ Un {mob['name']} selvatico è apparso!\n{format_mob_stats(mob, show_full=False)}\n\nSconfiggilo per ottenere ricompense!"
                 
                 # Send with image if available
                 if mob.get('image') and os.path.exists(mob['image']):
                     try:
                         with open(mob['image'], 'rb') as photo:
-                            bot.send_photo(GRUPPO_AROMA, photo, caption=msg_text, reply_markup=markup, )
+                            bot.send_photo(GRUPPO_AROMA, photo, caption=msg_text, reply_markup=markup)
                     except:
                         bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup)
                 else:
@@ -8085,9 +8484,9 @@ def spawn_daily_mob_job():
                         try:
                             if image_path and os.path.exists(image_path):
                                 with open(image_path, 'rb') as photo:
-                                    bot.send_photo(GRUPPO_AROMA, photo, caption=msg, reply_markup=markup, )
+                                    bot.send_photo(GRUPPO_AROMA, photo, caption=msg, reply_markup=markup)
                             else:
-                                bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, )
+                                bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup)
                         except:
                             bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, parse_mode='markdown')
 
@@ -8186,135 +8585,15 @@ def process_achievements_job():
 
 
 
-# Global state for uploads
-pending_attack_upload = {}
+# Global state for uploads (moved up)
 
-@bot.message_handler(commands=['missing_attack'])
-def handle_missing_attack(message):
-    """Admin command to upload missing attack GIFs"""
-    # Need to use message.chat.id since it's a message handler
-    chat_id = message.chat.id
-    utente = user_service.get_user(chat_id)
-    if not user_service.is_admin(utente):
-        return
-        
-    from services.character_loader import get_character_loader
-    char_loader = get_character_loader()
-    all_chars = char_loader.get_all_characters()
-    
-    # Find characters with special attack but no GIF
-    missing = []
-    for char in all_chars:
-        has_attack = char.get('special_attack_name') and char['special_attack_name'].strip()
-        has_gif = char.get('special_attack_gif') and char['special_attack_gif'].strip()
-        if has_attack and not has_gif:
-            missing.append(char)
-            
-    if not missing:
-        bot.reply_to(message, "✅ Tutti i personaggi con attacchi speciali hanno una GIF!")
-        return
-        
-    # Pick the first one
-    target = missing[0]
-    
-    # Set pending state
-    global pending_attack_upload
-    pending_attack_upload[chat_id] = target['id']
-    
-    msg = f"🎥 **Upload GIF Attacco**\n\n"
-    msg += f"Personaggio: **{target['nome']}**\n"
-    msg += f"Attacco: **{target['special_attack_name']}**\n\n"
-    msg += "Invia ora la GIF o il Video (MP4) per questo attacco.\n"
-    msg += f"Rimanenti: {len(missing)}"
-    
-    bot.reply_to(message, msg, parse_mode='markdown')
+
+# Missing skin/attack handlers moved up
 
 # --- Equipment System Commands ---
 
-@bot.message_handler(commands=['inventory', 'inv'])
-def command_inventory(message):
-    user_id = message.from_user.id
-    items = equipment_service.get_user_inventory(user_id)
-    if not items:
-        bot.reply_to(message, "Il tuo inventario è vuoto.")
-        return
-        
-    msg = "�� **Inventario**\n\n"
-    for u_item, item in items:
-        status = "✅" if u_item.is_equipped else ""
-        rarity_icon = "⚪️"
-        if item.rarity == "Uncommon": rarity_icon = "🟢"
-        elif item.rarity == "Rare": rarity_icon = "🔵"
-        elif item.rarity == "Epic": rarity_icon = "🟣"
-        elif item.rarity == "Legendary": rarity_icon = "🟠"
-        elif item.rarity == "Mythic": rarity_icon = "🔴"
-        
-        msg += f"{rarity_icon} 🆔 `{u_item.id}` - **{item.name}** ({item.slot}) {status}\n"
-        
-    msg += "\nUsa `/equip <id>` per equipaggiare."
-    bot.reply_to(message, msg, parse_mode="Markdown")
 
-@bot.message_handler(commands=['equip'])
-def command_equip(message):
-    try:
-        args = message.text.split()
-        if len(args) < 2:
-            bot.reply_to(message, "Uso: `/equip <id_oggetto>`")
-            return
-            
-        item_id = int(args[1])
-        success, result = user_service.equip_item(message.from_user.id, item_id)
-        bot.reply_to(message, result)
-    except ValueError:
-        bot.reply_to(message, "ID non valido.")
-
-@bot.message_handler(commands=['unequip'])
-def command_unequip(message):
-    try:
-        args = message.text.split()
-        if len(args) < 2:
-            bot.reply_to(message, "Uso: `/unequip <id_oggetto>`")
-            return
-            
-        item_id = int(args[1])
-        success, result = user_service.unequip_item(message.from_user.id, item_id)
-        bot.reply_to(message, result)
-    except ValueError:
-        bot.reply_to(message, "ID non valido.")
-
-@bot.message_handler(commands=['stats', 'me', 'profilo'])
-def command_stats(message):
-    # Pass Utente object or User object from message?
-    # info_user expects the message.from_user object (which has id, first_name etc)
-    # Wait, info_user signature: def info_user(self, utente_sorgente):
-    # utente_sorgente should be the telegram user object.
-    # But inside info_user it accesses id_telegram.
-    # message.from_user has id.
-    # However, Utente model has id_telegram.
-    # Let's check info_user implementation again.
-    # "utente = self.get_user(utente_sorgente.id_telegram)" -> No, message.from_user.id is the ID.
-    # message.from_user does NOT have id_telegram attribute. It has id.
-    # So I need to wrap it or pass an object with id_telegram.
-    # Actually, in main.py usually we pass message.from_user and UserService handles it?
-    # Let's check how other commands call info_user.
-    # I can't see other calls.
-    # But UserService.info_user (Line 404 in user_service.py):
-    # "utente = self.get_user(utente_sorgente.id_telegram)"
-    # So it expects an object with id_telegram.
-    # message.from_user has 'id'.
-    # So I need to adapt it.
-    
-    class UserWrapper:
-        def __init__(self, user):
-            self.id_telegram = user.id
-            self.first_name = user.first_name
-            self.username = user.username
-            # Add other fields if needed
-            self.scadenza_premium = "N/A" # Hack
-            
-    wrapper = UserWrapper(message.from_user)
-    info = user_service.info_user(wrapper)
-    bot.reply_to(message, info, parse_mode="Markdown")
+# Slash commands moved up to fix priority/interception
 
 
 @bot.message_handler(commands=['fusion'])
@@ -8557,7 +8836,7 @@ def process_crafting_queue_job():
 
 # Schedule the check every minute
 # Schedule Jobs
-schedule.every().hour.do(spawn_daily_mob_job)
+schedule.every(30).minutes.do(spawn_daily_mob_job)
 schedule.every().hour.do(regenerate_mana_job)
 schedule.every(10).seconds.do(mob_attack_job)
 schedule.every(30).seconds.do(process_achievements_job)
@@ -8675,6 +8954,9 @@ if __name__ == '__main__':
     
     # Schedule jobs
     schedule.every().day.at("04:00").do(BackupService().create_backup)
+    # Dungeon Checks (Every minute)
+    schedule.every(1).minutes.do(lambda: dungeon_service.check_daily_dungeon_trigger(bot=bot))
+
     threading.Thread(target=schedule_checker, daemon=True).start()
     
     # Start Bot Polling (Main Thread)

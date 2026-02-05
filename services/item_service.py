@@ -285,7 +285,7 @@ class ItemService:
             
             # Add new turbo
             effects.append({
-                'effect': 'turbo',
+                'id': 'turbo',
                 'expires': (datetime.datetime.now() + datetime.timedelta(minutes=30)).isoformat()
             })
             

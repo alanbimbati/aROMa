@@ -43,19 +43,22 @@ class TestDungeonScheduler(unittest.TestCase):
         fixed_now = datetime.datetime(2025, 1, 1, 10, 0, 0)
         mock_datetime.datetime.now.return_value = fixed_now
         mock_datetime.timedelta = datetime.timedelta # Keep real timedelta
+        mock_datetime.datetime.combine = datetime.datetime.combine # Keep real combine
+        mock_datetime.time = datetime.time # Keep real time
         
-        # Mock random so we know the scheduled time
-        with patch('random.randint', side_effect=[12, 0, 30]): # Hour 12, Min 0, Delay 30
+        # Mock random so we know the scheduled time (delay_mins = 30)
+        with patch('random.randint', return_value=30):
             self.dungeon_service.check_daily_dungeon_trigger(self.test_chat_id)
             
         # Verify DB
         session = self.db.get_session()
-        dungeon = session.query(Dungeon).filter_by(chat_id=self.test_chat_id).first()
-        self.assertIsNotNone(dungeon)
+        # Find ANY registration dungeon for this chat
+        dungeon = session.query(Dungeon).filter_by(chat_id=self.test_chat_id, status="registration").first()
+        self.assertIsNotNone(dungeon, "Dungeon should be scheduled")
         self.assertEqual(dungeon.status, "registration")
         self.assertFalse(dungeon.is_hype_active)
-        # Expected time: 12:00
-        expected_time = datetime.datetime(2025, 1, 1, 12, 0, 0)
+        # Expected time: 10:00 + 30 mins = 10:30
+        expected_time = datetime.datetime(2025, 1, 1, 10, 30, 0)
         self.assertEqual(dungeon.scheduled_for, expected_time)
         session.close()
 

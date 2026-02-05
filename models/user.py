@@ -96,4 +96,4 @@ class Utente(Base):
 class Admin(Base):
     __tablename__ = "admin"
     id = Column(Integer, primary_key=True)
-    id_telegram = Column('id_telegram',Integer)
+    id_telegram = Column('id_telegram', BigInteger)

@@ -45,6 +45,7 @@ class TestDungeonAdvancement(unittest.TestCase):
             self.session.execute(text("TRUNCATE dungeon_participant CASCADE"))
             self.session.execute(text("TRUNCATE combat_participation CASCADE"))
             self.session.execute(text("TRUNCATE dungeon_progress CASCADE"))
+            self.session.execute(text("TRUNCATE user_resources CASCADE"))
         except:
             pass
         self.session.commit()

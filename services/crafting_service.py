@@ -322,6 +322,11 @@ class CraftingService:
     
     def roll_resource_drop(self, mob_level, mob_is_boss=False):
         """Determine if a resource should drop and which one"""
+        try:
+            mob_level = int(mob_level)
+        except (ValueError, TypeError):
+            mob_level = 1
+
         # Base drop chance: 20% for normal mobs, 100% for bosses
         drop_chance = 100 if mob_is_boss else 20
         
@@ -344,10 +349,10 @@ class CraftingService:
         try:
             resources = session.execute(text("""
                 SELECT id, image FROM resources
-                WHERE rarity = :rarity AND drop_source IN ('mob', 'both')
+                WHERE rarity = :rarity AND drop_source LIKE :source
                 ORDER BY RANDOM()
                 LIMIT 1
-            """), {"rarity": rarity}).fetchone()
+            """), {"rarity": rarity, "source": f"%mob%" if not mob_is_boss else f"%boss%"}).fetchone()
             
             if resources:
                 return resources[0], resources[1] # Return id, image
@@ -372,10 +377,10 @@ class CraftingService:
         try:
             resources = session.execute(text("""
                 SELECT id, image FROM resources
-                WHERE rarity = :rarity AND drop_source IN ('chat', 'both')
+                WHERE rarity = :rarity AND drop_source LIKE '%chat%'
                 ORDER BY RANDOM()
                 LIMIT 1
-            """), {"rarity": rarity}).fetchone()
+            """)).fetchone()
             
             if resources:
                 return resources[0], resources[1]

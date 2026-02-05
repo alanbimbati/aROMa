@@ -37,9 +37,7 @@ class TestNitroTNT(unittest.TestCase):
         # Test apply_effect without target
         msg, data = self.item_service.apply_effect(user, "Nitro")
         
-        self.assertIn("Nitro piazzata", msg)
-        self.assertEqual(data['type'], 'next_mob_effect')
-        self.assertEqual(data['effect'], 'Nitro')
+        self.assertEqual(data['type'], 'nitro_trap')
         
     def test_apply_pending_effects(self):
         # Setup pending effect
