@@ -22,6 +22,11 @@ class Guild(Base):
     map_x = Column(Integer, nullable=True)
     map_y = Column(Integer, nullable=True)
     
+    # Customization
+    emblem = Column(String(255), nullable=True) # Emoji or URL
+    skin_id = Column(String(64), nullable=True) # UI Skin ID
+    description = Column(String(512), nullable=True) # Guild Bio
+    
     created_at = Column(DateTime, default=datetime.datetime.now)
     
     # Relationships

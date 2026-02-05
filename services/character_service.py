@@ -39,7 +39,7 @@ class CharacterService:
                     purchased_chars.append(char)
         
         # 3. FUSION UNLOCK: Check if user has 2+ Potara in inventory
-        fusion_char_ids = [146, 122, 110]  # Vegito Blue, Gogeta SSJ4, Gotenks SSJ3
+        fusion_char_ids = [146, 122, 110, 307]  # Vegito Blue, Gogeta SSJ4, Gotenks SSJ3, Super 17
         potara_unlocked_chars = []
         
         try:

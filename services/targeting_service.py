@@ -87,9 +87,6 @@ class TargetingService:
                 is_valid = self._is_valid_target(uid, mob, session)
                 if is_valid:
                     valid_targets.append(uid)
-                else:
-                    print(f"[DEBUG] Targeting: User {uid} rejected by _is_valid_target")
-            
             print(f"[DEBUG] Targeting: Final valid targets: {valid_targets}")
             return valid_targets
             

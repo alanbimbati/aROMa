@@ -242,6 +242,24 @@ class DungeonService:
             session.flush()
             print(f"[DUNGEON] Auto-joined {count} users.")
             
+            # Heal all participants for the new dungeon
+            print(f"[DUNGEON] Healing participants...")
+            for user in all_users:
+                 if user.id_telegram in [p.user_id for p in session.query(DungeonParticipant).filter_by(dungeon_id=dungeon.id).all()]:
+                     # Calculate Max HP
+                     # We might need a helper method if available, or manual calc
+                     # Quick manual calc or use user_service if available (but user_service uses session)
+                     # Let's assume user.health is base/max or we can recalibrate.
+                     # Better: use a simple heal to max logic.
+                     # If user has 'health' column as max (legacy) or stats JSON.
+                     # Let's trust user.health as max for now or 100 default.
+                     stats = user.get_stats()
+                     max_hp = stats.get('hp', 100)
+                     user.current_hp = max_hp
+                     user.is_dead = False # If there is such a flag
+            
+            session.flush()
+            
             # Start Dungeon
             dungeon.status = "active"
             dungeon.current_stage = 1

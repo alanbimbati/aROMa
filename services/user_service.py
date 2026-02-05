@@ -521,6 +521,13 @@ class UserService:
         msg += f"💎 Punti Stat: {utente.stat_points}\n"
         msg += trans_text
         
+        # Guild Info
+        from services.guild_service import GuildService
+        guild_service = GuildService()
+        guild = guild_service.get_user_guild(utente.id_telegram)
+        if guild:
+            msg += f"\n🏰 **Gilda**: {guild['name']} ({guild['role']})\n"
+        
         session.close()
         return msg
 

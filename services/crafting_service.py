@@ -326,7 +326,7 @@ class CraftingService:
         drop_chance = 100 if mob_is_boss else 20
         
         if random.random() * 100 > drop_chance:
-            return None
+            return None, None
         
         # Determine rarity based on mob level
         # Higher level mobs drop better resources

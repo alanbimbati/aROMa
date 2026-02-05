@@ -786,7 +786,13 @@ class PvEService:
             self.user_service.update_user(user.id_telegram, {'mana': user.mana - mana_cost}, session=session)
         
         # Update last attack time
-        self.user_service.update_user(user.id_telegram, {'last_attack_time': datetime.datetime.now()}, session=session)
+        self.user_service.update_user(user.id_telegram, {
+            'last_attack_time': datetime.datetime.now()
+        }, session=session)
+        
+        # Track activity for targeting system
+        self.user_service.track_activity(user.id_telegram, chat_id)
+
         
         # Get user character for stats/type
         from services.character_loader import get_character_loader
@@ -867,6 +873,55 @@ class PvEService:
             },
             session=session
         )
+        
+        # NEW: Guild Dungeon Damage Tracking
+        if mob.dungeon_id:
+             # Check if user is in a guild
+             from models.guild import GuildMember
+             from models.guild_dungeon_stats import GuildDungeonStats
+             
+             guild_member = session.query(GuildMember).filter_by(user_id=user.id_telegram).first()
+             if guild_member:
+                 # Update or Create Stats
+                 stat = session.query(GuildDungeonStats).filter_by(
+                     guild_id=guild_member.guild_id,
+                     dungeon_id=mob.dungeon_id
+                 ).first()
+                 
+                 if not stat:
+                     stat = GuildDungeonStats(
+                         guild_id=guild_member.guild_id,
+                         dungeon_id=mob.dungeon_id,
+                         total_damage=0
+                     )
+                     session.add(stat)
+                 
+                 stat.total_damage += actual_damage_dealt
+
+        
+        # NEW: Guild Dungeon Damage Tracking
+        if mob.dungeon_id:
+             # Check if user is in a guild
+             from models.guild import GuildMember
+             from models.guild_dungeon_stats import GuildDungeonStats
+             
+             guild_member = session.query(GuildMember).filter_by(user_id=user.id_telegram).first()
+             if guild_member:
+                 # Update or Create Stats
+                 stat = session.query(GuildDungeonStats).filter_by(
+                     guild_id=guild_member.guild_id,
+                     dungeon_id=mob.dungeon_id
+                 ).first()
+                 
+                 if not stat:
+                     stat = GuildDungeonStats(
+                         guild_id=guild_member.guild_id,
+                         dungeon_id=mob.dungeon_id,
+                         total_damage=0
+                     )
+                     session.add(stat)
+                 
+                 stat.total_damage += actual_damage_dealt
         
         # Build message
         msg = ""
@@ -1137,6 +1192,10 @@ class PvEService:
             'last_attack_time': datetime.datetime.now()
         }, session=session)
         
+        # Track activity for targeting system
+        self.user_service.track_activity(user.id_telegram, chat_id)
+
+        
         # Get user character for stats/type
         from services.character_loader import get_character_loader
         char_loader = get_character_loader()
@@ -1208,6 +1267,28 @@ class PvEService:
             actual_damage_dealt = max(0, min(damage, mob.health))
             mob.health -= damage
             
+            # NEW: Guild Dungeon Damage Tracking for AoE
+            if mob.dungeon_id:
+                from models.guild import GuildMember
+                from models.guild_dungeon_stats import GuildDungeonStats
+                
+                guild_member = session.query(GuildMember).filter_by(user_id=user.id_telegram).first()
+                if guild_member:
+                    stat = session.query(GuildDungeonStats).filter_by(
+                        guild_id=guild_member.guild_id,
+                        dungeon_id=mob.dungeon_id
+                    ).first()
+                    
+                    if not stat:
+                        stat = GuildDungeonStats(
+                            guild_id=guild_member.guild_id,
+                            dungeon_id=mob.dungeon_id,
+                            total_damage=0
+                        )
+                        session.add(stat)
+                    
+                    stat.total_damage += actual_damage_dealt
+
             # Update participation
             self.update_participation(mob.id, user.id_telegram, actual_damage_dealt, combat_result['is_crit'], session=session)
             
@@ -1282,16 +1363,16 @@ class PvEService:
                 if new_mob_ids:
                     extra_data['new_mob_ids'] = new_mob_ids
         
-        # Trigger Counter-Attack (30% chance)
-        attack_events = []
-        if mobs and random.random() < 0.3:
-            # Pick one of the hit mobs to lead the counter-attack
-            attacker_mob = random.choice(mobs)
-            # Ensure mob is still attached or re-query if needed, but keeping session open is better
-            if not attacker_mob.is_dead:
-                attack_events = self.mob_random_attack(specific_mob_id=attacker_mob.id, chat_id=chat_id, session=session)
+        # Trigger Counter-Attack (Enemy Turn)
+        # Call mob_random_attack for the whole chat to simulate enemy turn
+        # This allows all eligible mobs to attack back
+        attack_events = self.mob_random_attack(chat_id=chat_id, session=session)
         
+        # Append Cooldown to message
+        summary_msg += f"\n⏳ Cooldown: {int(cooldown_seconds)}s"
+
         if local_session:
+
             session.commit()
             session.close()
             
@@ -1529,6 +1610,11 @@ class PvEService:
                         
                         username = target.username.lstrip('@') if target.username else None
                         tag = f"@{username}" if username else target.nome
+                        
+                        # Add HP info to tag
+                        current_hp = target.current_hp if hasattr(target, 'current_hp') and target.current_hp is not None else target.health
+                        tag += f" ({current_hp}/{target.max_health} HP)"
+                        
                         if damage == 0 and self.user_service.is_invincible(target):
                             tag += " (INVINCIBILE! 🎭)"
                         damage_results.append({'tag': tag, 'damage': damage})
