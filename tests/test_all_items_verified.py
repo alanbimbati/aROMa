@@ -83,7 +83,7 @@ class TestAllItemsVerified(unittest.TestCase):
         self.mock_user_service.update_user.assert_called_once()
         args = self.mock_user_service.update_user.call_args
         self.assertEqual(args[0][0], 12345)
-        self.assertIn('"effect": "turbo"', args[0][1]['active_status_effects'])
+        self.assertIn('"id": "turbo"', args[0][1]['active_status_effects'])
 
     def test_aku_aku_activation(self):
         msg, effect = self.item_service.apply_effect(self.user, "Aku Aku")
@@ -185,6 +185,11 @@ class TestAllItemsVerified(unittest.TestCase):
         self.assertEqual(self.mock_item_service.use_item.call_count, 7)
         # Verify points added
         self.mock_user_service.add_points_by_id.assert_called_once()
+
+    def tearDown(self):
+        # We don't strictly need this because we use addCleanup for patchers,
+        # but for DB cleanup it's good practice.
+        pass
 
 if __name__ == '__main__':
     unittest.main()

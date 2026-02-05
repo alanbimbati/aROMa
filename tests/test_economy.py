@@ -13,6 +13,8 @@ from models.user import Utente
 from models.pve import Mob
 from models.combat import CombatParticipation
 from models.system import Livello
+from models.resources import UserResource
+from models.dungeon import DungeonParticipant
 from database import Database
 import datetime
 
@@ -52,6 +54,8 @@ class TestEconomy(unittest.TestCase):
 
     def tearDown(self):
         session = self.db.get_session()
+        session.query(DungeonParticipant).filter_by(user_id=self.test_user_id).delete()
+        session.query(UserResource).filter_by(user_id=self.test_user_id).delete()
         session.query(Utente).filter_by(id_telegram=self.test_user_id).delete()
         session.commit()
         session.close()

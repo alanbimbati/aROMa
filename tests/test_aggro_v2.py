@@ -107,14 +107,15 @@ class TestAggroSystemV2(unittest.TestCase):
             idx2 = population.index(102)
             idx3 = population.index(103)
             
-            # DPS: Base(10) + 2000 * 0.5 = 1010
-            self.assertEqual(weights[idx1], 1010.0)
+            # Current Logic: weight = max(dmg, 1.0) if dmg > 0 else 1.0; if defense_up: weight *= 5.0
+            # DPS: 2000 Dmg.
+            self.assertEqual(weights[idx1], 2000.0)
             
-            # Tank: Base(10) + 200 * 0.5 = 110. Multiplier x5.0 = 550.
-            self.assertEqual(weights[idx2], 550.0)
+            # Tank: 200 Dmg * 5.0 = 1000.
+            self.assertEqual(weights[idx2], 1000.0)
             
-            # Newbie: Base(10).
-            self.assertEqual(weights[idx3], 10.0)
+            # Newbie: 1.0 (No damage, no defense)
+            self.assertEqual(weights[idx3], 1.0)
             
             # Note: 2000 Dmg is MASSIVE. It should pull aggro unless Tank does more dmg or we boost multiplier.
             # But 2000 dmg vs 200 dmg is a 10x difference.

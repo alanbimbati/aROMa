@@ -145,6 +145,7 @@ class TestDefenseSystem(unittest.TestCase):
                 user, 
                 base_damage=200, 
                 use_special=True, 
+                chat_id=None,
                 session=session
             )
 

@@ -1,8 +1,13 @@
 import unittest
 import datetime
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from database import Database
 from models.user import Utente
 from services.user_service import UserService
+
+from models.dungeon import DungeonParticipant
 
 class TestRecovery(unittest.TestCase):
     def setUp(self):
@@ -12,6 +17,8 @@ class TestRecovery(unittest.TestCase):
         
         # Clear and setup test user
         session = self.db.get_session()
+        # Clean dependencies first
+        session.query(DungeonParticipant).filter_by(user_id=self.u1_id).delete()
         session.query(Utente).filter_by(id_telegram=self.u1_id).delete()
         
         self.user = Utente(
@@ -34,6 +41,7 @@ class TestRecovery(unittest.TestCase):
     def tearDown(self):
         # Clean up test user
         session = self.db.get_session()
+        session.query(DungeonParticipant).filter_by(user_id=self.u1_id).delete()
         session.query(Utente).filter_by(id_telegram=self.u1_id).delete()
         session.commit()
         session.close()

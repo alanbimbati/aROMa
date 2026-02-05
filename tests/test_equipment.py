@@ -37,11 +37,60 @@ class TestEquipmentSystem(unittest.TestCase):
         
         session = cls.db.get_session()
         try:
-            # Clean up any existing test user
+            # Clean up any existing test user and data
             session.execute(text('DELETE FROM user_equipment WHERE user_id = :uid'), 
                           {"uid": cls.test_user_id})
             session.execute(text('DELETE FROM utente WHERE "id_Telegram" = :uid'), 
                           {"uid": cls.test_user_id})
+            
+            # Clean up specific test equipment to avoid conflicts
+            test_equip_ids = [1, 6, 7, 8, 11, 16, 21]
+            session.execute(text(f'DELETE FROM equipment WHERE id IN ({",".join(map(str, test_equip_ids))})'))
+            session.commit()
+            
+            # Seed Test Equipment
+            # ID 6: Scouter (Scan)
+            session.execute(text("""
+                INSERT INTO equipment (id, name, slot, rarity, min_level, effect_type, set_name)
+                VALUES (6, 'Test Scouter', 'head', 1, 1, 'scan', NULL)
+            """))
+            
+            # ID 11: High Level Item (Z-Sword)
+            session.execute(text("""
+                INSERT INTO equipment (id, name, slot, rarity, min_level, effect_type, set_name)
+                VALUES (11, 'Z-Sword', 'hand', 5, 50, NULL, NULL)
+            """))
+            
+            # ID 1: Chest Item 1 (No Set)
+            session.execute(text("""
+                INSERT INTO equipment (id, name, slot, rarity, min_level, effect_type, set_name)
+                VALUES (1, 'Test Chest 1', 'chest', 1, 1, NULL, NULL)
+            """))
+
+            # ID 16: Additional Item for inventory limits test
+            session.execute(text("""
+                INSERT INTO equipment (id, name, slot, rarity, min_level, effect_type, set_name)
+                VALUES (16, 'Test Misc', 'accessory1', 1, 1, NULL, NULL)
+            """))
+            
+            # ID 7: Chest Item 2 (Set A)
+            session.execute(text("""
+                INSERT INTO equipment (id, name, slot, rarity, min_level, effect_type, set_name)
+                VALUES (7, 'Set Item 1', 'chest', 2, 1, NULL, 'TestSet')
+            """))
+            
+            # ID 8: Hands Item (Set A)
+            session.execute(text("""
+                INSERT INTO equipment (id, name, slot, rarity, min_level, effect_type, set_name)
+                VALUES (8, 'Set Item 2', 'hands', 2, 1, NULL, 'TestSet')
+            """))
+            
+            # ID 21: Potara (Fusion)
+            session.execute(text("""
+                INSERT INTO equipment (id, name, slot, rarity, min_level, effect_type, set_name)
+                VALUES (21, 'Potara', 'accessory1', 5, 1, 'fusion', 'Kaioshin')
+            """))
+            
             session.commit()
             
             # Create test user (level 50)
@@ -76,7 +125,7 @@ class TestEquipmentSystem(unittest.TestCase):
         try:
             # Add Scouter (level 1, common, head slot)
             session.execute(text("""
-                INSERT INTO user_equipment (user_id, equipment_id, equipped, durability)
+                INSERT INTO user_equipment (user_id, equipment_id, equipped)
                 VALUES (:uid, 6, FALSE)
             """), {"uid": self.test_user_id})
             session.commit()
@@ -115,7 +164,7 @@ class TestEquipmentSystem(unittest.TestCase):
             
             # Try to add high-level item (Z-Sword, level 50)
             session.execute(text("""
-                INSERT INTO user_equipment (user_id, equipment_id, equipped, durability)
+                INSERT INTO user_equipment (user_id, equipment_id, equipped)
                 VALUES (:uid, 11, FALSE)
             """), {"uid": self.test_user_id})
             session.commit()
@@ -200,7 +249,7 @@ class TestEquipmentSystem(unittest.TestCase):
         try:
             # Check if Scouter exists in inventory (not equipped)
             session.execute(text("""
-                INSERT INTO user_equipment (user_id, equipment_id, equipped, durability)
+                INSERT INTO user_equipment (user_id, equipment_id, equipped)
                 VALUES (:uid, 6, FALSE)
             """), {"uid": self.test_user_id})
             session.commit()
@@ -317,11 +366,11 @@ class TestEquipmentSystem(unittest.TestCase):
             
             # Count equipped items per set
             set_counts = session.execute(text("""
-                SELECT e.set_id, COUNT(*) as count
+                SELECT e.set_name, COUNT(*) as count
                 FROM user_equipment ue
                 JOIN equipment e ON ue.equipment_id = e.id
-                WHERE ue.user_id = :uid AND ue.equipped = TRUE AND e.set_id IS NOT NULL
-                GROUP BY e.set_id
+                WHERE ue.user_id = :uid AND ue.equipped = TRUE AND e.set_name IS NOT NULL
+                GROUP BY e.set_name
             """), {"uid": self.test_user_id}).fetchall()
             
             self.assertEqual(len(set_counts), 1, "Should have items from 1 set")

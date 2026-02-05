@@ -12,6 +12,8 @@ from services.item_service import ItemService
 from models.user import Utente
 from models.items import Collezionabili
 from models.market import MarketListing
+from models.resources import UserResource
+from models.dungeon import DungeonParticipant
 from database import Database
 import datetime
 
@@ -61,6 +63,8 @@ class TestMarket(unittest.TestCase):
         session = self.db.get_session()
         session.query(Collezionabili).filter(Collezionabili.id_telegram.in_([str(self.seller_id), str(self.buyer_id)])).delete()
         session.query(MarketListing).filter(MarketListing.seller_id.in_([self.seller_id, self.buyer_id])).delete()
+        session.query(DungeonParticipant).filter(DungeonParticipant.user_id.in_([self.seller_id, self.buyer_id])).delete()
+        session.query(UserResource).filter(UserResource.user_id.in_([self.seller_id, self.buyer_id])).delete()
         session.query(Utente).filter_by(id_telegram=self.seller_id).delete()
         session.query(Utente).filter_by(id_telegram=self.buyer_id).delete()
         session.commit()

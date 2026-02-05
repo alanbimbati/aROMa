@@ -36,11 +36,8 @@ class TestRewardsAndLeveling(unittest.TestCase):
         self.chat_id = 777
         self.user_id = 17001
         
-        # Ensure clean state: delete if exists
-        self.session.query(CombatParticipation).filter_by(user_id=self.user_id).delete()
-        self.session.query(Mob).filter_by(chat_id=self.chat_id).delete()
-        self.session.query(DungeonParticipant).filter_by(user_id=self.user_id).delete()
-        self.session.query(Dungeon).filter_by(chat_id=self.chat_id).delete()
+        from models.resources import UserResource
+        self.session.query(UserResource).filter_by(user_id=self.user_id).delete()
         self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()
         self.session.commit()
         
@@ -66,10 +63,10 @@ class TestRewardsAndLeveling(unittest.TestCase):
         self.session.commit()
         
     def tearDown(self):
-        self.session.query(CombatParticipation).filter_by(user_id=self.user_id).delete()
-        self.session.query(Mob).filter_by(chat_id=self.chat_id).delete()
+        from models.resources import UserResource
+        from models.dungeon import DungeonParticipant
         self.session.query(DungeonParticipant).delete()
-        self.session.query(Dungeon).filter_by(chat_id=self.chat_id).delete()
+        self.session.query(UserResource).filter_by(user_id=self.user_id).delete()
         self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()
         self.session.commit()
         self.session.close()
