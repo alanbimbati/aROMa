@@ -83,14 +83,125 @@ class GuildService:
             'inn_level': guild.inn_level,
             'armory_level': guild.armory_level,
             'village_level': guild.village_level,
-            'map_x': guild.map_x,
             'map_y': guild.map_y,
             'role': member.role,
             'bordello_level': guild.bordello_level,
-            'brewery_level': guild.brewery_level
+            'brewery_level': guild.brewery_level,
+            'emblem': guild.emblem,
+            'skin_id': guild.skin_id,
+            'description': guild.description
         }
         session.close()
         return guild_data
+
+
+
+
+    # --- Customization Methods ---
+    def set_guild_emblem(self, leader_id, emblem):
+        """Set guild emblem (Leader only)"""
+        session = self.db.get_session()
+        member = session.query(GuildMember).filter_by(user_id=leader_id, role="Leader").first()
+        if not member:
+            session.close()
+            return False, "Solo il capogilda può impostare lo stemma!"
+        
+        guild = session.query(Guild).filter_by(id=member.guild_id).first()
+        guild.emblem = emblem
+        session.commit()
+        session.close()
+        return True, f"Stemma della gilda aggiornato: {emblem}"
+
+    def set_guild_skin(self, leader_id, skin_id):
+        """Set guild UI skin (Leader only)"""
+        session = self.db.get_session()
+        member = session.query(GuildMember).filter_by(user_id=leader_id, role="Leader").first()
+        if not member:
+            session.close()
+            return False, "Solo il capogilda può impostare la skin!"
+            
+        guild = session.query(Guild).filter_by(id=member.guild_id).first()
+        guild.skin_id = skin_id
+        session.commit()
+        session.close()
+        return True, f"Skin della gilda aggiornata: {skin_id}"
+
+    def set_guild_description(self, leader_id, description):
+        """Set guild description (Leader only)"""
+        session = self.db.get_session()
+        member = session.query(GuildMember).filter_by(user_id=leader_id, role="Leader").first()
+        if not member:
+            session.close()
+            return False, "Solo il capogilda può impostare la descrizione!"
+            
+        if len(description) > 500:
+             session.close()
+             return False, "Descrizione troppo lunga (max 500 caratteri)!"
+
+        guild = session.query(Guild).filter_by(id=member.guild_id).first()
+        guild.description = description
+        session.commit()
+        session.close()
+        return True, "Descrizione della gilda aggiornata!"
+
+    def get_dungeon_ranking(self, dungeon_id=None, limit=10):
+        """Get guild damage ranking"""
+        session = self.db.get_session()
+        from models.guild_dungeon_stats import GuildDungeonStats
+        
+        query = session.query(Guild.name, func.sum(GuildDungeonStats.total_damage).label('total_damage'))\
+            .join(GuildDungeonStats, Guild.id == GuildDungeonStats.guild_id)
+            
+        if dungeon_id:
+            query = query.filter(GuildDungeonStats.dungeon_id == dungeon_id)
+            
+        ranking = query.group_by(Guild.id, Guild.name).order_by(func.sum(GuildDungeonStats.total_damage).desc()).limit(limit).all()
+        
+        result = [{'name': r[0], 'total_damage': r[1]} for r in ranking]
+        session.close()
+        return result
+
+    def process_weekly_rewards(self):
+        """Distribute rewards to top 3 guilds"""
+        ranking = self.get_dungeon_ranking(limit=3)
+        if not ranking:
+            return "Nessuna attività di gilda rilevata questa settimana."
+            
+        session = self.db.get_session()
+        rewards_log = []
+        
+        # 1st Place
+        if len(ranking) >= 1:
+            top_guild_name = ranking[0]['name']
+            g1 = session.query(Guild).filter_by(name=top_guild_name).first()
+            if g1:
+                g1.wumpa_bank += 5000
+                rewards_log.append(f"🥇 **{top_guild_name}**: 5000 Wumpa")
+                
+        # 2nd Place
+        if len(ranking) >= 2:
+            g2_name = ranking[1]['name']
+            g2 = session.query(Guild).filter_by(name=g2_name).first()
+            if g2:
+                g2.wumpa_bank += 3000
+                rewards_log.append(f"🥈 **{g2_name}**: 3000 Wumpa")
+                
+        # 3rd Place
+        if len(ranking) >= 3:
+            g3_name = ranking[2]['name']
+            g3 = session.query(Guild).filter_by(name=g3_name).first()
+            if g3:
+                g3.wumpa_bank += 1500
+                rewards_log.append(f"🥉 **{g3_name}**: 1500 Wumpa")
+
+        session.commit()
+        session.close()
+        
+        if not rewards_log:
+            return None
+            
+        return "🏆 **Ricompense Settimanali Gilda (Dungeon)**\n\n" + "\n".join(rewards_log)
+
 
     def deposit_wumpa(self, user_id, amount):
         """Deposit wumpa into guild bank"""

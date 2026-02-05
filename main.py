@@ -130,6 +130,9 @@ guide_service = GuideService()
 crafting_service = CraftingService()
 achievement_tracker = AchievementTracker()
 
+from services.stat_build_service import StatBuildService
+stat_service = StatBuildService()
+
 # Track last viewed character for admins (for image upload feature)
 admin_last_viewed_character = {}
 
@@ -1463,6 +1466,34 @@ def process_character_selection(message):
             bot.reply_to(message, f"❌ Errore durante la selezione: {str(e)}", reply_markup=get_main_menu())
         except:
             pass
+@bot.callback_query_handler(func=lambda call: call.data.startswith("char_select|"))
+def handle_character_selection_callback(call):
+    """Handle character selection via Inline Buttons (UX Update)"""
+    try:
+        char_id = int(call.data.split("|")[1])
+        user_id = call.from_user.id
+        
+        # Update user
+        user_service.update_user(user_id, {'livello_selezionato': char_id})
+        
+        # Get char details
+        from services.character_loader import get_character_loader
+        char_loader = get_character_loader()
+        character = char_loader.get_character_by_id(char_id)
+        character_name = character['nome'] if character else "Sconosciuto"
+        
+        msg_text = f"✅ **Personaggio Equipaggiato: {character_name}**"
+        
+        # Build a "Back" button to main menu or just leave it
+        # We can just update the text content and remove the keyboard or show a "Done" status
+        
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=msg_text, parse_mode='markdown')
+        safe_answer_callback(call.id, f"Hai scelto {character_name}!")
+        
+    except Exception as e:
+        print(f"[ERROR] Char select callback: {e}")
+        safe_answer_callback(call.id, "Errore nella selezione.")
+
 @bot.callback_query_handler(func=lambda call: call.data == "dungeon_leave_global")
 def handle_dungeon_leave_global(call):
     """Handle leaving dungeon from global menu"""
@@ -1485,6 +1516,72 @@ def handle_dungeon_leave_global(call):
     else:
         safe_answer_callback(call.id, "Errore durante la fuga!", show_alert=True)
         bot.send_message(call.message.chat.id, f"❌ Errore: {msg}")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("potion_use|"))
+def handle_potion_use_callback(call):
+    """Handle potion usage from profile buttons"""
+    user_id = call.from_user.id
+    potion_name = call.data.split("|")[1]
+    
+    # potion_name = "Pozione Salute" if potion_type == "health_potion" else "Pozione Mana"
+    
+    from services.potion_service import PotionService
+    potion_service = PotionService()
+    user = user_service.get_user(user_id)
+    
+    success, msg = potion_service.use_potion(user, potion_name)
+    
+    if success:
+        # Refresh profile to show updated stats
+        safe_answer_callback(call.id, msg)
+        # We need to call handle_profile but as a callback update
+        # Creating a pseudo-message object
+        call.message.from_user = call.from_user # Ensure user is correct
+        
+        # Re-fetch user to get updated stats
+        user = user_service.get_user(user_id) # Refresh
+        
+        # Re-render profile text
+        # Reuse logic from BotCommands.handle_profile? Ideally yes but it's an instance method.
+        # We can just manually construct the message again or call the command handler if we instantiate BotCommands
+        # For simplicity, let's just trigger the profile command which sends a new message? 
+        # No, better to edit the existing one to be smooth.
+        
+        # Instantiate BotCommands just for profile logic... a bit heavy but works
+        cmd = BotCommands(call.message, bot, user_id=user_id)
+        # We need to override reply_to/send_message to edit_message_text in this context OR
+        # just copy the profile generation logic or make it a static helper.
+        # Let's try to just call handle_profile and let it reply (user asked for smooth update)
+        # To strictly do "Update immediate", implementation needs to be edit_message.
+        
+        # Let's delete the old message and send new one? Or try to edit.
+        # Since handle_profile uses reply_to, it sends a NEW message.
+        # Let's try to just update the text here by extracting the profile generation logic?
+        # That's duplication.
+        
+        # Helper approach: Call handle_profile but trick it? No.
+        # Let's just send the feedback as alert (done above) and then update the message text.
+        
+        # ... actually, let's just use the BotCommands instance but modifying the message to be editable?
+        # Too complex.
+        
+        # Just answer alert (done) and send a tiny text update? 
+        # User request: "aggiornamento immediato" (immediate update).
+        # Editing the message is best.
+        
+        # Refactor profile generation to a static method?
+        # Let's do that in a separate step if needed. For now, let's just try to call handle_profile().
+        # It will send a new message. That's "immediate feedback" but maybe not "in-place update".
+        # But if I delete the old one?
+        try:
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except:
+            pass
+        cmd.handle_profile()
+        
+    else:
+        safe_answer_callback(call.id, f"❌ {msg}", show_alert=True)
+
 
 
 class BotCommands:
@@ -2232,16 +2329,62 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         if has_shenron:
             wish_service.log_summon(self.chatid, "Shenron")
             markup = types.InlineKeyboardMarkup()
-            markup.add(types.InlineKeyboardButton(f"💰 {PointsName} (300-500)", callback_data="wish|Shenron|wumpa"))
-            markup.add(types.InlineKeyboardButton("⭐ EXP (300-500)", callback_data="wish|Shenron|exp"))
-            self.bot.reply_to(self.message, "🐉 Shenron è stato evocato!\n\nEsprimi il tuo desiderio!", reply_markup=markup)
+            markup.add(types.InlineKeyboardButton(f"💰 {PointsName} (1000-2000)", callback_data="wish|Shenron|wumpa"))
+            markup.add(types.InlineKeyboardButton("⭐ EXP (1000-2000)", callback_data="wish|Shenron|exp"))
             
+            caption = "🐉 **SHENRON È STATO EVOCATO!**\n\nQual è il tuo desiderio?"
+            
+            # Send to user (photo + caption)
+            try:
+                with open('images/shenron.png', 'rb') as photo:
+                    self.bot.send_photo(self.chatid, photo, caption=caption, reply_markup=markup, parse_mode='markdown')
+            except Exception as e:
+                print(f"[ERROR] Shenron image: {e}")
+                self.bot.send_message(self.chatid, caption, reply_markup=markup, parse_mode='markdown')
+
+            # Announce to group if summoned in private
+            if self.message.chat.type == 'private':
+                try:
+                    from settings import GRUPPO_AROMA
+                    # Use 'utente' object which is loaded from self.user_id
+                    user_label = f"@{utente.username}" if utente.username else utente.nome
+                    user_label = escape_markdown(user_label)
+                    
+                    group_caption = f"🐉 **EVENTO DRAGO!**\n\n👤 {user_label} ha evocato **SHENRON**!"
+                    with open('images/shenron.png', 'rb') as photo:
+                        self.bot.send_photo(GRUPPO_AROMA, photo, caption=group_caption, parse_mode='markdown')
+                except Exception as e:
+                    print(f"[ERROR] Group announcement: {e}")
+
         elif has_porunga:
             wish_service.log_summon(self.chatid, "Porunga")
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton(f"💰 {PointsName} (50-100)", callback_data="pwish|1|wumpa"))
             markup.add(types.InlineKeyboardButton("🎁 Oggetto Raro", callback_data="pwish|1|item"))
-            self.bot.reply_to(self.message, "🐲 Porunga è stato evocato!\n\nEsprimi 3 desideri!\n\n[Desiderio 1/3]", reply_markup=markup)
+            
+            caption = "🐲 **PORUNGA È STATO EVOCATO!**\n\nEsprimi 3 desideri!\n\n[Desiderio 1/3]"
+            
+            # Send to user (photo + caption)
+            try:
+                with open('images/porunga.png', 'rb') as photo:
+                    self.bot.send_photo(self.chatid, photo, caption=caption, reply_markup=markup, parse_mode='markdown')
+            except Exception as e:
+                print(f"[ERROR] Porunga image: {e}")
+                self.bot.send_message(self.chatid, caption, reply_markup=markup, parse_mode='markdown')
+
+            # Announce to group if summoned in private
+            if self.message.chat.type == 'private':
+                try:
+                    from settings import GRUPPO_AROMA
+                    # Use 'utente' object which is loaded from self.user_id
+                    user_label = f"@{utente.username}" if utente.username else utente.nome
+                    user_label = escape_markdown(user_label)
+                    
+                    group_caption = f"🐲 **EVENTO DRAGO!**\n\n👤 {user_label} ha evocato **PORUNGA**!"
+                    with open('images/porunga.png', 'rb') as photo:
+                        self.bot.send_photo(GRUPPO_AROMA, photo, caption=group_caption, parse_mode='markdown')
+                except Exception as e:
+                    print(f"[ERROR] Group announcement: {e}")
             
         else:
             self.bot.reply_to(self.message, "❌ Non hai tutte le sfere del drago!\nRaccogli 7 sfere di Shenron o Porunga per evocarli.")
@@ -2546,20 +2689,22 @@ Per acquistare un gioco che vedi in un canale o gruppo:
              
         available = character_service.get_available_characters(utente)
         
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+        markup = types.InlineKeyboardMarkup(row_width=2)
         
         btns = []
         for c in available:
             name = c.get('nome', 'Unknown')
-            btns.append(types.KeyboardButton(name))
+            char_id = c.get('id')
+            # Add element icon if avail
+            btns.append(types.InlineKeyboardButton(name, callback_data=f"char_select|{char_id}"))
             
         markup.add(*btns)
-        markup.add(types.KeyboardButton("🔙 Indietro"))
         
-        msg = f"👤 **SCEGLI IL TUO PERSONAGGIO**\n\nEcco i personaggi che hai sbloccato. Selezionane uno per equipaggiarlo:"
+        msg = f"👤 **SCEGLI IL TUO PERSONAGGIO**\n\nEcco i personaggi che hai sbloccato. Clicca su un pulsante per equipaggiarlo:"
         
         self.bot.send_message(self.chatid, msg, reply_markup=markup, parse_mode='markdown')
-        self.bot.register_next_step_handler(self.message, process_character_selection)
+        # Remove next step handler for text input
+        # self.bot.register_next_step_handler(self.message, process_character_selection)
 
     def handle_profile(self, target_user=None):
         """Show comprehensive user profile with stats and transformations"""
@@ -2670,9 +2815,54 @@ Per acquistare un gioco che vedi in un canale o gruppo:
                 msg += f"└ Scade tra: {hours_left}h\n\n"
         
         markup = types.InlineKeyboardMarkup()
+    
+        # Check for potions (only for self)
+        if not target_user or target_user.id_telegram == self.chatid:
+            from services.item_service import ItemService
+            item_service = ItemService()
+            # Retrieve full inventory to find best potions
+            inventory = item_service.get_inventory(utente.id_telegram)
+            inventory_dict = {item.oggetto: item.quantita for item in inventory}
+            
+            # Define hierarchies
+            hp_hierarchy = [
+                ('Pozione Completa', '🧪 Vita Completa'),
+                ('Pozione Grande', '🧪 Vita Grande'),
+                ('Pozione Media', '🧪 Vita Media'),
+                ('Pozione Salute', '🧪 Vita Piccola'), # Legacy/Small
+                ('Pozione Piccola', '🧪 Vita Piccola')
+            ]
+            
+            mana_hierarchy = [
+                ('Pozione Mana Completa', '🧪 Mana Completo'),
+                ('Pozione Mana Grande', '🧪 Mana Grande'),
+                ('Pozione Mana Media', '🧪 Mana Media'),
+                ('Pozione Mana', '🧪 Mana Piccola'), # Legacy/Small
+                ('Pozione Mana Piccola', '🧪 Mana Piccola')
+            ]
+            
+            pot_buttons = []
+            
+            # Find best HP potion
+            for p_name, p_label in hp_hierarchy:
+                count = inventory_dict.get(p_name, 0)
+                if count > 0:
+                    pot_buttons.append(types.InlineKeyboardButton(f"{p_label} (x{count})", callback_data=f"potion_use|{p_name}"))
+                    break # Show only the best one
+            
+            # Find best Mana potion
+            for p_name, p_label in mana_hierarchy:
+                count = inventory_dict.get(p_name, 0)
+                if count > 0:
+                    pot_buttons.append(types.InlineKeyboardButton(f"{p_label} (x{count})", callback_data=f"potion_use|{p_name}"))
+                    break # Show only the best one
+                
+            if pot_buttons:
+                markup.row(*pot_buttons)
+
         # Only show action buttons if viewing own profile
         if not target_user or target_user.id_telegram == self.chatid:
-            markup.add(types.InlineKeyboardButton("📊 Alloca Statistiche", callback_data="stat_alloc"))
+            markup.add(types.InlineKeyboardButton("📊 Alloca Statistiche", callback_data="stat_edit_start"))
             markup.add(types.InlineKeyboardButton("🎒 Equipaggiamento", callback_data="view_equipment"))
             markup.add(types.InlineKeyboardButton("🏆 Scegli Titolo", callback_data="title_menu"))
             # markup.add(types.InlineKeyboardButton("🔄 Reset Stats (Gratis)", callback_data="stat_reset")) # Removed as per user request
@@ -3087,63 +3277,18 @@ Per acquistare un gioco che vedi in un canale o gruppo:
             self.bot.reply_to(self.message, f"❌ Utente {target_username} non trovato.")
 
     def handle_stats(self, is_callback=False):
-        """Show user stats and allocation menu"""
-        utente = user_service.get_user(self.chatid)
-        if not utente:
+        """Show user stats and allocation menu (Redirects to new Stat Editor)"""
+        user_id = self.chatid
+        stats = stat_service.start_editing(user_id)
+        if not stats:
+            self.bot.reply_to(self.message, "Errore: Utente non trovato.")
             return
             
-        from services.stats_service import StatsService
-        stats_service = StatsService()
-        
-        msg = stats_service.get_stat_allocation_summary(utente)
-        
-        markup = types.InlineKeyboardMarkup()
-        
-        # Allocation buttons
-        points_info = stats_service.get_available_stat_points(utente)
-        if points_info['available'] > 0:
-            markup.row(
-                types.InlineKeyboardButton("❤️ HP (+10)", callback_data="stat_up_health"),
-                types.InlineKeyboardButton("💙 Mana (+5)", callback_data="stat_up_mana")
-            )
-            markup.row(
-                types.InlineKeyboardButton("⚔️ Danno (+2)", callback_data="stat_up_damage"),
-                types.InlineKeyboardButton("⚡ Vel (+1)", callback_data="stat_up_speed")
-            )
-            markup.row(
-                types.InlineKeyboardButton("🛡️ Res (+1%)", callback_data="stat_up_resistance"),
-                types.InlineKeyboardButton("🎯 Crit (+1%)", callback_data="stat_up_crit_rate")
-            )
-        
-        # Reset button
-        markup.add(types.InlineKeyboardButton("🔄 Reset Statistiche (Gratis)", callback_data="stat_reset"))
-        # Changed to profile as main_menu might not be implemented
-        markup.add(types.InlineKeyboardButton("🔙 Profilo", callback_data="profile"))
-        
+        text, markup = get_stat_editor_ui(stats)
         if is_callback:
-            # Edit existing message
-            try:
-                self.bot.edit_message_text(msg, self.message.chat.id, self.message.message_id, reply_markup=markup, parse_mode='markdown')
-            except Exception:
-                # If editing fails (e.g. it was a photo), send new message then delete old
-                
-                # Send new message FIRST
-                try:
-                    self.bot.send_message(self.message.chat.id, msg, reply_markup=markup, parse_mode='markdown')
-                except Exception:
-                    import traceback
-                    traceback.print_exc()
-                
-                # Then try to delete old message
-                try:
-                    self.bot.delete_message(self.message.chat.id, self.message.message_id)
-                except Exception:
-                    pass
+            self.bot.edit_message_text(text, self.chatid, self.message.message_id, reply_markup=markup, parse_mode='markdown')
         else:
-            # Send new message (don't reply as command might be deleted)
-            # Use self.message.chat.id if available, otherwise self.chatid (fallback)
-            target_chat = self.message.chat.id if hasattr(self, 'message') and self.message else self.chatid
-            self.bot.send_message(target_chat, msg, reply_markup=markup, parse_mode='markdown')
+            self.bot.send_message(self.chatid, text, reply_markup=markup, parse_mode='markdown')
 
     def handle_title_selection(self, is_callback=False, call_id=None):
         """Show menu to select a title from unlocked achievements"""
@@ -4171,9 +4316,62 @@ def any(message):
                     if session:
                         session.close()
         
-        # GAME PURCHASE: Only allow purchases in private chat
-        if message.chat.type != 'private':
-            return
+        if not message.forward_from_chat:
+             return
+             
+    # RESOURCE DROPS (Merged from handle_general_chat)
+    # Check if this is a group chat where drops can happen
+    if message.chat.type in ['group', 'supergroup']:
+        try:
+             # Anti-spam check (min length)
+             if message.text and len(message.text) >= 4:
+                 # Initialize service
+                 from services.crafting_service import CraftingService
+                 crafting_service = CraftingService()
+                 
+                 # Roll drop (3% chance)
+                 resource_id, image_path = crafting_service.roll_chat_drop(chance=3)
+                 
+                 if resource_id:
+                     user_id = message.from_user.id
+                     from sqlalchemy import text
+                     # We might need a session, careful with closing it in loops/handlers
+                     # CraftingService usually manages its own session if not passed
+                     
+                     # To get resource name we need a session.
+                     # Let's open a quick one or verify if crafting_service has a helper
+                     # rolling drop returns ID. add_resource_drop needs ID.
+                     
+                     # Let's just call add_resource_drop, it handles logic.
+                     # We need the name for the message.
+                     session_res = crafting_service.db.get_session()
+                     try:
+                         resource_name = session_res.execute(text("SELECT name FROM resources WHERE id = :id"), {"id": resource_id}).scalar()
+                         
+                         success_drop = crafting_service.add_resource_drop(user_id, resource_id, quantity=1, source="chat", session=session_res)
+                         
+                         if success_drop and resource_name:
+                             msg_drop = f"✨ Hai trovato **{resource_name}**!"
+                             
+                             import os
+                             if image_path and os.path.exists(image_path):
+                                 try:
+                                     with open(image_path, 'rb') as photo:
+                                         bot.send_photo(message.chat.id, photo, caption=msg_drop, parse_mode='markdown', reply_to_message_id=message.message_id)
+                                 except Exception as img_err:
+                                     print(f"[IMAGE ERROR] {img_err}")
+                                     bot.reply_to(message, msg_drop, parse_mode='markdown')
+                             else:
+                                 bot.reply_to(message, msg_drop, parse_mode='markdown')
+                     finally:
+                         session_res.close()
+        except Exception as e:
+            print(f"[CHAT DROP ERROR] {e}")
+
+    # GAME PURCHASE / PRIVATE CHAT LOGIC
+    # Only allow purchases/private commands in private chat
+    if message.chat.type != 'private':
+        return
 
         # RESTRICTION: Check if forward source is valid (bot must be member)
         # If forwarded from a user (no forward_from_chat), we block it
@@ -4615,6 +4813,179 @@ def send_combat_message(chat_id, text, image_path, markup, mob_id, old_message_i
     return sent_msg
 
 
+
+# --- STAT SYSTEM HELPERS & CALLBACKS ---
+
+def get_profile_markup(user_id):
+    """Generate markup for user profile"""
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("📊 Assegna Punti", callback_data="stat_edit_start"))
+    markup.add(types.InlineKeyboardButton("🎒 Inventario", callback_data="profile_inventory"), 
+               types.InlineKeyboardButton("🧪 Pozioni", callback_data="profile_potions"))
+    markup.add(types.InlineKeyboardButton("🏆 Achievement", callback_data="ach_cat|menu"))
+    return markup
+
+def get_stat_editor_ui(stats):
+    """Generate text and markup for stat editor"""
+    spent = stats['spent_points']
+    total = stats['total_points']
+    free = total - spent
+    
+    text = f"📊 **ASSEGNAZIONE STATISTICHE**\n"
+    text += f"Punti Disponibili: **{free}** / {total}\n\n"
+    
+    # Stat List
+    stat_map = {
+        'health': '❤️ Vita',
+        'mana': '💙 Mana',
+        'damage': '⚔️ Danno',
+        'resistance': '🛡️ Resistenza',
+        'crit': '🍀 Critico',
+        'speed': '⚡ Velocità'
+    }
+    
+    markup = types.InlineKeyboardMarkup()
+    
+    for key, label in stat_map.items():
+        val = stats.get(key, 0)
+        # text += f"{label}: **{val}**\n"
+        
+        # Row with - and + buttons
+        btn_minus = types.InlineKeyboardButton("➖", callback_data=f"stat_change|{key}|-1")
+        btn_plus = types.InlineKeyboardButton("➕", callback_data=f"stat_change|{key}|1")
+        
+        markup.row(
+            types.InlineKeyboardButton(f"{label}: {val}", callback_data="noop"),
+            btn_minus,
+            btn_plus
+        )
+        
+    text += "\nModifica i valori e conferma."
+    
+    # Control Buttons
+    markup.add(types.InlineKeyboardButton("🔄 Reset Tutto", callback_data="stat_reset"))
+    markup.add(types.InlineKeyboardButton("📋 Applica Preset", callback_data="stat_preset_menu"))
+    
+    markup.row(
+        types.InlineKeyboardButton("❌ Annulla", callback_data="stat_cancel"),
+        types.InlineKeyboardButton("✅ Conferma", callback_data="stat_confirm")
+    )
+    
+    return text, markup
+
+def get_preset_menu_ui():
+    """Generate preset selection menu"""
+    presets = stat_service.get_presets()
+    text = "📋 **SCEGLI UN ARCHETIPO**\n\nI punti verranno distribuiti automaticamente secondo i rapporti definiti."
+    markup = types.InlineKeyboardMarkup()
+    
+    for p_name, p_data in presets.items():
+        markup.add(types.InlineKeyboardButton(f"{p_data['desc']}", callback_data=f"stat_apply_preset|{p_name}"))
+        
+    markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="stat_edit_start"))
+    return text, markup
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("stat_"))
+def handle_stat_callbacks(call):
+    """Handle new stat system callbacks"""
+    print(f"[DEBUG] handle_stat_callbacks triggered: {call.data}")
+    try:
+        user_id = call.from_user.id
+        data = call.data
+        
+        # 1. Start Editing (Main Menu)
+        if data == "stat_edit_start" or data == "stat_alloc":
+            stats = stat_service.start_editing(user_id)
+            if not stats:
+                safe_answer_callback(call.id, "Errore: Utente non trovato.")
+                return
+                
+            text, markup = get_stat_editor_ui(stats)
+            
+            # Robust edit: check content_type
+            if call.message.content_type == 'text':
+                bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+            else:
+                try:
+                    bot.delete_message(call.message.chat.id, call.message.message_id)
+                except:
+                    pass
+                bot.send_message(call.message.chat.id, text, reply_markup=markup, parse_mode='markdown')
+            
+        # 2. Change Stat (+/-)
+        elif data.startswith("stat_change|"):
+            parts = data.split("|")
+            stat = parts[1]
+            amount = int(parts[2])
+            
+            success, msg = stat_service.update_temp_stat(user_id, stat, amount)
+            if not success:
+                safe_answer_callback(call.id, msg)
+                return
+                
+            # Refresh UI
+            stats = stat_service.get_temp_stats(user_id)
+            text, markup = get_stat_editor_ui(stats)
+            # This is already in the editor, so it should be text
+            bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+            
+        # 3. Confirm Changes
+        elif data == "stat_confirm":
+            success, msg = stat_service.save_changes(user_id)
+            safe_answer_callback(call.id, msg)
+            
+            # Return to Profile (use BotCommands logic to handle photo if needed)
+            try:
+                 bot.delete_message(call.message.chat.id, call.message.message_id)
+            except:
+                 pass
+            
+            cmd = BotCommands(call.message, bot, user_id=user_id)
+            cmd.chatid = user_id
+            cmd.handle_profile()
+            
+        # 4. Cancel / Back
+        elif data == "stat_cancel":
+            stat_service.reset_temp(user_id) # Optional cleanup
+            try:
+                 bot.delete_message(call.message.chat.id, call.message.message_id)
+            except:
+                 pass
+            
+            cmd = BotCommands(call.message, bot, user_id=user_id)
+            cmd.chatid = user_id
+            cmd.handle_profile()
+            
+        # 5. Reset All (Temp)
+        elif data == "stat_reset":
+            stat_service.reset_temp(user_id)
+            stats = stat_service.get_temp_stats(user_id)
+            text, markup = get_stat_editor_ui(stats)
+            bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+
+        # 6. Presets Menu
+        elif data == "stat_preset_menu":
+            text, markup = get_preset_menu_ui()
+            bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+            
+        # 7. Apply Preset
+        elif data.startswith("stat_apply_preset|"):
+            preset_name = data.split("|")[1]
+            success, msg = stat_service.apply_preset(user_id, preset_name)
+            safe_answer_callback(call.id, msg)
+            
+            # Go back to editor to verify/tweak
+            stats = stat_service.get_temp_stats(user_id)
+            text, markup = get_stat_editor_ui(stats)
+            bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+    except Exception as e:
+        print(f"[ERROR] handle_stat_callbacks: {e}")
+        import traceback
+        traceback.print_exc()
+        safe_answer_callback(call.id, f"Errore: {e}", show_alert=True)
+
+# --- MAIN CALLBACK HANDLER ---
+
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
     user_id = call.from_user.id
@@ -4694,18 +5065,7 @@ def callback_query(call):
                 bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
         return
 
-    if call.data == "stat_alloc":
-        try:
-            safe_answer_callback(call.id)
-        except:
-            pass
-            
-        # Use BotCommands to handle stats
-        bot_cmds = BotCommands(call.message, bot, user_id=call.from_user.id)
-        bot_cmds.chatid = user_id 
-        bot_cmds.message = call.message 
-        bot_cmds.handle_stats(is_callback=True)
-        return
+
 
     # Market callbacks delegation
     if call.data.startswith("market_") or call.data.startswith("buy_item") or call.data.startswith("cancel_listing") or call.data == "market_menu":
@@ -5874,10 +6234,6 @@ def callback_query(call):
         _, upgrade_type = call.data.split("|")
         if upgrade_type == "inn":
             success, msg = guild_service.upgrade_inn(call.from_user.id)
-        elif upgrade_type == "village":
-            success, msg = guild_service.expand_village(call.from_user.id)
-        elif upgrade_type == "armory":
-            success, msg = guild_service.upgrade_armory(call.from_user.id)
         elif upgrade_type == "bordello":
             success, msg = guild_service.upgrade_bordello(call.from_user.id)
             
@@ -5888,10 +6244,6 @@ def callback_query(call):
         else:
             safe_answer_callback(call.id, msg, show_alert=True)
             
-    elif call.data.startswith("stat_"):
-        bot_cmds = BotCommands(call.message, bot, user_id=call.from_user.id)
-        bot_cmds.handle_stat_callback(call)
-        return
 
     elif call.data == "guild_back_main":
         safe_answer_callback(call.id)
@@ -6147,25 +6499,42 @@ def callback_query(call):
                 'timestamp': datetime.datetime.now()
             }
         
-        if image_data:
+        # Update message
+        try:
+            # Smart edit logic: Check content_type to avoid Telebot errors
+            msg_content_type = call.message.content_type
+            
+            if image_data:
+                # We want to show an IMAGE
+                if msg_content_type == 'photo':
+                    # Photo -> Photo: Edit Media
+                    media = types.InputMediaPhoto(image_data, caption=msg, parse_mode='markdown')
+                    bot.edit_message_media(media=media, chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
+                else:
+                    # Text -> Photo: Must delete and send new
+                    bot.delete_message(call.message.chat.id, call.message.message_id)
+                    bot.send_photo(call.message.chat.id, image_data, caption=msg, reply_markup=markup, parse_mode='markdown')
+            else:
+                # We want to show TEXT (no image)
+                if msg_content_type == 'text':
+                     # Text -> Text: Edit Text
+                    bot.edit_message_text(msg, user_id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+                else:
+                    # Photo -> Text: Must delete and send new
+                    bot.delete_message(call.message.chat.id, call.message.message_id)
+                    bot.send_message(user_id, msg, reply_markup=markup, parse_mode='markdown')
+                    
+        except Exception as e:
+            # Fallback
+            print(f"Error editing message (smart): {e}")
             try:
-                # Edit the existing message with new media instead of deleting and resending
-                media = types.InputMediaPhoto(image_data, caption=msg, parse_mode='markdown')
-                bot.edit_message_media(media, user_id, call.message.message_id, reply_markup=markup)
-            except Exception as e:
-                print(f"Error editing message media: {e}")
-                # Fallback: delete and resend if edit fails
-                try:
-                    bot.delete_message(user_id, call.message.message_id)
+                bot.delete_message(call.message.chat.id, call.message.message_id)
+                if image_data:
                     bot.send_photo(user_id, image_data, caption=msg, reply_markup=markup, parse_mode='markdown')
-                except Exception as e2:
-                    print(f"Error in fallback send: {e2}")
-        else:
-            # No image, just edit the text
-            try:
-                bot.edit_message_text(msg, user_id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
-            except Exception as e:
-                print(f"Error editing message text: {e}")
+                else:
+                    bot.send_message(user_id, msg, reply_markup=markup, parse_mode='markdown')
+            except Exception as e2:
+                print(f"Error in fallback send: {e2}")
 
         safe_answer_callback(call.id)
         return
@@ -6347,20 +6716,172 @@ def callback_query(call):
         
         if is_unlocked:
             if not is_equipped:
-                markup.add(types.InlineKeyboardButton("✅ Equipaggia questo personaggio", callback_data=f"char_select|{char.id}"))
+                markup.add(types.InlineKeyboardButton("✅ Equipaggia questo personaggio", callback_data=f"char_select|{char['id']}"))
             else:
                 markup.add(types.InlineKeyboardButton("⭐ Già Equipaggiato", callback_data="char_already_equipped"))
         else:
-            if char.lv_premium == 2 and char.price > 0:
-                price = char.price
+            if char['lv_premium'] == 2 and char.get('price', 0) > 0:
+                price = char['price']
                 if utente.premium == 1:
                     price = int(price * 0.5)
-                markup.add(types.InlineKeyboardButton(f"🔓 Sblocca ({price} 🍑)", callback_data=f"char_buy|{char.id}"))
+                markup.add(types.InlineKeyboardButton(f"🔓 Sblocca ({price} 🍑)", callback_data=f"char_buy|{char['id']}"))
         
-        bot.edit_message_text(msg, user_id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+        # Update message
+        try:
+             # Try to send image if available
+            from services.character_loader import get_character_image
+            image_data = get_character_image(char, is_locked=not is_unlocked)
+            
+            # Smart edit logic: Check content_type to avoid Telebot errors
+            msg_content_type = call.message.content_type
+            
+            if image_data:
+                # We want to show an IMAGE
+                if msg_content_type == 'photo':
+                    # Photo -> Photo: Edit Media
+                    media = types.InputMediaPhoto(image_data, caption=msg, parse_mode='markdown')
+                    bot.edit_message_media(media=media, chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
+                else:
+                    # Text -> Photo: Must delete and send new
+                    bot.delete_message(call.message.chat.id, call.message.message_id)
+                    bot.send_photo(call.message.chat.id, image_data, caption=msg, reply_markup=markup, parse_mode='markdown')
+            else:
+                # We want to show TEXT (no image)
+                if msg_content_type == 'text':
+                    # Text -> Text: Edit Text
+                    bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+                else:
+                    # Photo -> Text: Must delete and send new
+                    bot.delete_message(call.message.chat.id, call.message.message_id)
+                    bot.send_message(call.message.chat.id, msg, reply_markup=markup, parse_mode='markdown')
+                    
+        except Exception as e:
+            # Fallback
+            print(f"Error editing char filter: {e}")
+            try:
+                bot.delete_message(call.message.chat.id, call.message.message_id)
+                if image_data:
+                    bot.send_photo(call.message.chat.id, image_data, caption=msg, reply_markup=markup, parse_mode='markdown')
+                else:
+                    bot.send_message(call.message.chat.id, msg, reply_markup=markup, parse_mode='markdown')
+            except:
+                pass
+        
         safe_answer_callback(call.id, f"Filtrando per {'tutti i livelli' if filter_value == 'all' else f'livello {filter_value}'}")
         return
     
+    elif action.startswith("char_page|"):
+        # char_page|level_filter|page
+        parts = action.split("|")
+        level_filter = int(parts[1]) if parts[1] != '0' and parts[1] != 'None' else None
+        page = int(parts[2])
+        
+        # Determine max level visible (same logic as char_filter ideally, or just default)
+        # For now assume no max level hiding unless implemented elsewhere
+        
+        page_chars, total_pages, current_page = character_service.get_all_characters_paginated(utente, page=page, level_filter=level_filter)
+        
+        if not page_chars:
+            safe_answer_callback(call.id, "Nessun personaggio trovato.")
+            return
+
+        char = page_chars[0]
+        char_id = char['id']
+        
+        # Determine unlock status
+        is_unlocked = character_service.is_character_unlocked(utente, char_id)
+        is_equipped = (utente.livello_selezionato == char_id)
+        
+        # Format character card (Reuse logic by extracting to function or duplicating for now)
+        lock_icon = "" if is_unlocked else "🔒 "
+        msg = f"{lock_icon}"
+        msg += character_service.format_character_card(char, show_price=True, is_equipped=is_equipped, user=utente)
+        
+        if not is_unlocked:
+            msg += "\n\n🔒 **PERSONAGGIO BLOCCATO**\n"
+            if char['livello'] > utente.livello:
+                msg += f"Raggiungi livello {char['livello']} per sbloccarlo!\n"
+            elif char['lv_premium'] == 1:
+                msg += "Richiede abbonamento Premium!\n"
+        
+        msg += f"\n📄 Personaggio {current_page + 1} di {total_pages}"
+        
+        markup = types.InlineKeyboardMarkup()
+        
+        # Level filter row
+        levels = character_service.get_character_levels()
+        level_row = [types.InlineKeyboardButton("🔄 Tutti", callback_data="char_filter|all")]
+        for level in levels[:5]:
+            level_row.append(types.InlineKeyboardButton(f"Lv{level}", callback_data=f"char_filter|{level}"))
+        markup.row(*level_row)
+        
+        # Navigation row
+        nav_row = []
+        if total_pages > 1:
+            nav_row.append(types.InlineKeyboardButton("◀️", callback_data=f"char_page|{level_filter or 0}|{max(0, current_page - 1)}"))
+        nav_row.append(types.InlineKeyboardButton(f"{current_page + 1}/{total_pages}", callback_data="char_page_info"))
+        if total_pages > 1:
+            nav_row.append(types.InlineKeyboardButton("▶️", callback_data=f"char_page|{level_filter or 0}|{min(total_pages - 1, current_page + 1)}"))
+        markup.row(*nav_row)
+        
+        # Action buttons
+        if is_unlocked:
+            if not is_equipped:
+                markup.add(types.InlineKeyboardButton("✅ Equipaggia questo personaggio", callback_data=f"char_select|{char['id']}"))
+            else:
+                markup.add(types.InlineKeyboardButton("⭐ Già Equipaggiato", callback_data="char_already_equipped"))
+        else:
+            if char['lv_premium'] == 2 and char.get('price', 0) > 0:
+                price = char['price']
+                if utente.premium == 1:
+                    price = int(price * 0.5)
+                markup.add(types.InlineKeyboardButton(f"🔓 Sblocca ({price} 🍑)", callback_data=f"char_buy|{char['id']}"))
+
+        # Update message
+        # Update message
+        try:
+             # Try to send image if available
+            from services.character_loader import get_character_image
+            image_data = get_character_image(char, is_locked=not is_unlocked)
+            
+            # Smart edit logic: Check content_type to avoid Telebot errors
+            msg_content_type = call.message.content_type
+            
+            if image_data:
+                # We want to show an IMAGE
+                if msg_content_type == 'photo':
+                    # Photo -> Photo: Edit Media
+                    media = types.InputMediaPhoto(image_data, caption=msg, parse_mode='markdown')
+                    bot.edit_message_media(media=media, chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
+                else:
+                    # Text -> Photo: Must delete and send new
+                    bot.delete_message(call.message.chat.id, call.message.message_id)
+                    bot.send_photo(call.message.chat.id, image_data, caption=msg, reply_markup=markup, parse_mode='markdown')
+            else:
+                # We want to show TEXT (no image)
+                if msg_content_type == 'text':
+                    # Text -> Text: Edit Text
+                    bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+                else:
+                    # Photo -> Text: Must delete and send new
+                    bot.delete_message(call.message.chat.id, call.message.message_id)
+                    bot.send_message(call.message.chat.id, msg, reply_markup=markup, parse_mode='markdown')
+                    
+        except Exception as e:
+            # Fallback
+            print(f"Error editing char page: {e}")
+            try:
+                bot.delete_message(call.message.chat.id, call.message.message_id)
+                if image_data:
+                    bot.send_photo(call.message.chat.id, image_data, caption=msg, reply_markup=markup, parse_mode='markdown')
+                else:
+                    bot.send_message(call.message.chat.id, msg, reply_markup=markup, parse_mode='markdown')
+            except:
+                pass
+                
+        safe_answer_callback(call.id)
+        return
+
     elif action.startswith("char_buy|"):
         char_id = int(action.split("|")[1])
         
@@ -7499,6 +8020,8 @@ def callback_query(call):
             bot.send_message(user_id, msg, parse_mode='markdown')
         return
 
+
+
 def bot_polling_thread():
     bot.infinity_polling()
 
@@ -7525,48 +8048,48 @@ def regenerate_mana_job():
         print(f"[MANA REGEN ERROR] {e}")
 
 def spawn_daily_mob_job():
-    # Random check to spawn between 8 and 22
+    # Random check to spawn at any time (Restrictions removed)
     now = datetime.datetime.now()
-    if 8 <= now.hour <= 22:
-        # 20% chance every check
-        if random.random() < 0.2: 
-            success, msg, mob_id = pve_service.spawn_specific_mob(chat_id=GRUPPO_AROMA)
-            if mob_id:
-                # Apply pending effects
-                applied = pve_service.apply_pending_effects(mob_id, GRUPPO_AROMA)
-                for app in applied:
-                    bot.send_message(GRUPPO_AROMA, f"💥 **{app['effect']}** esplode sul nuovo arrivato! Danni: {app['damage']}")
+    
+    # 20% chance every check
+    if random.random() < 0.2: 
+        success, msg, mob_id = pve_service.spawn_specific_mob(chat_id=GRUPPO_AROMA)
+        if mob_id:
+            # Apply pending effects
+            applied = pve_service.apply_pending_effects(mob_id, GRUPPO_AROMA)
+            for app in applied:
+                bot.send_message(GRUPPO_AROMA, f"💥 **{app['effect']}** esplode sul nuovo arrivato! Danni: {app['damage']}")
+            
+            mob = pve_service.get_current_mob_status(mob_id)
+            if mob:
+                # Get the actual mob ID from spawn_daily_mob return value
+                markup = get_combat_markup("mob", mob_id, GRUPPO_AROMA)
                 
-                mob = pve_service.get_current_mob_status(mob_id)
-                if mob:
-                    # Get the actual mob ID from spawn_daily_mob return value
-                    markup = get_combat_markup("mob", mob_id, GRUPPO_AROMA)
-                    
-                    msg_text = f"⚠️ Un {mob['name']} selvatico è apparso!\n{format_mob_stats(mob, show_full=False)}\n\nSconfiggilo per ottenere ricompense!"
-                    
-                    # Send with image if available
-                    if mob.get('image') and os.path.exists(mob['image']):
+                msg_text = f"⚠️ Un {mob['name']} selvatico è apparso!\n{format_mob_stats(mob, show_full=False)}\n\nSconfiggilo per ottenere ricompense!"
+                
+                # Send with image if available
+                if mob.get('image') and os.path.exists(mob['image']):
+                    try:
+                        with open(mob['image'], 'rb') as photo:
+                            bot.send_photo(GRUPPO_AROMA, photo, caption=msg_text, reply_markup=markup, )
+                    except:
+                        bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup)
+                else:
+                    bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup, parse_mode='markdown')
+                
+                # Send immediate attack messages with buttons
+                if attack_events:
+                    for event in attack_events:
+                        msg = event['message']
+                        image_path = event['image']
                         try:
-                            with open(mob['image'], 'rb') as photo:
-                                bot.send_photo(GRUPPO_AROMA, photo, caption=msg_text, reply_markup=markup, )
+                            if image_path and os.path.exists(image_path):
+                                with open(image_path, 'rb') as photo:
+                                    bot.send_photo(GRUPPO_AROMA, photo, caption=msg, reply_markup=markup, )
+                            else:
+                                bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, )
                         except:
-                            bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup)
-                    else:
-                        bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup, parse_mode='markdown')
-                    
-                    # Send immediate attack messages with buttons
-                    if attack_events:
-                        for event in attack_events:
-                            msg = event['message']
-                            image_path = event['image']
-                            try:
-                                if image_path and os.path.exists(image_path):
-                                    with open(image_path, 'rb') as photo:
-                                        bot.send_photo(GRUPPO_AROMA, photo, caption=msg, reply_markup=markup, )
-                                else:
-                                    bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, )
-                            except:
-                                bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, parse_mode='markdown')
+                            bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, parse_mode='markdown')
 
 def spawn_weekly_boss_job():
     success, msg, boss_id = pve_service.spawn_boss(chat_id=GRUPPO_AROMA)
@@ -7963,6 +8486,16 @@ def job_weekly_ranking():
     except Exception as e:
         print(f"[ERROR] Failed to send weekly ranking: {e}")
 
+def job_guild_weekly_rewards():
+    """Weekly Guild Dungeon Rewards (Sunday)"""
+    print("[SCHEDULER] Running weekly guild rewards job...")
+    try:
+        msg = guild_service.process_weekly_rewards()
+        if msg:
+             bot.send_message(GRUPPO_AROMA, msg, parse_mode='markdown')
+    except Exception as e:
+        print(f"[ERROR] Guild Weekly Rewards: {e}")
+
 def job_dungeon_night_reset():
     """Midnight Reset: Flee Active Dungeon"""
     try:
@@ -8031,6 +8564,7 @@ schedule.every(30).seconds.do(process_achievements_job)
 schedule.every(1).minutes.do(process_crafting_queue_job)
 schedule.every(1).minutes.do(job_dungeon_check)
 schedule.every().sunday.at("20:00").do(job_weekly_ranking)
+schedule.every().sunday.at("21:00").do(job_guild_weekly_rewards)
 schedule.every().day.at("04:00").do(lambda: BackupService().create_backup())  # Daily Backup at 4 AM
 schedule.every().day.at("00:00").do(job_dungeon_night_reset) # Midnight Flee
 
@@ -8091,55 +8625,35 @@ def scan_mob_reply(message):
             print(f"Error scanning mob: {e}")
             bot.reply_to(message, "Errore durante la scansione.")
 
-            bot.reply_to(message, "Errore durante la scansione.")
+@bot.message_handler(commands=['guild_rank', 'grank'])
+def handle_guild_rank_cmd(message):
+    """Show Guild Dungeon Ranking"""
+    args = message.text.split()
+    dungeon_id = None
+    if len(args) > 1 and args[1].isdigit():
+        dungeon_id = int(args[1])
+        
+    ranking = guild_service.get_dungeon_ranking(dungeon_id=dungeon_id, limit=5)
+    
+    if not ranking:
+         bot.reply_to(message, "🏰 Nessuna attività di gilda registrata nei dungeon.")
+         return
+         
+    title = "🏰 **Classifica Gilde (Danni Dungeon)** 🏰"
+    if dungeon_id:
+        title += f"\n(Dungeon ID: {dungeon_id})"
+        
+    msg = f"{title}\n\n"
+    emojis = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
+    
+    for i, row in enumerate(ranking):
+        rank_icon = emojis[i] if i < len(emojis) else f"#{i+1}"
+        msg += f"{rank_icon} **{row['name']}**\n"
+        msg += f"   💥 Danni: {row['total_damage']}\n\n"
+        
+    bot.reply_to(message, msg, parse_mode='markdown')
             
-@bot.message_handler(func=lambda message: True)
-def handle_general_chat(message):
-    """Handle all other chat messages for resource drops + spam protection"""
-    # 5% chance to drop a resource
-    try:
-        # Check if message is long enough to be considered active chat (anti-spam)
-        if not message.text or len(message.text) < 4:
-            return
-            
-        user_id = message.from_user.id
-        
-        # Initialize service if not global (it should be)
-        from services.crafting_service import CraftingService
-        crafting_service = CraftingService()
-        
-        # Roll drop
-        resource_id, image_path = crafting_service.roll_chat_drop(chance=3) # 3% chance
-        
-        if resource_id:
-             # Add to inventory
-            from sqlalchemy import text
-            session = crafting_service.db.get_session()
-            try:
-                resource_name = session.execute(text("SELECT name FROM resources WHERE id = :id"), {"id": resource_id}).scalar()
-                
-                # Add drop
-                success = crafting_service.add_resource_drop(user_id, resource_id, quantity=1, source="chat")
-                
-                if success and resource_name:
-                     msg = f"✨ Hai trovato **{resource_name}**!"
-                     
-                     # Check if image exists and send it
-                     import os
-                     if image_path and os.path.exists(image_path):
-                         try:
-                             with open(image_path, 'rb') as photo:
-                                 bot.send_photo(message.chat.id, photo, caption=msg, parse_mode='markdown', reply_to_message_id=message.message_id)
-                         except Exception as img_err:
-                             print(f"[IMAGE ERROR] {img_err}")
-                             bot.reply_to(message, msg, parse_mode='markdown')
-                     else:
-                         bot.reply_to(message, msg, parse_mode='markdown')
-            finally:
-                session.close()
-                
-    except Exception as e:
-        print(f"[CHAT DROP ERROR] {e}")
+
 
 def schedule_checker():
     while True:

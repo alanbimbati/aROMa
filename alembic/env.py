@@ -24,6 +24,7 @@ from models.dungeon import Dungeon, DungeonParticipant
 from models.dungeon_progress import DungeonProgress
 from models.game import GameInfo, Steam, NomiGiochi, GiocoUtente # Corrected
 from models.guild import Guild, GuildMember, GuildUpgrade, GuildItem
+from models.guild_dungeon_stats import GuildDungeonStats
 from models.inventory import UserItem
 from models.item import Item, ItemSet
 from models.items import Collezionabili
@@ -31,7 +32,7 @@ from models.legacy_tables import Points, Gruppo, GiocoAroma
 from models.pve import Mob, Raid, RaidParticipation
 from models.seasons import Season, SeasonReward, SeasonClaimedReward, SeasonProgress
 from models.stats import UserStat
-from models.system import Livello, UserCharacter, Domenica
+from models.system import Livello, UserCharacter, Domenica, CharacterAbility, CharacterTransformation, UserTransformation
 from models.system_state import SystemState
 from models.equipment import Equipment, UserEquipment
 from models.crafting import CraftingQueue

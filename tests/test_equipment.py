@@ -77,7 +77,7 @@ class TestEquipmentSystem(unittest.TestCase):
             # Add Scouter (level 1, common, head slot)
             session.execute(text("""
                 INSERT INTO user_equipment (user_id, equipment_id, equipped, durability)
-                VALUES (:uid, 6, FALSE, 100)
+                VALUES (:uid, 6, FALSE)
             """), {"uid": self.test_user_id})
             session.commit()
             
@@ -116,7 +116,7 @@ class TestEquipmentSystem(unittest.TestCase):
             # Try to add high-level item (Z-Sword, level 50)
             session.execute(text("""
                 INSERT INTO user_equipment (user_id, equipment_id, equipped, durability)
-                VALUES (:uid, 11, FALSE, 100)
+                VALUES (:uid, 11, FALSE)
             """), {"uid": self.test_user_id})
             session.commit()
             
@@ -152,8 +152,8 @@ class TestEquipmentSystem(unittest.TestCase):
             # Add two chest items
             for item_id in [1, 7]:  # Gi della Tartaruga, Tuta Saiyan
                 session.execute(text("""
-                    INSERT INTO user_equipment (user_id, equipment_id, equipped, durability)
-                    VALUES (:uid, :eid, FALSE, 100)
+                    INSERT INTO user_equipment (user_id, equipment_id, equipped)
+                    VALUES (:uid, :eid, FALSE)
                 """), {"uid": self.test_user_id, "eid": item_id})
             session.commit()
             
@@ -201,7 +201,7 @@ class TestEquipmentSystem(unittest.TestCase):
             # Check if Scouter exists in inventory (not equipped)
             session.execute(text("""
                 INSERT INTO user_equipment (user_id, equipment_id, equipped, durability)
-                VALUES (:uid, 6, FALSE, 100)
+                VALUES (:uid, 6, FALSE)
             """), {"uid": self.test_user_id})
             session.commit()
             
@@ -256,13 +256,13 @@ class TestEquipmentSystem(unittest.TestCase):
             
             # Available chars without Potara
             chars_before = self.char_service.get_available_characters(user)
-            fusion_before = [c for c in chars_before if c['id'] in [146, 122, 110]]
+            fusion_before = [c for c in chars_before if c['id'] in [146, 122, 110, 307]]
             
             # Add 2 Potara
             for _ in range(2):
                 session.execute(text("""
-                    INSERT INTO user_equipment (user_id, equipment_id, equipped, durability)
-                    VALUES (:uid, 16, FALSE, 100)
+                    INSERT INTO user_equipment (user_id, equipment_id, equipped)
+                    VALUES (:uid, 21, FALSE)
                 """), {"uid": self.test_user_id})
             session.commit()
             
@@ -276,7 +276,7 @@ class TestEquipmentSystem(unittest.TestCase):
             
             # Available chars with Potara
             chars_after = self.char_service.get_available_characters(user)
-            fusion_after = [c for c in chars_after if c['id'] in [146, 122, 110]]
+            fusion_after = [c for c in chars_after if c['id'] in [146, 122, 110, 307]]
             
             # Should unlock all 3 fusion characters
             self.assertGreater(len(fusion_after), len(fusion_before), 
@@ -296,8 +296,8 @@ class TestEquipmentSystem(unittest.TestCase):
             # Tuta Saiyan (7) and Guanti Vegeta (8)
             for item_id in [7, 8]:
                 session.execute(text("""
-                    INSERT INTO user_equipment (user_id, equipment_id, equipped, durability)
-                    VALUES (:uid, :eid, FALSE, 100)
+                    INSERT INTO user_equipment (user_id, equipment_id, equipped)
+                    VALUES (:uid, :eid, FALSE)
                 """), {"uid": self.test_user_id, "eid": item_id})
             session.commit()
             
@@ -341,8 +341,8 @@ class TestEquipmentSystem(unittest.TestCase):
             item_ids = [1, 6, 7, 8, 11, 16]
             for item_id in item_ids:
                 session.execute(text("""
-                    INSERT INTO user_equipment (user_id, equipment_id, equipped, durability)
-                    VALUES (:uid, :eid, FALSE, 100)
+                    INSERT INTO user_equipment (user_id, equipment_id, equipped)
+                    VALUES (:uid, :eid, FALSE)
                 """), {"uid": self.test_user_id, "eid": item_id})
             session.commit()
             
