@@ -17,8 +17,8 @@ def test_rewards():
         print("No user found in database for testing.")
         return
     
-    initial_exp = user.exp
-    initial_points = user.points
+    initial_exp = (user.exp or 0)
+    initial_points = (user.points or 0)
     test_id = user.id_telegram
     
     print(f"Testing rewards for user {test_id} ({user.username})")

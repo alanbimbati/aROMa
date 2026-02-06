@@ -54,19 +54,23 @@ class TestGuildBonuses(unittest.TestCase):
         # Mock Guild logic inside get_user_guild
         # We need to mock get_user_guild to return a dict with brewery_level
         
-        # Case 1: No Guild -> 1.0 (no bonus? Actually get_potion_bonus currently requires guild? No, let's see code)
+        # Case 1: No Guild -> 1.0
+        mock_user = MagicMock()
+        mock_user.last_beer_usage = datetime.datetime.now()
+        self.mock_session.query.return_value.filter_by.return_value.first.return_value = mock_user
+        
         with patch.object(self.guild_service, 'get_user_guild', return_value=None):
             bonus = self.guild_service.get_potion_bonus(user_id)
             self.assertEqual(bonus, 1.0, "Should be 1.0 (no bonus) if not in guild")
             
         # Case 2: Guild with Brewery Lv 1
-        # Formula: 1.0 + (15 + (Lv*5))/100 = 1.0 + 0.20 = 1.20
+        mock_user.last_beer_usage = datetime.datetime.now()
         with patch.object(self.guild_service, 'get_user_guild', return_value={'brewery_level': 1, 'inn_level': 1}):
             bonus = self.guild_service.get_potion_bonus(user_id)
             self.assertEqual(bonus, 1.20, "Lv 1 Brewery should give +20% (1.20)")
             
         # Case 3: Brewery Lv 5
-        # Formula: 15 + 25 = 40% -> 1.40
+        mock_user.last_beer_usage = datetime.datetime.now()
         with patch.object(self.guild_service, 'get_user_guild', return_value={'brewery_level': 5, 'inn_level': 1}):
             bonus = self.guild_service.get_potion_bonus(user_id)
             self.assertEqual(bonus, 1.40, "Lv 5 Brewery should give +40% (1.40)")

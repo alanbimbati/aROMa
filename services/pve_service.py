@@ -1147,6 +1147,11 @@ class PvEService:
             
             mobs = sorted(all_mobs, key=get_priority)
 
+        # Dynamic Join for AoE
+        for m in all_mobs:
+            if m.dungeon_id:
+                ds.register_participant_if_needed(user.id_telegram, m.dungeon_id, session=session)
+
         # Filter out mobs that are strictly "private" or "invalid"? 
         # For now, just rely on chat_id visibility.
             
@@ -1463,7 +1468,7 @@ class PvEService:
                         is_aoe = True
                     
                     # Get targets using TargetingService
-                    recent_users = self.user_service.get_recent_users(chat_id=chat_id)
+                    recent_users = self.user_service.get_recent_users(chat_id=chat_id, minutes=1440)
                     targets_pool = self.targeting_service.get_valid_targets(
                         mob=mob,
                         chat_id=chat_id,
@@ -1561,26 +1566,26 @@ class PvEService:
                         # 15% Chance to attack RANDOM target (ignoring aggro/taunt)
                         random_roll = random.random()
                         if random_roll < 0.15 and len(candidates) > 1:
-                            # Pure random choice from valid candidates
+                            # Pure random choice from valid candidates in chat
                             target_id = random.choice(candidates)
                             print(f"[DEBUG AGGRO] 15% Random triggered (roll={random_roll:.3f}), selected {target_id}")
                         else:
                             # Standard Aggro Logic (85%)
+                            # Check for Taunt first
+                            taunt_target = None
                             if mob.aggro_target_id and mob.aggro_end_time and mob.aggro_end_time > datetime.datetime.now():
-                                # Taunt is active
-                                if mob.aggro_target_id in targets_pool:
-                                    target_id = mob.aggro_target_id
-                                    print(f"[DEBUG AGGRO] Taunt active, targeting {target_id}")
-                                else:
-                                    # Taunt target invalid, fallback to weights
-                                    target_id = random.choices(candidates, weights=weights, k=1)[0]
-                                    print(f"[DEBUG AGGRO] Taunt invalid, weighted choice: {target_id}")
+                                if mob.aggro_target_id in candidates:
+                                    taunt_target = mob.aggro_target_id
+                            
+                            if taunt_target:
+                                target_id = taunt_target
+                                print(f"[DEBUG AGGRO] 85% Logic: Taunt active on {target_id}")
                             else:
-                                # No taunt, use weighted aggro
+                                # Weighted choice based on damage/defense
                                 target_id = random.choices(candidates, weights=weights, k=1)[0]
                                 total_weight = sum(weights)
-                                selected_weight = weights[candidates.index(target_id)] if target_id in candidates else 0
-                                print(f"[DEBUG AGGRO] Weighted aggro: selected {target_id} (weight {selected_weight}/{total_weight})")
+                                selected_weight = weights[candidates.index(target_id)]
+                                print(f"[DEBUG AGGRO] 85% Logic: Weighted choice {target_id} ({selected_weight}/{total_weight})")
                                 
                         if target_id:
                             t = session.query(Utente).filter_by(id_telegram=target_id).first()

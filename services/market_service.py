@@ -29,18 +29,47 @@ class MarketService:
                 # print(f"[DEBUG] IDs in DB: {[i[0] for i in all_ids]}") # Too spammy if many users
                 return False, f"Utente non trovato (ID: {user_id})"
 
-            # Calculate total quantity available
-            total_qty = session.query(Collezionabili).filter_by(
+            # Calculate quantity available (Check items first, then resources)
+            from sqlalchemy import text
+            
+            # Check for regular items
+            item_qty = session.query(Collezionabili).filter_by(
                 id_telegram=str(user_id), 
                 oggetto=item_name,
                 data_utilizzo=None
             ).count()
             
+            # Check for resources
+            resource_qty = 0
+            resource_id = session.execute(text("SELECT id FROM resources WHERE name = :name"), {"name": item_name}).scalar()
+            if resource_id:
+                resource_qty = session.execute(text("""
+                    SELECT quantity FROM user_resources 
+                    WHERE user_id = :uid AND resource_id = :rid
+                """), {"uid": user_id, "rid": resource_id}).scalar() or 0
+                
+            total_qty = item_qty + resource_qty
+            
             if total_qty < quantity:
                 return False, f"Non hai abbastanza oggetti (Hai {total_qty}, ne servono {quantity})."
             
-            # Remove item from inventory
-            self.item_service.remove_item(user_id, item_name, quantity, session=session)
+            # Remove from appropriate inventory
+            if item_qty >= quantity:
+                self.item_service.remove_item(user_id, item_name, quantity, session=session)
+            elif resource_qty >= quantity:
+                session.execute(text("""
+                    UPDATE user_resources SET quantity = quantity - :qty
+                    WHERE user_id = :uid AND resource_id = :rid
+                """), {"qty": quantity, "uid": user_id, "rid": resource_id})
+            else:
+                # Mixed case (rare, but let's handle it)
+                if item_qty > 0:
+                    self.item_service.remove_item(user_id, item_name, item_qty, session=session)
+                needed_from_res = quantity - item_qty
+                session.execute(text("""
+                    UPDATE user_resources SET quantity = quantity - :qty
+                    WHERE user_id = :uid AND resource_id = :rid
+                """), {"qty": needed_from_res, "uid": user_id, "rid": resource_id})
             
             # Create listing
             listing = MarketListing(
@@ -104,8 +133,16 @@ class MarketService:
             if seller:
                 seller.points += total_price
                 
-            # 3. Add item to buyer
-            self.item_service.add_item(buyer_id, listing.item_name, listing.quantity, session=session)
+            # 3. Add to buyer (Check if it's a resource first)
+            from sqlalchemy import text
+            resource_id = session.execute(text("SELECT id FROM resources WHERE name = :name"), {"name": listing.item_name}).scalar()
+            
+            if resource_id:
+                from services.crafting_service import CraftingService
+                crafting_serv = CraftingService()
+                crafting_serv.add_resource_drop(buyer_id, resource_id, listing.quantity, source="market")
+            else:
+                self.item_service.add_item(buyer_id, listing.item_name, listing.quantity, session=session)
             
             # 4. Update listing
             listing.status = 'sold'

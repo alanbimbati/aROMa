@@ -10,6 +10,8 @@ import datetime
 class TransformationService:
     def __init__(self):
         self.db = Database()
+        from services.user_service import UserService
+        self.user_service = UserService()
     
     def get_available_transformations(self, user, character_id):
         """Get all transformations available for a character"""
@@ -149,6 +151,9 @@ class TransformationService:
         else:
             session.flush()
         
+        # Recalculate stats to apply bonuses/caps
+        self.user_service.recalculate_stats(user.id_telegram, session=session)
+        
         return True, f"Trasformazione '{transformation.transformation_name}' attivata per {transformation.duration_days} giorni!"
     
     def get_active_transformation(self, user, session=None):
@@ -273,6 +278,9 @@ class TransformationService:
         trans_name = transformation.transformation_name
         session.commit()
         session.close()
+        
+        # Recalculate stats to apply bonuses/caps
+        self.user_service.recalculate_stats(user.id_telegram, session=session)
         return True, f"Trasformazione '{trans_name}' attivata per {duration_minutes} minuti!"
 
     def get_transformation_id_by_name(self, name):

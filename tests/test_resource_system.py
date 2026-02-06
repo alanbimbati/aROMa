@@ -21,34 +21,34 @@ class TestResourceSystem(unittest.TestCase):
             self.service = CraftingService()
             
     def test_roll_chat_drop_success(self):
-        # Mock random to force drop
+        # Mock random.random, random.randint
         with patch('random.random', return_value=0.0): # 0.0 < 5.0 (chance)
-            with patch('random.choices', return_value=[1]): # Rarity 1
+            with patch('random.randint', return_value=1): # 1 item, 1 quantity
                 # Mock DB result
                 self.mock_session.execute.return_value.fetchone.return_value = (101, 'images/test.png')
                 
-                resource_id, image = self.service.roll_chat_drop(chance=5)
+                drops = self.service.roll_chat_drop(chance=5)
                 
-                self.assertEqual(resource_id, 101)
-                self.assertEqual(image, 'images/test.png')
+                self.assertEqual(len(drops), 1)
+                self.assertEqual(drops[0][0], 101)
+                self.assertEqual(drops[0][2], 'images/test.png')
                 
     def test_roll_chat_drop_failure(self):
         # Mock random to fail drop
         with patch('random.random', return_value=0.9): # 90 > 5
-            resource_id, image = self.service.roll_chat_drop(chance=5)
-            self.assertIsNone(resource_id)
-            self.assertIsNone(image)
+            drops = self.service.roll_chat_drop(chance=5)
+            self.assertEqual(len(drops), 0)
 
     def test_roll_resource_drop_mob(self):
         # Mob drop scaling
         # Level 5
         with patch('random.random', return_value=0.0): 
-             # Level 5 -> Weights 80, 20
-             with patch('random.choices', return_value=[1]):
+             with patch('random.randint', return_value=1):
                  self.mock_session.execute.return_value.fetchone.return_value = (202, 'images/res.png')
                  
-                 res_id, img = self.service.roll_resource_drop(mob_level=5, mob_is_boss=False)
-                 self.assertEqual(res_id, 202)
+                 drops = self.service.roll_resource_drop(mob_level=5, mob_is_boss=False)
+                 self.assertEqual(len(drops), 1)
+                 self.assertEqual(drops[0][0], 202)
                  
     def test_add_resource_drop_new(self):
         # Test adding a drop for a new resource
