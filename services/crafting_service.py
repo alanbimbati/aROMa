@@ -154,13 +154,9 @@ class CraftingService:
             if missing_resources:
                 # Get emoji for resources
                 emoji_map = {
-                    "Rottami": "🔩",
-                    "Ferro": "⚒️",
-                    "Cuoio": "🦴",
-                    "Mithril": "✨",
-                    "Seta": "🧵",
-                    "Essenza Elementale": "🔮",
-                    "Nucleo Stellare": "⭐"
+                    "Metallo": "🔩",
+                    "Tessuto": "🧵",
+                    "Cristallo": "🔮"
                 }
                 
                 error_msg = f"❌ Risorse insufficienti per craftare {eq_name}!\n\n"
@@ -321,70 +317,71 @@ class CraftingService:
             session.close()
     
     def roll_resource_drop(self, mob_level, mob_is_boss=False):
-        """Determine if a resource should drop and which one"""
+        """
+        Determine if resources should drop and which ones.
+        Returns a list of (resource_id, quantity, image) tuples.
+        """
         try:
             mob_level = int(mob_level)
         except (ValueError, TypeError):
             mob_level = 1
 
-        # Base drop chance: 20% for normal mobs, 100% for bosses
-        drop_chance = 100 if mob_is_boss else 20
+        # Base drop chance: 80% for normal mobs, 100% for bosses
+        drop_chance = 100 if mob_is_boss else 80
         
         if random.random() * 100 > drop_chance:
-            return None, None
+            return []
         
-        # Determine rarity based on mob level
-        # Higher level mobs drop better resources
-        if mob_level < 10:
-            rarity = random.choices([1, 2], weights=[80, 20])[0]
-        elif mob_level < 30:
-            rarity = random.choices([1, 2, 3], weights=[50, 35, 15])[0]
-        elif mob_level < 50:
-            rarity = random.choices([2, 3, 4], weights=[40, 40, 20])[0]
-        else:
-            rarity = random.choices([3, 4, 5], weights=[40, 40, 20])[0]
+        # Mobs drop 1-2 resources, Bosses drop 3-5
+        num_drops = random.randint(3, 5) if mob_is_boss else random.randint(1, 2)
         
-        # Get a random resource of that rarity
+        drops = []
         session = self.db.get_session()
         try:
-            resources = session.execute(text("""
-                SELECT id, image FROM resources
-                WHERE rarity = :rarity AND drop_source LIKE :source
-                ORDER BY RANDOM()
-                LIMIT 1
-            """), {"rarity": rarity, "source": f"%mob%" if not mob_is_boss else f"%boss%"}).fetchone()
+            for _ in range(num_drops):
+                # Standardized system: mostly common resources (IDs 1, 2, 3)
+                # We can roll for specific ID directly to be faster, or use DB
+                resource = session.execute(text("""
+                    SELECT id, image FROM resources
+                    ORDER BY RANDOM()
+                    LIMIT 1
+                """)).fetchone()
+                
+                if resource:
+                    # Quantity: 1-3 for normal, 5-15 for boss
+                    qty = random.randint(5, 15) if mob_is_boss else random.randint(1, 3)
+                    drops.append((resource[0], qty, resource[1]))
             
-            if resources:
-                return resources[0], resources[1] # Return id, image
-            return None, None
+            return drops
         finally:
             session.close()
 
-    def roll_chat_drop(self, chance=5):
+    def roll_chat_drop(self, chance=20):
         """
-        Determine if a resource should drop from chat activity.
-        Logic: 5% chance (default)
-        Rarity: mostly common/uncommon, rare chance for rare.
+        Determine if resources should drop from chat activity.
+        Now much more common: 20% chance by default.
+        Returns a list of (resource_id, quantity, image) tuples.
         """
         if random.random() * 100 > chance:
-            return None, None
+            return []
             
-        # Determine rarity for chat drops
-        # 80% Common, 19% Uncommon, 1% Rare
-        rarity = random.choices([1, 2, 3], weights=[80, 19, 1])[0]
-        
         session = self.db.get_session()
         try:
-            resources = session.execute(text("""
-                SELECT id, image FROM resources
-                WHERE rarity = :rarity AND drop_source LIKE '%chat%'
-                ORDER BY RANDOM()
-                LIMIT 1
-            """)).fetchone()
+            # Chat drop: 1-2 items, quantity 1-5
+            num_items = random.randint(1, 2)
+            drops = []
+            for _ in range(num_items):
+                resource = session.execute(text("""
+                    SELECT id, image FROM resources
+                    ORDER BY RANDOM()
+                    LIMIT 1
+                """)).fetchone()
+                
+                if resource:
+                    qty = random.randint(1, 5)
+                    drops.append((resource[0], qty, resource[1]))
             
-            if resources:
-                return resources[0], resources[1]
-            return None, None
+            return drops
         finally:
             session.close()
 

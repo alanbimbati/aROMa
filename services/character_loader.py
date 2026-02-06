@@ -59,6 +59,7 @@ class CharacterLoader:
                         'elemental_type': row.get('elemental_type', 'Normal'),
                         'crit_chance': safe_int(row.get('crit_chance'), 5),
                         'crit_multiplier': safe_float(row.get('crit_multiplier'), 1.5),
+                        'speed': safe_int(row.get('speed'), 30),
                         'required_character_id': safe_int(row.get('required_character_id'), None) if row.get('required_character_id', '').strip() else None,
                         # Transformation fields
                         'is_transformation': safe_int(row.get('is_transformation'), 0),

@@ -399,16 +399,28 @@ class GuildService:
         return True, f"Bordello potenziato al livello {new_level}!"
 
     def get_potion_bonus(self, user_id):
-        """Get potion effectiveness bonus based on inn level"""
+        """Get potion effectiveness bonus based on inn level (Active for 30 mins after beer)"""
+        session = self.db.get_session()
+        user = session.query(Utente).filter_by(id_telegram=user_id).first()
+        if not user or not user.last_beer_usage:
+            session.close()
+            return 1.0
+            
+        # Check if 30 minutes have passed
+        now = datetime.datetime.now()
+        if (now - user.last_beer_usage).total_seconds() > 1800: # 30 mins
+            session.close()
+            return 1.0
+            
         guild = self.get_user_guild(user_id)
         if not guild:
+            session.close()
             return 1.0
+            
         # Brewery bonus logic
-        # Lv 1: +20% (1.20)
-        # Lv 5: +40% (1.40)
-        # Formula: 1.0 + (15 + (brewery_level * 5)) / 100
         brew_level = guild.get('brewery_level', 1) or 1
         bonus_pct = 15 + (brew_level * 5)
+        session.close()
         return 1.0 + (bonus_pct / 100.0)
 
     def buy_craft_beer(self, user_id):
@@ -518,7 +530,7 @@ class GuildService:
         return True, f"Bordello delle Elfe potenziato al livello {new_level}!"
 
     def apply_vigore_bonus(self, user_id):
-        """Apply the Vigore bonus (50% mana cost) for 10 minutes"""
+        """Apply the Vigore bonus (50% mana cost) for 30 minutes"""
         session = self.db.get_session()
         user = session.query(Utente).filter_by(id_telegram=user_id).first()
         member = session.query(GuildMember).filter_by(user_id=user_id).first()
@@ -538,15 +550,11 @@ class GuildService:
              session.close()
              return False, "🔞 Hai già visitato il Bordello oggi! Torna domani."
             
-        # cost = 200 # Removed
-        # if user.points < cost: ...
-            
         # Limit 1 per day
         user.last_brothel_usage = now
-        # Duration: 60 mins base + 15 mins per level above 1
-        # Lv 1: 60
-        # Lv 5: 120 (2h)
-        duration_minutes = 60 + (guild.bordello_level - 1) * 15
+        
+        # FIXED Duration: 30 minutes
+        duration_minutes = 30
         user.vigore_until = datetime.datetime.now() + datetime.timedelta(minutes=duration_minutes)
         
         session.commit()
@@ -621,65 +629,99 @@ class GuildService:
         return result
 
     def deposit_item(self, user_id, item_name, quantity=1):
-        """Deposit item into guild warehouse"""
-        # Check if user has item
+        """Deposit item or resource into guild warehouse"""
         from services.item_service import ItemService
+        from sqlalchemy import text
         item_service = ItemService()
         
-        count = item_service.get_item_by_user(user_id, item_name)
-        if count < quantity:
-            return False, "Non hai abbastanza oggetti!"
-            
-        # Remove from user (use_item marks it as used)
-        for _ in range(quantity):
-            item_service.use_item(user_id, item_name)
-            
-        # Add to guild
         session = self.db.get_session()
-        member = session.query(GuildMember).filter_by(user_id=user_id).first()
-        if not member:
+        try:
+            # Check if it's a regular item
+            item_count = item_service.get_item_by_user(user_id, item_name)
+            
+            # Check if it's a resource
+            resource_id = session.execute(text("SELECT id FROM resources WHERE name = :name"), {"name": item_name}).scalar()
+            resource_qty = 0
+            if resource_id:
+                resource_qty = session.execute(text("""
+                    SELECT quantity FROM user_resources 
+                    WHERE user_id = :uid AND resource_id = :rid
+                """), {"uid": user_id, "rid": resource_id}).scalar() or 0
+                
+            if item_count < quantity and resource_qty < quantity:
+                return False, "Non hai abbastanza oggetti o risorse!"
+                
+            # Remove from user
+            if item_count >= quantity:
+                for _ in range(quantity):
+                    item_service.use_item(user_id, item_name, session=session)
+            else:
+                session.execute(text("""
+                    UPDATE user_resources SET quantity = quantity - :qty
+                    WHERE user_id = :uid AND resource_id = :rid
+                """), {"qty": quantity, "uid": user_id, "rid": resource_id})
+                
+            # Add to guild
+            member = session.query(GuildMember).filter_by(user_id=user_id).first()
+            if not member:
+                return False, "Non sei in una gilda!"
+                
+            guild_item = session.query(GuildItem).filter_by(guild_id=member.guild_id, item_name=item_name).first()
+            if guild_item:
+                guild_item.quantity += quantity
+            else:
+                guild_item = GuildItem(guild_id=member.guild_id, item_name=item_name, quantity=quantity)
+                session.add(guild_item)
+                
+            session.commit()
+            return True, f"Hai depositato {quantity}x {item_name} nel magazzino di gilda."
+        except Exception as e:
+            session.rollback()
+            return False, f"Errore nel deposito: {e}"
+        finally:
             session.close()
-            return False, "Non sei in una gilda!"
-            
-        guild_item = session.query(GuildItem).filter_by(guild_id=member.guild_id, item_name=item_name).first()
-        if guild_item:
-            guild_item.quantity += quantity
-        else:
-            guild_item = GuildItem(guild_id=member.guild_id, item_name=item_name, quantity=quantity)
-            session.add(guild_item)
-            
-        session.commit()
-        session.close()
-        return True, f"Hai depositato {quantity}x {item_name} nel magazzino di gilda."
 
     def withdraw_item(self, user_id, item_name, quantity=1):
-        """Withdraw item from guild warehouse"""
+        """Withdraw item or resource from guild warehouse"""
+        from sqlalchemy import text
         session = self.db.get_session()
-        member = session.query(GuildMember).filter_by(user_id=user_id).first()
-        if not member:
+        try:
+            member = session.query(GuildMember).filter_by(user_id=user_id).first()
+            if not member:
+                return False, "Non sei in una gilda!"
+                
+            guild_item = session.query(GuildItem).filter_by(guild_id=member.guild_id, item_name=item_name).first()
+            if not guild_item or guild_item.quantity < quantity:
+                return False, "Oggetto non disponibile nel magazzino!"
+                
+            # Check if it's a resource
+            resource_id = session.execute(text("SELECT id FROM resources WHERE name = :name"), {"name": item_name}).scalar()
+            
+            # Remove from guild
+            guild_item.quantity -= quantity
+            if guild_item.quantity <= 0:
+                session.delete(guild_item)
+                
+            # Add to user
+            if resource_id:
+                from services.crafting_service import CraftingService
+                crafting_serv = CraftingService()
+                # We need to manually add to avoid creating a new session if possible, 
+                # but add_resource_drop creates its own.
+                crafting_serv.add_resource_drop(user_id, resource_id, quantity, source="guild")
+            else:
+                from services.item_service import ItemService
+                item_service = ItemService()
+                for _ in range(quantity):
+                    item_service.add_item(user_id, item_name, session=session)
+                    
+            session.commit()
+            return True, f"Hai prelevato {quantity}x {item_name} dal magazzino."
+        except Exception as e:
+            session.rollback()
+            return False, f"Errore nel prelievo: {e}"
+        finally:
             session.close()
-            return False, "Non sei in una gilda!"
-            
-        guild_item = session.query(GuildItem).filter_by(guild_id=member.guild_id, item_name=item_name).first()
-        if not guild_item or guild_item.quantity < quantity:
-            session.close()
-            return False, "Oggetto non disponibile nel magazzino!"
-            
-        # Remove from guild
-        guild_item.quantity -= quantity
-        if guild_item.quantity <= 0:
-            session.delete(guild_item)
-            
-        session.commit()
-        session.close()
-        
-        # Add to user
-        from services.item_service import ItemService
-        item_service = ItemService()
-        for _ in range(quantity):
-            item_service.add_item(user_id, item_name)
-            
-        return True, f"Hai prelevato {quantity}x {item_name} dal magazzino."
 
     def join_guild(self, user_id, guild_id):
         """Join a guild if there is space"""

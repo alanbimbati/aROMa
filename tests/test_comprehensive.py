@@ -72,6 +72,10 @@ class TestComprehensive(unittest.TestCase):
         )
         self.session.add(self.user)
         self.session.commit()
+        
+        # Ensure stats are realistic for the current version
+        self.user_service.recalculate_stats(self.user_id)
+        self.session.refresh(self.user)
 
     def tearDown(self):
         self.cleanup()

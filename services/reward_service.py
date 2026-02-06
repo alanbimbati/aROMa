@@ -30,11 +30,18 @@ class RewardService:
         rewards = []
         difficulty = mob.difficulty_tier if mob.difficulty_tier else 1
         
-        # Difficulty Multiplier (can be adjusted if needed, currently linear based on PveService logic)
-        # Old logic: wumpa = damage * 0.05 * difficulty
-        # Old logic: xp = random(100, 300) * difficulty * share
+        # Balanced EXP Formula: Scales with mob level and non-linearly with difficulty
+        # Example: Lv 1, Tier 1 -> (1*15) * 1 ≈ 15 EXP
+        # Example: Lv 50, Tier 5 -> (50*15) * (5^1.8) ≈ 750 * 18.1 ≈ 13,575 EXP
+        mob_level = getattr(mob, 'mob_level', 1)
+        difficulty_multiplier = difficulty ** 1.8
+        base_xp_pool = int((mob_level * 15) * difficulty_multiplier)
         
-        base_xp_pool = random.randint(100, 300) * difficulty
+        # Add a small random variation (+/- 10%)
+        variation = random.uniform(0.9, 1.1)
+        base_xp_pool = int(base_xp_pool * variation)
+        
+        if base_xp_pool < 10: base_xp_pool = 10 # Minimum pool
 
         for p in participants:
             share = p.damage_dealt / total_damage
@@ -151,26 +158,32 @@ class RewardService:
         return header + "\n" + "\n".join(summary_lines)
 
     def _handle_resource_drop(self, user_id, mob, session=None):
-        """Handle resource drops using CraftingService"""
+        """Handle multiple resource drops using CraftingService"""
         try:
             # Determine drop
             mob_level = getattr(mob, 'mob_level', 1)
             is_boss = mob.is_boss
             
-            # Roll for resource
-            resource_id, _ = self.crafting_service.roll_resource_drop(mob_level, is_boss)
+            # Roll for resource (now returns a list of drops)
+            drops = self.crafting_service.roll_resource_drop(mob_level, is_boss)
             
-            if resource_id:
-                # Add to inventory
-                # We could fetch name here to display it
-                from sqlalchemy import text
+            if not drops:
+                return None
+                
+            drop_msgs = []
+            from sqlalchemy import text
+            
+            for resource_id, qty, _ in drops:
                 resource_name = session.execute(text("SELECT name FROM resources WHERE id = :id"), {"id": resource_id}).scalar()
                 
                 # Add drop
-                success = self.crafting_service.add_resource_drop(user_id, resource_id, quantity=1, source="mob")
+                success = self.crafting_service.add_resource_drop(user_id, resource_id, quantity=qty, source="mob")
                 
                 if success and resource_name:
-                    return f"🔩 Risorsa: **{resource_name}**"
+                    drop_msgs.append(f"{resource_name} x{qty}")
+            
+            if drop_msgs:
+                return f"🔩 Risorse: **" + ", ".join(drop_msgs) + "**"
             
             return None
         except Exception as e:

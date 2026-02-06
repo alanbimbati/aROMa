@@ -480,6 +480,32 @@ class CharacterService:
         session.close()
         return purchased is not None
     
+    def is_character_owned(self, user, char_id):
+        """Check if user owns this character (ignoring level requirements)"""
+        session = self.db.get_session()
+        character = self.char_loader.get_character_by_id(char_id)
+        
+        if not character:
+            session.close()
+            return False
+            
+        if character['lv_premium'] == 0:
+            session.close()
+            return user.livello >= character['livello']
+            
+        if character['lv_premium'] == 1:
+            session.close()
+            return user.premium == 1
+            
+        # Purchasable characters (lv_premium == 2)
+        purchased = session.query(UserCharacter).filter_by(
+            user_id=user.id_telegram,
+            character_id=char_id
+        ).first()
+        
+        session.close()
+        return purchased is not None
+
     def get_character_levels(self):
         """Get unique character levels for filtering"""
         return self.char_loader.get_character_levels()

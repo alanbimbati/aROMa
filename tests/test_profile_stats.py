@@ -54,15 +54,10 @@ class TestProfileStats(unittest.TestCase):
         self.assertEqual(self.user.stat_points, initial_points - 1)
         self.assertEqual(self.user.allocated_health, 1)
         
-        # Check if max_health increased
-        # Base HP = 100 (Level 1) + 5 (scaling) = 105
-        # Wait, get_projected_stats uses Level 2 if livello=2.
-        # In setUp: self.user.livello = 2.
-        # base_hp = 100 + (2 * 5) = 110.
-        # +1 alloc = +50 HP? No, check user_service.py.
-        # allocate_stat_point adds 50 HP (increased from 10?)
-        # Let's check user_service.py HP per point.
-        self.assertEqual(self.user.max_health, 160) # 110 + 50
+        # Recalculated stats for Level 10: 
+        # Base(20) + Scaling(18) = 38
+        # +1 alloc = +10 HP
+        self.assertEqual(self.user.max_health, 48) # 38 + 10
         
     def test_resistance_cap(self):
         """Test resistance cannot exceed 75%"""

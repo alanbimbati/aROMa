@@ -201,8 +201,16 @@ class TestDungeonLogic(unittest.TestCase):
         self.assertTrue(len(events) > 0, "Mob failed to attack dungeon participant")
         
         # Verify damage
+        attacked_user_id = None
+        for event in events:
+            msg = event['message']
+            if "@user13_1" in msg or "User 13-1" in msg: attacked_user_id = 13001
+            elif "@user13_3" in msg or "User 13-3" in msg: attacked_user_id = 13003
+        
+        self.assertIsNotNone(attacked_user_id, f"Could not identify attacked user in events: {events}")
+        
         session = self.db.get_session()
-        user = session.query(Utente).filter_by(id_telegram=13001).first()
+        user = session.query(Utente).filter_by(id_telegram=attacked_user_id).first()
         self.assertLess(user.current_hp, user.max_health)
         session.close()
 

@@ -85,8 +85,8 @@ class TestCraftingSystem(unittest.TestCase):
             
             # Ensure essential equipment for crafting tests exists
             # test_04/05 use ID 1, test_06 uses ID 8
-            for eid, name, req in [(1, 'Gi della Tartaruga', '{"Rottami": 5}'), 
-                                 (8, 'Guanti Vegeta', '{"Pelle Logora": 5}')]:
+            for eid, name, req in [(1, 'Gi della Tartaruga', '{"Metallo": 5}'), 
+                                 (8, 'Guanti Vegeta', '{"Tessuto": 5}')]:
                 exists = session.execute(text("SELECT id FROM equipment WHERE id = :id"), {"id": eid}).scalar()
                 if not exists:
                     session.execute(text("""
@@ -119,20 +119,20 @@ class TestCraftingSystem(unittest.TestCase):
         
         # Simulate killing a level 20 mob
         mob_level = 20
-        # Returns tuple (id, image_path) or (None, None)
-        result = self.crafting.roll_resource_drop(mob_level, mob_is_boss=False)
+        # Returns list of (id, quantity, image_path)
+        drops = self.crafting.roll_resource_drop(mob_level, mob_is_boss=False)
         
-        if result and result[0]:
-            resource_id, _ = result
+        if drops and drops[0][0]:
+            resource_id, qty, _ = drops[0]
             # Add resource to user
-            success = self.crafting.add_resource_drop(self.test_user_id, resource_id, quantity=1, source="mob")
+            success = self.crafting.add_resource_drop(self.test_user_id, resource_id, quantity=qty, source="mob")
             self.assertTrue(success, "Resource drop should be added")
             
             # Verify it's in inventory
             resources = self.crafting.get_user_resources(self.test_user_id)
             owned_resources = [r for r in resources if r['quantity'] > 0]
             self.assertEqual(len(owned_resources), 1, "Should have 1 resource type with quantity > 0")
-            self.assertEqual(owned_resources[0]['quantity'], 1, "Should have quantity 1")
+            self.assertEqual(owned_resources[0]['quantity'], qty, f"Should have quantity {qty}")
             print(f"✅ Dropped: {resources[0]['name']} (Rarity {resources[0]['rarity']})")
         else:
             print("✅ No drop this time (20% chance is working)")
@@ -142,20 +142,20 @@ class TestCraftingSystem(unittest.TestCase):
         print("\n🧪 Test 2: Boss resource drops (100% rate)")
         
         # Simulate killing a boss
-        result = self.crafting.roll_resource_drop(50, mob_is_boss=True)
+        drops = self.crafting.roll_resource_drop(50, mob_is_boss=True)
         
-        self.assertIsNotNone(result, "Boss should always drop a resource (tuple)")
-        resource_id, _ = result
+        self.assertTrue(len(drops) > 0, "Boss should drop at least one resource")
+        resource_id, qty, _ = drops[0]
         self.assertIsNotNone(resource_id, "Boss should drop a VALID resource (not None)")
         
-        success = self.crafting.add_resource_drop(self.test_user_id, resource_id, quantity=3, source="boss")
+        success = self.crafting.add_resource_drop(self.test_user_id, resource_id, quantity=qty, source="boss")
         self.assertTrue(success, "Boss resource drop should be added")
         
         resources = self.crafting.get_user_resources(self.test_user_id)
         # Filter for non-zero quantity
         owned_resources = [r for r in resources if r['quantity'] > 0]
         self.assertEqual(len(owned_resources), 1, "Should have 1 owned resource type")
-        self.assertGreaterEqual(owned_resources[0]['quantity'], 3, "Should have at least 3 from boss")
+        self.assertGreaterEqual(owned_resources[0]['quantity'], qty, f"Should have at least {qty} from boss")
         print(f"✅ Boss dropped: {owned_resources[0]['name']} x{owned_resources[0]['quantity']}")
     
     def test_03_resource_stacking(self):
@@ -164,13 +164,13 @@ class TestCraftingSystem(unittest.TestCase):
         
         session = self.db.get_session()
         try:
-            # Get Rottami ID
-            iron_id = session.execute(text("SELECT id FROM resources WHERE name = 'Rottami'")).scalar()
+            # Get Metallo ID
+            iron_id = session.execute(text("SELECT id FROM resources WHERE name = 'Metallo'")).scalar()
             
-            # Add 5 Rottami
+            # Add 5 Metallo
             self.crafting.add_resource_drop(self.test_user_id, iron_id, quantity=5)
             
-            # Add 3 more Rottami
+            # Add 3 more Metallo
             self.crafting.add_resource_drop(self.test_user_id, iron_id, quantity=3)
             
             # Should have 8 total
@@ -178,7 +178,7 @@ class TestCraftingSystem(unittest.TestCase):
             # Filter for non-zero quantity
             owned_resources = [r for r in resources if r['quantity'] > 0]
             self.assertEqual(len(owned_resources), 1, "Should only have 1 resource type")
-            self.assertEqual(owned_resources[0]['quantity'], 8, "Should have 8 Rottami stacked")
+            self.assertEqual(owned_resources[0]['quantity'], 8, "Should have 8 Metallo stacked")
             print(f"✅ Stacked correctly: {owned_resources[0]['name']} x{owned_resources[0]['quantity']}")
             
         finally:
@@ -213,7 +213,7 @@ class TestCraftingSystem(unittest.TestCase):
             if not exists:
                 session.execute(text("""
                     INSERT INTO equipment (id, name, slot, rarity, min_level, crafting_time, crafting_requirements)
-                    VALUES (1, 'Gi della Tartaruga', 'chest', 1, 1, 10, '{"Rottami": 5}')
+                    VALUES (1, 'Gi della Tartaruga', 'chest', 1, 1, 10, '{"Metallo": 5}')
                 """))
                 session.commit()
 

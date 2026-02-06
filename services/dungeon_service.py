@@ -97,24 +97,24 @@ class DungeonService:
             ).count()
             
             if today_count < 40 and 8 <= now.hour < 23:
-                 last = session.query(Dungeon).filter(Dungeon.chat_id == chat_id).order_by(Dungeon.created_at.desc()).first()
-                 
-                 # Logic: If no dungeon today, or if 30 minutes passed since last CREATION
-                 should_schedule = False
-                 if not last:
-                     should_schedule = True
-                 else:
-                     # Check if last was today
-                     if last.created_at.date() < today_date:
-                         should_schedule = True
-                     else:
-                         # Last was today, check 30 minute gap start-to-start roughly
-                         # We use created_at as the "scheduling time" anchor
-                         if now >= last.created_at + datetime.timedelta(minutes=30):
-                             should_schedule = True
-                 
-                 if should_schedule:
-                     self.schedule_daily_dungeon(chat_id, session=session)
+                last = session.query(Dungeon).filter(Dungeon.chat_id == chat_id).order_by(Dungeon.created_at.desc()).first()
+                
+                # Logic: If no dungeon today, or if 2 hours passed since last completion
+                should_schedule = False
+                if not last:
+                    should_schedule = True
+                else:
+                    # Check if last was today
+                    if last.created_at.date() < today_date:
+                        should_schedule = True
+                    else:
+                        # Last was today, check 2-hour gap after completion (preferred) or creation
+                        reference_time = last.completed_at if last.completed_at else last.created_at
+                        if now >= reference_time + datetime.timedelta(hours=2):
+                            should_schedule = True
+                
+                if should_schedule:
+                    self.schedule_daily_dungeon(chat_id, session=session)
 
         except Exception as e:
             print(f"Error in check_daily_dungeon_trigger: {e}")
@@ -479,12 +479,13 @@ class DungeonService:
                 session.close()
             return False, "Non c'è nessuna iscrizione aperta per un dungeon in questo gruppo."
             
-        # Check access for joiner
-        if dungeon.dungeon_def_id:
+        # Join Restrictions
+        # If it's in registration, we keep the unlock check
+        if dungeon.status == "registration":
             if not self.can_access_dungeon(user_id, dungeon.dungeon_def_id, session=session):
-                if local_session:
-                    session.close()
-                return False, "🔒 Non hai ancora sbloccato questo dungeon! Completa i precedenti."
+                if local_session: session.close()
+                return False, "Non hai ancora sbloccato questo dungeon (devi finire quelli precedenti)!"
+        # If it's already active, we allow anyone to join to avoid blocking "intruders" or late joins
 
         # Check if already joined
         exists = session.query(DungeonParticipant).filter_by(

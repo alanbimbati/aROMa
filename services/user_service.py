@@ -367,13 +367,18 @@ class UserService:
             
             # Helper to get exp required from CharacterLoader (source of truth)
             def get_exp_required_for_level(level):
+                # For levels > 50, we force a quadratic curve (100 * level^2)
+                # to ensure difficulty continues to scale as requested by the user.
+                if level > 50:
+                    return 100 * (level ** 2)
+                
                 loader = get_character_loader()
                 chars = loader.get_characters_by_level(level)
                 if chars:
                     # All characters of same level should have same exp req, take first
-                    return chars[0].get('exp_required', 100)
+                    return chars[0].get('exp_required', 100 * (level ** 2))
                 
-                # Fallback to DB if loader fails (unlikely if CSV is good)
+                # Fallback to DB if loader fails
                 level_data = self._get_livello_by_level(session, level)
                 if level_data and hasattr(level_data, 'exp_required') and level_data.exp_required is not None:
                     return level_data.exp_required
@@ -586,20 +591,42 @@ class UserService:
             (utente.allocated_speed or 0)
         )
         
-        # Reset to base values
+        # Reset to base values (matching new get_projected_stats logic)
+        level = utente.livello or 1
+        
+        from services.character_loader import get_character_loader
+        character = get_character_loader().get_character_by_id(utente.livello_selezionato)
+        
+        # System base + character bonuses + level scaling
+        base_h = 20 + (level - 1) * 2
+        base_m = 20 + (level - 1) * 1
+        base_d = 5 + (level - 1) * 0.5
+        
+        if character:
+            base_h += character.get('bonus_health', 0)
+            base_m += character.get('bonus_mana', 0)
+            base_d += character.get('bonus_damage', 0)
+            res = character.get('bonus_resistance', 0)
+            crit = character.get('crit_chance', 5) + character.get('bonus_crit', 0)
+            speed = character.get('speed', 30) + character.get('bonus_speed', 0)
+        else:
+            res = 0
+            crit = 5
+            speed = 30
+
         updates = {
-            'max_health': 100 + (utente.livello * 5),  # Base + level bonus
-            'max_mana': 50 + (utente.livello * 2),
-            'base_damage': 10 + (utente.livello * 1),
+            'max_health': int(base_h),
+            'max_mana': int(base_m),
+            'base_damage': int(base_d),
             'allocated_health': 0,
             'allocated_mana': 0,
             'allocated_damage': 0,
             'allocated_resistance': 0,
             'allocated_crit': 0,
             'allocated_speed': 0,
-            'resistance': 0,
-            'crit_chance': 0,
-            'speed': 0,
+            'resistance': res,
+            'crit_chance': crit,
+            'speed': speed,
             'stat_points': utente.livello * 2
         }
         
@@ -678,21 +705,21 @@ class UserService:
         finally:
             session.close()
 
-    def get_projected_stats(self, utente, override_character_id=None):
+    def get_projected_stats(self, utente, override_character_id=None, session=None):
         """
         Calculate total stats for a user, optionally overriding the character.
         Returns a dict of final stats.
         """
-        # 1. Base Stats (Level-based scaling)
+        # 1. System Base Stats (Now minimal to rely more on character/build)
         level = utente.livello or 1
-        base_hp = 100 + (level * 5)
-        base_mana = 50 + (level * 2)
-        base_dmg = 10 + (level * 1)
+        base_hp = 20  # Minimum base to avoid 0 HP issues
+        base_mana = 20
+        base_dmg = 5
         base_res = 0
-        base_crit = 0
-        base_speed = 0
+        base_crit = 0 
+        base_speed = 0 
         
-        # 2. Character Bonuses
+        # 2. Character Stats & Bonuses
         from services.character_loader import get_character_loader
         char_loader = get_character_loader()
         
@@ -701,14 +728,18 @@ class UserService:
         character = char_loader.get_character_by_id(char_id)
         
         if character:
+            # Use character base values
             base_hp += character.get('bonus_health', 0)
             base_mana += character.get('bonus_mana', 0)
             base_dmg += character.get('bonus_damage', 0)
             base_res += character.get('bonus_resistance', 0)
-            base_crit += character.get('bonus_crit', 0)
-            base_speed += character.get('bonus_speed', 0)
+            
+            # Use character specific bases for speed and crit
+            base_crit = character.get('crit_chance', 5) + character.get('bonus_crit', 0)
+            base_speed = character.get('speed', 30) + character.get('bonus_speed', 0)
         
         # 3. Allocations
+        # Scaling: 1 point = 10 HP, 5 Mana, 2 DMG, 1 Res, 1 Crit, 1 Speed
         alloc_hp = (utente.allocated_health or 0) * 10
         alloc_mana = (utente.allocated_mana or 0) * 5
         alloc_dmg = (utente.allocated_damage or 0) * 2
@@ -722,6 +753,15 @@ class UserService:
         total_res = base_res + alloc_res
         total_crit = base_crit + alloc_crit
         total_speed = base_speed + alloc_speed
+        
+        # Level scaling for total HP/Mana (optional, but keep it subtle)
+        # Instead of 100 + level*5, let's keep it character-driven.
+        # If user wants level-based scaling, we can add a small bonus per level.
+        total_hp += (level - 1) * 2
+        total_mana += (level - 1) * 1
+        total_dmg += (level - 1) * 0.5 # Subtle damage increase
+        
+        total_dmg = int(total_dmg) # Ensure integer
         
         # 4. Equipment Bonuses
         # We need to calculate this. equip_service needs session?
@@ -737,7 +777,19 @@ class UserService:
         total_crit += equip_stats.get('crit_chance', 0)
         total_speed += equip_stats.get('speed', 0)
         
-        # 5. Caps
+        # 5. Transformation Bonuses
+        try:
+            from services.transformation_service import TransformationService
+            trans_service = TransformationService()
+            trans_bonuses = trans_service.get_transformation_bonuses(utente, session=session)
+            
+            total_hp += trans_bonuses.get('health', 0)
+            total_mana += trans_bonuses.get('mana', 0)
+            total_dmg += trans_bonuses.get('damage', 0)
+        except Exception as e:
+            print(f"Error applying transformation bonuses in get_projected_stats: {e}")
+            
+        # 6. Caps
         total_res = min(total_res, 75)
         
         return {
@@ -764,7 +816,7 @@ class UserService:
                 return
 
             # Use projected stats (no override)
-            stats = self.get_projected_stats(utente)
+            stats = self.get_projected_stats(utente, session=session)
             
             # Update User
             utente.max_health = stats['max_health']
@@ -778,17 +830,14 @@ class UserService:
             if utente.health > utente.max_health:
                 utente.health = utente.max_health
             
-            # Handle current_hp/mana logic
-            if hasattr(utente, 'current_hp') and utente.current_hp is not None:
-                if utente.current_hp > utente.max_health:
-                    utente.current_hp = utente.max_health
-            else:
+            if utente.mana > utente.max_mana:
+                utente.mana = utente.max_mana
+            
+            # Handle current_hp/mana logic for combat
+            if utente.current_hp is None or utente.current_hp > utente.max_health:
                 utente.current_hp = utente.max_health
                 
-            if hasattr(utente, 'current_mana') and utente.current_mana is not None:
-                if utente.current_mana > utente.max_mana:
-                    utente.current_mana = utente.max_mana
-            else:
+            if utente.current_mana is None or utente.current_mana > utente.max_mana:
                 utente.current_mana = utente.max_mana
                 
             print(f"Recalculated stats for {user_id}: HP {utente.max_health}, Dmg {utente.base_damage}")
@@ -840,7 +889,7 @@ class UserService:
                 session.commit()
             else:
                 session.flush()
-            return True, "Hai iniziato a riposare nella Locanda Pubblica. Recupererai 1 HP e 1 Mana al minuto."
+            return True, "Hai iniziato a riposare! Usa /inn per controllare il recupero o smettere di riposare."
         except Exception as e:
             if local_session:
                 session.rollback()
@@ -1000,6 +1049,10 @@ class UserService:
         current_hp = user.current_hp if hasattr(user, 'current_hp') and user.current_hp is not None else (user.health or 0)
         max_hp = user.max_health
         
+        # Dead is not fatigued
+        if current_hp <= 0:
+            return False
+            
         if max_hp > 0 and (current_hp / max_hp) < 0.05:
             return True
         return False

@@ -2,6 +2,7 @@ from database import Database
 from models.user import Utente
 from models.pve import Mob
 from models.combat import CombatParticipation
+from models.dungeon import DungeonParticipant
 from services.user_service import UserService
 import datetime
 
@@ -42,43 +43,29 @@ class TargetingService:
             local_session = True
         
         try:
-            # Get recent users if not provided
+            # Get recent users from THIS chat (48h window)
             if recent_users is None:
-                recent_users = self.user_service.get_recent_users(chat_id=chat_id)
+                recent_users = self.user_service.get_recent_users(chat_id=chat_id, minutes=2880) # 48 hours
             
-            # Prepare candidates list
+            # Candidates are ONLY those active in the current chat
             all_candidates = set(recent_users) if recent_users else set()
-            print(f"[DEBUG] Targeting: mob_id={mob.id}, dungeon_id={mob.dungeon_id}, initial_candidates={len(all_candidates)}")
+            print(f"[DEBUG] Targeting: chat_id={chat_id}, candidates_in_chat={len(all_candidates)}")
             
-            # If mob is in a dungeon, add only ACTIVE dungeon participants
-            if mob.dungeon_id:
-                from services.dungeon_service import DungeonService
-                import datetime
-                ds = DungeonService()
-                
-                # Get dungeon participants
-                participants = ds.get_dungeon_participants(mob.dungeon_id, session=session)
-                
-                # Filter for active users only (last activity within 6 months)
-                six_months_ago = datetime.datetime.now() - datetime.timedelta(days=180)
-                active_participant_ids = []
-                
-                for p in participants:
-                    # Check if user exists and is active
-                    user = session.query(Utente).filter_by(id_telegram=p.user_id).first()
-                    if user:
-                        last_activity = getattr(user, 'last_activity', None)
-                        if last_activity and last_activity >= six_months_ago:
-                            active_participant_ids.append(p.user_id)
-                        elif not last_activity:
-                            # If no last_activity recorded, include them (new user)
-                            active_participant_ids.append(p.user_id)
-                
-                print(f"[DEBUG] Targeting: Dungeon mode. Found {len(active_participant_ids)} active participants (filtered from {len(participants)} total) in dungeon {mob.dungeon_id}.")
-                for pid in active_participant_ids:
-                    all_candidates.add(pid)
+            # REMOVED: Dungeon participant injection. Mobs MUST only target people active in the chat.
+            # Even if in a dungeon, we only care about who is present in the current chat "instance".
             
             print(f"[DEBUG] Targeting: Total candidates to check: {len(all_candidates)}")
+            
+            # FALLBACK: If it's a dungeon mob, also include all registered participants
+            if mob.dungeon_id:
+                try:
+                    participants = session.query(DungeonParticipant).filter_by(dungeon_id=mob.dungeon_id).all()
+                    for p in participants:
+                        if p.user_id not in all_candidates:
+                            all_candidates.add(p.user_id)
+                    print(f"[DEBUG] Targeting: Added dungeon participants. Total candidates: {len(all_candidates)}")
+                except Exception as e:
+                    print(f"[DEBUG] Error fetching dungeon participants for targeting: {e}")
             
             # Filter users based on eligibility
             valid_targets = []
@@ -128,20 +115,8 @@ class TargetingService:
         if participation:
             return False
         
-        # Dungeon-specific checks
-        from services.dungeon_service import DungeonService
-        ds = DungeonService()
-        if mob.dungeon_id:
-            # For dungeon mobs, user must be a participant
-            participants = ds.get_dungeon_participants(mob.dungeon_id, session=session)
-            participant_ids = [p.user_id for p in participants]
-            
-            if user_id not in participant_ids:
-                return False
-        else:
-            # For world mobs, user must be in recent_users (active in group)
-            # This check is implicit since we only add recent_users to candidates in get_valid_targets
-            pass
+        # No more dungeon-specific participant check for targeting.
+        # If they are in recent_users for this chat, they are valid targets.
         
         return True
     
