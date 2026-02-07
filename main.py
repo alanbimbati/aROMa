@@ -4981,11 +4981,11 @@ def handle_photo(message):
             name_lower = pending['name'].lower().replace(" ", "_")
             
             if pending['type'] == 'character':
-                save_dir = "images/characters"
+                save_dir = "images"
             elif pending['type'] == 'mob':
-                save_dir = "images/mobs"
+                save_dir = "images"
             elif pending['type'] == 'boss':
-                save_dir = "images/bosses"
+                save_dir = "images"
             else:
                 bot.reply_to(message, "❌ Tipo sconosciuto.")
                 return
