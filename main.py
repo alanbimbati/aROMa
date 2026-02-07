@@ -4986,6 +4986,9 @@ def handle_photo(message):
                 pass  # Keep 'Unknown' as fallback
 
         # Ensure pending has required keys
+        print(f"[DEBUG] Pending dict content: {pending}")
+        print(f"[DEBUG] Pending type: {type(pending)}")
+        print(f"[DEBUG] Pending keys: {pending.keys() if isinstance(pending, dict) else 'NOT A DICT'}")
         if not all(k in pending for k in ['type', 'name']):
             bot.reply_to(message, "❌ Errore: dati del personaggio incompleti. Riprova a selezionare il personaggio.")
             del admin_last_viewed_character[user_id]
