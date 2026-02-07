@@ -12,6 +12,7 @@ class Utente(Base):
     username = Column('username', String(64), unique=True)  # Increased from 32
     exp = Column('exp', Integer)
     points = Column('money', Integer)
+    cristalli_aroma = Column('cristalli_aroma', Integer, default=0, nullable=False)  # Premium currency for cosmetics
     livello = Column('livello', Integer)
     vita = Column('vita', Integer)
     premium = Column('premium', Integer)

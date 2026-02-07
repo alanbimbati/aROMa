@@ -114,3 +114,17 @@ Frammenti di metallo, cristalli e altri materiali:
 - **Mob Comuni**: Drop basato su livello e fortuna
 - **Boss**: Garantiscono sempre drop di risorse rare ed epiche
 - **Utilizzo**: Necessarie per la Raffineria e Crafting
+
+### ✨ Cristalli aROMa (Premium)
+
+I **Cristalli aROMa** sono una valuta premium esclusiva utilizzata per:
+- **Skin personalizzate** per personaggi
+- **Effetti visivi** speciali
+- **Oggetti cosmetici** unici
+
+**Come ottenerli:**
+- Supportando il progetto tramite **donazioni**
+- Eventi speciali e ricompense stagionali
+- Premi esclusivi per la community
+
+**NOTA**: I Cristalli aROMa NON danno vantaggi di gioco - sono puramente estetici!
