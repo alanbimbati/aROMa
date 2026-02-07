@@ -572,11 +572,6 @@ def handle_dungeons_cmd(message):
     cmd = BotCommands(message, bot)
     cmd.handle_dungeons_list()
 
-@bot.message_handler(commands=['me', 'profile', 'profilo', 'info'])
-def handle_info_cmd(message):
-    """Show user profile using the unified handler"""
-    cmd = BotCommands(message, bot)
-    cmd.handle_profile()
 
 @bot.message_handler(commands=['inventario', 'inv'])
 def handle_inventario_cmd(message):
@@ -1126,7 +1121,10 @@ def handle_guild_armory_view(call):
             msg += "_Nessun equipaggiamento disponibile._\n"
         
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("⚒️ Inizia Crafting", callback_data="craft_select_equipment"))
+        markup.add(
+            types.InlineKeyboardButton("⚒️ Inizia Crafting", callback_data="craft_select_equipment"),
+            types.InlineKeyboardButton("💎 Raffineria", callback_data="guild_refinery_view")
+        )
         markup.add(types.InlineKeyboardButton("📦 Risorse", callback_data="craft_view_resources"))
         
         # Add claim button if there are completed crafts
@@ -1145,6 +1143,255 @@ def handle_guild_armory_view(call):
                              reply_markup=markup, parse_mode='markdown')
     finally:
         session.close()
+
+def handle_guild_refinery_view(call):
+    """View guild refinery status and daily rotation"""
+    safe_answer_callback(call.id)
+    guild = guild_service.get_user_guild(call.from_user.id)
+    if not guild:
+        return
+        
+    from services.crafting_service import CraftingService
+    from sqlalchemy import text
+    from datetime import datetime
+    crafting_service = CraftingService()
+    
+    daily_res = crafting_service.get_daily_refinable_resource()
+    
+    msg = f"💎 **Raffineria della Gilda: {guild['name']}**\n\n"
+    msg += f"📅 **Oggi si raffina**: {'❓' if not daily_res else daily_res['name']}\n"
+    msg += "_Solo questo materiale può essere processato oggi._\n\n"
+    
+    # Active refinement jobs
+    session = crafting_service.db.get_session()
+    try:
+        active_jobs = session.execute(text("""
+            SELECT rq.id, rq.completion_time, r.name, rq.quantity, rq.user_id
+            FROM refinery_queue rq
+            JOIN resources r ON rq.resource_id = r.id
+            WHERE rq.guild_id = :gid AND rq.status = 'in_progress'
+            ORDER BY rq.completion_time ASC
+        """), {"gid": guild['id']}).fetchall()
+        
+        if active_jobs:
+            msg += "⚡ **Processi in Corso**:\n"
+            now = datetime.now()
+            for job_id, completion_time, name, qty, user_id in active_jobs:
+                time_left = completion_time - now
+                user_marker = "📌" if user_id == call.from_user.id else "👤"
+                if time_left.total_seconds() > 0:
+                    minutes = int(time_left.total_seconds() // 60)
+                    seconds = int(time_left.total_seconds() % 60)
+                    msg += f"⏱️ {user_marker} {qty}x {name} - {minutes}m {seconds}s\n"
+                else:
+                    msg += f"✅ {user_marker} {qty}x {name} - Pronto!\n"
+            msg += "\n"
+        else:
+            msg += "💤 Nessun processo attivo\n\n"
+            
+        markup = types.InlineKeyboardMarkup()
+        if daily_res:
+            markup.add(types.InlineKeyboardButton(f"⚒️ Raffina {daily_res['name']}", callback_data=f"refine_select_qty|{daily_res['id']}"))
+            
+        # Claim button
+        completed_count = session.execute(text("""
+            SELECT COUNT(*) FROM refinery_queue
+            WHERE guild_id = :gid AND status = 'in_progress' AND completion_time <= NOW()
+        """), {"gid": guild['id']}).scalar() or 0
+        
+        if completed_count > 0:
+            markup.add(types.InlineKeyboardButton(f"✅ Ritira {completed_count} Materiali", callback_data="refinery_claim_all"))
+            
+        markup.add(types.InlineKeyboardButton("⬆️ Upgrade Materiali", callback_data="refinery_upgrade_view"))
+        markup.add(types.InlineKeyboardButton("🔙 Armeria", callback_data="guild_armory_view"))
+        
+        bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+    finally:
+        session.close()
+
+def handle_refine_select_quantity(call):
+    """Select quantity for refinement"""
+    res_id = int(call.data.split("|")[1])
+    guild = guild_service.get_user_guild(call.from_user.id)
+    
+    from services.crafting_service import CraftingService
+    from sqlalchemy import text
+    crafting_service = CraftingService()
+    
+    session = crafting_service.db.get_session()
+    try:
+        resource = session.execute(text("SELECT name FROM resources WHERE id = :id"), {"id": res_id}).fetchone()
+        user_qty = session.execute(text("SELECT quantity FROM user_resources WHERE user_id = :uid AND resource_id = :rid"), 
+                                  {"uid": call.from_user.id, "rid": res_id}).scalar() or 0
+        
+        if user_qty <= 0:
+            bot.answer_callback_query(call.id, f"Non hai {resource[0]} da raffinare!", show_alert=True)
+            return
+
+        msg = f"⚒️ **Raffinazione: {resource[0]}**\n\n"
+        msg += f"Possiedi: **x{user_qty}**\n\n"
+        msg += "Quanti ne vuoi raffinare?\n"
+        msg += "_Più ne raffini, più tempo ci vorrà._"
+        
+        markup = types.InlineKeyboardMarkup()
+        # Quantities: 10, 50, 100, All
+        for q in [10, 50, 100]:
+            if user_qty >= q:
+                markup.add(types.InlineKeyboardButton(f"Raffina {q}", callback_data=f"refine_do|{res_id}|{q}"))
+        
+        markup.add(types.InlineKeyboardButton(f"Raffina TUTTI ({user_qty})", callback_data=f"refine_do|{res_id}|{user_qty}"))
+        markup.add(types.InlineKeyboardButton("🔙 Annulla", callback_data="guild_refinery_view"))
+        
+        bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+    finally:
+        session.close()
+
+def handle_refine_do(call):
+    """Execute refinement"""
+    _, res_id, qty = call.data.split("|")
+    res_id = int(res_id)
+    qty = int(qty)
+    
+    guild = guild_service.get_user_guild(call.from_user.id)
+    if not guild: return
+    
+    from services.crafting_service import CraftingService
+    crafting_service = CraftingService()
+    
+    result = crafting_service.start_refinement(guild['id'], call.from_user.id, res_id, qty)
+    
+    if result['success']:
+        bot.answer_callback_query(call.id, "Raffinazione avviata!", show_alert=False)
+        handle_guild_refinery_view(call)
+    else:
+        bot.answer_callback_query(call.id, result['error'], show_alert=True)
+
+def handle_refinery_claim_all(call):
+    """Claim all completed refinements"""
+    guild = guild_service.get_user_guild(call.from_user.id)
+    if not guild: return
+    
+    from services.crafting_service import CraftingService
+    crafting_service = CraftingService()
+    
+    results = crafting_service.process_refinery_queue()
+    
+    if results:
+        # User only sees their own or all? The service filters for all ready jobs.
+        # We should notify only if user got something.
+        user_results = [r for r in results if r.get('user_id') == call.from_user.id]
+        if user_results:
+            total_mats = {}
+            for res in user_results:
+                for mat, qty in res['materials'].items():
+                    total_mats[mat] = total_mats.get(mat, 0) + qty
+            
+            msg = "✅ **Raffinazione Completata!**\n\nHai ottenuto:\n"
+            for mat, qty in total_mats.items():
+                if qty > 0:
+                    msg += f"• {mat}: **x{qty}**\n"
+            bot.send_message(call.message.chat.id, msg, parse_mode='markdown')
+        else:
+            bot.answer_callback_query(call.id, "Hai ritirato i materiali pronti.")
+    else:
+        bot.answer_callback_query(call.id, "Nessun materiale pronto da ritirare.")
+    
+    handle_guild_refinery_view(call)
+
+def handle_refinery_upgrade_view(call):
+    """Show available material upgrades"""
+    safe_answer_callback(call.id)
+    guild = guild_service.get_user_guild(call.from_user.id)
+    if not guild: return
+    
+    from services.crafting_service import CraftingService
+    crafting_service = CraftingService()
+    res_data = crafting_service.get_user_resources(call.from_user.id)
+    
+    msg = "⬆️ **Upgrade Materiali Raffinati**\n\n"
+    msg += "Puoi forgiari materiali di tier superiore combinando quelli inferiori.\n"
+    msg += "🔸 Tasso di conversione: **10:1**\n\n"
+    msg += "💎 **Tuoi Materiali**:\n"
+    
+    emoji_map = {"Rottami": "🔩", "Materiale Pregiato": "💎", "Diamante": "💍"}
+    mats_by_id = {}
+    for item in res_data['refined']:
+        emoji = emoji_map.get(item['name'], '📦')
+        msg += f"{emoji} {item['name']}: **x{item['quantity']}**\n"
+        mats_by_id[item['material_id']] = item
+        
+    markup = types.InlineKeyboardMarkup()
+    
+    # 1 -> 2
+    if mats_by_id.get(1, {}).get('quantity', 0) >= 10:
+        markup.add(types.InlineKeyboardButton("🔩 ➡️ 💎 Upgrade Rottami", callback_data="refinery_upgrade_sel|1"))
+    
+    # 2 -> 3
+    if mats_by_id.get(2, {}).get('quantity', 0) >= 10:
+        markup.add(types.InlineKeyboardButton("💎 ➡️ 💍 Upgrade Pregiato", callback_data="refinery_upgrade_sel|2"))
+        
+    markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guild_refinery_view"))
+    
+    bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+
+def handle_refinery_upgrade_select_qty(call):
+    """Select how many target materials to create"""
+    safe_answer_callback(call.id)
+    source_id = int(call.data.split("|")[1])
+    
+    from services.crafting_service import CraftingService
+    crafting_service = CraftingService()
+    res_data = crafting_service.get_user_resources(call.from_user.id)
+    
+    source_item = next((i for i in res_data['refined'] if i['material_id'] == source_id), None)
+    if not source_item or source_item['quantity'] < 10:
+        bot.answer_callback_query(call.id, "Non hai abbastanza materiali!", show_alert=True)
+        return
+        
+    target_names = {1: "Materiale Pregiato", 2: "Diamante"}
+    target_name = target_names.get(source_id, "???")
+    
+    msg = f"⬆️ **Upgrade: {source_item['name']}**\n\n"
+    msg += f"Possiedi: **x{source_item['quantity']}**\n"
+    msg += f"Costo: **10** {source_item['name']} ➡️ **1** {target_name}\n\n"
+    msg += f"Quanti **{target_name}** vuoi creare?"
+    
+    markup = types.InlineKeyboardMarkup()
+    
+    # Options for TARGET count
+    max_target = source_item['quantity'] // 10
+    options = [1, 5, 10, 50]
+    for opt in options:
+        if max_target >= opt:
+            markup.add(types.InlineKeyboardButton(f"Crea {opt}", callback_data=f"refinery_upgrade_do|{source_id}|{opt}"))
+            
+    if max_target > 0 and max_target not in options:
+        markup.add(types.InlineKeyboardButton(f"Crea MAX ({max_target})", callback_data=f"refinery_upgrade_do|{source_id}|{max_target}"))
+        
+    markup.add(types.InlineKeyboardButton("🔙 Annulla", callback_data="refinery_upgrade_view"))
+    
+    bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+
+def handle_refinery_upgrade_do(call):
+    """Execute the upgrade"""
+    _, source_id, count = call.data.split("|")
+    source_id = int(source_id)
+    count = int(count)
+    
+    from services.crafting_service import CraftingService
+    crafting_service = CraftingService()
+    
+    target_id = source_id + 1
+    result = crafting_service.upgrade_material(call.from_user.id, source_id, target_id, count)
+    
+    if result.get('success'):
+        msg = f"✅ **Upgrade Completato!**\n\n"
+        msg += f"Hai convertito {result['cost']} {result['source_name']} in **{result['count']} {result['target_name']}**!"
+        bot.answer_callback_query(call.id, "✅ Upgrade riuscito!", show_alert=False)
+        bot.send_message(call.message.chat.id, msg, parse_mode='markdown')
+        handle_refinery_upgrade_view(call)
+    else:
+        bot.answer_callback_query(call.id, result.get('error', 'Errore sconosciuto'), show_alert=True)
 
 def handle_craft_select_equipment(call):
     """Show Set selection for crafting (Filtered by Armory Level)"""
@@ -1377,29 +1624,30 @@ def handle_craft_view_resources(call):
     session = crafting_service.db.get_session()
     
     try:
-        # Use LEFT JOIN to show all resources, even those with 0 quantity
-        resources = session.execute(text("""
-            SELECT r.name, COALESCE(ur.quantity, 0) as quantity
-            FROM resources r
-            LEFT JOIN user_resources ur ON r.id = ur.resource_id AND ur.user_id = :uid
-            ORDER BY r.rarity ASC, r.name ASC
-        """), {"uid": call.from_user.id}).fetchall()
-        
-        emoji_map = {
-            "Metallo": "🔩",
-            "Tessuto": "🧵",
-            "Cristallo": "🔮"
-        }
+        res_data = crafting_service.get_user_resources(call.from_user.id)
         
         msg = "📦 **Le Tue Risorse**\n\n"
-        if resources:
-            for name, quantity in resources:
-                emoji_display = emoji_map.get(name, '📦')
-                msg += f"{emoji_display} {name}: **x{quantity}**\n"
+        
+        # Raw resources
+        msg += "🪵 **Materiali Grezzi** (Da raffinare):\n"
+        if res_data['raw']:
+            for item in res_data['raw']:
+                msg += f"• {item['name']}: **x{item['quantity']}**\n"
         else:
-            msg += "_Nessuna risorsa registrata nel sistema._\n"
+            msg += "_Nessun materiale grezzo._\n"
+            
+        msg += "\n💎 **Materiali Raffinati** (Per crafting):\n"
+        emoji_map = {
+            "Rottami": "🔩",
+            "Materiale Pregiato": "💎",
+            "Diamante": "💍"
+        }
+        for item in res_data['refined']:
+            emoji = emoji_map.get(item['name'], '📦')
+            msg += f"{emoji} {item['name']}: **x{item['quantity']}**\n"
+            
     finally:
-        session.close()
+        pass
     
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guild_armory_view"))
@@ -5566,6 +5814,27 @@ def callback_query(call):
         print(f"[DEBUG] Catch-all: detected craft_claim_all")
         handle_craft_claim_all(call)
         return
+    elif call.data == "guild_refinery_view":
+        handle_guild_refinery_view(call)
+        return
+    elif call.data.startswith("refine_select_qty|"):
+        handle_refine_select_quantity(call)
+        return
+    elif call.data.startswith("refine_do|"):
+        handle_refine_do(call)
+        return
+    elif call.data == "refinery_claim_all":
+        handle_refinery_claim_all(call)
+        return
+    elif call.data == "refinery_upgrade_view":
+        handle_refinery_upgrade_view(call)
+        return
+    elif call.data.startswith("refinery_upgrade_sel|"):
+        handle_refinery_upgrade_select_qty(call)
+        return
+    elif call.data.startswith("refinery_upgrade_do|"):
+        handle_refinery_upgrade_do(call)
+        return
 
     # --- Ranking Callbacks ---
     if call.data.startswith("ranking|"):
@@ -8054,38 +8323,62 @@ def callback_query(call):
         enemy_type = parts[1]
         enemy_id = int(parts[2])
         
-        # Check if it's a dungeon mob
-        mob_details = pve_service.get_mob_details(enemy_id)
-        if mob_details and mob_details.get('dungeon_id'):
-            # Use existing dungeon flee logic
-            success, msg = dungeon_service.leave_dungeon(call.message.chat.id, call.from_user.id)
-            safe_answer_callback(call.id, "Tentativo di fuga dal dungeon...", show_alert=False)
-            bot.send_message(call.message.chat.id, f"🏃 @{call.from_user.username or call.from_user.first_name}: {msg}", parse_mode='markdown')
+        # Unified Flee Logic via PvEService
+        utente = user_service.get_user(call.from_user.id)
+        
+        # Check if user is resting
+        if utente.resting_since:
+            safe_answer_callback(call.id, "❌ Non puoi fuggire mentre riposi!", show_alert=True)
+            return
+
+        success, msg = pve_service.flee_mob(utente, enemy_id)
+        
+        if success:
+            safe_answer_callback(call.id, "🏃 Fuga riuscita!")
             
-            # If successful and mob is now dead (dungeon failed), delete message
-            if success:
-                # Re-check mob status
-                updated_mob = pve_service.get_mob_details(enemy_id)
-                if updated_mob and updated_mob.get('health', 1) <= 0:
-                    try:
-                        bot.delete_message(call.message.chat.id, call.message.message_id)
-                    except:
-                        pass
-            else:
-                try:
-                    safe_answer_callback(call.id, msg, show_alert=True)
-                except Exception:
-                    pass
+            # If successful, we might want to update the message or delete it
+            # But flee_mob might return a message saying "You fled from X"
+            # We should update the chat message to reflect this.
+            
+            username = escape_markdown(utente.username if utente.username else utente.nome)
+            full_msg = f"@{username}\n{msg}"
+            
+            # Check if mob is dead/despawned (e.g. group flee triggered)
+            # or if it's just this user fleeing.
+            # If just user fled, they shouldn't see buttons? 
+            # or we just show the message.
+            
+            from models.pve import Mob
+            session = db.get_session()
+            mob = session.query(Mob).filter_by(id=enemy_id).first()
+            is_dead = mob.is_dead if mob else True
+            session.close()
+
+            try:
+                if is_dead:
+                     # Mob gone (group flee or other reason)
+                     if call.message.photo:
+                         bot.edit_message_caption(chat_id=call.message.chat.id, message_id=call.message.message_id, caption=full_msg, reply_markup=None, parse_mode='markdown')
+                     else:
+                         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=full_msg, reply_markup=None, parse_mode='markdown')
+                else:
+                    # Mob still there, but user fled. 
+                    # We can't easily "hide" buttons just for one user in a group chat message.
+                    # So we just post the result.
+                    # Optimally, we delete the original message if it was a private interaction, but mostly these are group messages.
+                    # We'll just send a new message for clarity if it's a group, or edit if it's the latest.
+                    # But editing the group message for one user fleeing might be annoying if others are fighting.
+                    # Standard behavior: Send specific message.
+                    bot.send_message(call.message.chat.id, full_msg, parse_mode='markdown')
+            except Exception as e:
+                print(f"Error updating after flee: {e}")
+                
         else:
-            # Regular mob flee
-            utente = user_service.get_user(call.from_user.id)
-            success, msg = pve_service.flee_mob(utente, enemy_id)
+            # Failed to flee
+            safe_answer_callback(call.id, "🚫 Fuga fallita!", show_alert=False)
+            bot.send_message(call.message.chat.id, f"Running refused: {msg}", parse_mode='markdown')
+            # actually safe_answer_callback with alert is better for failure
             safe_answer_callback(call.id, msg, show_alert=True)
-            if success:
-                try:
-                    bot.delete_message(call.message.chat.id, call.message.message_id)
-                except:
-                    pass
 
     elif action.startswith("aoe_attack_enemy|") or action.startswith("special_aoe_attack_enemy|"):
         # AoE attack on all enemies: aoe_attack_enemy|{type}|{id} or special_aoe_attack_enemy|{type}|{id}
@@ -8179,54 +8472,6 @@ def callback_query(call):
                 pass
         return
 
-    elif action.startswith("flee_enemy|"):
-        # flee_enemy|{type}|{id}
-        parts = action.split("|")
-        enemy_type = parts[1]
-        enemy_id = int(parts[2])
-        
-        utente = user_service.get_user(user_id)
-        
-        success, msg = pve_service.flee_mob(utente, enemy_id)
-        
-        if success:
-            try:
-                safe_answer_callback(call.id, "🏃 Fuga riuscita!")
-            except:
-                pass
-            
-            username = escape_markdown(utente.username if utente.username else utente.nome)
-            full_msg = f"@{username}\n{msg}"
-            
-            # Check if mob is now dead (group flee)
-            session = db.get_session()
-            from models.pve import Mob
-            mob = session.query(Mob).filter_by(id=enemy_id).first()
-            is_dead = mob.is_dead if mob else True
-            session.close()
-            
-            try:
-                if is_dead:
-                    # Remove buttons for everyone
-                    if call.message.photo:
-                        bot.edit_message_caption(chat_id=call.message.chat.id, message_id=call.message.message_id, caption=full_msg, reply_markup=None, parse_mode='markdown')
-                    else:
-                        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=full_msg, reply_markup=None, parse_mode='markdown')
-                else:
-                    # Update message but keep buttons
-                    if call.message.photo:
-                        bot.edit_message_caption(chat_id=call.message.chat.id, message_id=call.message.message_id, caption=full_msg, reply_markup=get_combat_markup(enemy_type, enemy_id, call.message.chat.id), parse_mode='markdown')
-                    else:
-                        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=full_msg, reply_markup=get_combat_markup(enemy_type, enemy_id, call.message.chat.id), parse_mode='markdown')
-            except Exception as e:
-                print(f"Error updating message after flee: {e}")
-                bot.send_message(call.message.chat.id, full_msg, parse_mode='markdown')
-        else:
-            try:
-                safe_answer_callback(call.id, msg, show_alert=True)
-            except:
-                pass
-        return
 
     # Legacy attack handlers - keeping for backward compatibility but should not be used
     elif action == "attack_mob":

@@ -55,9 +55,9 @@ class TestProfileStats(unittest.TestCase):
         self.assertEqual(self.user.allocated_health, 1)
         
         # Recalculated stats for Level 10: 
-        # Base(20) + Scaling(18) = 38
+        # Base(100) + Scaling((10-1)*2 = 18) = 118
         # +1 alloc = +10 HP
-        self.assertEqual(self.user.max_health, 48) # 38 + 10
+        self.assertEqual(self.user.max_health, 128) # 118 + 10
         
     def test_resistance_cap(self):
         """Test resistance cannot exceed 75%"""

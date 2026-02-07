@@ -143,7 +143,30 @@ class EquipmentService:
                     stats = {}
                 
                 for stat, value in stats.items():
-                    total_stats[stat] = total_stats.get(stat, 0) + value
+                    # Map legacy/external stat names to internal ones
+                    if stat == 'health':
+                        total_stats['max_health'] = total_stats.get('max_health', 0) + value
+                    elif stat == 'mana':
+                        total_stats['max_mana'] = total_stats.get('max_mana', 0) + value
+                    elif stat == 'attack':
+                        total_stats['base_damage'] = total_stats.get('base_damage', 0) + value
+                    elif stat == 'defense':
+                        total_stats['resistance'] = total_stats.get('resistance', 0) + value
+                    elif stat in ['crit', 'perception', 'luck']:
+                        total_stats['crit_chance'] = total_stats.get('crit_chance', 0) + value
+                    elif stat == 'wisdom':
+                        total_stats['max_mana'] = total_stats.get('max_mana', 0) + value
+                    elif stat == 'all_stats':
+                        # Valid for "Anello del Tempo" etc.
+                        total_stats['max_health'] = total_stats.get('max_health', 0) + (value * 10)
+                        total_stats['max_mana'] = total_stats.get('max_mana', 0) + (value * 5)
+                        total_stats['base_damage'] = total_stats.get('base_damage', 0) + (value * 2)
+                        total_stats['resistance'] = total_stats.get('resistance', 0) + value
+                        total_stats['crit_chance'] = total_stats.get('crit_chance', 0) + value
+                        total_stats['speed'] = total_stats.get('speed', 0) + value
+                    else:
+                        # Standard stat (max_health, base_damage, etc.)
+                        total_stats[stat] = total_stats.get(stat, 0) + value
                     
                 # No level scaling usually for equipment unless it's upgraded (+1)
                 # Assuming 'min_level' is requirement, not item level

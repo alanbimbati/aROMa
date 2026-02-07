@@ -85,10 +85,10 @@ class TestHealthCap(unittest.TestCase):
         session = self.db.get_session()
         user = session.query(Utente).filter_by(id_telegram=self.u1_id).first()
         
-        # Base HP for lvl 1 is now 20 (system base)
-        self.assertEqual(user.max_health, 20)
-        self.assertEqual(user.current_hp, 20)
-        self.assertEqual(user.health, 20)
+        # Base HP for lvl 1 is now 100 (system base)
+        self.assertEqual(user.max_health, 100)
+        self.assertEqual(user.current_hp, 100)
+        self.assertEqual(user.health, 100)
         session.close()
 
     def test_kill_regen_caps_health(self):

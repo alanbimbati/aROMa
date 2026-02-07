@@ -19,7 +19,9 @@ Usa il comando `/stats` per aprire il menu di allocazione. Puoi spendere i tuoi 
 ### Statistiche Avanzate
 4.  **🛡️ Resistenza (+1%)**: Riduce il danno subito. Ogni punto = 1% riduzione danni. **MAX: 75%**
 5.  **💥 Critico (+1%)**: Aumenta la probabilità di colpo critico. Ogni punto = 1% probabilità.
-6.  **⚡ Velocità (+5)**: Determina chi attacca per primo e la frequenza degli attacchi.
+6.  **⚡ Velocità (+5%)**: Riduce il tempo di ricarica degli attacchi. Ogni punto riduce il cooldown del **5%**.
+    *   Formula: `Tempo = 60 / (1 + Punti * 0.05)`
+    *   Esempio: 20 punti dimezzano il tempo di attesa!
 
 ## 🔄 Reset Statistiche
 
