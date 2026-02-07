@@ -31,11 +31,12 @@ class RewardService:
         difficulty = mob.difficulty_tier if mob.difficulty_tier else 1
         
         # Balanced EXP Formula: Scales with mob level and non-linearly with difficulty
-        # Example: Lv 1, Tier 1 -> (1*15) * 1 ≈ 15 EXP
-        # Example: Lv 50, Tier 5 -> (50*15) * (5^1.8) ≈ 750 * 18.1 ≈ 13,575 EXP
+        # Reduced from 15 to 5 to slow progression (2026-02-07)
+        # Example: Lv 1, Tier 1 -> (1*5) * 1 ≈ 5 EXP
+        # Example: Lv 50, Tier 5 -> (50*5) * (5^1.8) ≈ 250 * 18.1 ≈ 4,525 EXP
         mob_level = getattr(mob, 'mob_level', 1)
         difficulty_multiplier = difficulty ** 1.8
-        base_xp_pool = int((mob_level * 15) * difficulty_multiplier)
+        base_xp_pool = int((mob_level * 5) * difficulty_multiplier)
         
         # Add a small random variation (+/- 10%)
         variation = random.uniform(0.9, 1.1)
