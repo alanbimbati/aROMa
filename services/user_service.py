@@ -727,7 +727,9 @@ class UserService:
         char_id = override_character_id if override_character_id is not None else utente.livello_selezionato
         character = char_loader.get_character_by_id(char_id)
         
+        char_level = 1
         if character:
+            char_level = character.get('livello', 1)
             # Use character base values
             base_hp += character.get('bonus_health', 0)
             base_mana += character.get('bonus_mana', 0)
@@ -747,17 +749,13 @@ class UserService:
         alloc_crit = (utente.allocated_crit or 0) * 1
         alloc_speed = (utente.allocated_speed or 0) * 1
         
-        total_hp = base_hp + alloc_hp
-        total_mana = base_mana + alloc_mana
-        total_dmg = base_dmg + alloc_dmg
+        # Core Formula: System Base + Character Lv Power + Character Bonuses + Allocations
+        total_hp = base_hp + (char_level * 5) + alloc_hp
+        total_mana = base_mana + (char_level * 2) + alloc_mana
+        total_dmg = base_dmg + (char_level * 1) + alloc_dmg
         total_res = base_res + alloc_res
         total_crit = base_crit + alloc_crit
         total_speed = base_speed + alloc_speed
-        
-        # Level scaling for total HP/Mana (Reward leveling up)
-        total_hp += level * 5
-        total_mana += level * 2
-        total_dmg += level * 1
         
         total_dmg = int(total_dmg) # Ensure integer
         
