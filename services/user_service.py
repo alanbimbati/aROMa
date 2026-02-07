@@ -757,6 +757,11 @@ class UserService:
         total_crit = base_crit + alloc_crit
         total_speed = base_speed + alloc_speed
         
+        # Level scaling (Automatic growth to match game difficulty)
+        total_hp += level * 5
+        total_mana += level * 2
+        total_dmg += level * 1
+        
         total_dmg = int(total_dmg) # Ensure integer
         
         # 4. Equipment Bonuses

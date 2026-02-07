@@ -9,16 +9,25 @@ Salendo di livello, il tuo personaggio diventa più forte. Oltre all'aumento aut
 
 ## 🛡️ Calcolo delle Statistiche
 
-Le tue statistiche totali sono trasparenti e dipendono esclusivamente da quattro fattori:
+Il tuo potere cresce in due modi: **automaticamente** salendo di livello e **manualmente** assegnando punti.
 
-**Statistiche Totali = Base Sistema + Bonus Personaggio + Allocazioni + Equipaggiamento**
+### 1. Progressione Automatica (Livello Utente)
+Ogni volta che sali di livello, le tue basi di sistema aumentano per permetterti di affrontare nemici sempre più forti:
+*   **❤️ Salute (HP)**: +5 per ogni tuo livello.
+*   **💙 Mana (MP)**: +2 per ogni tuo livello.
+*   **⚔️ Danno**: +1 per ogni tuo livello.
 
-1.  **Base Sistema**: Ogni giocatore parte con **100 HP, 50 MP, 10 Danno**.
-2.  **Bonus Personaggio**: Ogni personaggio (es. Goten, Goku) ha dei bonus fissi che trovi indicati nella sua descrizione.
-3.  **Allocazioni**: I punti che assegni manualmente con `/stats` (2 punti per livello).
-4.  **Equipaggiamento**: I bonus forniti da armi e armature indossate.
+### 2. Formula Finale Trasparente
+Il calcolo totale che vedi nel profilo è dato da:
+**Stat Totale = [Base + Bonus Livello] + Bonus Personaggio + Allocazioni + Gear**
 
-Non ci sono bonus "nascosti" o automatici: ogni punto di potenza aggiuntivo è deciso da te tramite i punti allocazione o la scelta del personaggio e dell'equipaggiamento! 🚀
+*   **Basi Fisso**: 100 HP, 50 MP, 10 Dmg.
+*   **Bonus Personaggio**: I valori fissi del personaggio scelto (es. Goten, Goku).
+*   **Allocazioni**: I punti che assegni tu (1pt = 10 HP, 5 Mana, 2 Dmg).
+*   **Equipaggiamento**: Bonus di armi e armature.
+
+> [!NOTE]
+> La progressione automatica serve a bilanciare la difficoltà crescente dei mostri nei Dungeon e nel mondo di gioco. I punti che allochi tu sono il surplus che definisce la tua specializzazione (Tank, DPS, ecc.).
 
 ## 🛠️ Come Assegnare i Punti
 
