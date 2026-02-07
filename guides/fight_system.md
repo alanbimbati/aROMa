@@ -74,7 +74,15 @@ Se la tua salute scende a 0:
 *   Devi aspettare il recupero automatico giornaliero (20% HP) o usare una **Pozione di Cura**.
 *   Puoi acquistare pozioni nel Negozio (`/shop`).
 
-## 💡 Consigli
-*   Usa gli Attacchi Speciali contro i Boss o nemici forti.
-*   Tieni d'occhio il Mana! Usa le **Pozioni Mana** se finisci l'energia.
-*   Aumenta le tue statistiche salendo di livello e assegnando i Punti Statistica (`/stats`).
+## 💰 Ricompense e Drop
+
+Ogni vittoria in combattimento ti garantisce diverse ricompense:
+
+1.  **Esperienza (Exp)**: Necessaria per salire di livello.
+2.  **Punti (Wumpa)**: Moneta di gioco per comprare pozioni, personaggi e item.
+3.  **Risorse Grezze**: Frammenti di metallo, cristalli e altri materiali necessari per la [Raffineria](file:///home/alan/Documenti/Coding/aroma/guides/refinery.md).
+    *   **Mob Comuni**: Possibilità di drop basata sul livello e fortuna.
+    *   **Boss**: Garantiscono sempre il drop di risorse rare ed epiche.
+
+---
+[Vai alla Guida alla Raffineria](file:///home/alan/Documenti/Coding/aroma/guides/refinery.md) | [Torna al Profilo](file:///home/alan/Documenti/Coding/aroma/guides/stats_allocation.md)
