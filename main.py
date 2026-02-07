@@ -1955,6 +1955,8 @@ def handle_character_selection_callback(call):
                 'id': char_id,
                 'name': character_name
             }
+            print(f"[DEBUG] Admin {user_id} viewing character {character_name} (ID {char_id})")
+            print(f"[DEBUG] admin_last_viewed_character now: {admin_last_viewed_character}")
             msg_text += "\n\n📸 **Admin**: Invia una foto ora per aggiornare l'immagine di questo personaggio."
         
         # Build a "Back" button to main menu or just leave it
@@ -4962,8 +4964,12 @@ def handle_photo(message):
     """Handle photo uploads for characters, mobs, and bosses"""
     user_id = message.from_user.id
     
+    print(f"[DEBUG] Photo received from user {user_id}")
+    print(f"[DEBUG] admin_last_viewed_character dict: {admin_last_viewed_character}")
+    
     # Check if admin is waiting to upload
     if user_id in admin_last_viewed_character:
+        print(f"[DEBUG] User {user_id} found in admin_last_viewed_character!")
         pending = admin_last_viewed_character[user_id]
         
         # Handle old format (just ID) for backward compatibility or if session persisted
