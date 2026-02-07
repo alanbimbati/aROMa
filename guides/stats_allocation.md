@@ -7,6 +7,15 @@ Salendo di livello, il tuo personaggio diventa più forte. Oltre all'aumento aut
 *   **Livelli 1-79**: Ottieni **2** Punti Statistica per livello.
 *   **Livelli 80+**: Ottieni **5** Punti Statistica per livello.
 
+## ✨ Progressione Automatica
+
+Ogni volta che sali di livello, il tuo personaggio guadagna automaticamente delle statistiche, anche senza assegnare punti:
+*   **❤️ Salute (HP)**: +5 per livello.
+*   **💙 Mana (MP)**: +2 per livello.
+*   **⚔️ Danno**: +1 per livello.
+
+Questo garantisce che ogni livello sia un miglioramento tangibile della tua potenza! 🚀
+
 ## 🛠️ Come Assegnare i Punti
 
 Usa il comando `/stats` per aprire il menu di allocazione. Puoi spendere i tuoi punti in:

@@ -754,12 +754,10 @@ class UserService:
         total_crit = base_crit + alloc_crit
         total_speed = base_speed + alloc_speed
         
-        # Level scaling for total HP/Mana (optional, but keep it subtle)
-        # Instead of 100 + level*5, let's keep it character-driven.
-        # If user wants level-based scaling, we can add a small bonus per level.
-        total_hp += (level - 1) * 2
-        total_mana += (level - 1) * 1
-        total_dmg += (level - 1) * 0.5 # Subtle damage increase
+        # Level scaling for total HP/Mana (Reward leveling up)
+        total_hp += level * 5
+        total_mana += level * 2
+        total_dmg += level * 1
         
         total_dmg = int(total_dmg) # Ensure integer
         
