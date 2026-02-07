@@ -552,13 +552,19 @@ def handle_locanda_button(message):
 
 @bot.message_handler(func=lambda message: message.text == "📖 Guida")
 def handle_guide_button(message):
-    # Show main guide menu
-    categories = guide_service.get_categories()
-    markup = types.InlineKeyboardMarkup()
-    for key, title in categories:
-        markup.add(types.InlineKeyboardButton(title, callback_data=f"guide_cat|{key}"))
+    # Show main guide menu with detailed sub-guides
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        types.InlineKeyboardButton("⚔️ Sistema di Combattimento", callback_data="guide|fight_system"),
+        types.InlineKeyboardButton("🏰 Dungeon", callback_data="guide|dungeons"),
+        types.InlineKeyboardButton("💎 Raffineria", callback_data="guide|refinery"),
+        types.InlineKeyboardButton("🔨 Crafting & Forgia", callback_data="guide|crafting"),
+        types.InlineKeyboardButton("📊 Allocazione Statistiche", callback_data="guide|stats_allocation"),
+        types.InlineKeyboardButton("🍂 Sistema Stagionale", callback_data="guide|season_system"),
+        types.InlineKeyboardButton("🏆 Achievements", callback_data="guide|achievements")
+    )
     
-    bot.send_message(message.chat.id, "📚 **Guida di aROMa**\n\nSeleziona un argomento per saperne di più:", reply_markup=markup, parse_mode='markdown')
+    bot.send_message(message.chat.id, "📚 **GUIDE DI GIOCO** 📚\n\nBenvenuto nella sezione guide! Seleziona un argomento per leggere la guida completa:", reply_markup=markup, parse_mode='markdown')
 
 @bot.message_handler(commands=['classifica', 'ranking', 'top'])
 def handle_ranking_cmd(message):
@@ -5855,11 +5861,17 @@ def callback_query(call):
         
         if call.data == "guide_main":
             # Back to main menu
-            categories = guide_service.get_categories()
-            markup = types.InlineKeyboardMarkup()
-            for key, title in categories:
-                markup.add(types.InlineKeyboardButton(title, callback_data=f"guide_cat|{key}"))
-            bot.edit_message_text("📚 **Guida di aROMa**\n\nSeleziona un argomento per saperne di più:", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+            markup = types.InlineKeyboardMarkup(row_width=1)
+            markup.add(
+                types.InlineKeyboardButton("⚔️ Sistema di Combattimento", callback_data="guide|fight_system"),
+                types.InlineKeyboardButton("🏰 Dungeon", callback_data="guide|dungeons"),
+                types.InlineKeyboardButton("💎 Raffineria", callback_data="guide|refinery"),
+                types.InlineKeyboardButton("🔨 Crafting & Forgia", callback_data="guide|crafting"),
+                types.InlineKeyboardButton("📊 Allocazione Statistiche", callback_data="guide|stats_allocation"),
+                types.InlineKeyboardButton("🍂 Sistema Stagionale", callback_data="guide|season_system"),
+                types.InlineKeyboardButton("🏆 Achievements", callback_data="guide|achievements")
+            )
+            bot.edit_message_text("📚 **GUIDE DI GIOCO** 📚\n\nSeleziona un argomento per leggere la guida completa:", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
             
         elif call.data.startswith("guide_cat|"):
             cat_key = call.data.split("|")[1]
@@ -8781,13 +8793,19 @@ def callback_query(call):
                 with open(file_path, "r", encoding="utf-8") as f:
                     content = f.read()
                 
+                markup = types.InlineKeyboardMarkup()
+                markup.add(types.InlineKeyboardButton("🔙 Torna al Menu", callback_data="guide_main"))
+                
                 # Split content if too long (Telegram limit 4096)
                 if len(content) > 4000:
                     parts = [content[i:i+4000] for i in range(0, len(content), 4000)]
-                    for part in parts:
-                        bot.send_message(user_id, part, parse_mode='markdown')
+                    for i, part in enumerate(parts):
+                        if i == len(parts) - 1:
+                            bot.send_message(user_id, part, reply_markup=markup, parse_mode='markdown')
+                        else:
+                            bot.send_message(user_id, part, parse_mode='markdown')
                 else:
-                    bot.send_message(user_id, content, parse_mode='markdown')
+                    bot.send_message(user_id, content, reply_markup=markup, parse_mode='markdown')
                     
                 safe_answer_callback(call.id, "📖 Guida aperta!")
             else:
