@@ -749,10 +749,10 @@ class UserService:
         alloc_crit = (utente.allocated_crit or 0) * 1
         alloc_speed = (utente.allocated_speed or 0) * 1
         
-        # Core Formula: System Base + Character Lv Power + Character Bonuses + Allocations
-        total_hp = base_hp + (char_level * 5) + alloc_hp
-        total_mana = base_mana + (char_level * 2) + alloc_mana
-        total_dmg = base_dmg + (char_level * 1) + alloc_dmg
+        # Core Formula: System Base + Character Bonuses + Allocations
+        total_hp = base_hp + alloc_hp
+        total_mana = base_mana + alloc_mana
+        total_dmg = base_dmg + alloc_dmg
         total_res = base_res + alloc_res
         total_crit = base_crit + alloc_crit
         total_speed = base_speed + alloc_speed

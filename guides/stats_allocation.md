@@ -7,15 +7,18 @@ Salendo di livello, il tuo personaggio diventa più forte. Oltre all'aumento aut
 *   **Livelli 1-79**: Ottieni **2** Punti Statistica per livello.
 *   **Livelli 80+**: Ottieni **5** Punti Statistica per livello.
 
-## ✨ Il Personaggio Conta!
+## 🛡️ Calcolo delle Statistiche
 
-Le tue statistiche totali non dipendono solo dai punti che assegni, ma soprattutto dal **personaggio equipaggiato**. Ogni personaggio ha un suo livello e dei bonus unici che definiscono la tua "base" di partenza:
+Le tue statistiche totali sono trasparenti e dipendono esclusivamente da quattro fattori:
 
-*   **❤️ Salute (HP)**: 100 base + (Livello Personaggio × 5) + Bonus Personaggio.
-*   **💙 Mana (MP)**: 50 base + (Livello Personaggio × 2) + Bonus Personaggio.
-*   **⚔️ Danno**: 10 base + (Livello Personaggio × 1) + Bonus Personaggio.
+**Statistiche Totali = Base Sistema + Bonus Personaggio + Allocazioni + Equipaggiamento**
 
-Questo significa che passando a un personaggio di livello più alto (es. sbloccando Gotenks al posto di Goten), vedrai un salto immediato di potenza! 🚀
+1.  **Base Sistema**: Ogni giocatore parte con **100 HP, 50 MP, 10 Danno**.
+2.  **Bonus Personaggio**: Ogni personaggio (es. Goten, Goku) ha dei bonus fissi che trovi indicati nella sua descrizione.
+3.  **Allocazioni**: I punti che assegni manualmente con `/stats` (2 punti per livello).
+4.  **Equipaggiamento**: I bonus forniti da armi e armature indossate.
+
+Non ci sono bonus "nascosti" o automatici: ogni punto di potenza aggiuntivo è deciso da te tramite i punti allocazione o la scelta del personaggio e dell'equipaggiamento! 🚀
 
 ## 🛠️ Come Assegnare i Punti
 
