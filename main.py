@@ -8793,26 +8793,51 @@ def callback_query(call):
                 with open(file_path, "r", encoding="utf-8") as f:
                     content = f.read()
                 
+                # Simple Markdown to HTML conversion for basic elements
+                # Replacing # Header with <b>HEADER</b>
+                import re
+                content = re.sub(r'^# +(.*)$', r'<b>\1</b>', content, flags=re.MULTILINE)
+                content = re.sub(r'^## +(.*)$', r'<b>\1</b>', content, flags=re.MULTILINE)
+                content = re.sub(r'^### +(.*)$', r'<b>\1</b>', content, flags=re.MULTILINE)
+                content = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', content)
+                content = re.sub(r'\*(.*?)\*', r'<i>\1</i>', content)
+                # Bullet points: * or - to •
+                content = re.sub(r'^[*-] +(.*)$', r'• \1', content, flags=re.MULTILINE)
+                
                 markup = types.InlineKeyboardMarkup()
                 markup.add(types.InlineKeyboardButton("🔙 Torna al Menu", callback_data="guide_main"))
                 
                 # Split content if too long (Telegram limit 4096)
                 if len(content) > 4000:
-                    parts = [content[i:i+4000] for i in range(0, len(content), 4000)]
+                    parts = []
+                    # Try to split by double newline or just length
+                    temp_parts = content.split('\n\n')
+                    current_part = ""
+                    for p in temp_parts:
+                        if len(current_part) + len(p) + 2 < 4000:
+                            current_part += p + "\n\n"
+                        else:
+                            parts.append(current_part.strip())
+                            current_part = p + "\n\n"
+                    if current_part:
+                        parts.append(current_part.strip())
+                        
                     for i, part in enumerate(parts):
                         if i == len(parts) - 1:
-                            bot.send_message(user_id, part, reply_markup=markup, parse_mode='markdown')
+                            bot.send_message(call.message.chat.id, part, reply_markup=markup, parse_mode='HTML')
                         else:
-                            bot.send_message(user_id, part, parse_mode='markdown')
+                            bot.send_message(call.message.chat.id, part, parse_mode='HTML')
                 else:
-                    bot.send_message(user_id, content, reply_markup=markup, parse_mode='markdown')
+                    bot.send_message(call.message.chat.id, content, reply_markup=markup, parse_mode='HTML')
                     
                 safe_answer_callback(call.id, "📖 Guida aperta!")
             else:
                 safe_answer_callback(call.id, "❌ Guida non trovata!", show_alert=True)
         except Exception as e:
-            print(f"Error showing guide: {e}")
-            safe_answer_callback(call.id, "❌ Errore nell'apertura della guida", show_alert=True)
+            print(f"Error showing guide '{guide_name}': {e}")
+            import traceback
+            traceback.print_exc()
+            safe_answer_callback(call.id, "❌ Errore nel caricamento della guida", show_alert=True)
         return
 
     # ACHIEVEMENT PAGINATION
