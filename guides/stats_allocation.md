@@ -7,14 +7,15 @@ Salendo di livello, il tuo personaggio diventa più forte. Oltre all'aumento aut
 *   **Livelli 1-79**: Ottieni **2** Punti Statistica per livello.
 *   **Livelli 80+**: Ottieni **5** Punti Statistica per livello.
 
-## ✨ Progressione Automatica
+## ✨ Il Personaggio Conta!
 
-Ogni volta che sali di livello, il tuo personaggio guadagna automaticamente delle statistiche, anche senza assegnare punti:
-*   **❤️ Salute (HP)**: +5 per livello.
-*   **💙 Mana (MP)**: +2 per livello.
-*   **⚔️ Danno**: +1 per livello.
+Le tue statistiche totali non dipendono solo dai punti che assegni, ma soprattutto dal **personaggio equipaggiato**. Ogni personaggio ha un suo livello e dei bonus unici che definiscono la tua "base" di partenza:
 
-Questo garantisce che ogni livello sia un miglioramento tangibile della tua potenza! 🚀
+*   **❤️ Salute (HP)**: 100 base + (Livello Personaggio × 5) + Bonus Personaggio.
+*   **💙 Mana (MP)**: 50 base + (Livello Personaggio × 2) + Bonus Personaggio.
+*   **⚔️ Danno**: 10 base + (Livello Personaggio × 1) + Bonus Personaggio.
+
+Questo significa che passando a un personaggio di livello più alto (es. sbloccando Gotenks al posto di Goten), vedrai un salto immediato di potenza! 🚀
 
 ## 🛠️ Come Assegnare i Punti
 

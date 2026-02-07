@@ -6,9 +6,12 @@ Benvenuto nel sistema di combattimento di aROMa RPG! Qui troverai tutto ciò che
 
 Ogni personaggio parte con dei valori minimi di sistema:
 
-1.  **❤️ Salute (HP)**: La tua vita. Valore minimo base: **100 HP**. Se scende a 0, sei esausto e non puoi combattere finché non recuperi.
-2.  **💙 Mana (MP)**: Energia magica usata per gli Attacchi Speciali. Valore minimo base: **50 MP**.
-3.  **⚔️ Danno Base**: Il danno fisico che infliggi con un attacco normale. Valore minimo base: **10**.
+1.  **❤️ Salute (HP)**: Valore minimo base: **100 HP**. 
+2.  **💙 Mana (MP)**: Valore minimo base: **50 MP**.
+3.  **⚔️ Danno Base**: Valore minimo base: **10**.
+
+> [!NOTE]
+> Questi valori aumentano automaticamente in base al **Livello del Personaggio** scelto e ai punti che allochi con il comando `/stats`. [Scopri di più qui](file:///home/alan/Documenti/Coding/aroma/guides/stats_allocation.md).
 
 ### Statistiche Avanzate (Allocabili)
 4.  **🛡️ Resistenza**: Riduce i danni subiti (1% per punto allocato, MAX 75%).
