@@ -1946,6 +1946,17 @@ def handle_character_selection_callback(call):
         
         msg_text = f"✅ **Personaggio Equipaggiato: {character_name}**"
         
+        # ==== ADMIN FEATURE: Track character for image upload ====
+        utente = user_service.get_user(user_id)
+        if utente and user_service.is_admin(utente):
+            # Save in tracking dict for 5 minutes
+            admin_last_viewed_character[user_id] = {
+                'type': 'character',
+                'id': char_id,
+                'name': character_name
+            }
+            msg_text += "\n\n📸 **Admin**: Invia una foto ora per aggiornare l'immagine di questo personaggio."
+        
         # Build a "Back" button to main menu or just leave it
         # We can just update the text content and remove the keyboard or show a "Done" status
         
