@@ -4968,10 +4968,22 @@ def handle_photo(message):
         
         # Handle old format (just ID) for backward compatibility or if session persisted
         if not isinstance(pending, dict):
-             pending = {'type': 'character', 'id': pending, 'name': 'Unknown'}
-             # Try to fetch name if possible, or just fail gracefully
-             char = character_service.get_character(pending['id'])
-             if char: pending['name'] = char['nome']
+            pending = {'type': 'character', 'id': pending, 'name': 'Unknown'}
+            # Try to fetch name if possible
+            try:
+                from services.character_loader import get_character_loader
+                char_loader = get_character_loader()
+                char = char_loader.get_character_by_id(pending['id'])
+                if char and 'nome' in char:
+                    pending['name'] = char['nome']
+            except:
+                pass  # Keep 'Unknown' as fallback
+
+        # Ensure pending has required keys
+        if not all(k in pending for k in ['type', 'name']):
+            bot.reply_to(message, "❌ Errore: dati del personaggio incompleti. Riprova a selezionare il personaggio.")
+            del admin_last_viewed_character[user_id]
+            return
 
         try:
             # Get the photo
