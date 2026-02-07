@@ -6,12 +6,12 @@ Benvenuto nel sistema di combattimento di aROMa RPG! Qui troverai tutto ciò che
 
 Ogni personaggio parte con dei valori minimi di sistema:
 
-1.  **❤️ Salute (HP)**: Valore minimo base: **100 HP**. 
-2.  **💙 Mana (MP)**: Valore minimo base: **50 MP**.
-3.  **⚔️ Danno Base**: Valore minimo base: **10**.
+1.  **❤️ Salute (HP)**: Base sistema: **100 HP**. 
+2.  **💙 Mana (MP)**: Base sistema: **50 MP**.
+3.  **⚔️ Danno Base**: Base sistema: **10**.
 
-> [!NOTE]
-> Questi valori aumentano automaticamente in base al **Livello del Personaggio** scelto e ai punti che allochi con il comando `/stats`. [Scopri di più qui](file:///home/alan/Documenti/Coding/aroma/guides/stats_allocation.md).
+> [!TIP]
+> Puoi aumentare queste statistiche equipaggiando personaggi più forti, assegnando i punti guadagnati livellando o indossando equipaggiamento potente. [Vedi la guida alle statistiche](file:///home/alan/Documenti/Coding/aroma/guides/stats_allocation.md).
 
 ### Statistiche Avanzate (Allocabili)
 4.  **🛡️ Resistenza**: Riduce i danni subiti (1% per punto allocato, MAX 75%).
