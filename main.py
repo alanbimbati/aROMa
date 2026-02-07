@@ -4338,6 +4338,8 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         markup.add(
             types.InlineKeyboardButton("⚔️ Sistema di Combattimento", callback_data="guide|fight_system"),
             types.InlineKeyboardButton("🏰 Dungeon", callback_data="guide|dungeons"),
+            types.InlineKeyboardButton("💎 Raffineria", callback_data="guide|refinery"),
+            types.InlineKeyboardButton("🔨 Crafting & Forgia", callback_data="guide|crafting"),
             types.InlineKeyboardButton("📊 Allocazione Statistiche", callback_data="guide|stats_allocation"),
             types.InlineKeyboardButton("🍂 Sistema Stagionale", callback_data="guide|season_system"),
             types.InlineKeyboardButton("🏆 Achievements", callback_data="guide|achievements")
