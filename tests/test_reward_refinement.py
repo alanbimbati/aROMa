@@ -10,6 +10,7 @@ class TestRewardLogicRefinement(unittest.TestCase):
         self.item_service = MagicMock()
         self.season_manager = MagicMock()
         self.reward_service = RewardService(self.db, self.user_service, self.item_service, self.season_manager)
+        self.reward_service.crafting_service = MagicMock()
         
         # Mock item loading
         self.item_service.load_items_from_csv.return_value = [

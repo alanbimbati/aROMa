@@ -1,24 +1,24 @@
 id,name,slot,rarity,min_level,stats_json,crafting_time,crafting_requirements,description,set_name
-1,Gi da Allenamento Base,chest,1,1,"{""defense"": 1}",600,"{""Metallo"": 10}",Un semplice gi da allenamento per principianti,Set Base
-2,Scouter Verde,head,1,1,"{""perception"": 1}",600,"{""Metallo"": 10}",Uno scouter verde di base per scansionare i nemici,Set Base
-3,Spada di Legno,main_hand,1,1,"{""attack"": 1}",600,"{""Metallo"": 10}",Una spada di legno per l'allenamento,Set Base
-4,Armatura Saiyan Mk I,chest,2,5,"{""defense"": 3, ""health"": 10}",1800,"{""Metallo"": 20, ""Tessuto"": 15}",Armatura da combattimento Saiyan di base,Set Saiyan
-5,Scouter Rosso Elite,head,2,5,"{""perception"": 3, ""crit"": 2}",1800,"{""Metallo"": 15}",Scouter avanzato dell'elite Saiyan,Set Saiyan
-6,Guanti da Combattimento Saiyan,accessory1,2,5,"{""attack"": 2, ""crit"": 1}",1800,"{""Tessuto"": 20}",Guanti rinforzati per il combattimento,Set Saiyan
-7,Armatura Saiyan Mk II,chest,3,15,"{""defense"": 5, ""health"": 20, ""attack"": 2}",14400,"{""Metallo"": 15, ""Tessuto"": 10}",Armatura Saiyan avanzata per guerrieri d'elite,Set Saiyan Elite
-8,Scouter Blu Reale,head,3,15,"{""perception"": 5, ""crit"": 3, ""speed"": 1}",14400,"{""Metallo"": 10}",Scouter di ultima generazione,Set Saiyan Elite
-9,Spada Z,main_hand,3,15,"{""attack"": 5, ""crit"": 3}",14400,"{""Metallo"": 10, ""Tessuto"": 5}",La leggendaria spada usata per allenare Gohan,Set Saiyan Elite
-10,Veste Namecciana,chest,2,5,"{""defense"": 2, ""mana"": 15, ""wisdom"": 2}",1800,"{""Metallo"": 15, ""Tessuto"": 20}",Tradizionale gi namecciano che amplifica il ki,Set Namecciano
-11,Turbante Namecciano,head,2,5,"{""wisdom"": 3, ""mana"": 10}",1800,"{""Tessuto"": 15}",Copricapo namecciano che aumenta la concentrazione,Set Namecciano
-12,Bastone Namecciano,main_hand,2,5,"{""attack"": 2, ""wisdom"": 2, ""mana"": 5}",1800,"{""Metallo"": 20}",Bastone rituale usato dai guerrieri namecciani,Set Namecciano
-13,Mantello Namecciano Anziano,chest,3,15,"{""defense"": 3, ""mana"": 30, ""wisdom"": 5, ""health"": 15}",14400,"{""Metallo"": 10, ""Tessuto"": 20}",Mantello degli anziani namecciani con poteri mistici,Set Namecciano Anziano
-14,Corona Namecciana,head,3,15,"{""wisdom"": 5, ""mana"": 20, ""perception"": 2}",14400,"{""Metallo"": 15}",Corona indossata dai leader namecciani,Set Namecciano Anziano
-15,Corpo Androide Mk I,chest,3,15,"{""defense"": 6, ""health"": 25, ""attack"": 3}",14400,"{""Metallo"": 50}",Corpo meccanico rinforzato,Set Androide
-16,Scanner Androide,head,3,15,"{""perception"": 6, ""crit"": 4}",14400,"{""Metallo"": 15}",Sistema di rilevamento avanzato,Set Androide
-17,Cannone Energetico,main_hand,3,15,"{""attack"": 6, ""crit"": 2}",14400,"{""Metallo"": 15, ""Cristallo"": 5}",Arma ad energia devastante,Set Androide
-18,Corpo Androide Mk II,chest,4,25,"{""defense"": 8, ""health"": 40, ""attack"": 5, ""speed"": 2}",43200,"{""Metallo"": 30, ""Cristallo"": 15}",Corpo meccanico di ultima generazione,Set Androide Avanzato
-19,Gi di Kame,chest,4,25,"{""defense"": 6, ""health"": 30, ""wisdom"": 3, ""speed"": 2}",43200,"{""Metallo"": 20, ""Cristallo"": 10}",Il kimono della Scuola della Tartaruga,Set Maestri
-20,Tunica Kaioshin,chest,4,25,"{""defense"": 5, ""mana"": 50, ""wisdom"": 8, ""health"": 25}",43200,"{""Metallo"": 25, ""Cristallo"": 20}",Tunica sacra indossata dai Kaioshin,Set Kaioshin
-21,Orecchini Potara,accessory1,5,50,"{""all_stats"": 10}",172800,"{""Cristallo"": 35}",Orecchini leggendari dei Kaioshin per la fusione,Set Kaioshin Supremo
-22,Mantello Supremo,chest,5,50,"{""defense"": 10, ""mana"": 80, ""wisdom"": 15, ""health"": 50, ""all_stats"": 5}",86400,"{""Cristallo"": 48}",Mantello del Kaioshin Supremo,Set Kaioshin Supremo
-23,Anello del Tempo,accessory2,5,50,"{""speed"": 10, ""perception"": 10, ""all_stats"": 3}",86400,"{""Cristallo"": 30}",Anello mistico che manipola il tempo,Set Kaioshin Supremo
+1,Gi da Allenamento Base,chest,1,1,"{""defense"": 1}",600,"{""Rottami"": 10}",Un semplice gi da allenamento per principianti,Set Base
+2,Scouter Verde,head,1,1,"{""perception"": 1}",600,"{""Rottami"": 10}",Uno scouter verde di base per scansionare i nemici,Set Base
+3,Spada di Legno,main_hand,1,1,"{""attack"": 1}",600,"{""Rottami"": 10}",Una spada di legno per l'allenamento,Set Base
+4,Armatura Saiyan Mk I,chest,2,5,"{""defense"": 3, ""health"": 10}",1800,"{""Materiale Pregiato"": 15}",Armatura da combattimento Saiyan di base,Set Saiyan
+5,Scouter Rosso Elite,head,2,5,"{""perception"": 3, ""crit"": 2}",1800,"{""Materiale Pregiato"": 10}",Scouter avanzato dell'elite Saiyan,Set Saiyan
+6,Guanti da Combattimento Saiyan,accessory1,2,5,"{""attack"": 2, ""crit"": 1}",1800,"{""Materiale Pregiato"": 10}",Guanti rinforzati per il combattimento,Set Saiyan
+7,Armatura Saiyan Mk II,chest,3,15,"{""defense"": 5, ""health"": 20, ""attack"": 2}",14400,"{""Materiale Pregiato"": 25}",Armatura Saiyan avanzata per guerrieri d'elite,Set Saiyan Elite
+8,Scouter Blu Reale,head,3,15,"{""perception"": 5, ""crit"": 3, ""speed"": 1}",14400,"{""Materiale Pregiato"": 15}",Scouter di ultima generazione,Set Saiyan Elite
+9,Spada Z,main_hand,3,15,"{""attack"": 5, ""crit"": 3}",14400,"{""Materiale Pregiato"": 20}",La leggendaria spada usata per allenare Gohan,Set Saiyan Elite
+10,Veste Namecciana,chest,2,5,"{""defense"": 2, ""mana"": 15, ""wisdom"": 2}",1800,"{""Materiale Pregiato"": 15}",Tradizionale gi namecciano che amplifica il ki,Set Namecciano
+11,Turbante Namecciano,head,2,5,"{""wisdom"": 3, ""mana"": 10}",1800,"{""Materiale Pregiato"": 10}",Copricapo namecciano che aumenta la concentrazione,Set Namecciano
+12,Bastone Namecciano,main_hand,2,5,"{""attack"": 2, ""wisdom"": 2, ""mana"": 5}",1800,"{""Materiale Pregiato"": 15}",Bastone rituale usato dai guerrieri namecciani,Set Namecciano
+13,Mantello Namecciano Anziano,chest,3,15,"{""defense"": 3, ""mana"": 30, ""wisdom"": 5, ""health"": 15}",14400,"{""Materiale Pregiato"": 30}",Mantello degli anziani namecciani con poteri mistici,Set Namecciano Anziano
+14,Corona Namecciana,head,3,15,"{""wisdom"": 5, ""mana"": 20, ""perception"": 2}",14400,"{""Materiale Pregiato"": 20}",Corona indossata dai leader namecciani,Set Namecciano Anziano
+15,Corpo Androide Mk I,chest,3,15,"{""defense"": 6, ""health"": 25, ""attack"": 3}",14400,"{""Materiale Pregiato"": 50}",Corpo meccanico rinforzato,Set Androide
+16,Scanner Androide,head,3,15,"{""perception"": 6, ""crit"": 4}",14400,"{""Materiale Pregiato"": 20}",Sistema di rilevamento avanzato,Set Androide
+17,Cannone Energetico,main_hand,3,15,"{""attack"": 6, ""crit"": 2}",14400,"{""Materiale Pregiato"": 25}",Arma ad energia devastante,Set Androide
+18,Corpo Androide Mk II,chest,4,25,"{""defense"": 8, ""health"": 40, ""attack"": 5, ""speed"": 2}",43200,"{""Diamante"": 15}",Corpo meccanico di ultima generazione,Set Androide Avanzato
+19,Gi di Kame,chest,4,25,"{""defense"": 6, ""health"": 30, ""wisdom"": 3, ""speed"": 2}",43200,"{""Diamante"": 12}",Il kimono della Scuola della Tartaruga,Set Maestri
+20,Tunica Kaioshin,chest,4,25,"{""defense"": 5, ""mana"": 50, ""wisdom"": 8, ""health"": 25}",43200,"{""Diamante"": 15}",Tunica sacra indossata dai Kaioshin,Set Kaioshin
+21,Orecchini Potara,accessory1,5,50,"{""all_stats"": 10}",172800,"{""Diamante"": 35}",Orecchini leggendari dei Kaioshin per la fusione,Set Kaioshin Supremo
+22,Mantello Supremo,chest,5,50,"{""defense"": 10, ""mana"": 80, ""wisdom"": 15, ""health"": 50, ""all_stats"": 5}",86400,"{""Diamante"": 48}",Mantello del Kaioshin Supremo,Set Kaioshin Supremo
+23,Anello del Tempo,accessory2,5,50,"{""speed"": 10, ""perception"": 10, ""all_stats"": 3}",86400,"{""Diamante"": 30}",Anello mistico che manipola il tempo,Set Kaioshin Supremo

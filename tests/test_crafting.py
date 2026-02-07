@@ -85,8 +85,8 @@ class TestCraftingSystem(unittest.TestCase):
             
             # Ensure essential equipment for crafting tests exists
             # test_04/05 use ID 1, test_06 uses ID 8
-            for eid, name, req in [(1, 'Gi della Tartaruga', '{"Metallo": 5}'), 
-                                 (8, 'Guanti Vegeta', '{"Tessuto": 5}')]:
+            for eid, name, req in [(1, 'Gi della Tartaruga', '{"Rottami": 5}'), 
+                                 (8, 'Guanti Vegeta', '{"Rottami": 5}')]:
                 exists = session.execute(text("SELECT id FROM equipment WHERE id = :id"), {"id": eid}).scalar()
                 if not exists:
                     session.execute(text("""
@@ -106,6 +106,8 @@ class TestCraftingSystem(unittest.TestCase):
             session.execute(text('DELETE FROM crafting_queue WHERE user_id = :uid'),
                           {"uid": self.test_user_id})
             session.execute(text('DELETE FROM user_resources WHERE user_id = :uid'),
+                          {"uid": self.test_user_id})
+            session.execute(text('DELETE FROM user_refined_materials WHERE user_id = :uid'),
                           {"uid": self.test_user_id})
             session.execute(text('DELETE FROM user_equipment WHERE user_id = :uid'),
                           {"uid": self.test_user_id})
@@ -130,10 +132,10 @@ class TestCraftingSystem(unittest.TestCase):
             
             # Verify it's in inventory
             resources = self.crafting.get_user_resources(self.test_user_id)
-            owned_resources = [r for r in resources if r['quantity'] > 0]
+            owned_resources = [r for r in resources['raw'] if r['quantity'] > 0]
             self.assertEqual(len(owned_resources), 1, "Should have 1 resource type with quantity > 0")
             self.assertEqual(owned_resources[0]['quantity'], qty, f"Should have quantity {qty}")
-            print(f"✅ Dropped: {resources[0]['name']} (Rarity {resources[0]['rarity']})")
+            print(f"✅ Dropped: {resources['raw'][0]['name']} (Rarity {resources['raw'][0]['rarity']})")
         else:
             print("✅ No drop this time (20% chance is working)")
     
@@ -153,7 +155,7 @@ class TestCraftingSystem(unittest.TestCase):
         
         resources = self.crafting.get_user_resources(self.test_user_id)
         # Filter for non-zero quantity
-        owned_resources = [r for r in resources if r['quantity'] > 0]
+        owned_resources = [r for r in resources['raw'] if r['quantity'] > 0]
         self.assertEqual(len(owned_resources), 1, "Should have 1 owned resource type")
         self.assertGreaterEqual(owned_resources[0]['quantity'], qty, f"Should have at least {qty} from boss")
         print(f"✅ Boss dropped: {owned_resources[0]['name']} x{owned_resources[0]['quantity']}")
@@ -176,7 +178,7 @@ class TestCraftingSystem(unittest.TestCase):
             # Should have 8 total
             resources = self.crafting.get_user_resources(self.test_user_id)
             # Filter for non-zero quantity
-            owned_resources = [r for r in resources if r['quantity'] > 0]
+            owned_resources = [r for r in resources['raw'] if r['quantity'] > 0]
             self.assertEqual(len(owned_resources), 1, "Should only have 1 resource type")
             self.assertEqual(owned_resources[0]['quantity'], 8, "Should have 8 Metallo stacked")
             print(f"✅ Stacked correctly: {owned_resources[0]['name']} x{owned_resources[0]['quantity']}")
@@ -225,12 +227,18 @@ class TestCraftingSystem(unittest.TestCase):
             equipment_id, crafting_requirements = equipment
             resources_needed = json.loads(crafting_requirements)
             
-            # Add required resources
-            for resource_name, quantity in resources_needed.items():
-                resource_id = session.execute(text("""
-                    SELECT id FROM resources WHERE name = :name
-                """), {"name": resource_name}).scalar()
-                self.crafting.add_resource_drop(self.test_user_id, resource_id, quantity=quantity)
+            # Add required refined materials
+            for mat_name, quantity in resources_needed.items():
+                mat_id = session.execute(text("""
+                    SELECT id FROM refined_materials WHERE name = :name
+                """), {"name": mat_name}).scalar()
+                
+                session.execute(text("""
+                    INSERT INTO user_refined_materials (user_id, material_id, quantity)
+                    VALUES (:uid, :mid, :qty)
+                """), {"uid": self.test_user_id, "mid": mat_id, "qty": quantity})
+            
+            session.commit()
             
             # Verify resources before crafting
             resources_before = self.crafting.get_user_resources(self.test_user_id)
@@ -247,7 +255,7 @@ class TestCraftingSystem(unittest.TestCase):
             print(f"📦 Resources after: {len(resources_after)} types (consumed)")
             
             # Should have no resources left (all consumed)
-            total_after = sum(r['quantity'] for r in resources_after)
+            total_after = sum(r['quantity'] for r in resources_after['raw']) + sum(r['quantity'] for r in resources_after['refined'])
             self.assertEqual(total_after, 0, "All resources should be consumed")
             
             print(f"✅ Crafting started! Completes in {result['crafting_time']}s")
@@ -269,12 +277,18 @@ class TestCraftingSystem(unittest.TestCase):
             equipment_id, crafting_requirements = equipment
             resources_needed = json.loads(crafting_requirements)
             
-            # Add resources and start crafting
-            for resource_name, quantity in resources_needed.items():
-                resource_id = session.execute(text("""
-                    SELECT id FROM resources WHERE name = :name
-                """), {"name": resource_name}).scalar()
-                self.crafting.add_resource_drop(self.test_user_id, resource_id, quantity=quantity)
+            # Add refined materials and start crafting
+            for mat_name, quantity in resources_needed.items():
+                mat_id = session.execute(text("""
+                    SELECT id FROM refined_materials WHERE name = :name
+                """), {"name": mat_name}).scalar()
+                
+                session.execute(text("""
+                    INSERT INTO user_refined_materials (user_id, material_id, quantity)
+                    VALUES (:uid, :mid, :qty)
+                """), {"uid": self.test_user_id, "mid": mat_id, "qty": quantity})
+            
+            session.commit()
             
             craft_result = self.crafting.start_crafting(self.test_guild_id, self.test_user_id, equipment_id)
             if not craft_result['success']:

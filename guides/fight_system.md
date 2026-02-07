@@ -4,16 +4,20 @@ Benvenuto nel sistema di combattimento di aROMa RPG! Qui troverai tutto ciò che
 
 ## 📊 Statistiche Base
 
-Ogni personaggio ha 3 statistiche principali:
+Ogni personaggio parte con dei valori minimi di sistema:
 
-1.  **❤️ Salute (HP)**: La tua vita. Se scende a 0, sei esausto e non puoi combattere finché non recuperi.
-2.  **💙 Mana (MP)**: Energia magica usata per gli Attacchi Speciali.
-3.  **⚔️ Danno Base**: Il danno fisico che infliggi con un attacco normale.
+1.  **❤️ Salute (HP)**: La tua vita. Valore minimo base: **100 HP**. Se scende a 0, sei esausto e non puoi combattere finché non recuperi.
+2.  **💙 Mana (MP)**: Energia magica usata per gli Attacchi Speciali. Valore minimo base: **50 MP**.
+3.  **⚔️ Danno Base**: Il danno fisico che infliggi con un attacco normale. Valore minimo base: **10**.
 
 ### Statistiche Avanzate (Allocabili)
-4.  **🛡️ Resistenza**: Riduce i danni subiti (1% per punto allocato, MAX 75%)
-5.  **💥 Critico**: Probabilità di infliggere danno critico (1% per punto allocato)
-6.  **⚡ Velocità**: Determina l'ordine di attacco e la frequenza
+4.  **🛡️ Resistenza**: Riduce i danni subiti (1% per punto allocato, MAX 75%).
+5.  **💥 Critico**: Probabilità di infliggere danno critico (1% per punto allocato).
+6.  **⚡ Velocità**: Riduce il tempo di ricarica (Cooldown) tra un attacco e l'altro.
+    *   **Base**: 0 punti velocità = 60 secondi di cooldown.
+    *   **Scaling**: Ogni punto di velocità riduce il cooldown del **5%**.
+    *   **Formula**: `60 / (1 + Velocità * 0.05)` secondi.
+    *   **Esempio**: Con 20 punti velocità, il cooldown si dimezza a **30 secondi**.
 
 ## 🥊 Come Combattere
 

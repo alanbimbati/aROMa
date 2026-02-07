@@ -60,10 +60,16 @@ class DropService:
 
         # Base drop chance (e.g., 1% per message)
         # If theme is Dragon Ball, increase to 5%
-        drop_chance = 0.01
+        # Default drop chance 0 for Dragon Balls if not in season
+        drop_chance = 0.0
+        
         if theme == 'Dragon Ball':
-            drop_chance = 0.05
-            
+            # Check if it's Saga 1
+            if active_season and "Saga 1" in active_season.name:
+                drop_chance = 0.05
+            else:
+                drop_chance = 0.01
+
         # Anti-spam check: 30 seconds cooldown
         import datetime
         if user.last_chat_drop_time:

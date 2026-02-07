@@ -536,7 +536,7 @@ class UserService:
         session.close()
         return msg
 
-    def allocate_stat_point(self, utente, stat_type):
+    def allocate_stat_point(self, utente, stat_type, session=None):
         """Allocate a stat point to HP, Mana, Damage, Resistance, Crit, or Speed"""
         if utente.stat_points <= 0:
             return False, "Non hai punti statistica disponibili!"
@@ -569,8 +569,8 @@ class UserService:
         else:
             return False, "Statistica non valida!"
         
-        self.update_user(utente.id_telegram, updates)
-        self.recalculate_stats(utente.id_telegram)
+        self.update_user(utente.id_telegram, updates, session=session)
+        self.recalculate_stats(utente.id_telegram, session=session)
         
         return True, msg
     
@@ -710,11 +710,11 @@ class UserService:
         Calculate total stats for a user, optionally overriding the character.
         Returns a dict of final stats.
         """
-        # 1. System Base Stats (Now minimal to rely more on character/build)
+        # 1. System Base Stats (Matching model defaults for level 1)
         level = utente.livello or 1
-        base_hp = 20  # Minimum base to avoid 0 HP issues
-        base_mana = 20
-        base_dmg = 5
+        base_hp = 100
+        base_mana = 50
+        base_dmg = 10
         base_res = 0
         base_crit = 0 
         base_speed = 0 
@@ -735,8 +735,8 @@ class UserService:
             base_res += character.get('bonus_resistance', 0)
             
             # Use character specific bases for speed and crit
-            base_crit = character.get('crit_chance', 5) + character.get('bonus_crit', 0)
-            base_speed = character.get('speed', 30) + character.get('bonus_speed', 0)
+            base_crit = character.get('crit_chance', 0) + character.get('bonus_crit', 0)
+            base_speed = character.get('speed', 0) + character.get('bonus_speed', 0)
         
         # 3. Allocations
         # Scaling: 1 point = 10 HP, 5 Mana, 2 DMG, 1 Res, 1 Crit, 1 Speed
@@ -768,7 +768,7 @@ class UserService:
         # calculate_equipment_stats uses a new session if none provided, 
         # but here we might pass a user object detached or attached.
         # Ideally we fetch fresh equip stats for the user ID.
-        equip_stats = self.equipment_service.calculate_equipment_stats(utente.id_telegram)
+        equip_stats = self.equipment_service.calculate_equipment_stats(utente.id_telegram, session=session)
         
         total_hp += equip_stats.get('max_health', 0)
         total_mana += equip_stats.get('max_mana', 0)
@@ -827,10 +827,10 @@ class UserService:
             utente.speed = stats['speed']
             
             # Ensure current values don't exceed max
-            if utente.health > utente.max_health:
+            if utente.health is None or utente.health > utente.max_health:
                 utente.health = utente.max_health
             
-            if utente.mana > utente.max_mana:
+            if utente.mana is None or utente.mana > utente.max_mana:
                 utente.mana = utente.max_mana
             
             # Handle current_hp/mana logic for combat
@@ -1047,7 +1047,7 @@ class UserService:
     def check_fatigue(self, user):
         """Check if user is fatigued (low HP)"""
         current_hp = user.current_hp if hasattr(user, 'current_hp') and user.current_hp is not None else (user.health or 0)
-        max_hp = user.max_health
+        max_hp = user.max_health if user.max_health is not None else 100
         
         # Dead is not fatigued
         if current_hp <= 0:
@@ -1087,8 +1087,8 @@ class UserService:
         # Apply remaining damage to HP
         if damage > 0:
             current_hp = user.current_hp if user.current_hp is not None else (user.health or 0)
-            # Ensure we start from at most max_health
-            current_hp = min(current_hp, user.max_health)
+            max_health = user.max_health if user.max_health is not None else 100
+            current_hp = min(current_hp, max_health)
             
             new_hp = max(0, current_hp - damage)
             

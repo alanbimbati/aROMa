@@ -22,36 +22,33 @@ def seed_resources():
     
     resources = [
         # Common (Rarity 1)
-        {'name': 'Rottami', 'rarity': 1, 'description': 'Rusty metal fragments (Iron Scrap)', 'drop_source': 'mob'},
+        {'name': 'Ferro Vecchio', 'rarity': 1, 'description': 'Rusty metal fragments (Old Iron)', 'drop_source': 'mob'},
         {'name': 'Cuoio', 'rarity': 1, 'description': 'Tattered leather pieces (Worn Leather)', 'drop_source': 'mob'},
         {'name': 'Legna', 'rarity': 1, 'description': 'Rough wooden board (Wood Plank)', 'drop_source': 'both'},
-        {'name': 'Cristallo Verde', 'rarity': 1, 'description': 'A glowing green crystal', 'drop_source': 'both'},
+        {'name': 'Cristallo di Crash', 'rarity': 1, 'description': 'A unstable crystal from Bandicoot era', 'drop_source': 'mob'},
+        {'name': 'Tessuto Semplice', 'rarity': 1, 'description': 'Basic cloth fabric', 'drop_source': 'mob'},
+        {'name': 'Lefa di Freezer', 'rarity': 1, 'description': 'Cold alien scale fragment', 'drop_source': 'mob'},
         
         # Uncommon (Rarity 2)
         {'name': 'Ferro', 'rarity': 2, 'description': 'A solid steel ingot (Steel Bar)', 'drop_source': 'mob'},
         {'name': 'Pelle Dura', 'rarity': 2, 'description': 'Durable leather hide (Tough Leather)', 'drop_source': 'mob'},
         {'name': 'Cristallo Blu', 'rarity': 2, 'description': 'A pulsing blue crystal', 'drop_source': 'both'},
-        {'name': 'Scaglia di Drago', 'rarity': 2, 'description': 'Fragment of dragon scale', 'drop_source': 'mob'},
+        {'name': 'Vetro Spaccato', 'rarity': 2, 'description': 'Broken glass with sharp edges', 'drop_source': 'mob'},
         
         # Rare (Rarity 3)
         {'name': 'Mithril', 'rarity': 3, 'description': 'Lightweight rare metal', 'drop_source': 'mob'},
         {'name': 'Cristallo Rosso', 'rarity': 3, 'description': 'A fiery red crystal', 'drop_source': 'both'},
-        {'name': 'Frammento Stellare', 'rarity': 3, 'description': 'A piece of fallen star', 'drop_source': 'mob'},
         {'name': 'Essenza Energetica', 'rarity': 3, 'description': 'Condensed pure energy', 'drop_source': 'both'},
         {'name': 'Seta', 'rarity': 3, 'description': 'Fine silk cloth', 'drop_source': 'mob'},
-        {'name': 'Essenza Elementale', 'rarity': 3, 'description': 'Elemental essence', 'drop_source': 'mob'},
         
         # Epic (Rarity 4)
         {'name': 'Adamantite', 'rarity': 4, 'description': 'Nearly indestructible metal', 'drop_source': 'mob'},
         {'name': 'Cristallo Viola', 'rarity': 4, 'description': 'A mysterious purple crystal', 'drop_source': 'both'},
         {'name': 'Frammento Antico', 'rarity': 4, 'description': 'Relic from ancient times', 'drop_source': 'mob'},
-        {'name': 'Essenza del Caos', 'rarity': 4, 'description': 'Volatile chaotic energy', 'drop_source': 'both'},
         
         # Legendary (Rarity 5)
         {'name': 'Oricalco', 'rarity': 5, 'description': 'The legendary divine metal', 'drop_source': 'mob'},
         {'name': 'Cristallo Dorato', 'rarity': 5, 'description': 'A radiant golden crystal', 'drop_source': 'both'},
-        {'name': 'Frammento Divino', 'rarity': 5, 'description': 'Fragment of godly power', 'drop_source': 'mob'},
-        {'name': 'Essenza Eterna', 'rarity': 5, 'description': 'Essence that never fades', 'drop_source': 'both'},
         {'name': 'Nucleo Stellare', 'rarity': 5, 'description': 'Core of a star', 'drop_source': 'mob'},
     ]
     
@@ -145,6 +142,42 @@ def seed_equipment():
     finally:
         session.close()
 
+def seed_refined_materials():
+    """Populate refined_materials table"""
+    db = Database()
+    session = db.get_session()
+    
+    print("💎 Seeding refined materials...")
+    
+    refined = [
+        {'name': 'Rottami', 'rarity': 1},
+        {'name': 'Materiale Pregiato', 'rarity': 2},
+        {'name': 'Diamante', 'rarity': 3},
+    ]
+    
+    count = 0
+    try:
+        for res in refined:
+            exists = session.execute(
+                text("SELECT id FROM refined_materials WHERE name = :name"),
+                {"name": res['name']}
+            ).fetchone()
+            
+            if not exists:
+                session.execute(text("""
+                    INSERT INTO refined_materials (name, rarity)
+                    VALUES (:name, :rarity)
+                """), res)
+                count += 1
+        session.commit()
+        print(f"✅ Added {count} new refined materials.")
+    except Exception as e:
+        print(f"❌ Error seeding refined materials: {e}")
+        session.rollback()
+    finally:
+        session.close()
+
 if __name__ == "__main__":
     seed_resources()
+    seed_refined_materials()
     seed_equipment()

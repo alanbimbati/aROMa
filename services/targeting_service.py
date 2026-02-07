@@ -138,9 +138,9 @@ class TargetingService:
         if self.user_service.check_fatigue(user):
             return False, "Sei troppo affaticato per combattere! Riposa."
         
-        # Check cooldown
+        # Check cooldown (1 point = 5% CD reduction)
         user_speed = getattr(user, 'speed', 0) or 0
-        cooldown_seconds = 60 / (1 + user_speed * 0.01)
+        cooldown_seconds = 60 / (1 + user_speed * 0.05)
         
         last_attack = getattr(user, 'last_attack_time', None)
         if last_attack:
@@ -163,9 +163,9 @@ class TargetingService:
         Returns:
             tuple: (bool, str) - (can_defend, error_message)
         """
-        # Check cooldown (shared with attack)
+        # Check cooldown (shared with attack, 1 point = 5% CD reduction)
         user_speed = getattr(user, 'speed', 0) or 0
-        cooldown_seconds = 60 / (1 + user_speed * 0.01)
+        cooldown_seconds = 60 / (1 + user_speed * 0.05)
         
         last_attack = getattr(user, 'last_attack_time', None)
         if last_attack:
