@@ -16,6 +16,10 @@ else:
 
 PointsName = 'Frutti Wumpa 🍑'
 
+# Premium Currency (Cosmetics)
+PremiumCurrencyName = 'Cristalli aROMa'
+PremiumCurrencyIcon = '✨'
+
 PREMIUM_CHANNELS = {
     'ps1'       :    '-1001187652609',
     'ps2'       :    '-1001369506956',

@@ -335,6 +335,82 @@ class UserService:
         except Exception as e:
             print(f"[ERROR] add_exp failed: {e}")
 
+    # ========== Premium Currency (Cristalli aROMa) Methods ==========
+    
+    def add_cristalli(self, user_id, amount, session=None):
+        """Add Cristalli aROMa premium currency to user"""
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
+        try:
+            utente = session.query(Utente).filter_by(id_telegram=user_id).first()
+            if utente:
+                current = utente.cristalli_aroma if utente.cristalli_aroma is not None else 0
+                utente.cristalli_aroma = int(current) + int(amount)
+                
+                if local_session:
+                    session.commit()
+                    
+                print(f"[CRISTALLI] Added {amount} Cristalli aROMa to user {user_id}. New balance: {utente.cristalli_aroma}")
+                return True
+            return False
+        except Exception as e:
+            print(f"[ERROR] add_cristalli failed: {e}")
+            if local_session:
+                session.rollback()
+            return False
+        finally:
+            if local_session:
+                session.close()
+    
+    def remove_cristalli(self, user_id, amount, session=None):
+        """Remove Cristalli aROMa premium currency from user (for purchases)"""
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
+        try:
+            utente = session.query(Utente).filter_by(id_telegram=user_id).first()
+            if utente:
+                current = utente.cristalli_aroma if utente.cristalli_aroma is not None else 0
+                if current < amount:
+                    print(f"[CRISTALLI] Insufficient balance. Current: {current}, Required: {amount}")
+                    return False
+                    
+                utente.cristalli_aroma = int(current) - int(amount)
+                
+                if local_session:
+                    session.commit()
+                    
+                print(f"[CRISTALLI] Removed {amount} Cristalli aROMa from user {user_id}. New balance: {utente.cristalli_aroma}")
+                return True
+            return False
+        except Exception as e:
+            print(f"[ERROR] remove_cristalli failed: {e}")
+            if local_session:
+                session.rollback()
+            return False
+        finally:
+            if local_session:
+                session.close()
+    
+    def get_cristalli_balance(self, user_id):
+        """Get current Cristalli aROMa balance for a user"""
+        session = self.db.get_session()
+        try:
+            utente = session.query(Utente).filter_by(id_telegram=user_id).first()
+            if utente:
+                return utente.cristalli_aroma if utente.cristalli_aroma is not None else 0
+            return 0
+        except Exception as e:
+            print(f"[ERROR] get_cristalli_balance failed: {e}")
+            return 0
+        finally:
+            session.close()
+
     def add_chat_exp(self, user_id, amount):
         """Add chat EXP to user and return new total"""
         session = self.db.get_session()

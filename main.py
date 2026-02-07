@@ -3403,6 +3403,12 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         if utente.stat_points > 0:
             msg += f" | 📊 **Punti**: `{utente.stat_points}`"
         msg += "\n"
+        
+        # Premium Currency
+        from settings import PremiumCurrencyName, PremiumCurrencyIcon
+        cristalli = getattr(utente, 'cristalli_aroma', 0) or 0
+        if cristalli > 0:
+            msg += f"{PremiumCurrencyIcon} **{PremiumCurrencyName}**: `{cristalli}`\n"
 
         # Special Attack / Abilities
         if character:
