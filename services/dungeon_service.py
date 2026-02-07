@@ -26,8 +26,8 @@ class DungeonService:
             now = datetime.datetime.now()
             today_date = now.date()
             
-            # 0. AUTO-CLEANUP: Clear extremely stale dungeons (e.g. older than 8 hours)
-            stale_cutoff = now - datetime.timedelta(hours=8)
+            # 0. AUTO-CLEANUP: Clear extremely stale dungeons (e.g. older than 3 hours)
+            stale_cutoff = now - datetime.timedelta(hours=3)
             stale_dungeons = session.query(Dungeon).filter(
                 Dungeon.chat_id == chat_id,
                 Dungeon.status.in_(["registration", "active"]),
