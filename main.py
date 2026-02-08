@@ -8198,17 +8198,16 @@ def callback_query(call):
         session = db.get_session()
         
         enemy_dead = False
-        if enemy_type == "mob":
-            mob = session.query(Mob).filter_by(id=enemy_id).first()
-            if not mob:
-                session.close()
-                safe_answer_callback(call.id, "❌ Nemico non trovato!", show_alert=True)
-                return
-            enemy_dead = mob.is_dead
-        else:
+        if enemy_type not in ["mob", "boss"]:
             session.close()
             safe_answer_callback(call.id, "❌ Tipo nemico non valido", show_alert=True)
             return
+        mob = session.query(Mob).filter_by(id=enemy_id).first()
+        if not mob:
+            session.close()
+            safe_answer_callback(call.id, "❌ Nemico non trovato!", show_alert=True)
+            return
+        enemy_dead = mob.is_dead
         session.close()
         
         if enemy_dead:
@@ -8306,18 +8305,17 @@ def callback_query(call):
         db = Database()
         session = db.get_session()
         
-        enemy_dead = False
-        if enemy_type == "mob":
-            mob = session.query(Mob).filter_by(id=enemy_id).first()
-            if not mob:
-                session.close()
-                safe_answer_callback(call.id, "❌ Nemico non trovato!", show_alert=True)
-                return
-            enemy_dead = mob.is_dead
-        else:
+        if enemy_type not in ["mob", "boss"]:
             session.close()
             safe_answer_callback(call.id, "❌ Tipo non valido", show_alert=True)
             return
+
+        mob = session.query(Mob).filter_by(id=enemy_id).first()
+        if not mob:
+            session.close()
+            safe_answer_callback(call.id, "❌ Nemico non trovato!", show_alert=True)
+            return
+        enemy_dead = mob.is_dead
         session.close()
         
         if enemy_dead:
