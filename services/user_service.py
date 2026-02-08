@@ -443,15 +443,16 @@ class UserService:
             
             # Helper to get exp required from CharacterLoader (source of truth)
             def get_exp_required_for_level(level):
-                # For levels > 50, we force a quadratic curve (100 * level^2)
-                # to ensure difficulty continues to scale as requested by the user.
-                if level > 50:
+                # We use a consistent quadratic curve (100 * level^2) for levels >= 45.
+                # This prevents extreme spikes found in some legacy character data
+                # and ensures that difficulty continues to scale as requested.
+                if level >= 45:
                     return 100 * (level ** 2)
                 
                 loader = get_character_loader()
                 chars = loader.get_characters_by_level(level)
                 if chars:
-                    # All characters of same level should have same exp req, take first
+                    # For mid-levels, we take the value from CSV if available
                     return chars[0].get('exp_required', 100 * (level ** 2))
                 
                 # Fallback to DB if loader fails
@@ -717,18 +718,18 @@ class UserService:
         return True, f"Statistiche resettate! {points_to_refund} punti restituiti."
 
     def validate_and_fix_user_stats(self):
-        """Startup check to reset stats for users who have more points than allowed"""
-        print("[STARTUP] Validating user stat allocations...")
+        """Startup check to reset stats for users and sync with current logic/data"""
+        print("[STARTUP] Validating and syncing user statistics...")
         session = self.db.get_session()
         try:
             users = session.query(Utente).all()
-            fixed_count = 0
+            print(f"[STARTUP] Processing {len(users)} users...")
             
             for user in users:
                 if not user.livello:
                     continue
                 
-                # Total allowed points: Level * 2
+                # 1. Total allowed points: Level * 2
                 allowed_total = user.livello * 2
                 
                 # Current allocated points
@@ -747,33 +748,28 @@ class UserService:
                 # Total they actually HAVE
                 actual_total = allocated + available
                 
+                # If they have too many points, reset them
                 if actual_total > allowed_total:
-                    print(f"[FIX] User {user.id_telegram} ({user.nome}) has {actual_total} pts, but level {user.livello} only allows {allowed_total}. Resetting...")
-                    
-                    # Reset stats (using the same logic as reset_stats but without Wumpa cost)
+                    print(f"[FIX] User {user.id_telegram} ({user.nome}) has {actual_total} pts, but level {user.livello} only allows {allowed_total}. Resetting allocations...")
                     user.allocated_health = 0
                     user.allocated_mana = 0
                     user.allocated_damage = 0
                     user.allocated_resistance = 0
                     user.allocated_crit = 0
                     user.allocated_speed = 0
-                    user.resistance = 0
-                    user.crit_chance = 0
-                    user.speed = 0
                     user.stat_points = allowed_total
-                    
-                    # Flush changes to allow recalculate to work correctly
                     session.flush()
-                    
-                    # Recalculate will fix max_health, max_mana, and base_damage based on level
+
+                # 2. Mandatory synchronization with current logic/CSV data
+                # This ensures that if we changed a character bonus or speed formula, 
+                # all users are updated immediately on startup.
+                try:
                     self.recalculate_stats(user.id_telegram, session=session)
-                    fixed_count += 1
+                except Exception as e:
+                    print(f"[ERROR] Recalculate failed for user {user.id_telegram}: {e}")
             
-            if fixed_count > 0:
-                session.commit()
-                print(f"[STARTUP] Fixed stat points for {fixed_count} users.")
-            else:
-                print("[STARTUP] Stat validation complete. No issues found.")
+            session.commit()
+            print("[STARTUP] Stat validation and sync complete.")
                 
         except Exception as e:
             print(f"[ERROR] validate_and_fix_user_stats: {e}")
@@ -812,9 +808,11 @@ class UserService:
             base_dmg += character.get('bonus_damage', 0)
             base_res += character.get('bonus_resistance', 0)
             
-            # Use character specific bases for speed and crit
-            base_crit = character.get('crit_chance', 0) + character.get('bonus_crit', 0)
-            base_speed = character.get('speed', 0) + character.get('bonus_speed', 0)
+            # Use character specific bonuses for speed and crit (Base starts at 0 as requested)
+            # We ignore the 'speed' and 'crit_chance' columns as they contain legacy "tier" values
+            # that bypass the stat system. We only use explicit 'bonus_' columns.
+            base_crit = character.get('bonus_crit', 0)
+            base_speed = character.get('bonus_speed', 0)
         
         # 3. Allocations
         # Scaling: 1 point = 10 HP, 5 Mana, 2 DMG, 1 Res, 1 Crit, 1 Speed
