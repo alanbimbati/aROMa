@@ -64,8 +64,8 @@ class DropService:
         drop_chance = 0.0
         
         if theme == 'Dragon Ball':
-            # Check if it's Saga 1
-            if active_season and "Saga 1" in active_season.name:
+            # Check if it's Saga 1 or Stagione 1
+            if active_season and ("Saga 1" in active_season.name or "Stagione 1" in active_season.name):
                 drop_chance = 0.05
             else:
                 drop_chance = 0.01
