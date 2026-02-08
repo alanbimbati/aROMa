@@ -5163,55 +5163,8 @@ def any(message):
         if not message.forward_from_chat:
              return
              
-    # RESOURCE DROPS (Merged from handle_general_chat)
-    # Check if this is a group chat where drops can happen
-    if message.chat.type in ['group', 'supergroup']:
-        try:
-             # Anti-spam check (min length)
-             if message.text and len(message.text) >= 4:
-                 # Initialize service
-                 from services.crafting_service import CraftingService
-                 crafting_service = CraftingService()
-                 
-                 # Roll drop (20% chance now as per user request for simplicity)
-                 drops = crafting_service.roll_chat_drop(chance=20)
-                 
-                 if drops:
-                     user_id = message.from_user.id
-                     from sqlalchemy import text
-                     
-                     session_res = crafting_service.db.get_session()
-                     try:
-                         drop_messages = []
-                         for resource_id, qty, image_path in drops:
-                             resource_name = session_res.execute(text("SELECT name FROM resources WHERE id = :id"), {"id": resource_id}).scalar()
-                             
-                             success_drop = crafting_service.add_resource_drop(user_id, resource_id, quantity=qty, source="chat")
-                             
-                             if success_drop and resource_name:
-                                 drop_messages.append(f"**{resource_name} x{qty}**")
-                                 
-                                 # Send photo only for the first item if multiple, otherwise it's spammy
-                                 if len(drop_messages) == 1:
-                                     import os
-                                     if image_path and os.path.exists(image_path):
-                                         try:
-                                             with open(image_path, 'rb') as photo:
-                                                 bot.send_photo(message.chat.id, photo, caption=f"✨ Hai trovato dei materiali!", reply_to_message_id=message.message_id)
-                                         except:
-                                             pass
-                         
-                         if drop_messages:
-                             msg_drop = f"✨ Hai trovato: " + ", ".join(drop_messages) + "!"
-                             bot.reply_to(message, msg_drop, parse_mode='markdown')
-                                 
-                     except Exception as e:
-                         print(f"Error in chat drop: {e}")
-                         session_res.rollback()
-                     finally:
-                         session_res.close()
-        except Exception as e:
-            print(f"[CHAT DROP ERROR] {e}")
+    # RESOURCE DROPS are now handled by drop_service.maybe_drop(utente, bot, message)
+    # in the latter part of this function to respect the 10s cooldown and avoid flood.
 
     # GAME PURCHASE / PRIVATE CHAT LOGIC
     # Only allow purchases/private commands in private chat
@@ -5375,33 +5328,32 @@ def any(message):
             can_receive_reward = True
             if utente.last_chat_drop_time:
                 elapsed = (datetime.datetime.now() - utente.last_chat_drop_time).total_seconds()
-                if elapsed < 30:
+                if elapsed < 10:
                     can_receive_reward = False
             
-            if not can_receive_reward:
-                return
+            if can_receive_reward:
 
-            # Update last drop time
-            user_service.update_user(message.from_user.id, {'last_chat_drop_time': datetime.datetime.now()})
+                # Update last drop time
+                user_service.update_user(message.from_user.id, {'last_chat_drop_time': datetime.datetime.now()})
 
-            passive_exp = random.randint(1, 10)
-            level_up_info = user_service.add_exp_by_id(message.from_user.id, passive_exp)
-            
-            if level_up_info['leveled_up']:
-                username = escape_markdown(message.from_user.username if message.from_user.username else message.from_user.first_name)
-                bot.send_message(message.chat.id, f"🎉 **LEVEL UP!** @{username} è salito al livello **{level_up_info['new_level']}**! 🚀", parse_mode='markdown')
-            
-            # Track chat EXP for achievements
-            new_chat_exp_total = user_service.add_chat_exp(message.from_user.id, passive_exp)
-            
-            achievement_tracker = AchievementTracker()
-            achievement_tracker.on_chat_exp(
-                message.from_user.id,
-                new_chat_exp_total,
-                increment=passive_exp
-            )
-            # Process achievements immediately
-            achievement_tracker.process_pending_events(limit=5)
+                passive_exp = random.randint(1, 10)
+                level_up_info = user_service.add_exp_by_id(message.from_user.id, passive_exp)
+                
+                if level_up_info['leveled_up']:
+                    username = escape_markdown(message.from_user.username if message.from_user.username else message.from_user.first_name)
+                    bot.send_message(message.chat.id, f"🎉 **LEVEL UP!** @{username} è salito al livello **{level_up_info['new_level']}**! 🚀", parse_mode='markdown')
+                
+                # Track chat EXP for achievements
+                new_chat_exp_total = user_service.add_chat_exp(message.from_user.id, passive_exp)
+                
+                achievement_tracker = AchievementTracker()
+                achievement_tracker.on_chat_exp(
+                    message.from_user.id,
+                    new_chat_exp_total,
+                    increment=passive_exp
+                )
+                # Process achievements immediately
+                achievement_tracker.process_pending_events(limit=5)
     
     # Sunday bonus: 10 Wumpa when you write on Sunday
     if datetime.datetime.today().weekday() == 6:  # Sunday

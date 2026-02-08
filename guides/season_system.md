@@ -56,3 +56,9 @@ Alla fine della stagione:
 • I Gradi vengono resettati.
 • Le ricompense non reclamate potrebbero andare perse (reclamale in tempo!).
 • Inizia una nuova stagione con nuove ricompense!
+ 
+## 🐉 Drop delle Sfere del Drago
+Durante le stagioni a tema Dragon Ball, puoi trovare le sfere direttamente chattando nei gruppi!
+• **Probabilità**: 5% ad ogni messaggio.
+• **Cooldown**: 10 secondi tra un drop e l'altro per persona.
+• **Bonus Mostri**: Sconfiggere i mostri durante la stagione dà una probabilità extra del 15% di trovare una sfera!
