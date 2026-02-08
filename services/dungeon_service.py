@@ -49,6 +49,9 @@ class DungeonService:
                                 bot.send_message(check_chat_id, f"🕑 **TEMPO SCADUTO!**\n\nI nemici del dungeon **{sd.name}** si sono stancati di aspettare e sono fuggiti col bottino!", parse_mode='markdown')
                         except Exception as e:
                             print(f"[ERROR] Failed to send expiration message: {e}")
+                    
+                    # Advance global index even on cleanup to prevent loop
+                    self._advance_global_index(session)
                             
                 session.commit()
 
@@ -849,15 +852,8 @@ class DungeonService:
         if local_session:
             session.commit()
             
-        # NEW: Advance global index upon successful completion
-        try:
-             current_idx_str = SystemState.get_val(session, 'current_dungeon_index', '1')
-             current_idx = int(current_idx_str)
-             if current_idx <= 20:
-                 SystemState.set_val(session, 'current_dungeon_index', current_idx + 1)
-                 print(f"[DUNGEON] Advanced global index to {current_idx + 1}")
-        except Exception as e:
-             print(f"[ERROR] Failed to advance dungeon index: {e}")
+        # NEW: Advance global index upon successful completion (now using helper)
+        self._advance_global_index(session)
 
         if local_session:
             session.close()
@@ -865,6 +861,22 @@ class DungeonService:
             session.flush()
         
         return f"🏆 **DUNGEON COMPLETATO!** 🏆\n\n**Rango: {score}**\n{details}\n\nRicompense:\n+{wumpa} Wumpa, +{exp} EXP a tutti!"
+
+    def _advance_global_index(self, session):
+        """Helper to advance the global dungeon index safely"""
+        try:
+            current_idx_str = SystemState.get_val(session, 'current_dungeon_index', '1')
+            current_idx = int(current_idx_str)
+            if current_idx < 20:
+                SystemState.set_val(session, 'current_dungeon_index', current_idx + 1)
+                print(f"[DUNGEON] Advanced global index to {current_idx + 1}")
+            else:
+                # Loop back or go random? For now, reset to 1 or stay at 20
+                # Let's reset to 1 to cycle through content
+                SystemState.set_val(session, 'current_dungeon_index', 1)
+                print(f"[DUNGEON] Reset global index to 1")
+        except Exception as e:
+            print(f"[ERROR] Failed to advance dungeon index: {e}")
 
     def calculate_score(self, dungeon):
         """Calculate F-Z score based on time, deaths, items"""
