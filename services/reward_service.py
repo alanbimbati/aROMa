@@ -192,14 +192,34 @@ class RewardService:
             return None
 
     def _handle_item_drop(self, user_id, is_boss, session=None):
+        # 1. Standard Item Drop (10% or 30% for boss)
         chance = 0.30 if is_boss else 0.10
         if random.random() < chance:
             items_data = self.item_service.load_items_from_csv()
             if items_data:
-                weights = [1/float(item['rarita']) for item in items_data]
-                reward_item = random.choices(items_data, weights=weights, k=1)[0]
-                self.item_service.add_item(user_id, reward_item['nome'], session=session)
-                return f"✨ Oggetto: **{reward_item['nome']}**"
+                # Filter out Dragon Balls from standard weighted drop to avoid 10000 rarity issues
+                standard_items = [i for i in items_data if "Sfera del Drago" not in i['nome']]
+                if standard_items:
+                    weights = [1/float(item['rarita']) for item in standard_items]
+                    reward_item = random.choices(standard_items, weights=weights, k=1)[0]
+                    self.item_service.add_item(user_id, reward_item['nome'], session=session)
+                    return f"✨ Oggetto: **{reward_item['nome']}**"
+
+        # 2. Seasonal Dragon Ball Drop (15% Bonus Chance if Theme is Dragon Ball)
+        try:
+            active_season = self.season_manager.get_active_season(session=session)
+            if active_season and active_season.theme == 'Dragon Ball':
+                if random.random() < 0.15: # 15% bonus chance
+                    items_data = self.item_service.load_items_from_csv()
+                    dragon_balls = [i for i in items_data if "Sfera del Drago" in i['nome']]
+                    if dragon_balls:
+                        # Even weights for specific balls during season
+                        reward_item = random.choice(dragon_balls)
+                        self.item_service.add_item(user_id, reward_item['nome'], session=session)
+                        return f"🐉 Sfera: **{reward_item['nome']}**"
+        except Exception as e:
+            print(f"[ERROR] Seasonal drop failed: {e}")
+            
         return None
 
     def distribute_aggregated_rewards(self, mobs_rewards_map, session):
