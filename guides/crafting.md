@@ -34,5 +34,6 @@ Il crafting non è istantaneo. La forgia richiede tempo per terminare il lavoro.
 ## 💡 Consigli
 
 • **Collabora con la Gilda**: Potenziare l'Armeria comune conviene a tutti i membri per ottenere equipaggiamento migliore.
-• **Raffina Costantemente**: Non restare mai senza materiali! Tieni sempre la raffineria occupata con le risorse grezze che trovi dai mostri.
+• **Raffina Costantemente**: Non restare mai senza materiali! Tieni sempre la raffineria occupata con le risorse grezze che trovi dai mostri o chattando.
+• **Chatta per le Risorse**: Scrivendo nei gruppi hai il 20% di probabilità di trovare materiali grezzi! (Cooldown di 10 secondi).
 • **Punta al Leggendario**: Con un'Armeria di livello alto e molta esperienza, potresti creare oggetti Leggendari unici nel server!

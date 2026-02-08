@@ -14,6 +14,8 @@ class DropService:
         self.db = Database()
         self.user_service = UserService()
         self.item_service = ItemService()
+        from services.crafting_service import CraftingService
+        self.crafting_service = CraftingService()
         self.active_traps = {} # {chat_id: {'type': 'TNT'/'Nitro', 'owner_id': user_id}}
 
     def set_trap(self, chat_id, trap_type, owner_id):
@@ -45,12 +47,29 @@ class DropService:
 
     def maybe_drop(self, user, bot, message):
         """
-        Random chance to drop Dragon Balls while writing in chat.
-        Drop rate increases during Dragon Ball season.
+        Consolidated chat drop system:
+        - Resources (20%)
+        - Classic Items (1%)
+        - Dragon Balls (5% during relevant season)
+        
+        Cooldown: 10 seconds to avoid flood.
+        Min message length: 4 characters.
         """
         # Only in groups
         if message.chat.type not in ['group', 'supergroup']:
             return
+            
+        # Anti-spam check (min length)
+        if not message.text or len(message.text) < 4:
+            return
+
+        # Anti-spam check (time)
+        import datetime
+        now = datetime.datetime.now()
+        if user.last_chat_drop_time:
+            elapsed = (now - user.last_chat_drop_time).total_seconds()
+            if elapsed < 10:
+                return
             
         # Get active season theme
         session = self.db.get_session()
@@ -58,56 +77,71 @@ class DropService:
         theme = active_season.theme if active_season else None
         session.close()
 
-        # Base drop chance (e.g., 1% per message)
-        # If theme is Dragon Ball, increase to 5%
-        # Default drop chance 0 for Dragon Balls if not in season
-        drop_chance = 0.0
-        
-        if theme == 'Dragon Ball':
-            # Check if it's Saga 1 or Stagione 1
-            if active_season and ("Saga 1" in active_season.name or "Stagione 1" in active_season.name):
-                drop_chance = 0.05
-            else:
-                drop_chance = 0.01
+        # Update last drop time immediately to reserve the slot
+        self.user_service.update_user(user.id_telegram, {'last_chat_drop_time': now})
 
-        # Anti-spam check: 30 seconds cooldown
-        import datetime
-        if user.last_chat_drop_time:
-            elapsed = (datetime.datetime.now() - user.last_chat_drop_time).total_seconds()
-            if elapsed < 30:
+        # 1. Roll for Dragon Balls (5% during Dragon Ball season)
+        if theme == 'Dragon Ball' and active_season and ("Saga 1" in active_season.name or "Stagione 1" in active_season.name):
+            if random.random() < 0.05:
+                items_data = self.item_service.load_items_from_csv()
+                dragon_balls = [item for item in items_data if "Sfera del Drago" in item['nome']]
+                if dragon_balls:
+                    item = random.choice(dragon_balls)
+                    item_name = item['nome']
+                    self.item_service.add_item(user.id_telegram, item_name, 1)
+                    bot.reply_to(message, f"🐉 **DRAGON BALL!**\nHai trovato: {item_name}!")
+                    # Send sticker
+                    try:
+                        sticker_path = f"Stickers/{item['sticker']}"
+                        with open(sticker_path, 'rb') as sti:
+                            bot.send_sticker(message.chat.id, sti)
+                    except: pass
+                    return
+
+        # 2. Roll for Classic Items (1% chance)
+        if random.random() < 0.01:
+            items_data = self.item_service.load_items_from_csv()
+            classic_items = [item for item in items_data if "Sfera del Drago" not in item['nome']]
+            if classic_items:
+                # Weighted roll for items
+                weights = [1/float(i['rarita']) for i in classic_items]
+                item = random.choices(classic_items, weights=weights, k=1)[0]
+                item_name = item['nome']
+                self.item_service.add_item(user.id_telegram, item_name, 1)
+                bot.reply_to(message, f"✨ **OGGETTO!**\nHai trovato: {item_name}!")
                 return
 
-        if random.random() > drop_chance:
-            return
-        
-        # Update last drop time
-        self.user_service.update_user(user.id_telegram, {'last_chat_drop_time': datetime.datetime.now()})
-        
-        # Load items from CSV
-        items_data = self.item_service.load_items_from_csv()
-        if not items_data:
-            return
-        
-        # Filter for Dragon Balls
-        dragon_balls = [item for item in items_data if "Sfera del Drago" in item['nome']]
-        if not dragon_balls:
-            return
+        # 3. Roll for Resources (20% chance)
+        drops = self.crafting_service.roll_chat_drop(chance=20)
+        if drops:
+            # Drop messages/photos
+            drop_messages = []
+            for resource_id, qty, image_path in drops:
+                resource_name = "Risorsa" # Fallback
+                try:
+                    from sqlalchemy import text
+                    s_res = self.db.get_session()
+                    resource_name = s_res.execute(text("SELECT name FROM resources WHERE id = :id"), {"id": resource_id}).scalar()
+                    s_res.close()
+                except: pass
+                
+                success = self.crafting_service.add_resource_drop(user.id_telegram, resource_id, quantity=qty, source="chat")
+                if success and resource_name:
+                    drop_messages.append(f"**{resource_name} x{qty}**")
             
-        # Pick a random Dragon Ball
-        item = random.choice(dragon_balls)
-        item_name = item['nome']
-        
-        # Send sticker if available
-        try:
-            sticker_path = f"Stickers/{item['sticker']}"
-            with open(sticker_path, 'rb') as sti:
-                bot.send_sticker(message.chat.id, sti)
-        except:
-            pass
-        
-        # Add item
-        self.item_service.add_item(user.id_telegram, item_name, 1)
-        bot.reply_to(message, f"✨ Hai trovato: {item_name}!")
+            if drop_messages:
+                caption = "⚒️ **RISORSE!**\nHai trovato: " + ", ".join(drop_messages)
+                first_image = drops[0][2] # image from the first drop
+                import os
+                if first_image and os.path.exists(first_image):
+                    try:
+                        with open(first_image, 'rb') as photo:
+                            bot.send_photo(message.chat.id, photo, caption=caption, reply_to_message_id=message.message_id, parse_mode='markdown')
+                        return
+                    except: pass
+                
+                bot.reply_to(message, caption, parse_mode='markdown')
+                return
     
     def handle_tnt(self, user, bot, message):
         """
