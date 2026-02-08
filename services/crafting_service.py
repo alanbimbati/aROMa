@@ -299,12 +299,16 @@ class CraftingService:
             total_mass = int(raw_qty * (1 + armory_level * 0.05) * rarity_mult)
             if total_mass < 1: total_mass = 1
             
-            # Distribution: Rarity increases chances for better materials
-            t2_boost = 0.9 + (resource_rarity * 0.1)
-            t3_boost = 0.8 + (resource_rarity * 0.2)
+            # Distribution: HEAVILY nerfed - premium materials should be very rare
+            # Resource rarity provides a small bonus
+            t2_boost = 1.0 + (resource_rarity * 0.05)  # Much smaller boost from rarity
+            t3_boost = 1.0 + (resource_rarity * 0.03)  # Even smaller for diamonds
             
-            t2_chance = min(50, (15 + (prof_level * 0.5) + (char_level * 0.1)) * t2_boost)
-            t3_chance = min(30, (5 + (prof_level * 0.3) + (char_level * 0.1)) * t3_boost)
+            # Base chances severely reduced to make materials rare
+            # T2 (Fine Material): Starts at ~2%, caps at 15%
+            # T3 (Diamond): Starts at ~0.5%, caps at 5%
+            t2_chance = min(15, (2 + (prof_level * 0.3) + (char_level * 0.05)) * t2_boost)
+            t3_chance = min(5, (0.5 + (prof_level * 0.15) + (char_level * 0.02)) * t3_boost)
             
             # Distribution calculation
             qty_t3 = int(total_mass * (t3_chance / 100.0) * random.uniform(0.8, 1.2))
@@ -350,7 +354,12 @@ class CraftingService:
             session.execute(text("UPDATE refinery_queue SET status = 'completed' WHERE id = :id"), {"id": queue_id})
             
             session.commit()
-            return {"success": True, "materials": results}
+            
+            # Award profession XP (5 XP per raw material refined)
+            xp_gained = raw_qty * 5
+            leveled_up = self.add_profession_xp(user_id, xp_gained)
+            
+            return {"success": True, "materials": results, "xp_gained": xp_gained, "leveled_up": leveled_up}
         except Exception as e:
             session.rollback()
             return {"success": False, "error": str(e)}
@@ -711,6 +720,11 @@ class CraftingService:
         current_xp = info['xp']
         current_level = info['level']
         
+        # Cap at level 50
+        MAX_PROFESSION_LEVEL = 50
+        if current_level >= MAX_PROFESSION_LEVEL:
+            return False  # Already at max level, no XP gain
+        
         new_xp = current_xp + amount
         
         # Calculate level: 100 * (level * (level + 1) / 2) is the XP needed for NEXT level
@@ -724,11 +738,38 @@ class CraftingService:
         # Simpler check:
         new_level = current_level
         while True:
+            if new_level >= MAX_PROFESSION_LEVEL:
+                new_level = MAX_PROFESSION_LEVEL
+                break
+                
             xp_needed = 100 * (new_level * (new_level + 1) // 2)
             if new_xp >= xp_needed:
                 new_level += 1
             else:
                 break
+        
+        # Update stats in database
+        session = self.db.get_session()
+        try:
+            # Update XP
+            session.execute(text("""
+                INSERT INTO user_stat (user_id, stat_key, value)
+                VALUES (:uid, 'profession_xp', :xp)
+                ON CONFLICT (user_id, stat_key) 
+                DO UPDATE SET value = :xp
+            """), {"uid": user_id, "xp": new_xp})
+            
+            # Update Level
+            session.execute(text("""
+                INSERT INTO user_stat (user_id, stat_key, value)
+                VALUES (:uid, 'profession_level', :lvl)
+                ON CONFLICT (user_id, stat_key) 
+                DO UPDATE SET value = :lvl
+            """), {"uid": user_id, "lvl": new_level})
+            
+            session.commit()
+        finally:
+            session.close()
         
         # Log XP gain event
         self.event_dispatcher.log_event(
