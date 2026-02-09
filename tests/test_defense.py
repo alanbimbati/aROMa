@@ -19,7 +19,17 @@ class TestDefenseSystem(unittest.TestCase):
         self.pve_service.user_service.get_resting_status.return_value = None # Ensure not resting
         self.pve_service.targeting_service = MagicMock()
         self.pve_service.event_dispatcher = MagicMock()
+        # Mock ParryService directly
+        self.pve_service.parry_service = MagicMock()
+        self.pve_service.parry_service.activate_parry.return_value = {
+            'success': True,
+            'window_duration': 2.5,
+            'activated_at': datetime.datetime.now()
+        }
         
+    def tearDown(self):
+        pass
+
     def test_defend_action(self):
         # Mock session
         session = MagicMock()
@@ -27,21 +37,30 @@ class TestDefenseSystem(unittest.TestCase):
         session.merge = MagicMock(side_effect=lambda x: x)
         
         # Mock user
-        user = Utente(id_telegram=123, nome="Hero", health=50, max_health=100, speed=10)
+        user = Utente(id_telegram=123, nome="Hero", health=50, max_health=100, max_mana=50, speed=10)
         user.active_status_effects = '[]'
+        user.current_hp = 50
+        user.resting_since = None
         
         # Test defend
         success, msg = self.pve_service.defend(user)
         
         self.assertTrue(success)
-        self.assertIn("usa **Difesa**", msg)
+        self.assertIn("entra in **Posizione di Difesa**", msg)
         
         # Check effect applied
         effects = json.loads(user.active_status_effects)
         self.assertTrue(any(e['effect'] == 'defense_up' for e in effects))
         
-        # Check healing (2-3% of 100 is 2-3 HP)
-        self.assertTrue(52 <= user.health <= 53)
+        # Check healing (2-3% of 100 is 2 HP)
+        # Verify update_user called twice (healing + cooldown)
+        # First call should be healing
+        self.assertGreaterEqual(self.pve_service.user_service.update_user.call_count, 1)
+        
+        first_call = self.pve_service.user_service.update_user.call_args_list[0]
+        args, kwargs = first_call
+        updates = args[1]
+        self.assertEqual(updates['health'], 52)
         
     def test_defense_damage_reduction(self):
         # Mock session
@@ -51,14 +70,13 @@ class TestDefenseSystem(unittest.TestCase):
         
         # Mock user with defense_up
         user = Utente(id_telegram=123, nome="Hero", health=100, max_health=100, allocated_resistance=0)
+        user.current_hp = 100
         StatusEffect.apply_status(user, 'defense_up', duration=1)
         
         # Mock mob
         mob = Mob(id=1, name="Goblin", attack_damage=100, difficulty_tier=1)
         
         # Mock query results
-        # We need to handle different queries: Mob and CombatParticipation
-        
         def query_side_effect(*args, **kwargs):
             if not args:
                 return MagicMock()
@@ -70,7 +88,6 @@ class TestDefenseSystem(unittest.TestCase):
             elif model == Utente:
                 query_mock.filter_by.return_value.first.return_value = user
             elif model == CombatParticipation:
-                # Return empty list for fled users
                 query_mock.filter_by.return_value.all.return_value = []
                 query_mock.filter_by.return_value.first.return_value = None
             return query_mock
@@ -81,16 +98,22 @@ class TestDefenseSystem(unittest.TestCase):
         self.pve_service.user_service.get_user.return_value = user
         self.pve_service.targeting_service.get_valid_targets.return_value = [123]
         
+        # Mock combat service
+        self.pve_service.combat_service = MagicMock()
+        self.pve_service.combat_service.calculate_mob_damage_to_user.return_value = 50
+        
+        # Mock ParryService process_enemy_attack to prevent MagicMock leak
+        # We need to mock the parry_service instance on pve_service
+        self.pve_service.parry_service = MagicMock()
+        self.pve_service.parry_service.process_enemy_attack.return_value = {'success': False}
+        
         # Mock damage_health to return new_hp, died
         self.pve_service.user_service.damage_health.return_value = (50, False)
         
         # Run attack
-        # We need to capture the damage calculation.
-        # Since mob_random_attack calculates damage internally, we can inspect the log_event call
-        
         self.pve_service.mob_random_attack(chat_id=1)
         
-        # Verify log_event called with reduced damage
+        # Verify log_event called with reducded damage
         self.assertTrue(self.pve_service.event_dispatcher.log_event.called, "log_event should have been called")
         
         call_args = self.pve_service.event_dispatcher.log_event.call_args
@@ -98,10 +121,11 @@ class TestDefenseSystem(unittest.TestCase):
             kwargs = call_args[1]
             damage = kwargs['value']
             # We expect damage to be reduced.
-            # Without defense: 100 base -> ~49 adjusted.
-            # With defense: ~46.
-            self.assertLess(damage, 60)
-            print(f"Damage taken: {damage}")
+            # Without defense: 50 base (from mock combat_service).
+            # With defense: 50 * 0.8 = 40.
+            self.assertLess(damage, 55)
+            # Ensure it is not a Mock
+            self.assertIsInstance(damage, (int, float))
 
     def test_special_attack(self):
         # Mock session

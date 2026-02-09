@@ -18,7 +18,7 @@ def get_combat_markup(enemy_type, enemy_id, chat_id, can_use_items=None):
         types.InlineKeyboardButton("✨ Speciale", callback_data=f"special_attack_enemy|{enemy_type}|{enemy_id}")
     )
     # Defend button
-    markup.add(types.InlineKeyboardButton("🛡️ Difesa", callback_data="defend_mob"))
+    markup.add(types.InlineKeyboardButton("🛡️ Difesa", callback_data=f"defend_mob|{enemy_type}|{enemy_id}"))
     
     # AoE buttons (only if >= 2 mobs)
     mob_count = pve_service.get_active_mobs_count(chat_id)

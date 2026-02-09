@@ -1,4 +1,5 @@
 import unittest
+from sqlalchemy import text
 import datetime
 import sys
 import os
@@ -25,10 +26,9 @@ class TestGuildExpansion(unittest.TestCase):
 
     def setUp(self):
         session = self.db.get_session()
-        # Clean up
-        session.query(GuildMember).delete()
-        session.query(Guild).delete()
-        session.query(Utente).filter(Utente.id_telegram.in_([self.u1_id, self.u2_id])).delete()
+        # Clean up using CASCADE to handle all dependencies
+        session.execute(text("TRUNCATE TABLE utente, guilds, guild_members, crafting_queue, user_refined_materials, parry_states RESTART IDENTITY CASCADE"))
+        session.commit()
         
         u1 = Utente(id_telegram=self.u1_id, nome="Leader", livello=10, points=5000, health=100, max_health=100, current_hp=50, mana=20, max_mana=100)
         u2 = Utente(id_telegram=self.u2_id, nome="Member", livello=5, points=1000, health=100, max_health=100, current_hp=50, mana=20, max_mana=100)

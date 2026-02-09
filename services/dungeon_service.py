@@ -860,7 +860,17 @@ class DungeonService:
         else:
             session.flush()
         
-        return f"🏆 **DUNGEON COMPLETATO!** 🏆\n\n**Rango: {score}**\n{details}\n\nRicompense:\n+{wumpa} Wumpa, +{exp} EXP a tutti!"
+        # Build participant names list
+        participant_names = []
+        for p in participants:
+            user = session.query(Utente).filter_by(id_telegram=p.user_id).first()
+            if user:
+                name = user.username if user.username else user.nome
+                participant_names.append(name)
+        
+        participants_str = ", ".join(participant_names) if participant_names else "nessuno"
+        
+        return f"🏆 **DUNGEON COMPLETATO!** 🏆\n\n**Rango: {score}**\n{details}\n\n**Ricompense:**\n+{wumpa} Wumpa, +{exp} EXP\n\n**Partecipanti:** {participants_str}"
 
     def _advance_global_index(self, session):
         """Helper to advance the global dungeon index safely"""

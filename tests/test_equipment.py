@@ -38,8 +38,7 @@ class TestEquipmentSystem(unittest.TestCase):
         session = cls.db.get_session()
         try:
             # Clean up any existing test user and data
-            session.execute(text('DELETE FROM user_equipment WHERE user_id = :uid'), 
-                          {"uid": cls.test_user_id})
+            session.execute(text('DELETE FROM user_equipment')) # Global cleanup for equipment tests
             session.execute(text('DELETE FROM utente WHERE "id_Telegram" = :uid'), 
                           {"uid": cls.test_user_id})
             

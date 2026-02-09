@@ -77,11 +77,12 @@ class CraftingService:
                 ORDER BY r.rarity ASC, r.name
             """), {"uid": user_id}).fetchall()
             
-            # Refined materials
+            # Refined materials (Aggregated to handle duplicates gracefully)
             refined = session.execute(text("""
-                SELECT rm.id, rm.name, rm.rarity, COALESCE(urm.quantity, 0) as quantity
+                SELECT rm.id, rm.name, rm.rarity, SUM(COALESCE(urm.quantity, 0)) as quantity
                 FROM refined_materials rm
                 LEFT JOIN user_refined_materials urm ON rm.id = urm.material_id AND urm.user_id = :uid
+                GROUP BY rm.id, rm.name, rm.rarity
                 ORDER BY rm.rarity ASC
             """), {"uid": user_id}).fetchall()
             
@@ -140,21 +141,13 @@ class CraftingService:
                 WHERE user_id = :uid AND material_id = :mid
             """), {"q": total_cost, "uid": user_id, "mid": source_id})
             
-            # Add target
-            existing_target = session.execute(text("""
-                SELECT id FROM user_refined_materials WHERE user_id = :uid AND material_id = :mid
-            """), {"uid": user_id, "mid": target_id}).scalar()
-            
-            if existing_target:
-                session.execute(text("""
-                    UPDATE user_refined_materials SET quantity = quantity + :q
-                    WHERE id = :id
-                """), {"q": count, "id": existing_target})
-            else:
-                session.execute(text("""
-                    INSERT INTO user_refined_materials (user_id, material_id, quantity)
-                    VALUES (:uid, :mid, :q)
-                """), {"uid": user_id, "mid": target_id, "q": count})
+            # Add target (Atomic UPSERT)
+            session.execute(text("""
+                INSERT INTO user_refined_materials (user_id, material_id, quantity)
+                VALUES (:uid, :mid, :q)
+                ON CONFLICT (user_id, material_id) 
+                DO UPDATE SET quantity = user_refined_materials.quantity + EXCLUDED.quantity
+            """), {"uid": user_id, "mid": target_id, "q": count})
                 
             session.commit()
             
@@ -327,31 +320,36 @@ class CraftingService:
                 'Diamante': qty_t3
             }
             
-            # Add to user_refined_materials
+            # Add to user_refined_materials (Atomic UPSERT)
             for mat_name, qty in results.items():
                 if qty <= 0: continue
                 # Get ID
                 mat_id = session.execute(text("SELECT id FROM refined_materials WHERE name = :n"), {"n": mat_name}).scalar()
-                if not mat_id: continue
+                if not mat_id: 
+                    print(f"[ERROR REFINERY] Material ID not found for: {mat_name}")
+                    continue
                 
-                # Check exist
-                existing = session.execute(text("""
-                    SELECT id FROM user_refined_materials WHERE user_id = :uid AND material_id = :mid
-                """), {"uid": user_id, "mid": mat_id}).scalar()
-                
-                if existing:
-                    session.execute(text("""
-                        UPDATE user_refined_materials SET quantity = quantity + :q
-                        WHERE id = :id
-                    """), {"q": qty, "id": existing})
-                else:
-                    session.execute(text("""
-                        INSERT INTO user_refined_materials (user_id, material_id, quantity)
-                        VALUES (:uid, :mid, :q)
-                    """), {"uid": user_id, "mid": mat_id, "q": qty})
+                session.execute(text("""
+                    INSERT INTO user_refined_materials (user_id, material_id, quantity)
+                    VALUES (:uid, :mid, :q)
+                    ON CONFLICT (user_id, material_id) 
+                    DO UPDATE SET quantity = user_refined_materials.quantity + EXCLUDED.quantity
+                """), {"uid": user_id, "mid": mat_id, "q": qty})
             
-            # Mark job complete
-            session.execute(text("UPDATE refinery_queue SET status = 'completed' WHERE id = :id"), {"id": queue_id})
+            # Mark job complete and store results
+            session.execute(text("""
+                UPDATE refinery_queue 
+                SET status = 'completed',
+                    result_t1 = :t1,
+                    result_t2 = :t2,
+                    result_t3 = :t3
+                WHERE id = :id
+            """), {
+                "id": queue_id,
+                "t1": results.get('Rottami', 0),
+                "t2": results.get('Materiale Pregiato', 0),
+                "t3": results.get('Diamante', 0)
+            })
             
             session.commit()
             
