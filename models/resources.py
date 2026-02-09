@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, BigInteger, String, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, ForeignKey, Text, UniqueConstraint
 from database import Base
 import datetime
 
@@ -35,6 +35,9 @@ class RefinedMaterial(Base):
 class UserRefinedMaterial(Base):
     """Represents refined materials owned by a user"""
     __tablename__ = "user_refined_materials"
+    __table_args__ = (
+        UniqueConstraint('user_id', 'material_id', name='uix_user_material'),
+    )
     
     id = Column(Integer, primary_key=True)
     user_id = Column(BigInteger, ForeignKey('utente.id_Telegram'), nullable=False)
@@ -61,4 +64,9 @@ class RefineryQueue(Base):
     
     start_time = Column(DateTime, default=datetime.datetime.now)
     completion_time = Column(DateTime, nullable=False)
-    status = Column(String(20), default="in_progress") # in_progress, completed, cancelled
+    status = Column(String(20), default="in_progress") # in_progress, completed, claimed, cancelled
+    
+    # Results stored after completion for claiming notification
+    result_t1 = Column(Integer, default=0) # Rottami
+    result_t2 = Column(Integer, default=0) # Materiale Pregiato
+    result_t3 = Column(Integer, default=0) # Diamante

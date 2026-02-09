@@ -47,7 +47,6 @@ sync_prod_to_local.sh
 verify_defense.py
 update_characters_with_metadata.py
 update_schema*.py
-BACKUP_GUIDE.md
 find_missing_images.py
 migrate_dietpi_schema.py
 missing_images_list.txt
@@ -57,7 +56,6 @@ run_tests.py
 setup_backups.sh
 test_cm_err.txt
 update_json_paths.py
-docs/EQUIPMENT_GUIDE.md
 scripts/fix_base_stats.py
 scripts/maintenance/sort_images_by_level.py
 scripts/maintenance/sync_image_sources.py
@@ -65,3 +63,16 @@ scripts/fix_base_stats.py
 scripts/fix_base_stats.py
 full_test_output*.txt
 test*.txt
+final_test_report*.txt
+find_*.py
+verify_*.py
+repro_*.py
+debug_*.py
+seed_*.py
+clean_*.py
+clean_db.py
+force_recalc.py
+migrate_sync.py
+aroma_backup_*.sql.gz
+BACKUP_GUIDE.md
+EQUIPMENT_GUIDE.md

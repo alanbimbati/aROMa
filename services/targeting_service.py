@@ -49,12 +49,14 @@ class TargetingService:
             
             # Candidates are ONLY those active in the current chat
             all_candidates = set(recent_users) if recent_users else set()
-            print(f"[DEBUG] Targeting: chat_id={chat_id}, candidates_in_chat={len(all_candidates)}")
+            # print(f"[DEBUG] Targeting: chat_id={chat_id}, candidates_in_chat={len(all_candidates)}")
+
             
             # REMOVED: Dungeon participant injection. Mobs MUST only target people active in the chat.
             # Even if in a dungeon, we only care about who is present in the current chat "instance".
             
-            print(f"[DEBUG] Targeting: Total candidates to check: {len(all_candidates)}")
+            # print(f"[DEBUG] Targeting: Total candidates to check: {len(all_candidates)}")
+
             
             # FALLBACK: If it's a dungeon mob, also include all registered participants
             if mob.dungeon_id:
@@ -63,9 +65,11 @@ class TargetingService:
                     for p in participants:
                         if p.user_id not in all_candidates:
                             all_candidates.add(p.user_id)
-                    print(f"[DEBUG] Targeting: Added dungeon participants. Total candidates: {len(all_candidates)}")
+                    pass # print(f"[DEBUG] Targeting: Added dungeon participants. Total candidates: {len(all_candidates)}")
+
                 except Exception as e:
-                    print(f"[DEBUG] Error fetching dungeon participants for targeting: {e}")
+                    pass # print(f"[DEBUG] Error fetching dungeon participants for targeting: {e}")
+
             
             # Filter users based on eligibility
             valid_targets = []
@@ -74,7 +78,8 @@ class TargetingService:
                 is_valid = self._is_valid_target(uid, mob, session)
                 if is_valid:
                     valid_targets.append(uid)
-            print(f"[DEBUG] Targeting: Final valid targets: {valid_targets}")
+            # print(f"[DEBUG] Targeting: Final valid targets: {valid_targets}")
+
             return valid_targets
             
         finally:
@@ -93,7 +98,8 @@ class TargetingService:
             import datetime
             six_months_ago = datetime.datetime.now() - datetime.timedelta(days=180)
             if user.last_activity < six_months_ago:
-                print(f"[DEBUG] User {user_id} inactive for 6+ months, skipping")
+                pass # print(f"[DEBUG] User {user_id} inactive for 6+ months, skipping")
+
                 return False
         
         # Check if resting

@@ -685,11 +685,11 @@ class UserService:
             base_d += character.get('bonus_damage', 0)
             res = character.get('bonus_resistance', 0)
             crit = character.get('crit_chance', 5) + character.get('bonus_crit', 0)
-            speed = character.get('speed', 30) + character.get('bonus_speed', 0)
+            speed = character.get('bonus_speed', 0)  # Only bonus from character
         else:
             res = 0
             crit = 5
-            speed = 30
+            speed = 0  # No character = no bonus
 
         updates = {
             'max_health': int(base_h),
@@ -808,11 +808,9 @@ class UserService:
             base_dmg += character.get('bonus_damage', 0)
             base_res += character.get('bonus_resistance', 0)
             
-            # Use character specific bonuses for speed and crit (Base starts at 0 as requested)
-            # We ignore the 'speed' and 'crit_chance' columns as they contain legacy "tier" values
-            # that bypass the stat system. We only use explicit 'bonus_' columns.
-            base_crit = character.get('bonus_crit', 0)
-            base_speed = character.get('bonus_speed', 0)
+            # Use character specific values for speed and crit
+            base_crit = character.get('crit_chance', 0) + character.get('bonus_crit', 0)
+            base_speed = character.get('bonus_speed', 0)  # Only bonus from character
         
         # 3. Allocations
         # Scaling: 1 point = 10 HP, 5 Mana, 2 DMG, 1 Res, 1 Crit, 1 Speed
@@ -832,9 +830,9 @@ class UserService:
         total_speed = base_speed + alloc_speed
         
         # Level scaling (Automatic growth to match game difficulty)
-        total_hp += level * 5
-        total_mana += level * 2
-        total_dmg += level * 1
+        total_hp += (level - 1) * 2
+        total_mana += (level - 1) * 2
+        total_dmg += (level - 1) * 1
         
         total_dmg = int(total_dmg) # Ensure integer
         

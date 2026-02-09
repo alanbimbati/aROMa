@@ -1168,6 +1168,11 @@ def handle_guild_refinery_view(call):
     msg += f"📅 **Oggi si raffina**: {'❓' if not daily_res else daily_res['name']}\n"
     msg += "_Solo questo materiale può essere processato oggi._\n\n"
     
+    # Show user's profession level
+    prof_info = crafting_service.get_profession_info(call.from_user.id)
+    msg += f"🔨 **Armaiolo**: Lv. {prof_info['level']}/50 ({prof_info['xp']} XP)\n"
+    msg += "_Livelli più alti = maggiori probabilità di materiali rari_\n\n"
+    
     # Active refinement jobs
     session = crafting_service.db.get_session()
     try:
@@ -1175,7 +1180,7 @@ def handle_guild_refinery_view(call):
             SELECT rq.id, rq.completion_time, r.name, rq.quantity, rq.user_id
             FROM refinery_queue rq
             JOIN resources r ON rq.resource_id = r.id
-            WHERE rq.guild_id = :gid AND rq.status = 'in_progress'
+            WHERE rq.guild_id = :gid AND rq.status IN ('in_progress', 'completed')
             ORDER BY rq.completion_time ASC
         """), {"gid": guild['id']}).fetchall()
         
@@ -1199,11 +1204,15 @@ def handle_guild_refinery_view(call):
         if daily_res:
             markup.add(types.InlineKeyboardButton(f"⚒️ Raffina {daily_res['name']}", callback_data=f"refine_select_qty|{daily_res['id']}"))
             
-        # Claim button
+        # Claim button - use Python datetime for consistency with the display above
+        now_param = datetime.now()
+        # Count claimable jobs for the current user (either already completed or ready to be completed)
         completed_count = session.execute(text("""
             SELECT COUNT(*) FROM refinery_queue
-            WHERE guild_id = :gid AND status = 'in_progress' AND completion_time <= NOW()
-        """), {"gid": guild['id']}).scalar() or 0
+            WHERE user_id = :uid AND (status = 'completed' OR (status = 'in_progress' AND completion_time <= :now))
+        """), {"uid": call.from_user.id, "now": now_param}).scalar() or 0
+        
+        print(f"[DEBUG REFINERY] Guild {guild['id']}, completed_count = {completed_count}, now = {now_param}")
         
         if completed_count > 0:
             markup.add(types.InlineKeyboardButton(f"✅ Ritira {completed_count} Materiali", callback_data="refinery_claim_all"))
@@ -1274,33 +1283,72 @@ def handle_refine_do(call):
 
 def handle_refinery_claim_all(call):
     """Claim all completed refinements"""
-    guild = guild_service.get_user_guild(call.from_user.id)
-    if not guild: return
+    user_id = call.from_user.id
+    guild = guild_service.get_user_guild(user_id)
+    if not guild:
+        return
     
     from services.crafting_service import CraftingService
     crafting_service = CraftingService()
     
-    results = crafting_service.process_refinery_queue()
+    # 1. Process any in_progress jobs that are now ready (manual trigger to catch up)
+    crafting_service.process_refinery_queue()
     
-    if results:
-        # User only sees their own or all? The service filters for all ready jobs.
-        # We should notify only if user got something.
-        user_results = [r for r in results if r.get('user_id') == call.from_user.id]
-        if user_results:
-            total_mats = {}
-            for res in user_results:
-                for mat, qty in res['materials'].items():
-                    total_mats[mat] = total_mats.get(mat, 0) + qty
+    # 2. Find all 'completed' jobs for this user
+    session = crafting_service.db.get_session()
+    from sqlalchemy import text
+    try:
+        completed_jobs = session.execute(text("""
+            SELECT id, result_t1, result_t2, result_t3, quantity 
+            FROM refinery_queue 
+            WHERE user_id = :uid AND status = 'completed'
+        """), {"uid": user_id}).fetchall()
+        
+        if not completed_jobs:
+            bot.answer_callback_query(call.id, "Nessun materiale pronto da ritirare.")
+            handle_guild_refinery_view(call)
+            return
             
-            msg = "✅ **Raffinazione Completata!**\n\nHai ottenuto:\n"
-            for mat, qty in total_mats.items():
-                if qty > 0:
-                    msg += f"• {mat}: **x{qty}**\n"
-            bot.send_message(call.message.chat.id, msg, parse_mode='markdown')
-        else:
-            bot.answer_callback_query(call.id, "Hai ritirato i materiali pronti.")
-    else:
-        bot.answer_callback_query(call.id, "Nessun materiale pronto da ritirare.")
+        total_mats = {
+            'Rottami': 0,
+            'Materiale Pregiato': 0,
+            'Diamante': 0
+        }
+        total_jobs = 0
+        
+        for job in completed_jobs:
+            jid, t1, t2, t3, raw_qty = job
+            total_mats['Rottami'] += (t1 or 0)
+            total_mats['Materiale Pregiato'] += (t2 or 0)
+            total_mats['Diamante'] += (t3 or 0)
+            total_jobs += 1
+            
+            # NOTE: If result columns are null/0 (legacy jobs), we just clear them.
+            # Mark as claimed to clear from UI
+            session.execute(text("UPDATE refinery_queue SET status = 'claimed' WHERE id = :id"), {"id": jid})
+        
+        session.commit()
+        
+        # Build success message
+        msg = "✅ **Raffinazione Completata!**\n\nHai ritirato materiale da **x{}** cicli:\n".format(total_jobs)
+        has_mats = False
+        emoji_map = {'Rottami': '🔩', 'Materiale Pregiato': '💎', 'Diamante': '💍'}
+        for mat, qty in total_mats.items():
+            if qty > 0:
+                msg += f"{emoji_map.get(mat, '•')} {mat}: **x{qty}**\n"
+                has_mats = True
+        
+        if not has_mats:
+            msg += "_Materiali aggiunti alle tue risorse._"
+            
+        bot.send_message(call.message.chat.id, msg, parse_mode='markdown')
+        
+    except Exception as e:
+        print(f"[DEBUG] Error in handle_refinery_claim_all: {e}")
+        session.rollback()
+        bot.answer_callback_query(call.id, "❌ Errore nel ritiro.")
+    finally:
+        session.close()
     
     handle_guild_refinery_view(call)
 
@@ -3399,7 +3447,18 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         exp_bar = "▰" * exp_percent + "▱" * (10 - exp_percent)
         msg += f"\n📈 **Exp**: `{utente.exp}/{exp_req}`\n`[{exp_bar}]`\n"
         
-        msg += f"🍑 **{PointsName}**: `{utente.points}`"
+        # Profession Level
+        from services.crafting_service import CraftingService
+        crafting_service = CraftingService()
+        prof_info = crafting_service.get_profession_info(utente.id_telegram)
+        prof_level = prof_info['level']
+        prof_xp = prof_info['xp']
+        prof_xp_needed = 100 * (prof_level * (prof_level + 1) // 2)
+        prof_percent = int((prof_xp / prof_xp_needed) * 10) if prof_xp_needed > 0 else 0
+        prof_bar = "▰" * prof_percent + "▱" * (10 - prof_percent)
+        msg += f"🔨 **Armaiolo**: Lv. `{prof_level}/50` | `{prof_xp}/{prof_xp_needed}` XP\n`[{prof_bar}]`\n"
+        
+        msg += f"\n🍑 **{PointsName}**: `{utente.points}`"
         if utente.stat_points > 0:
             msg += f" | 📊 **Punti**: `{utente.stat_points}`"
         msg += "\n"
@@ -5435,7 +5494,9 @@ def any(message):
                     if sent_msg:
                         pve_service.update_mob_message_id(mob_id, sent_msg.message_id)
         
-        # Mobs attack! (subject to cooldowns)
+        
+        # Mobs attack! (both world and dungeon mobs)
+        # World mobs spawn with 8% chance above, dungeon mobs spawn automatically
         attack_events = pve_service.mob_random_attack(chat_id=message.chat.id)
         
         # Send immediate attack messages if any
@@ -5581,31 +5642,59 @@ def send_combat_message(chat_id, text, image_path, markup, mob_id, old_message_i
     else:
         final_text = text
     
+    # Ensure text is string and not None
+    final_text = str(final_text or "")
+    
     sent_msg = None
     try:
         if image_path and os.path.exists(image_path):
             ext = os.path.splitext(image_path)[1].lower()
             if ext in ['.gif']:
                 with open(image_path, 'rb') as animation:
-                    sent_msg = bot.send_animation(chat_id, animation, caption=final_text, reply_markup=markup, parse_mode='markdown')
+                    try:
+                        sent_msg = bot.send_animation(chat_id, animation, caption=final_text, reply_markup=markup, parse_mode='markdown')
+                    except Exception as e:
+                        if "can't parse entities" in str(e).lower():
+                            animation.seek(0)
+                            sent_msg = bot.send_animation(chat_id, animation, caption=final_text, reply_markup=markup)
+                        else: raise e
             elif ext in ['.mp4', '.mov']:
                 with open(image_path, 'rb') as video:
-                    sent_msg = bot.send_video(chat_id, video, caption=final_text, reply_markup=markup, parse_mode='markdown')
+                    try:
+                        sent_msg = bot.send_video(chat_id, video, caption=final_text, reply_markup=markup, parse_mode='markdown')
+                    except Exception as e:
+                        if "can't parse entities" in str(e).lower():
+                            video.seek(0)
+                            sent_msg = bot.send_video(chat_id, video, caption=final_text, reply_markup=markup)
+                        else: raise e
             else:
                 with open(image_path, 'rb') as photo:
-                    sent_msg = bot.send_photo(chat_id, photo, caption=final_text, reply_markup=markup, parse_mode='markdown')
+                    try:
+                        sent_msg = bot.send_photo(chat_id, photo, caption=final_text, reply_markup=markup, parse_mode='markdown')
+                    except Exception as e:
+                        if "can't parse entities" in str(e).lower():
+                            photo.seek(0)
+                            sent_msg = bot.send_photo(chat_id, photo, caption=final_text, reply_markup=markup)
+                        else: raise e
         else:
-            sent_msg = bot.send_message(chat_id, final_text, reply_markup=markup, parse_mode='markdown')
+            try:
+                sent_msg = bot.send_message(chat_id, final_text, reply_markup=markup, parse_mode='markdown')
+            except Exception as e:
+                if "can't parse entities" in str(e).lower():
+                    sent_msg = bot.send_message(chat_id, final_text, reply_markup=markup)
+                else: raise e
         
         if not is_death and sent_msg:
             pve_service.update_mob_message_id(mob_id, sent_msg.message_id)
     except Exception as e:
         print(f"[ERROR] send_combat_message failed: {e}")
         try:
-            sent_msg = bot.send_message(chat_id, final_text, reply_markup=markup, parse_mode='markdown')
-            if not is_death:
+            # Final fallback: retry sending as a simple message without markdown
+            sent_msg = bot.send_message(chat_id, final_text, reply_markup=markup)
+            if not is_death and sent_msg:
                 pve_service.update_mob_message_id(mob_id, sent_msg.message_id)
-        except:
+        except Exception as e2:
+            print(f"[ERROR] Critical failure in send_combat_message fallback: {e2}")
             pass
     return sent_msg
 
@@ -8404,7 +8493,7 @@ def callback_query(call):
             success, msg, extra_data, attack_events = pve_service.use_special_attack(utente, is_aoe=True, chat_id=call.message.chat.id)
         else:
             damage = utente.base_damage
-            success, msg, extra_data, _ = pve_service.attack_aoe(utente, damage, chat_id=call.message.chat.id, target_mob_id=enemy_id)
+            success, msg, extra_data, attack_events = pve_service.attack_aoe(utente, damage, chat_id=call.message.chat.id, target_mob_id=enemy_id)
             
         # Handle Dungeon Events (Dialogues, Delays, Spawns)
         # Handle Dungeon Events (Dialogues, Delays, Spawns)
@@ -8511,6 +8600,7 @@ def callback_query(call):
                     markup = types.InlineKeyboardMarkup()
                     markup.add(types.InlineKeyboardButton("⚔️ Attacca", callback_data=f"attack_enemy|mob|{mob_id}"), 
                                types.InlineKeyboardButton("✨ Attacco Speciale", callback_data=f"special_attack_enemy|mob|{mob_id}"))
+                    markup.add(types.InlineKeyboardButton("🛡️ Difesa", callback_data="defend_mob"))
                 else:
                     markup = types.InlineKeyboardMarkup()
                     markup.add(types.InlineKeyboardButton("⚔️ Attacca", callback_data="attack_mob"), 
@@ -8557,6 +8647,7 @@ def callback_query(call):
                     markup = types.InlineKeyboardMarkup()
                     markup.add(types.InlineKeyboardButton("⚔️ Attacca", callback_data=f"attack_enemy|mob|{mob_id}"), 
                                types.InlineKeyboardButton("✨ Attacco Speciale", callback_data=f"special_attack_enemy|mob|{mob_id}"))
+                    markup.add(types.InlineKeyboardButton("🛡️ Difesa", callback_data="defend_mob"))
                 else:
                     markup = types.InlineKeyboardMarkup()
                     markup.add(types.InlineKeyboardButton("⚔️ Attacca", callback_data="attack_mob"), 
@@ -8603,13 +8694,19 @@ def callback_query(call):
                 pass
         return
 
-    elif action == "defend_mob":
+    elif action.startswith("defend_mob"):
+        # Format: defend_mob or defend_mob|type|id
+        parts = action.split("|")
+        enemy_id = None
+        if len(parts) == 3:
+            enemy_id = int(parts[2])
+            
         utente = user_service.get_user(user_id)
         success, msg = pve_service.defend(utente, chat_id=call.message.chat.id)
         
         if success:
             try:
-                safe_answer_callback(call.id, "🛡️ Posizione difensiva assunta!")
+                safe_answer_callback(call.id, "🛡️ Difesa e Recupero!")
             except Exception:
                 pass
             
@@ -9285,6 +9382,53 @@ def process_crafting_queue_job():
         import traceback
         traceback.print_exc()
 
+def process_refinery_queue_job():
+    """Background job to check and complete finished refinery projects"""
+    from datetime import datetime
+    print(f"[REFINERY JOB] Running at {datetime.now().strftime('%H:%M:%S')}")
+    try:
+        from services.crafting_service import CraftingService
+        crafting_service = CraftingService()
+        results = crafting_service.process_refinery_queue()
+        print(f"[REFINERY JOB] Processed {len(results)} jobs")
+        
+        for res in results:
+            if res.get('success'):
+                user_id = res['user_id']
+                materials = res['materials']
+                
+                print(f"[REFINERY JOB] Notifying user {user_id} about refined materials")
+                # Notify user
+                try:
+                    msg = f"💎 **RAFFINAZIONE COMPLETATA!**\n\n"
+                    msg += "I tuoi materiali raffinati sono pronti:\n"
+                    
+                    emoji_map = {
+                        'Rottami': '🔩',
+                        'Materiale Pregiato': '💎',
+                        'Diamante': '💍'
+                    }
+                    
+                    for mat_name, qty in materials.items():
+                        if qty > 0:
+                            emoji = emoji_map.get(mat_name, '📦')
+                            msg += f"{emoji} **{mat_name}**: x{qty}\n"
+                    
+                    # Add profession XP info
+                    if res.get('xp_gained'):
+                        msg += f"\n🔨 **Esperienza Armaiolo**: +{res['xp_gained']} XP"
+                        if res.get('leveled_up'):
+                            msg += f"\n🎉 **LIVELLO PROFESSIONE SALITO!**"
+                    
+                    bot.send_message(user_id, msg, parse_mode='markdown')
+                except Exception as e:
+                    print(f"[REFINERY JOB] Could not notify user {user_id}: {e}")
+                    
+    except Exception as e:
+        print(f"[REFINERY JOB] Error: {e}")
+        import traceback
+        traceback.print_exc()
+
 # Schedule the check every minute
 # Schedule Jobs
 schedule.every(30).minutes.do(spawn_daily_mob_job)
@@ -9292,6 +9436,7 @@ schedule.every().hour.do(regenerate_mana_job)
 schedule.every(10).seconds.do(mob_attack_job)
 schedule.every(30).seconds.do(process_achievements_job)
 schedule.every(1).minutes.do(process_crafting_queue_job)
+schedule.every(1).minutes.do(process_refinery_queue_job)
 schedule.every(1).minutes.do(job_dungeon_check)
 schedule.every().sunday.at("20:00").do(job_weekly_ranking)
 schedule.every().sunday.at("21:00").do(job_guild_weekly_rewards)

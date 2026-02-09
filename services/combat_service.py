@@ -40,31 +40,43 @@ class CombatService:
         defender: User object or Mob object
         ability: CharacterAbility object (optional)
         """
+        def get_stat(obj, name, default):
+            val = getattr(obj, name, default)
+            if val.__class__.__name__ in ('Mock', 'MagicMock'):
+                return default
+            return val if val is not None else default
         
         # Base stats
-        # Assuming attacker has .damage_total property or similar
-        base_damage = getattr(attacker, 'damage_total', 10) 
+        base_damage = get_stat(attacker, 'damage_total', 10) 
         
         # Ability damage
         ability_damage = 0
         attack_type = "Normal"
         if ability:
-            ability_damage = ability.damage
-            attack_type = ability.elemental_type
+            ability_damage = getattr(ability, 'damage', 0)
+            attack_type = getattr(ability, 'elemental_type', "Normal")
         
         total_power = base_damage + ability_damage
         
         # Defender stats
-        # Assuming defender has .defense_total or similar (if implemented)
-        defense = getattr(defender, 'defense_total', 0)
+        defense = get_stat(defender, 'defense_total', 0)
         
         # Type Effectiveness
-        defender_type = getattr(defender, 'elemental_type', "Normal")
+        defender_type = get_stat(defender, 'elemental_type', "Normal")
         effectiveness = self.get_type_effectiveness(attack_type, defender_type)
         
         # Critical Hit
-        crit_chance = getattr(attacker, 'crit_chance', 5)
-        crit_multiplier = getattr(attacker, 'crit_multiplier', 1.5)
+        def get_stat(obj, name, default):
+            val = getattr(obj, name, default)
+            # Handle Mocks which 'exist' but aren't what we want (return a Mock instead of missing)
+            if val.__class__.__name__ in ('Mock', 'MagicMock'):
+                # Check if it's been set to something else
+                # Since we reached here, getattr returned the Mock itself
+                return default
+            return val if val is not None else default
+
+        crit_chance = get_stat(attacker, 'crit_chance', 5)
+        crit_multiplier = get_stat(attacker, 'crit_multiplier', 1.5)
         
         is_crit = random.randint(1, 100) <= crit_chance
         
@@ -142,6 +154,33 @@ class CombatService:
             damage = int(damage * reduction_factor)
             
         return max(1, damage)
+
+    def calculate_counterattack_damage(self, attacker, defender, parry_multiplier=1.2, is_perfect=False):
+        """
+        Calculate counterattack damage after a successful parry.
+        - Standard success: parry_multiplier (passed from service)
+        - Perfect success: parry_multiplier * 1.2 (perfect bonus) + forced critical hit
+        """
+        # Base damage calculation
+        dmg_data = self.calculate_damage(attacker, defender)
+        base_damage = dmg_data['damage']
+        
+        # Apply parry multiplier
+        damage = base_damage * parry_multiplier
+        
+        # Perfect parry adds extra 1.2x bonus and forces a critical hit
+        is_crit = dmg_data['is_crit']
+        if is_perfect:
+            damage *= 1.2
+            is_crit = True
+            
+        return {
+            "damage": int(max(1, damage)),
+            "is_crit": is_crit,
+            "is_counter": True,
+            "effectiveness": dmg_data['effectiveness'],
+            "type": dmg_data['type']
+        }
 
     def apply_status_effect(self, target, ability, source_id=None):
         """

@@ -50,7 +50,9 @@ class TestCraftingSystem(unittest.TestCase):
         
         session = cls.db.get_session()
         try:
-            # Clean up test data
+            # Clean up test data (in correct order to avoid FK violation)
+            session.execute(text('DELETE FROM user_refined_materials WHERE user_id = :uid'),
+                          {"uid": cls.test_user_id})
             session.execute(text('DELETE FROM crafting_queue WHERE user_id = :uid'), 
                           {"uid": cls.test_user_id})
             session.execute(text('DELETE FROM user_resources WHERE user_id = :uid'),
@@ -339,6 +341,8 @@ class TestCraftingSystem(unittest.TestCase):
         """Clean up test data"""
         session = cls.db.get_session()
         try:
+            session.execute(text('DELETE FROM user_refined_materials WHERE user_id = :uid'),
+                          {"uid": cls.test_user_id})
             session.execute(text('DELETE FROM crafting_queue WHERE user_id = :uid'),
                           {"uid": cls.test_user_id})
             session.execute(text('DELETE FROM user_resources WHERE user_id = :uid'),

@@ -11,6 +11,7 @@ from services.event_dispatcher import EventDispatcher
 from services.damage_calculator import DamageCalculator
 from services.status_effects import StatusEffect
 from services.targeting_service import TargetingService
+from services.parry_service import ParryService
 import datetime
 import random
 import csv
@@ -47,6 +48,7 @@ class PvEService:
         self.guild_service = GuildService()
         self.equipment_service = EquipmentService()
         self.reward_service = RewardService(self.db, self.user_service, self.item_service, self.season_manager)
+        self.parry_service = ParryService()
         
         self.mob_data = self.load_mob_data()
         self.boss_data = self.load_boss_data()
@@ -137,15 +139,15 @@ class PvEService:
 
     def defend(self, user, chat_id=None):
         """
-        Enter defensive stance.
-        - Increases resistance by 5% (capped at 75%) for next attack.
-        - Heals 2-3% HP.
-        - Shares cooldown with attack.
+        Enter defensive stance with parry window.
+        - Activates 3-second parry window
+        - If enemy attacks within window → Parry (counterattack + bonuses)
+        - If window expires → Standard defense (+20% resistance)
+        - Shares cooldown with attack
         """
         session = self.db.get_session()
         try:
-            # Re-fetch user in this session to ensure updates persist
-            # (The passed user object might be detached or from another session)
+            # Re-fetch user in this session
             db_user = session.merge(user)
             
             # Check if Resting (Inn)
@@ -153,23 +155,24 @@ class PvEService:
                 session.close()
                 return False, "💤 Sei alla Locanda! Non puoi combattere mentre riposi. Usa /locanda per uscire."
 
-            # Check if dead (Robust check)
+            # Check if dead
             current_hp = db_user.current_hp if hasattr(db_user, 'current_hp') and db_user.current_hp is not None else (db_user.health or 0)
             
             if current_hp <= 0:
                 session.close()
                 return False, "💀 Sei morto! Non puoi difenderti. Devi curarti alla Locanda."
 
-            # Check if there are active mobs in chat (if chat_id provided)
+            # Check if there are active mobs in chat
+            active_mob = None
             if chat_id:
-                mobs_count = session.query(Mob).filter_by(chat_id=chat_id, is_dead=False).count()
-                if mobs_count == 0:
+                active_mob = session.query(Mob).filter_by(chat_id=chat_id, is_dead=False).first()
+                if not active_mob:
                     session.close()
-                    return False, "Non c'è nessuno da cui difendersi! I nemici sono stati sconfitti."
+                    return False, "Non c'è nessuno da cui difenderti! I nemici sono stati sconfitti."
 
             # Check Cooldown (Shared with attack)
             user_speed = getattr(db_user, 'speed', 0) or 0
-            cooldown_seconds = 60 / (1 + user_speed * 0.01)
+            cooldown_seconds = 60 / (1 + user_speed * 0.05)
             
             last_attack = getattr(db_user, 'last_attack_time', None)
             if last_attack:
@@ -179,25 +182,49 @@ class PvEService:
                     session.close()
                     return False, f"⏳ Sei stanco! (CD: {int(cooldown_seconds)}s)\nDevi riposare ancora per {remaining}s."
             
-            # Apply Defense Up Effect
+            # HP/Mana Recovery (2% of max)
+            hp_recovery = int(db_user.max_health * 0.02)
+            mana_recovery = int(db_user.max_mana * 0.02)
+            
+            new_hp = min(db_user.max_health, (db_user.health or 0) + hp_recovery)
+            new_mana = min(db_user.max_mana, (db_user.mana or 0) + mana_recovery)
+            
+            self.user_service.update_user(db_user.id_telegram, {
+                'health': new_hp,
+                'current_hp': new_hp,
+                'mana': new_mana
+            }, session=session)
+            
+            # Apply standard defense status effect
+            from services.status_effects import StatusEffect
             StatusEffect.apply_status(db_user, 'defense_up', duration=1)
             
-            # Heal 2-3% HP
-            heal_percent = random.uniform(0.02, 0.03)
-            heal_amount = int(db_user.max_health * heal_percent)
+            session.flush()
             
-            old_hp = db_user.health or 0
-            new_hp = min(old_hp + heal_amount, db_user.max_health)
-            db_user.health = new_hp
-            db_user.current_hp = new_hp
+            # Activate Parry Window
+            parry_service = self.parry_service
             
-            real_healed = new_hp - old_hp
+            mob_id = active_mob.id if active_mob else None
+            parry_result = parry_service.activate_parry(db_user.id_telegram, mob_id)
             
-            # Update last action time
+            if not parry_result['success']:
+                session.close()
+                return False, f"❌ {parry_result['error']}"
+            
+            # Update last action time (cooldown starts)
             self.user_service.update_user(db_user.id_telegram, {'last_attack_time': datetime.datetime.now()}, session=session)
             
             session.commit()
-            return True, f"🛡️ **{db_user.nome}** usa **Difesa**!\nResistenza aumentata del 5% e recuperati {real_healed} HP."
+            
+            window_duration = parry_result['window_duration']
+            msg = f"🛡️ **{db_user.nome}** entra in **Posizione di Difesa**!\n"
+            msg += f"💚 Recupero: **+{hp_recovery} HP**, **+{mana_recovery} Mana**\n"
+            msg += f"⏱️ Finestra Parata: **{window_duration:.1f}s**\n"
+            msg += f"⚡ **Parata con successo** → Cooldown azzerato!\n"
+            msg += f"_Attendi l'attacco nemico per contrattaccare!_\n\n"
+            msg += f"💡 Contrattacco entro 5s → **Critico Assicurato**"
+            
+            return True, msg
             
         except Exception as e:
             session.rollback()
@@ -798,6 +825,7 @@ class PvEService:
         character = char_loader.get_character_by_id(user.livello_selezionato)
         
         # Prepare attacker object wrapper for CombatService
+        pve_self = self
         class AttackerWrapper:
             def __init__(self, user, char, base_dmg):
                 self.damage_total = base_dmg
@@ -825,6 +853,17 @@ class PvEService:
                 self.crit_chance = char_crit + user_crit
                 
                 self.crit_multiplier = char.get('crit_multiplier', 1.5) if char else 1.5
+                
+                # Parry Counterattack Bonus: Guaranteed Crit
+                self.is_parry_crit = False
+                self.parry_record = None
+                parry_state = pve_self.parry_service.get_active_counter_window(user.id_telegram)
+                if parry_state:
+                    counter_data = pve_self.parry_service.calculate_counterattack_multiplier(parry_state['activated_at'])
+                    if counter_data['in_window']:
+                        self.crit_chance = 110 # Guaranteed Crit
+                        self.is_parry_crit = True
+                        self.parry_record = parry_state
         
         attacker = AttackerWrapper(user, character, base_damage)
         
@@ -839,6 +878,11 @@ class PvEService:
         # Calculate damage
         combat_result = self.combat_service.calculate_damage(attacker, defender, ability)
         damage = combat_result['damage']
+        
+        # Log Parry Counterattack if applied
+        if getattr(attacker, 'is_parry_crit', False) and attacker.parry_record:
+            combat_result['is_counter'] = True
+            self.parry_service.log_counterattack(user.id_telegram, attacker.parry_record['parry_id'], datetime.datetime.now(), damage)
         
         # Apply Mob Resistance
         if hasattr(mob, 'resistance') and mob.resistance > 0:
@@ -935,6 +979,9 @@ class PvEService:
             msg += "🚫 **Nessun effetto!** "
             
         msg += f"⚔️ Hai inflitto {damage} danni ({combat_result['type']}) a {mob.name}!"
+        
+        if combat_result.get('is_counter'):
+            msg = f"↩️ **CONTRATTACCO!** (CRITICO ASSICURATO)\n" + msg
         
         if 'resistance_applied' in combat_result:
             msg += f" (Resistenza {combat_result['resistance_applied']}%)"
@@ -1428,7 +1475,8 @@ class PvEService:
                 return []
                 
             attack_events = []
-            print(f"[DEBUG] mob_random_attack called for {len(mobs_to_process)} mobs. Chat ID: {chat_id}")
+            # Random attack logic
+
             
             for mob in mobs_to_process:
                 try:
@@ -1436,14 +1484,16 @@ class PvEService:
                     if mob.dungeon_id:
                         dungeon = session.query(Dungeon).filter_by(id=mob.dungeon_id).first()
                         if not dungeon or dungeon.status != "active":
-                            print(f"[DEBUG] Mob {mob.id} belongs to inactive dungeon {mob.dungeon_id}. Marking as dead.")
+                            is_active = False
+
                             mob.is_dead = True
                             # Removed individual commit to reduce locking
                             continue
                         
                         # Chat Consistency: Dungeon mobs only attack in their dungeon chat
                         if chat_id and chat_id != dungeon.chat_id:
-                            print(f"[DEBUG] Mob {mob.id} (Dungeon {mob.dungeon_id}) skipped: chat {chat_id} != dungeon chat {dungeon.chat_id}")
+                            continue
+
                             continue
 
                     # Check mob cooldown based on speed
@@ -1474,10 +1524,7 @@ class PvEService:
                         session=session
                     )
                     
-                    print(f"[DEBUG] {'Dungeon' if mob.dungeon_id else 'World'} Mob {mob.id}: targets_pool={targets_pool}")
-
                     if not targets_pool:
-                        print(f"[DEBUG] No valid targets found for mob {mob.id} (chat {chat_id})")
                         continue
                     
                     targets = []
@@ -1526,7 +1573,6 @@ class PvEService:
                             
                         candidates.append(uid)
                         weights.append(weight)
-                        print(f"[DEBUG AGGRO] User {uid}: damage={dmg}, weight={weight}")
                         
                     # 3. Select Target
                     target_id = None
@@ -1538,7 +1584,7 @@ class PvEService:
                         # Simple approach: Pick primary weighted, then neighbors or randoms.
                         # For now, let's just pick random weighted samples (allowing duplicates? No)
                         
-                        # Workaround: Pick primary target weighted, rest random
+                        # Workaround: Pick primary target weighted, then neighbors or randoms.
                         if candidates:
                              primary_target_id = random.choices(candidates, weights=weights, k=1)[0]
                              targets_set = {primary_target_id}
@@ -1566,7 +1612,6 @@ class PvEService:
                         if random_roll < 0.15 and len(candidates) > 1:
                             # Pure random choice from valid candidates in chat
                             target_id = random.choice(candidates)
-                            print(f"[DEBUG AGGRO] 15% Random triggered (roll={random_roll:.3f}), selected {target_id}")
                         else:
                             # Standard Aggro Logic (85%)
                             # Check for Taunt first
@@ -1577,13 +1622,11 @@ class PvEService:
                             
                             if taunt_target:
                                 target_id = taunt_target
-                                print(f"[DEBUG AGGRO] 85% Logic: Taunt active on {target_id}")
                             else:
                                 # Weighted choice based on damage/defense
                                 target_id = random.choices(candidates, weights=weights, k=1)[0]
                                 total_weight = sum(weights)
                                 selected_weight = weights[candidates.index(target_id)]
-                                print(f"[DEBUG AGGRO] 85% Logic: Weighted choice {target_id} ({selected_weight}/{total_weight})")
                                 
                         if target_id:
                             t = session.query(Utente).filter_by(id_telegram=target_id).first()
@@ -1601,6 +1644,13 @@ class PvEService:
                         is_aoe_target = is_aoe
                         damage = self.combat_service.calculate_mob_damage_to_user(mob, target, is_aoe=is_aoe_target, is_boss=mob.is_boss)
                         
+                        # NEW: Parry Processing
+                        parry_result = self.parry_service.process_enemy_attack(target.id_telegram, mob.id, damage)
+                        if parry_result['success']:
+                            damage = parry_result['damage_taken']
+                            # Reset cooldown as requested
+                            self.user_service.update_user(target.id_telegram, {'last_attack_time': datetime.datetime.now() - datetime.timedelta(minutes=5)}, session=session)
+                        
                         new_hp, died = self.user_service.damage_health(target, damage, session=session)
                         
                         self.event_dispatcher.log_event(
@@ -1612,15 +1662,28 @@ class PvEService:
                         )
                         
                         username = target.username.lstrip('@') if target.username else None
-                        tag = f"@{username}" if username else target.nome
+                        tag_raw = f"@{username}" if username else target.nome
+                        # Escape tag for markdown
+                        tag = tag_raw.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace(']', '\\]').replace('(', '\\(').replace(')', '\\)')
                         
                         # Add HP info to tag
                         current_hp = target.current_hp if hasattr(target, 'current_hp') and target.current_hp is not None else target.health
                         tag += f" ({current_hp}/{target.max_health} HP)"
                         
+                        # Add Parry Icon if applicable
+                        if parry_result.get('success'):
+                            if parry_result.get('perfect'):
+                                tag += " 🛡️✨"
+                            else:
+                                tag += " 🛡️"
+                        
                         if damage == 0 and self.user_service.is_invincible(target):
                             tag += " (INVINCIBILE! 🎭)"
-                        damage_results.append({'tag': tag, 'damage': damage})
+                        damage_results.append({
+                            'tag': tag, 
+                            'damage': damage,
+                            'parry': parry_result if parry_result.get('success') else None
+                        })
                         if died:
                             death_messages.append(f"💀 **{tag}** è caduto in battaglia!")
                             
@@ -1637,18 +1700,36 @@ class PvEService:
                             avg_damage = sum([r['damage'] for r in damage_results]) // len(damage_results)
                             msg = f"☠️ **Attacco del Boss!**\n**{boss_name_escaped}** ha scatenato un attacco ad area!\n🎯 Colpiti: {tags}\n💥 Danni inflitti: **{avg_damage}** (media)"
                         else:
-                            tag = damage_results[0]['tag']
-                            damage = damage_results[0]['damage']
-                            msg = f"☠️ **Attacco del Boss!**\n**{boss_name_escaped}** ha attaccato {tag}\n💥 Danni inflitti: **{damage}**"
+                            res = damage_results[0]
+                            tag = res['tag']
+                            damage = res['damage']
+                            prefix = ""
+                            if res.get('parry'):
+                                p = res['parry']
+                                if p['perfect']:
+                                    prefix = "🛡️ **PARATA PERFETTA!**\n⚡ Cooldown azzerato! Contrattacco entro 5s → **CRITICO ASSICURATO**!\n"
+                                else:
+                                    prefix = "🛡️ **PARATA!**\n⚡ Cooldown azzerato! Contrattacco entro 5s → **CRITICO ASSICURATO**!\n"
+                                    
+                            msg = f"☠️ **Attacco del Boss!**\n**{boss_name_escaped}** ha attaccato {tag}\n{prefix}💥 Danni inflitti: **{damage}**"
                     else:
                         if is_aoe:
                             tags = ", ".join([r['tag'] for r in damage_results])
                             avg_damage = sum([r['damage'] for r in damage_results]) // len(damage_results)
                             msg = f"🔥 **Attacco ad Area!**\n**{mob.name}** ha colpito: {tags}\n💥 Danni inflitti: **{avg_damage}** (media)"
                         else:
-                            tag = damage_results[0]['tag']
-                            damage = damage_results[0]['damage']
-                            msg = f"⚠️ **{mob.name}** ha attaccato {tag}\n💥 Danni inflitti: **{damage}**"
+                            res = damage_results[0]
+                            tag = res['tag']
+                            damage = res['damage']
+                            prefix = ""
+                            if res.get('parry'):
+                                p = res['parry']
+                                if p['perfect']:
+                                    prefix = "🛡️ **PARATA PERFETTA!**\n⚡ Cooldown azzerato! Contrattacco entro 5s → **CRITICO ASSICURATO**!\n"
+                                else:
+                                    prefix = "🛡️ **PARATA!**\n⚡ Cooldown azzerato! Contrattacco entro 5s → **CRITICO ASSICURATO**!\n"
+                                    
+                            msg = f"⚠️ **{mob.name}** ha attaccato {tag}\n{prefix}💥 Danni inflitti: **{damage}**"
                         
                         # Pass the first target's ID to check for Scouter
                         target_id_for_scouter = targets[0].id_telegram if targets else None
