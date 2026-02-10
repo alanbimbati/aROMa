@@ -5,9 +5,12 @@ Handles random drops while users write in chat
 from database import Database
 from services.user_service import UserService
 from services.item_service import ItemService
-import random
-from settings import PointsName
 from models.seasons import Season
+import os
+
+# Dynamic path resolution
+SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(SERVICE_DIR)
 
 class DropService:
     def __init__(self):
@@ -92,7 +95,7 @@ class DropService:
                     bot.reply_to(message, f"🐉 **DRAGON BALL!**\nHai trovato: {item_name}!")
                     # Send sticker
                     try:
-                        sticker_path = f"Stickers/{item['sticker']}"
+                        sticker_path = os.path.join(BASE_DIR, "Stickers", item['sticker'])
                         with open(sticker_path, 'rb') as sti:
                             bot.send_sticker(message.chat.id, sti)
                     except: pass

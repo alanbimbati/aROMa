@@ -269,7 +269,7 @@ class CraftingService:
             session.close()
 
     def complete_refinement(self, queue_id, char_level, prof_level, armory_level):
-        """Process completion and generate materials"""
+        """Process completion and generate materials using a single session for atomicity"""
         session = self.db.get_session()
         try:
             job = session.execute(text("""
@@ -278,7 +278,7 @@ class CraftingService:
             """), {"id": queue_id}).fetchone()
             
             if not job:
-                return {"success": False, "error": "Job not found"}
+                return {"success": False, "error": "Job non trovato o già processato"}
             
             user_id, raw_qty, res_id = job
             
@@ -286,80 +286,41 @@ class CraftingService:
             res_info = session.execute(text("SELECT rarity FROM resources WHERE id = :id"), {"id": res_id}).fetchone()
             resource_rarity = res_info[0] if res_info else 1
             
-            # Formula for refined materials
-            # Total mass scaled by resource rarity and armory level
+            # Formula (same as before)
             rarity_mult = 0.8 + (resource_rarity * 0.2)
             total_mass = int(raw_qty * (1 + armory_level * 0.05) * rarity_mult)
-            if total_mass < 1: total_mass = 1
+            total_mass = max(1, total_mass)
             
-            # Distribution: HEAVILY nerfed - premium materials should be very rare
-            # Resource rarity provides a small bonus
-            t2_boost = 1.0 + (resource_rarity * 0.05)  # Much smaller boost from rarity
-            t3_boost = 1.0 + (resource_rarity * 0.03)  # Even smaller for diamonds
+            t2_boost = 1.0 + (resource_rarity * 0.05)
+            t3_boost = 1.0 + (resource_rarity * 0.03)
             
-            # Base chances severely reduced to make materials rare
-            # T2 (Fine Material): Starts at ~2%, caps at 15%
-            # T3 (Diamond): Starts at ~0.5%, caps at 5%
             t2_chance = min(15, (2 + (prof_level * 0.3) + (char_level * 0.05)) * t2_boost)
             t3_chance = min(5, (0.5 + (prof_level * 0.15) + (char_level * 0.02)) * t3_boost)
             
-            # Distribution calculation
             qty_t3 = int(total_mass * (t3_chance / 100.0) * random.uniform(0.8, 1.2))
             remaining = total_mass - qty_t3
             qty_t2 = int(remaining * (t2_chance / (100.0 - t3_chance)) * random.uniform(0.8, 1.2))
-            qty_t1 = total_mass - qty_t3 - qty_t2
+            qty_t1 = max(0, total_mass - qty_t3 - qty_t2)
             
-            # Ensure no negative results (though physically unlikely with int)
-            qty_t1 = max(0, qty_t1)
-            qty_t2 = max(0, qty_t2)
-            qty_t3 = max(0, qty_t3)
+            results = {'Rottami': qty_t1, 'Materiale Pregiato': qty_t2, 'Diamante': qty_t3}
             
-            results = {
-                'Rottami': qty_t1,
-                'Materiale Pregiato': qty_t2,
-                'Diamante': qty_t3
-            }
-            
-            # Add to user_refined_materials (Atomic UPSERT)
-            for mat_name, qty in results.items():
-                if qty <= 0: continue
-                # Get ID
-                mat_id = session.execute(text("SELECT id FROM refined_materials WHERE name = :n"), {"n": mat_name}).scalar()
-                if not mat_id: 
-                    print(f"[ERROR REFINERY] Material ID not found for: {mat_name}")
-                    continue
-                
-                session.execute(text("""
-                    INSERT INTO user_refined_materials (user_id, material_id, quantity)
-                    VALUES (:uid, :mid, :q)
-                    ON CONFLICT (user_id, material_id) 
-                    DO UPDATE SET quantity = user_refined_materials.quantity + EXCLUDED.quantity
-                """), {"uid": user_id, "mid": mat_id, "q": qty})
-            
-            # Mark job complete and store results
+            # 2. Update job status to 'completed' and store results
+            # NOTE: We NO LONGER add to inventory here, it's done during manual 'claim'
             session.execute(text("""
                 UPDATE refinery_queue 
-                SET status = 'completed',
-                    result_t1 = :t1,
-                    result_t2 = :t2,
-                    result_t3 = :t3
+                SET status = 'completed', result_t1 = :t1, result_t2 = :t2, result_t3 = :t3
                 WHERE id = :id
-            """), {
-                "id": queue_id,
-                "t1": results.get('Rottami', 0),
-                "t2": results.get('Materiale Pregiato', 0),
-                "t3": results.get('Diamante', 0)
-            })
+            """), {"id": queue_id, "t1": qty_t1, "t2": qty_t2, "t3": qty_t3})
+            
+            # 3. Award profession XP (this is fine to do here as it's proportional to work done)
+            xp_gained = raw_qty * 5
+            self.add_profession_xp(user_id, xp_gained)
             
             session.commit()
-            
-            # Award profession XP (5 XP per raw material refined)
-            xp_gained = raw_qty * 5
-            leveled_up = self.add_profession_xp(user_id, xp_gained)
-            
-            return {"success": True, "materials": results, "xp_gained": xp_gained, "leveled_up": leveled_up}
+            return {"success": True, "materials": results, "xp_gained": xp_gained}
         except Exception as e:
             session.rollback()
+            print(f"[REFINERY] Error in complete_refinement for job {queue_id}: {e}")
             return {"success": False, "error": str(e)}
         finally:
             session.close()
@@ -383,15 +344,75 @@ class CraftingService:
             
             for qid, uid, gid in ready:
                 user = user_service.get_user(uid)
+                if not user:
+                    print(f"[REFINERY] User {uid} not found for job {qid}. Marking as cancelled.")
+                    session.execute(text("UPDATE refinery_queue SET status = 'cancelled' WHERE id = :id"), {"id": qid})
+                    continue
+                    
                 armory_level = self.get_guild_armory_level(gid)
-                
                 prof = self.get_profession_info(uid)
                 
                 res = self.complete_refinement(qid, user.livello, prof['level'], armory_level)
                 if res['success']:
                     res['user_id'] = uid
                     results.append(res)
+            
+            session.commit()
             return results
+        finally:
+            session.close()
+
+    def claim_user_refinements(self, user_id):
+        """Claim all completed jobs for a user and add materials to inventory"""
+        # 1. First, process any ready jobs
+        self.process_refinery_queue()
+        
+        session = self.db.get_session()
+        try:
+            # 2. Find all 'completed' jobs
+            jobs = session.execute(text("""
+                SELECT id, result_t1, result_t2, result_t3 FROM refinery_queue
+                WHERE user_id = :uid AND status = 'completed'
+            """), {"uid": user_id}).fetchall()
+            
+            if not jobs:
+                return {"success": False, "error": "Nessun materiale pronto da ritirare."}
+            
+            totals = {'Rottami': 0, 'Materiale Pregiato': 0, 'Diamante': 0}
+            job_ids = []
+            
+            for jid, t1, t2, t3 in jobs:
+                totals['Rottami'] += (t1 or 0)
+                totals['Materiale Pregiato'] += (t2 or 0)
+                totals['Diamante'] += (t3 or 0)
+                job_ids.append(jid)
+            
+            # 3. Add to user_refined_materials
+            for mat_name, total_qty in totals.items():
+                if total_qty <= 0: continue
+                
+                mat_id = session.execute(text("SELECT id FROM refined_materials WHERE name = :n"), {"n": mat_name}).scalar()
+                if not mat_id: continue
+                
+                session.execute(text("""
+                    INSERT INTO user_refined_materials (user_id, material_id, quantity)
+                    VALUES (:uid, :mid, :q)
+                    ON CONFLICT (user_id, material_id) 
+                    DO UPDATE SET quantity = user_refined_materials.quantity + EXCLUDED.quantity
+                """), {"uid": user_id, "mid": mat_id, "q": total_qty})
+            
+            # 4. Mark jobs as claimed
+            session.execute(text("""
+                UPDATE refinery_queue SET status = 'claimed'
+                WHERE id IN :ids
+            """), {"ids": tuple(job_ids)})
+            
+            session.commit()
+            return {"success": True, "totals": totals, "job_count": len(jobs)}
+        except Exception as e:
+            session.rollback()
+            print(f"[REFINERY] Error claiming for user {user_id}: {e}")
+            return {"success": False, "error": str(e)}
         finally:
             session.close()
     

@@ -6,6 +6,10 @@ import csv
 import os
 from typing import Optional, List, Dict, Any
 
+# Dynamic path resolution
+LOADER_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(LOADER_DIR)
+
 class CharacterLoader:
     """Load and cache character data from CSV file"""
     
@@ -39,7 +43,8 @@ class CharacterLoader:
 
         characters = []
         try:
-            with open('data/characters.csv', 'r', encoding='utf-8') as f:
+            csv_path = os.path.join(BASE_DIR, 'data', 'characters.csv')
+            with open(csv_path, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     char = {
@@ -325,7 +330,7 @@ def get_character_image(character: Dict[str, Any], is_locked: bool = False):
     
     # Check possible extensions
     for ext in ['.png', '.jpg', '.jpeg', '.webp']:
-        path = f"images/{safe_name}{ext}"
+        path = os.path.join(BASE_DIR, "images", f"{safe_name}{ext}")
         if os.path.exists(path):
             try:
                 if is_locked and PIL_AVAILABLE:

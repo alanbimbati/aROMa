@@ -10,6 +10,10 @@ import csv
 import json
 import os
 
+# Dynamic path resolution
+SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(SERVICE_DIR)
+
 class DungeonService:
     def __init__(self):
         self.db = Database()
@@ -327,7 +331,8 @@ class DungeonService:
         """Load dungeons from CSV"""
         dungeons = {}
         try:
-            with open('data/dungeons.csv', 'r', encoding='utf-8') as f:
+            csv_path = os.path.join(BASE_DIR, 'data', 'dungeons.csv')
+            with open(csv_path, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f, skipinitialspace=True)
                 for row in reader:
                     # Strip whitespace from all string values

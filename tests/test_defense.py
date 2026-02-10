@@ -43,7 +43,7 @@ class TestDefenseSystem(unittest.TestCase):
         user.resting_since = None
         
         # Test defend
-        success, msg = self.pve_service.defend(user)
+        success, msg, mob_info = self.pve_service.defend(user)
         
         self.assertTrue(success)
         self.assertIn("entra in **Posizione di Difesa**", msg)

@@ -20,6 +20,10 @@ import json
 from settings import PointsName, GRUPPO_AROMA
 from services.equipment_service import EquipmentService
 
+# Dynamic path resolution
+SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(SERVICE_DIR)
+
 class PvEService:
     def __init__(self):
         self.db = Database()
@@ -59,7 +63,8 @@ class PvEService:
         """Load mob data from CSV"""
         mobs = []
         try:
-            with open('data/mobs.csv', 'r', encoding='utf-8') as f:
+            csv_path = os.path.join(BASE_DIR, 'data', 'mobs.csv')
+            with open(csv_path, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     mobs.append(row)
@@ -71,7 +76,8 @@ class PvEService:
         """Load boss data from CSV"""
         bosses = []
         try:
-            with open('data/bosses.csv', 'r', encoding='utf-8') as f:
+            csv_path = os.path.join(BASE_DIR, 'data', 'bosses.csv')
+            with open(csv_path, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     bosses.append(row)
@@ -224,7 +230,12 @@ class PvEService:
             msg += f"_Attendi l'attacco nemico per contrattaccare!_\n\n"
             msg += f"💡 Contrattacco entro 5s → **Critico Assicurato**"
             
-            return True, msg
+            mob_info = {
+                'mob_id': active_mob.id if active_mob else None,
+                'last_message_id': active_mob.last_message_id if active_mob else None
+            }
+            
+            return True, msg, mob_info
             
         except Exception as e:
             session.rollback()
@@ -715,7 +726,8 @@ class PvEService:
             'image_path': self.get_enemy_image_path(mob),
             'dungeon_id': mob.dungeon_id,
             'is_boss': mob.is_boss,
-            'spawn_time': mob.spawn_time
+            'spawn_time': mob.spawn_time,
+            'last_message_id': mob.last_message_id
         }
         session.close()
         return data
@@ -2049,7 +2061,7 @@ class PvEService:
         
         # Check in consolidated images folder
         for ext in ['.png', '.jpg', '.jpeg']:
-            path = f"images/{safe_name}{ext}"
+            path = os.path.join(BASE_DIR, "images", f"{safe_name}{ext}")
             if os.path.exists(path):
                 image_path = path
                 break
@@ -2057,8 +2069,9 @@ class PvEService:
         # Fallback to default if specific not found
         if not image_path:
              # Try generic default
-             if os.path.exists("images/default.png"):
-                 image_path = "images/default.png"
+             default_path = os.path.join(BASE_DIR, "images", "default.png")
+             if os.path.exists(default_path):
+                 image_path = default_path
                  
         return image_path
 

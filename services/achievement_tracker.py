@@ -8,7 +8,11 @@ from models.stats import UserStat
 from services.event_dispatcher import EventDispatcher
 from services.stat_aggregator import StatAggregator
 import json
-import datetime
+import os
+
+# Dynamic path resolution
+SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(SERVICE_DIR)
 
 class AchievementTracker:
     """
@@ -20,10 +24,12 @@ class AchievementTracker:
         self.event_dispatcher = EventDispatcher()
         self.stat_aggregator = StatAggregator()
         
-    def load_from_csv(self, csv_path="data/achievements.csv"):
+    def load_from_csv(self, csv_path=None):
         """Load achievements from a CSV file, updating the database."""
         import csv
-        import os
+        
+        if csv_path is None:
+            csv_path = os.path.join(BASE_DIR, "data", "achievements.csv")
         
         if not os.path.exists(csv_path):
             print(f"[AchievementTracker] CSV file not found: {csv_path}")
