@@ -657,10 +657,12 @@ class CraftingService:
         drop_chance = 100 if mob_is_boss else 80
         
         if random.random() * 100 > drop_chance:
+            print(f"[DEBUG] CraftingService: Drop roll failed ({drop_chance}%)")
             return []
         
         # Mobs drop 1-2 resources, Bosses drop 3-5
         num_drops = random.randint(3, 5) if mob_is_boss else random.randint(1, 2)
+        print(f"[DEBUG] CraftingService: Rolling {num_drops} resources")
         
         drops = []
         session = self.db.get_session()
