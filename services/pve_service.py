@@ -59,6 +59,21 @@ class PvEService:
         self.recent_mobs = [] # Track last 10 spawned mobs to avoid repetition
         self.pending_mob_effects = {} # {chat_id: [effect1, effect2, ...]}
 
+    def get_living_mobs(self, chat_id=None, session=None, with_lock=False):
+        """Helper to get all living mobs, optionally filtered by chat and locked"""
+        if session is None:
+            session = self.db.get_session()
+            
+        query = session.query(Mob).filter(Mob.is_dead == False).order_by(Mob.id.asc())
+        
+        if chat_id:
+            query = query.filter(Mob.chat_id == chat_id)
+            
+        if with_lock:
+            query = query.with_for_update()
+            
+        return query.all()
+
     def load_mob_data(self):
         """Load mob data from CSV"""
         mobs = []
@@ -1169,7 +1184,7 @@ class PvEService:
             session = self.db.get_session()
             local_session = True
         # Select mobs WITH LOCK and CONSISTENT ORDER to prevent deadlocks
-        all_mobs = session.query(Mob).filter_by(chat_id=chat_id, is_dead=False).order_by(Mob.id.asc()).with_for_update().all()
+        all_mobs = self.get_living_mobs(chat_id, session, with_lock=True)
         
         if not all_mobs:
             if local_session:
@@ -1482,11 +1497,8 @@ class PvEService:
                 mob = session.query(Mob).filter_by(id=specific_mob_id).first()
                 if mob and not mob.is_dead:
                     mobs_to_process.append(mob)
-            elif chat_id:
-                # Use CONSISTENT ORDER to prevent deadlocks when multiple users attack/are attacked
-                mobs_to_process = session.query(Mob).filter_by(chat_id=chat_id, is_dead=False).order_by(Mob.id.asc()).all()
             else:
-                mobs_to_process = session.query(Mob).filter_by(is_dead=False).order_by(Mob.id.asc()).all()
+                mobs_to_process = self.get_living_mobs(chat_id=chat_id, session=session)
                 
             if not mobs_to_process:
                 if local_session:

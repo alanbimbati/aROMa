@@ -141,6 +141,10 @@ class TestRefinery(unittest.TestCase):
     def test_04_inventory_tracking(self):
         """Verify user_refined_materials table reflects gains"""
         print("\n🧪 Test: Inventory Tracking")
+        
+        # We MUST claim the refinements first to populate the user_refined_materials table
+        self.crafting.claim_user_refinements(self.test_user_id)
+        
         session = self.db.get_session()
         mats = session.execute(text("SELECT material_id, quantity FROM user_refined_materials WHERE user_id = :uid"), 
                               {"uid": self.test_user_id}).fetchall()

@@ -27,8 +27,8 @@ class TestAoELogic(unittest.TestCase):
         m2 = MagicMock(id=2, dungeon_id=None, is_dead=False, resistance=0, attack_type='physical', health=1000, max_health=1000) # World
         m3 = MagicMock(id=3, dungeon_id=88, is_dead=False, resistance=0, attack_type='physical', health=1000, max_health=1000) # Other dungeon
         
-        # Mock Query to return all
-        session.query(Mob).filter_by().all.return_value = [m1, m2, m3]
+        # Mock get_living_mobs
+        self.service.get_living_mobs = MagicMock(return_value=[m1, m2, m3])
         self.service.db.get_session.return_value = session
         
         # Mock Dungeon Service

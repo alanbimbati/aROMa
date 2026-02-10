@@ -9,6 +9,7 @@ from services.event_dispatcher import EventDispatcher
 from services.stat_aggregator import StatAggregator
 import json
 import os
+from datetime import datetime
 
 # Dynamic path resolution
 SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -218,7 +219,7 @@ class AchievementTracker:
         
         # Update progress snapshot
         user_ach.progress_value = current_val
-        user_ach.last_progress_update = datetime.datetime.now()
+        user_ach.last_progress_update = datetime.now()
         
         # Check Tiers
         try:
@@ -261,7 +262,7 @@ class AchievementTracker:
         
         if unlocked_tier != user_ach.current_tier:
             user_ach.current_tier = unlocked_tier
-            user_ach.unlocked_at = datetime.datetime.now()
+            user_ach.unlocked_at = datetime.now()
 
     def _is_higher_tier(self, new_tier, current_tier, order):
         if current_tier is None:

@@ -36,35 +36,23 @@ class TestCraftingSystem(unittest.TestCase):
         
         session = cls.db.get_session()
         try:
-             # Force cleanup of resources to ensure clean init
-             session.execute(text('TRUNCATE TABLE resources RESTART IDENTITY CASCADE'))
-             session.commit()
-        except Exception:
-             session.rollback()
+             # Ensure test database is seeded if empty
+             res_count = session.execute(text('SELECT count(*) FROM resources')).scalar()
+             if res_count == 0:
+                 print("🌱 Seeding test database...")
+                 os.system('python3 db_setup.py > /dev/null 2>&1')
+        except Exception as e:
+             print(f"⚠️ Warning during setup: {e}")
         finally:
              session.close()
 
-        # Initialize crafting system
-        print("\n🔧 Initializing crafting system...")
-        os.system('python3 init_crafting_db.py > /dev/null 2>&1')
+        # Initialize crafting system using the official setup script
+        print("\n🔧 Initializing crafting system database...")
+        os.system('TEST_DB=1 python3 db_setup.py > /dev/null 2>&1')
         
         session = cls.db.get_session()
         try:
-            # Clean up test data (in correct order to avoid FK violation)
-            session.execute(text('DELETE FROM user_refined_materials WHERE user_id = :uid'),
-                          {"uid": cls.test_user_id})
-            session.execute(text('DELETE FROM crafting_queue WHERE user_id = :uid'), 
-                          {"uid": cls.test_user_id})
-            session.execute(text('DELETE FROM user_resources WHERE user_id = :uid'),
-                          {"uid": cls.test_user_id})
-            session.execute(text('DELETE FROM user_equipment WHERE user_id = :uid'),
-                          {"uid": cls.test_user_id})
-            session.execute(text('DELETE FROM guild_buildings WHERE guild_id = :gid'),
-                          {"gid": cls.test_guild_id})
-            session.execute(text('DELETE FROM guilds WHERE id = :gid'),
-                          {"gid": cls.test_guild_id})
-            session.execute(text('DELETE FROM utente WHERE "id_Telegram" = :uid'),
-                          {"uid": cls.test_user_id})
+            session.execute(text('TRUNCATE utente CASCADE'))
             session.commit()
             
             # Create test user

@@ -97,6 +97,7 @@ class TestDefenseSystem(unittest.TestCase):
         self.pve_service.user_service.get_recent_users.return_value = [123]
         self.pve_service.user_service.get_user.return_value = user
         self.pve_service.targeting_service.get_valid_targets.return_value = [123]
+        self.pve_service.targeting_service.calculate_weights.return_value = [1.0]
         
         # Mock combat service
         self.pve_service.combat_service = MagicMock()
@@ -110,10 +111,21 @@ class TestDefenseSystem(unittest.TestCase):
         # Mock damage_health to return new_hp, died
         self.pve_service.user_service.damage_health.return_value = (50, False)
         
+        # Ensure mob has a target and is active
+        mob.last_target_id = 123
+        self.pve_service.get_active_mobs = MagicMock(return_value=[mob])
+        self.pve_service.get_living_mobs = MagicMock(return_value=[mob])
+        
+        # Ensure mob has a target
+        mob.last_target_id = 123
+        self.pve_service.get_active_mobs = MagicMock(return_value=[mob])
+        
         # Run attack
+        # We need to ensure pve_service uses our mocked session if we don't pass one
         self.pve_service.mob_random_attack(chat_id=1)
         
-        # Verify log_event called with reducded damage
+        # Verify log_event called with reduced damage
+        # Since we use mob_random_attack, it calls log_event on the dispatcher
         self.assertTrue(self.pve_service.event_dispatcher.log_event.called, "log_event should have been called")
         
         call_args = self.pve_service.event_dispatcher.log_event.call_args
