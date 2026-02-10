@@ -4414,28 +4414,29 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         parts = self.message.text.split(' ', 1)
         mob_name = parts[1] if len(parts) > 1 else None
         
-        success, msg, mob_id = pve_service.spawn_specific_mob(mob_name)
+        success, msg, mob_id = pve_service.spawn_specific_mob(mob_name, chat_id=self.chatid)
         
         if success:
             # Announce spawn
             mob = pve_service.get_current_mob_status(mob_id)
             if mob:
-                markup = get_combat_markup("mob", mob_id, GRUPPO_AROMA)
+                markup = get_combat_markup("mob", mob_id, self.chatid)
                 
                 msg_text = f"⚠️ Un {mob['name']} selvatico è apparso!\n📊 Lv. {mob.get('level', 1)} | ⚡ Vel: {mob.get('speed', 30)} | 🛡️ Res: {mob.get('resistance', 0)}%\n❤️ Salute: {mob['health']}/{mob['max_health']} HP\n⚔️ Danno: {mob['attack']}\n\nSconfiggilo per ottenere ricompense!"
                 
                 # Send with image if available
-                sent_msg = send_combat_message(GRUPPO_AROMA, msg_text, mob.get('image'), markup, mob_id)
+                sent_msg = send_combat_message(self.chatid, msg_text, mob.get('image'), markup, mob_id)
                 
                 # Immediate attack
-                attack_events = pve_service.mob_random_attack(specific_mob_id=mob_id)
+                attack_events = pve_service.mob_random_attack(specific_mob_id=mob_id, chat_id=self.chatid)
                 if attack_events:
                     for event in attack_events:
                         msg = event['message']
                         image_path = event['image']
-                        old_msg_id = event['last_message_id']
+                        # Use the message ID we JUST sent as the old one to avoid double cards
+                        old_msg_id = sent_msg.message_id if sent_msg else event.get('last_message_id')
                         
-                        send_combat_message(GRUPPO_AROMA, msg, image_path, markup, mob_id, old_msg_id)
+                        send_combat_message(self.chatid, msg, image_path, markup, mob_id, old_msg_id)
         else:
             self.bot.reply_to(self.message, f"❌ {msg}")
 
@@ -5565,7 +5566,11 @@ def trigger_dungeon_mob_attack(bot, chat_id, mob_ids):
                 send_combat_message(chat_id, msg, image_path, markup, mob_id, old_msg_id)
 
 def send_combat_message(chat_id, text, image_path, markup, mob_id, old_message_id=None, is_death=False):
-    """Helper to send combat messages, deleting the previous one and showing the enemy image."""
+    # ANTI-SPAM: Automatically fetch old message ID from DB if not provided
+    mob = pve_service.get_mob_details(mob_id)
+    if not old_message_id and mob:
+        old_message_id = mob.get('last_message_id')
+
     if old_message_id:
         try:
             bot.delete_message(chat_id, old_message_id)
@@ -5665,14 +5670,23 @@ def send_combat_message(chat_id, text, image_path, markup, mob_id, old_message_i
         if not is_death and sent_msg:
             pve_service.update_mob_message_id(mob_id, sent_msg.message_id)
     except Exception as e:
-        print(f"[ERROR] send_combat_message failed: {e}")
+        err_msg = str(e).lower()
+        print(f"[ERROR] send_combat_message failed for chat_id {chat_id}: {e}")
+        
+        # If it's a critical Telegram error (Chat not found, etc), re-raise to allow caller cleanup
+        if any(x in err_msg for x in ["chat not found", "chat_id_invalid", "bot was blocked"]):
+            raise e
+
         try:
             # Final fallback: retry sending as a simple message without markdown
             sent_msg = bot.send_message(chat_id, final_text, reply_markup=markup)
             if not is_death and sent_msg:
                 pve_service.update_mob_message_id(mob_id, sent_msg.message_id)
         except Exception as e2:
-            print(f"[ERROR] Critical failure in send_combat_message fallback: {e2}")
+            print(f"[ERROR] Critical failure in send_combat_message fallback for chat_id {chat_id}: {e2}")
+            # Re-raise critical errors even from fallback
+            if any(x in str(e2).lower() for x in ["chat not found", "chat_id_invalid", "bot was blocked"]):
+                raise e2
             pass
     return sent_msg
 
@@ -9114,8 +9128,8 @@ def mob_attack_job():
                                 pass
                 except Exception as e:
                     err_msg = str(e).lower()
-                    if "chat not found" in err_msg or "chat_id_invalid" in err_msg:
-                        print(f"[WARNING] Chat {enemy.chat_id} not found. Marking mob {enemy.id} as dead.")
+                    if any(x in err_msg for x in ["chat not found", "chat_id_invalid", "bot was blocked", "forbidden"]):
+                        print(f"[WARNING] Chat {chat_id} not found or bot blocked. Marking mob {enemy.id} as dead.")
                         # We need a new session to mark as dead since we are in a loop
                         temp_session = db.get_session()
                         try:

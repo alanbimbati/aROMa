@@ -860,11 +860,6 @@ class DungeonService:
         # NEW: Advance global index upon successful completion (now using helper)
         self._advance_global_index(session)
 
-        if local_session:
-            session.close()
-        else:
-            session.flush()
-        
         # Build participant names list
         participant_names = []
         for p in participants:
@@ -874,6 +869,11 @@ class DungeonService:
                 participant_names.append(name)
         
         participants_str = ", ".join(participant_names) if participant_names else "nessuno"
+        
+        if local_session:
+            session.close()
+        else:
+            session.flush()
         
         return f"🏆 **DUNGEON COMPLETATO!** 🏆\n\n**Rango: {score}**\n{details}\n\n**Ricompense:**\n+{wumpa} Wumpa, +{exp} EXP\n\n**Partecipanti:** {participants_str}"
 
