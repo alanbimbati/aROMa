@@ -167,6 +167,7 @@ class RewardService:
             
             # Roll for resource (now returns a list of drops)
             drops = self.crafting_service.roll_resource_drop(mob_level, is_boss)
+            print(f"[DEBUG] RewardService: Rolled {len(drops)} drops for mob {mob.id}")
             
             if not drops:
                 return None
@@ -175,10 +176,18 @@ class RewardService:
             from sqlalchemy import text
             
             for resource_id, qty, _ in drops:
-                resource_name = session.execute(text("SELECT name FROM resources WHERE id = :id"), {"id": resource_id}).scalar()
+                # Use a specific session for name lookup if the passed one is unreliable
+                resource_name = None
+                try:
+                    resource_name = session.execute(text("SELECT name FROM resources WHERE id = :id"), {"id": resource_id}).scalar()
+                except Exception as e:
+                    print(f"[ERROR] Session execute failed for resource {resource_id}, trying new session: {e}")
+                    with self.db.get_session() as new_session:
+                        resource_name = new_session.execute(text("SELECT name FROM resources WHERE id = :id"), {"id": resource_id}).scalar()
                 
                 # Add drop
                 success = self.crafting_service.add_resource_drop(user_id, resource_id, quantity=qty, source="mob")
+                print(f"[DEBUG] RewardService: Added drop {resource_id} x{qty} - Success: {success}")
                 
                 if success and resource_name:
                     drop_msgs.append(f"{resource_name} x{qty}")
