@@ -8899,29 +8899,40 @@ def callback_query(call):
         guide_name = action.split("|")[1]
         
         try:
-            file_path = os.path.join(BASE_DIR, "guides", f"{guide_name}.md")
-            if os.path.exists(file_path):
+            # Robust Path Resolution: Try multiple common locations
+            paths_to_try = [
+                os.path.join(BASE_DIR, "guides", f"{guide_name}.md"),
+                os.path.join(BASE_DIR, "Guides", f"{guide_name}.md"),
+                os.path.join(BASE_DIR, "docs", "guides", f"{guide_name}.md"),
+                os.path.join(os.getcwd(), "guides", f"{guide_name}.md")
+            ]
+            
+            file_path = None
+            for path in paths_to_try:
+                if os.path.exists(path):
+                    file_path = path
+                    break
+            
+            if file_path:
                 with open(file_path, "r", encoding="utf-8") as f:
                     content = f.read()
                 
                 # Simple Markdown to HTML conversion for basic elements
-                # Replacing # Header with <b>HEADER</b>
                 import re
                 content = re.sub(r'^# +(.*)$', r'<b>\1</b>', content, flags=re.MULTILINE)
                 content = re.sub(r'^## +(.*)$', r'<b>\1</b>', content, flags=re.MULTILINE)
                 content = re.sub(r'^### +(.*)$', r'<b>\1</b>', content, flags=re.MULTILINE)
                 content = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', content)
                 content = re.sub(r'\*(.*?)\*', r'<i>\1</i>', content)
-                # Bullet points: * or - to •
+                # Bullet points
                 content = re.sub(r'^[*-] +(.*)$', r'• \1', content, flags=re.MULTILINE)
                 
                 markup = types.InlineKeyboardMarkup()
                 markup.add(types.InlineKeyboardButton("🔙 Torna al Menu", callback_data="guide_main"))
                 
-                # Split content if too long (Telegram limit 4096)
+                # Split content if too long
                 if len(content) > 4000:
                     parts = []
-                    # Try to split by double newline or just length
                     temp_parts = content.split('\n\n')
                     current_part = ""
                     for p in temp_parts:
@@ -8943,6 +8954,7 @@ def callback_query(call):
                     
                 safe_answer_callback(call.id, "📖 Guida aperta!")
             else:
+                print(f"[DEBUG] Guide '{guide_name}' not found. Attempted paths: {paths_to_try}")
                 safe_answer_callback(call.id, "❌ Guida non trovata!", show_alert=True)
         except Exception as e:
             print(f"Error showing guide '{guide_name}': {e}")
