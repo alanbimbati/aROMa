@@ -19,7 +19,6 @@ points
 dumps/
 check_*.py
 fix_*.py
-init_*.py
 inspect_*.py
 list_*.py
 load_*.py

@@ -11,6 +11,9 @@ from io import BytesIO
 from database import Database
 from models.user import Utente
 
+# Dynamic path resolution to handle different environments (Local vs DietPi)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 def escape_markdown(text):
     """Helper to escape markdown characters for Telegram"""
     if not text:
@@ -171,6 +174,8 @@ achievement_tracker = AchievementTracker()
 
 from services.stat_build_service import StatBuildService
 stat_service = StatBuildService()
+
+from db_setup import init_database
 
 # Track last viewed character for admins (for image upload feature)
 admin_last_viewed_character = {}
@@ -1282,75 +1287,39 @@ def handle_refine_do(call):
         bot.answer_callback_query(call.id, result['error'], show_alert=True)
 
 def handle_refinery_claim_all(call):
-    """Claim all completed refinements"""
+    """Claim all completed refinements via CraftingService"""
     user_id = call.from_user.id
-    guild = guild_service.get_user_guild(user_id)
-    if not guild:
-        return
     
     from services.crafting_service import CraftingService
     crafting_service = CraftingService()
     
-    # 1. Process any in_progress jobs that are now ready (manual trigger to catch up)
-    crafting_service.process_refinery_queue()
+    result = crafting_service.claim_user_refinements(user_id)
     
-    # 2. Find all 'completed' jobs for this user
-    session = crafting_service.db.get_session()
-    from sqlalchemy import text
-    try:
-        completed_jobs = session.execute(text("""
-            SELECT id, result_t1, result_t2, result_t3, quantity 
-            FROM refinery_queue 
-            WHERE user_id = :uid AND status = 'completed'
-        """), {"uid": user_id}).fetchall()
+    if result['success']:
+        totals = result['totals']
+        job_count = result['job_count']
         
-        if not completed_jobs:
-            bot.answer_callback_query(call.id, "Nessun materiale pronto da ritirare.")
-            handle_guild_refinery_view(call)
-            return
-            
-        total_mats = {
-            'Rottami': 0,
-            'Materiale Pregiato': 0,
-            'Diamante': 0
-        }
-        total_jobs = 0
-        
-        for job in completed_jobs:
-            jid, t1, t2, t3, raw_qty = job
-            total_mats['Rottami'] += (t1 or 0)
-            total_mats['Materiale Pregiato'] += (t2 or 0)
-            total_mats['Diamante'] += (t3 or 0)
-            total_jobs += 1
-            
-            # NOTE: If result columns are null/0 (legacy jobs), we just clear them.
-            # Mark as claimed to clear from UI
-            session.execute(text("UPDATE refinery_queue SET status = 'claimed' WHERE id = :id"), {"id": jid})
-        
-        session.commit()
-        
-        # Build success message
-        msg = "✅ **Raffinazione Completata!**\n\nHai ritirato materiale da **x{}** cicli:\n".format(total_jobs)
-        has_mats = False
+        msg = f"✅ **Raffinazione Completata!**\n\nHai ritirato materiale da **x{job_count}** cicli:\n"
         emoji_map = {'Rottami': '🔩', 'Materiale Pregiato': '💎', 'Diamante': '💍'}
-        for mat, qty in total_mats.items():
+        has_mats = False
+        
+        for mat, qty in totals.items():
             if qty > 0:
                 msg += f"{emoji_map.get(mat, '•')} {mat}: **x{qty}**\n"
                 has_mats = True
         
         if not has_mats:
-            msg += "_Materiali aggiunti alle tue risorse._"
+            msg += "_I materiali erano già stati accreditati._"
             
         bot.send_message(call.message.chat.id, msg, parse_mode='markdown')
+        safe_answer_callback(call.id, "✅ Ritiro completato!")
         
-    except Exception as e:
-        print(f"[DEBUG] Error in handle_refinery_claim_all: {e}")
-        session.rollback()
-        bot.answer_callback_query(call.id, "❌ Errore nel ritiro.")
-    finally:
-        session.close()
-    
-    handle_guild_refinery_view(call)
+        # Refresh the view
+        handle_guild_refinery_view(call)
+    else:
+        # If it failed, show the error (e.g., "Nessun materiale pronto")
+        bot.answer_callback_query(call.id, result['error'], show_alert=True)
+        handle_guild_refinery_view(call)
 
 def handle_refinery_upgrade_view(call):
     """Show available material upgrades"""
@@ -5513,14 +5482,15 @@ def any(message):
                 if attacker_id:
                     attack_markup = get_combat_markup("mob", attacker_id, message.chat.id)
                 
-                try:
-                    if image_path and os.path.exists(image_path):
-                        with open(image_path, 'rb') as photo:
-                            bot.send_photo(message.chat.id, photo, caption=msg, reply_markup=attack_markup, parse_mode='markdown')
-                    else:
-                        bot.send_message(message.chat.id, msg, reply_markup=attack_markup, parse_mode='markdown')
-                except:
-                    bot.send_message(message.chat.id, msg, reply_markup=markup, parse_mode='markdown')
+                # Use send_combat_message to handle deletion and formatting
+                send_combat_message(
+                    chat_id=message.chat.id,
+                    text=msg,
+                    image_path=image_path,
+                    markup=attack_markup,
+                    mob_id=attacker_id,
+                    old_message_id=event.get('last_message_id')
+                )
 
     bothandler = BotCommands(message, bot)
     bothandler.handle_all_commands()
@@ -5534,6 +5504,14 @@ def display_mob_spawn(bot, chat_id, mob_id):
         print(f"[DEBUG] display_mob_spawn: mob details not found for {mob_id}")
         return
     
+    # Delete previous message if it exists
+    old_msg_id = mob.get('last_message_id')
+    if old_msg_id:
+        try:
+            bot.delete_message(chat_id, old_msg_id)
+        except Exception:
+            pass
+
     # Format ASCII Card
     hp_percent = int((mob['health'] / mob['max_health']) * 10)
     hp_bar = "█" * hp_percent + "░" * (10 - hp_percent)
@@ -7074,22 +7052,44 @@ def callback_query(call):
                     username = escape_markdown(utente.username if utente.username else utente.nome)
                     full_msg = f"@{username}\n{effect_msg}\n\n💰 Il Mob ha perso {dropped_amount} Wumpa!"
                     
-                    # Send as a new message to the group
-                    bot.send_message(call.message.chat.id, full_msg, reply_markup=markup)
+                    old_msg_id = mob_data.get('last_message_id')
+                    
+                    # Update/Send mob card with results
+                    send_combat_message(
+                        chat_id=call.message.chat.id,
+                        text=full_msg,
+                        image_path=None,
+                        markup=markup,
+                        mob_id=mob_id,
+                        old_message_id=old_msg_id
+                    )
                 else:
                     username = escape_markdown(utente.username if utente.username else utente.nome)
-                    bot.send_message(call.message.chat.id, f"@{username}\n{effect_msg}")
+                    full_msg = f"@{username}\n{effect_msg}"
+                    old_msg_id = mob_data.get('last_message_id')
+                    
+                    markup = get_combat_markup("mob", mob_id, call.message.chat.id)
+                    send_combat_message(call.message.chat.id, full_msg, None, markup, mob_id, old_msg_id)
             
             elif data and data.get('type') == 'next_mob_effect':
                 chat_id = call.message.chat.id
                 if chat_id not in pve_service.pending_mob_effects:
                     pve_service.pending_mob_effects[chat_id] = []
                 pve_service.pending_mob_effects[chat_id].append(data.get('effect'))
+                
                 username = escape_markdown(utente.username if utente.username else utente.nome)
-                bot.send_message(call.message.chat.id, f"@{username}\n{effect_msg}")
+                full_msg = f"@{username}\n{effect_msg}"
+                old_msg_id = mob_data.get('last_message_id')
+                
+                markup = get_combat_markup("mob", mob_id, call.message.chat.id)
+                send_combat_message(call.message.chat.id, full_msg, None, markup, mob_id, old_msg_id)
             else:
                 username = escape_markdown(utente.username if utente.username else utente.nome)
-                bot.send_message(call.message.chat.id, f"@{username}\n{effect_msg}")
+                full_msg = f"@{username}\n{effect_msg}"
+                old_msg_id = mob_data.get('last_message_id')
+                
+                markup = get_combat_markup("mob", mob_id, call.message.chat.id)
+                send_combat_message(call.message.chat.id, full_msg, None, markup, mob_id, old_msg_id)
         else:
             safe_answer_callback(call.id, "❌ Errore nell'uso dell'oggetto!", show_alert=True)
         return
@@ -8548,14 +8548,17 @@ def callback_query(call):
                     if attacker_id:
                         attack_markup = get_combat_markup("mob", attacker_id, call.message.chat.id)
                     
-                    try:
-                        if image_path and os.path.exists(image_path):
-                            with open(image_path, 'rb') as photo:
-                                bot.send_photo(call.message.chat.id, photo, caption=msg, reply_markup=attack_markup, parse_mode='markdown')
-                        else:
-                            bot.send_message(call.message.chat.id, msg, reply_markup=attack_markup, parse_mode='markdown')
-                    except Exception as e:
-                        print(f"Error sending counter-attack message: {e}")
+                    # Use send_combat_message to handle deletion and card update
+                    send_combat_message(
+                        chat_id=call.message.chat.id,
+                        text=msg,
+                        image_path=image_path,
+                        markup=attack_markup,
+                        mob_id=attacker_id,
+                        old_message_id=event.get('last_message_id')
+                    )
+                
+            # Check for new mobs (Dungeon progression)
         else:
             try:
                 safe_answer_callback(call.id, msg, show_alert=True)
@@ -8702,7 +8705,7 @@ def callback_query(call):
             enemy_id = int(parts[2])
             
         utente = user_service.get_user(user_id)
-        success, msg = pve_service.defend(utente, chat_id=call.message.chat.id)
+        success, msg, mob_info = pve_service.defend(utente, chat_id=call.message.chat.id)
         
         if success:
             try:
@@ -8711,7 +8714,16 @@ def callback_query(call):
                 pass
             
             username = escape_markdown(utente.username if utente.username else utente.nome)
-            bot.send_message(call.message.chat.id, f"@{username}\n{msg}", parse_mode='markdown')
+            full_msg = f"@{username}\n{msg}"
+            
+            mob_id = mob_info.get('mob_id')
+            old_msg_id = mob_info.get('last_message_id')
+            
+            if mob_id:
+                markup = get_combat_markup("mob", mob_id, call.message.chat.id)
+                send_combat_message(call.message.chat.id, full_msg, None, markup, mob_id, old_msg_id)
+            else:
+                bot.send_message(call.message.chat.id, full_msg, parse_mode='markdown')
         else:
             safe_answer_callback(call.id, msg, show_alert=True)
     
@@ -8873,7 +8885,7 @@ def callback_query(call):
         guide_name = action.split("|")[1]
         
         try:
-            file_path = os.path.join("guides", f"{guide_name}.md")
+            file_path = os.path.join(BASE_DIR, "guides", f"{guide_name}.md")
             if os.path.exists(file_path):
                 with open(file_path, "r", encoding="utf-8") as f:
                     content = f.read()
@@ -9538,9 +9550,8 @@ def schedule_checker():
 if __name__ == '__main__':
     print("Starting aROMa Bot...")
     
-    # Initialize DB (if needed)
-    db = Database()
-    db.create_all_tables()
+    # Initialize DB (Schema migrations + Seeding)
+    init_database()
     
     # Reload achievements from CSV
     achievement_tracker.load_from_csv()

@@ -4,6 +4,11 @@ Potion Service - Handle health and mana potions
 from database import Database
 from services.user_service import UserService
 import csv
+import os
+
+# Dynamic path resolution
+SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(SERVICE_DIR)
 
 class PotionService:
     def __init__(self):
@@ -15,7 +20,8 @@ class PotionService:
         """Load potions from CSV"""
         potions = []
         try:
-            with open('data/potions.csv', 'r', encoding='utf-8') as f:
+            csv_path = os.path.join(BASE_DIR, 'data', 'potions.csv')
+            with open(csv_path, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     potions.append({

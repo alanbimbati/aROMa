@@ -8,6 +8,11 @@ from settings import PointsName
 from services.event_dispatcher import EventDispatcher
 
 import csv
+import os
+
+# Dynamic path resolution
+SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(SERVICE_DIR)
 
 class ItemService:
     def __init__(self):
@@ -20,7 +25,8 @@ class ItemService:
         """Load item metadata from CSV"""
         metadata = {}
         try:
-            with open('items.csv', 'r', encoding='utf-8') as f:
+            csv_path = os.path.join(BASE_DIR, 'items.csv')
+            with open(csv_path, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     metadata[row['nome']] = {
@@ -164,7 +170,8 @@ class ItemService:
     def load_items_from_csv(self):
         items = []
         try:
-            with open('items.csv', 'r', encoding='utf-8') as f:
+            csv_path = os.path.join(BASE_DIR, 'items.csv')
+            with open(csv_path, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     items.append({
