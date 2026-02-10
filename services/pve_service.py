@@ -771,7 +771,8 @@ class PvEService:
                 return False, "Sei fuggito da questo mostro! Non puoi più attaccarlo.", None
         else:
             # Attack first alive mob (preferring this chat if provided)
-            query = session.query(Mob).filter_by(is_dead=False)
+            # Use FOR UPDATE and consistent order to prevent deadlocks
+            query = session.query(Mob).filter_by(is_dead=False).order_by(Mob.id.asc()).with_for_update()
             if chat_id:
                 query = query.filter_by(chat_id=chat_id)
             mob = query.first()
@@ -1167,7 +1168,8 @@ class PvEService:
         if not session:
             session = self.db.get_session()
             local_session = True
-        all_mobs = session.query(Mob).filter_by(chat_id=chat_id, is_dead=False).all()
+        # Select mobs WITH LOCK and CONSISTENT ORDER to prevent deadlocks
+        all_mobs = session.query(Mob).filter_by(chat_id=chat_id, is_dead=False).order_by(Mob.id.asc()).with_for_update().all()
         
         if not all_mobs:
             if local_session:
@@ -1434,9 +1436,13 @@ class PvEService:
         summary_msg += f"\n⏳ Cooldown: {int(cooldown_seconds)}s"
 
         if local_session:
-
-            session.commit()
-            session.close()
+            try:
+                session.commit()
+            except Exception as e:
+                print(f"[ERROR] Final commit in attack_aoe failed: {e}")
+                session.rollback()
+            finally:
+                session.close()
             
         return True, summary_msg, extra_data, attack_events
 
@@ -1477,9 +1483,10 @@ class PvEService:
                 if mob and not mob.is_dead:
                     mobs_to_process.append(mob)
             elif chat_id:
-                mobs_to_process = session.query(Mob).filter_by(chat_id=chat_id, is_dead=False).all()
+                # Use CONSISTENT ORDER to prevent deadlocks when multiple users attack/are attacked
+                mobs_to_process = session.query(Mob).filter_by(chat_id=chat_id, is_dead=False).order_by(Mob.id.asc()).all()
             else:
-                mobs_to_process = session.query(Mob).filter_by(is_dead=False).all()
+                mobs_to_process = session.query(Mob).filter_by(is_dead=False).order_by(Mob.id.asc()).all()
                 
             if not mobs_to_process:
                 if local_session:
@@ -1780,7 +1787,13 @@ class PvEService:
                     
                 except Exception as e:
                     print(f"Error in mob_random_attack loop for mob {mob.id}: {e}")
-                    session.rollback()
+                    # Only rollback if we own the session OR if it's a fatal DB error (like deadlock)
+                    # Note: a deadlock already invalidates the transaction in Postgres.
+                    if local_session:
+                        session.rollback()
+                    else:
+                        # Re-raise so the caller knows the transaction is dead
+                        raise
             
             if local_session:
                 session.commit()
