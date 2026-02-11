@@ -170,8 +170,12 @@ class UserService:
         recent.sort(key=lambda x: x[1], reverse=True)
         return [uid for uid, _ in recent]
 
-    def get_user(self, target):
-        session = self.db.get_session()
+    def get_user(self, target, session=None):
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         utente = None
         target = str(target)
 
@@ -198,10 +202,10 @@ class UserService:
                 )
             ).first()
         else:
-            chatid = int(target)
-            utente = session.query(Utente).filter_by(id_telegram=chatid).first()
+            utente = session.query(Utente).filter_by(id_telegram=int(target)).first()
             
-        session.close()
+        if local_session:
+            session.close()
         return utente
 
     def get_users(self):
@@ -446,14 +450,19 @@ class UserService:
                 # We use a consistent quadratic curve (100 * level^2) for levels >= 45.
                 # This prevents extreme spikes found in some legacy character data
                 # and ensures that difficulty continues to scale as requested.
-                if level >= 45:
-                    return 100 * (level ** 2)
-                
                 loader = get_character_loader()
                 chars = loader.get_characters_by_level(level)
                 if chars:
-                    # For mid-levels, we take the value from CSV if available
-                    return chars[0].get('exp_required', 100 * (level ** 2))
+                    # Always prioritize CSV value if available (e.g. Inkling Lv 53 = 135k)
+                    csv_exp = chars[0].get('exp_required')
+                    if csv_exp and csv_exp > 0:
+                         return csv_exp
+                
+                # We use a consistent quadratic curve (100 * level^2) for levels >= 45 IF not in CSV.
+                # This prevents extreme spikes found in some legacy character data
+                # and ensures that difficulty continues to scale as requested.
+                if level >= 45:
+                    return 100 * (level ** 2)
                 
                 # Fallback to DB if loader fails
                 level_data = self._get_livello_by_level(session, level)
@@ -466,7 +475,10 @@ class UserService:
             # Check for level-up
             next_exp_req = get_exp_required_for_level(utente.livello + 1)
             
-            while next_exp_req is not None and utente.exp >= next_exp_req:
+            # Loop to handle multiple level-ups
+            loop_guard = 0
+            while next_exp_req is not None and utente.exp >= next_exp_req and loop_guard < 100:
+                loop_guard += 1
                 # Level up!
                 utente.livello += 1
                 
@@ -481,54 +493,36 @@ class UserService:
                 )
                 utente.stat_points = (utente.livello * 2) - spent_points
                 
-                # Increase base stats
-                # utente.max_health += 10
-                # utente.max_mana += 10
-                # utente.base_damage += 2
-                
-                # Full Heal on Level Up
-                # We do this after recalculate to ensure max_health is updated first?
-                # No, recalculate commits.
-                
                 leveled_up = True
                 new_level = utente.livello
                 
-                # Recalculate stats based on new level
-                # We need to commit first so recalculate sees new level? 
-                # recalculate uses session.query, so it sees DB state.
-                # But we are in a session here.
-                # If we call self.recalculate_stats(user_id), it opens a NEW session.
-                # This might cause lock or not see uncommitted changes.
-                # We should pass session to recalculate_stats?
-                # Or commit here first.
+                # Commit intermediate state to ensure level is saved
                 if local_session:
                     session.commit()
                 else:
                     session.flush()
                     
+                # Recalculate stats
                 self.recalculate_stats(user_id, session=session)
                 
-                # Re-fetch to get updated max values for heal
-                # If we passed session, utente is still attached (if we didn't close).
-                # But recalculate_stats might have updated DB using the SAME session?
-                # If recalculate_stats used the same session, we don't need to expire_all if we flush.
-                # But let's be safe.
+                # Refresh user object
                 if local_session:
-                    session.expire_all()
+                    try:
+                        session.refresh(utente)
+                    except:
+                        # Re-query if refresh fails (detached)
+                        utente = session.query(Utente).filter_by(id_telegram=user_id).first()
                 else:
+                    # Just expire to force reload on access
                     session.expire(utente)
-                    
-                u_refreshed = session.query(Utente).filter_by(id_telegram=user_id).first()
+
+                # Full Heal logic
+                utente.health = utente.max_health
+                utente.mana = utente.max_mana
+                utente.current_hp = utente.max_health
+                utente.current_mana = utente.max_mana
                 
-                # Update current values (using same session)
-                # We can update directly on u_refreshed
-                u_refreshed.health = u_refreshed.max_health
-                u_refreshed.mana = u_refreshed.max_mana
-                u_refreshed.current_hp = u_refreshed.max_health
-                u_refreshed.current_mana = u_refreshed.max_mana
-                # update_user handles clamping to max.
-                
-                # NEW: Log level up event
+                # Log level up event
                 self.event_dispatcher.log_event(
                     event_type='level_up',
                     user_id=user_id,
@@ -537,7 +531,7 @@ class UserService:
                     session=session
                 )
                 
-                # Check for next level
+                # Check for NEXT level
                 next_exp_req = get_exp_required_for_level(utente.livello + 1)
             
             # Get next level exp requirement for display
@@ -547,6 +541,17 @@ class UserService:
                 session.commit()
         if local_session:
             session.close()
+        
+        return {
+            'leveled_up': leveled_up,
+            'new_level': new_level,
+            'next_level_exp': next_level_exp
+        }
+
+    def check_level_up(self, user_id, session=None):
+        """Force check for level up (helper method)"""
+        # We reuse add_exp_by_id with 0 exp to trigger the check loop
+        return self.add_exp_by_id(user_id, 0, session=session)
         
         return {
             'leveled_up': leveled_up,
@@ -1088,14 +1093,19 @@ class UserService:
             
         return True, f"Hai smesso di riposare. Hai recuperato {status['hp']} HP e {status['mana']} Mana in {status['minutes']} minuti."
 
-    def add_title(self, user_id, title):
+    def add_title(self, user_id, title, session=None):
         """Add a title to the user's unlocked titles list"""
         import json
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         user = session.query(Utente).filter_by(id_telegram=user_id).first()
         
         if not user:
-            session.close()
+            if local_session:
+                session.close()
             return False
             
         try:
@@ -1106,9 +1116,11 @@ class UserService:
         if title not in titles:
             titles.append(title)
             user.titles = json.dumps(titles)
-            session.commit()
+            if local_session:
+                session.commit()
             
-        session.close()
+        if local_session:
+            session.close()
         return True
     def is_invincible(self, user):
         """Check if user has active invincibility"""

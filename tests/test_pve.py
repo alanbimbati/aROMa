@@ -24,9 +24,11 @@ class TestPvE(unittest.TestCase):
         # Cleanup
         from models.combat import CombatParticipation
         from models.resources import UserResource
+        from models.dungeon import DungeonParticipant
         self.session.query(CombatParticipation).filter(CombatParticipation.mob_id.in_(
             self.session.query(Mob.id).filter_by(chat_id=self.chat_id)
         )).delete(synchronize_session=False)
+        self.session.query(DungeonParticipant).filter_by(user_id=self.user_id).delete(synchronize_session=False)
         self.session.query(UserResource).filter_by(user_id=self.user_id).delete()
         self.session.query(Mob).filter_by(chat_id=self.chat_id).delete()
         self.session.query(Utente).filter_by(id_telegram=self.user_id).delete()
@@ -79,8 +81,8 @@ class TestPvE(unittest.TestCase):
         session.close()
         
         # Attack
-        success, msg, _ = self.pve_service.attack_mob(self.user, 10)
-        self.assertTrue(success)
+        success, msg, _ = self.pve_service.attack_mob(self.user, 10, chat_id=self.chat_id)
+        self.assertTrue(success, f"Attack failed: {msg}")
         self.assertIn("Hai inflitto", msg)
         
         # Verify damage
@@ -95,8 +97,8 @@ class TestPvE(unittest.TestCase):
         self.pve_service.spawn_specific_mob(chat_id=self.chat_id)
         
         # Attack
-        success, msg, _ = self.pve_service.attack_mob(self.user, 1000) # Kill it
-        self.assertTrue(success)
+        success, msg, _ = self.pve_service.attack_mob(self.user, 1000, chat_id=self.chat_id) # Kill it
+        self.assertTrue(success, f"Kill failed: {msg}")
         print(f"Attack result: {msg}")
         
         # Verify dead

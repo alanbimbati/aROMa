@@ -78,14 +78,22 @@ class RewardService:
         summary_lines = []
         total_wumpa_distributed = 0
         
+        # Batch fetch users to avoid N+1 queries
+        user_ids = [r['user_id'] for r in rewards_data]
+        if not user_ids:
+            return ""
+
+        users = session.query(Utente).filter(Utente.id_telegram.in_(user_ids)).all()
+        user_map = {u.id_telegram: u for u in users}
+
         for reward in rewards_data:
             user_id = reward['user_id']
             xp = reward['base_xp']
             wumpa = reward['base_wumpa']
             damage = reward['damage_dealt']
             
-            # Use session to query user
-            user = session.query(Utente).filter_by(id_telegram=user_id).first()
+            # Get user from map
+            user = user_map.get(user_id)
             if not user:
                 continue
 
@@ -269,12 +277,20 @@ class RewardService:
 
         summary_lines = []
         
+        # Batch fetch users
+        user_ids = list(aggregated_users.keys())
+        if not user_ids:
+            return ""
+            
+        users = session.query(Utente).filter(Utente.id_telegram.in_(user_ids)).all()
+        user_map = {u.id_telegram: u for u in users}
+
         for user_id, data in aggregated_users.items():
             amount_xp = data['xp']
             amount_wumpa = data['wumpa']
             
-            # Use session to query user if provided
-            user = session.query(Utente).filter_by(id_telegram=user_id).first()
+            # Get user from map
+            user = user_map.get(user_id)
             if not user: continue
             
             is_dead = False

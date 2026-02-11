@@ -23,9 +23,13 @@ class CraftingService:
         from services.event_dispatcher import EventDispatcher
         self.event_dispatcher = EventDispatcher()
     
-    def add_resource_drop(self, user_id, resource_id, quantity=1, source="mob"):
+    def add_resource_drop(self, user_id, resource_id, quantity=1, source="mob", session=None):
         """Add a resource to user's inventory"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         try:
             # Check if user already has this resource
             existing = session.execute(text("""
@@ -47,22 +51,26 @@ class CraftingService:
                     VALUES (:uid, :rid, :qty, :source)
                 """), {"uid": user_id, "rid": resource_id, "qty": quantity, "source": source})
             
-            session.commit()
+            if local_session:
+                session.commit()
             
             # Log event for achievements
             self.event_dispatcher.log_event(
                 event_type="RESOURCE_DROP",
                 user_id=user_id,
                 value=quantity,
-                context={"resource_id": resource_id, "source": source}
+                context={"resource_id": resource_id, "source": source},
+                session=session
             )
             return True
         except Exception as e:
+            if local_session:
+                session.rollback()
             print(f"Error adding resource drop: {e}")
-            session.rollback()
             return False
         finally:
-            session.close()
+            if local_session:
+                session.close()
     
     def get_user_resources(self, user_id):
         """Get all raw and refined resources for a user"""

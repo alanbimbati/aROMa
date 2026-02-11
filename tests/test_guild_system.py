@@ -71,5 +71,68 @@ class TestGuildSystem(unittest.TestCase):
         self.assertEqual(guild.inn_level, 2)
         self.assertEqual(guild.wumpa_bank, 9500) # 10000 - 500
 
+    def test_upgrade_armory(self):
+        # Mock session
+        session = MagicMock()
+        patcher = patch.object(self.guild_service.db, 'get_session', return_value=session)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        
+        # Mock leader member
+        member = GuildMember(guild_id=1, user_id=111, role="Leader")
+        
+        # Mock guild with funds
+        guild = Guild(id=1, name="TestGuild", armory_level=0, wumpa_bank=10000)
+        
+        def query_side_effect(*args, **kwargs):
+            model = args[0] if args else None
+            query = MagicMock()
+            if model == GuildMember:
+                query.filter_by.return_value.first.return_value = member
+            elif model == Guild:
+                query.filter_by.return_value.first.return_value = guild
+            return query
+            
+        session.query.side_effect = query_side_effect
+        
+        # Test upgrade armory
+        # Cost: (0+1) * 750 = 750
+        success, msg = self.guild_service.upgrade_armory(leader_id=111)
+        self.assertTrue(success, f"Upgrade failed with message: {msg}")
+        self.assertEqual(guild.armory_level, 1)
+        self.assertEqual(guild.wumpa_bank, 9250) # 10000 - 750
+
+    def test_expand_village(self):
+        # Mock session
+        session = MagicMock()
+        patcher = patch.object(self.guild_service.db, 'get_session', return_value=session)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        
+        # Mock leader member
+        member = GuildMember(guild_id=1, user_id=111, role="Leader")
+        
+        # Mock guild with funds
+        guild = Guild(id=1, name="TestGuild", village_level=1, member_limit=5, wumpa_bank=10000)
+        
+        def query_side_effect(*args, **kwargs):
+            model = args[0] if args else None
+            query = MagicMock()
+            if model == GuildMember:
+                query.filter_by.return_value.first.return_value = member
+            elif model == Guild:
+                query.filter_by.return_value.first.return_value = guild
+            return query
+            
+        session.query.side_effect = query_side_effect
+        
+        # Test expand village
+        # Cost: 1 * 1000 = 1000
+        success, msg = self.guild_service.expand_village(leader_id=111)
+        self.assertTrue(success, f"Upgrade failed with message: {msg}")
+        self.assertEqual(guild.village_level, 2)
+        self.assertEqual(guild.member_limit, 10) # 5 + 5
+        self.assertEqual(guild.wumpa_bank, 9000) # 10000 - 1000
+
 if __name__ == '__main__':
     unittest.main()
