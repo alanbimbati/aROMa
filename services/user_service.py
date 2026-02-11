@@ -27,11 +27,23 @@ class UserService:
         self.equipment_service = EquipmentService()
 
     def get_user_by_username(self, username):
-        """Get user by username (case insensitive)"""
+        """Get user by username (case insensitive, handles @ prefix)"""
+        if not username: return None
+        
+        # Strip @ if provided to check both versions
+        clean_name = username[1:] if username.startswith('@') else username
+        
         session = self.db.get_session()
-        user = session.query(Utente).filter(func.lower(Utente.username) == username.lower()).first()
-        session.close()
-        return user
+        try:
+            # Try exact match, then match with @, then match without @
+            user = session.query(Utente).filter(
+                (func.lower(Utente.username) == username.lower()) |
+                (func.lower(Utente.username) == clean_name.lower()) |
+                (func.lower(Utente.username) == f"@{clean_name}".lower())
+            ).first()
+            return user
+        finally:
+            session.close()
     
     def _check_exp_required_column(self):
         """Verifica se la colonna exp_required esiste nel database"""
@@ -120,18 +132,29 @@ class UserService:
         key = (user_id, chat_id)
         self.recent_activities[key] = now
         
-        # Throttled DB update (once per hour per user)
-        last_db_upd = self.last_db_updates.get(user_id)
-        if not last_db_upd or (now - last_db_upd).total_seconds() > 3600:
-            self._update_last_activity_db(user_id, now)
-            self.last_db_updates[user_id] = now
+        try:
+            # Throttled DB update (once per hour per user)
+            last_db_upd = self.last_db_updates.get(user_id)
+            if not last_db_upd or (now - last_db_upd).total_seconds() > 3600:
+                self._update_last_activity_db(user_id, now)
+                self.last_db_updates[user_id] = now
+                
+            print(f"[DEBUG] track_activity: user_id={user_id}, chat_id={chat_id}")
             
-        print(f"[DEBUG] track_activity: user_id={user_id}, chat_id={chat_id}")
-        
+            # PERIODIC MEMBERSHIP CHECK (1% chance to check on activity)
+            import random
+            if random.random() < 0.01:
+                if not self.check_group_membership(user_id):
+                    self.delete_user_data(user_id)
+                    
+        except Exception as e:
+            print(f"[ERROR] track_activity fallback failed: {e}")
+
     def _update_last_activity_db(self, user_id, timestamp):
         """Update last_activity in database"""
         session = self.db.get_session()
         try:
+            from models.user import Utente
             session.query(Utente).filter_by(id_telegram=user_id).update(
                 {'last_activity': timestamp}
             )
@@ -139,6 +162,137 @@ class UserService:
         except Exception as e:
             print(f"[ERROR] Failed to update last_activity for {user_id}: {e}")
             session.rollback()
+        finally:
+            session.close()
+        
+    def check_group_membership(self, user_id):
+        """
+        Verify if user is a member of the official or test group.
+        Returns True if member of at least one, False otherwise.
+        """
+        import main
+        from settings import AROMA_GRUPPO, TEST_GRUPPO
+        
+        if not hasattr(main, 'bot'):
+            return True # Cannot check, assume OK to avoid accidental deletion
+            
+        # Try Official Group
+        try:
+            member = main.bot.get_chat_member(AROMA_GRUPPO, user_id)
+            if member.status in ['member', 'administrator', 'creator']:
+                return True
+        except Exception as e:
+            # "chat not found" or "user not found" are expected if not in group
+            pass
+            
+        # Try Test Group
+        try:
+            member = main.bot.get_chat_member(TEST_GRUPPO, user_id)
+            if member.status in ['member', 'administrator', 'creator']:
+                return True
+        except Exception as e:
+            pass
+            
+        return False
+
+    def delete_user_data(self, user_id, ignore_activity=False):
+        """
+        Permanently delete ALL data associated with a user ID across all tables.
+        This is used for cleaning up users who are no longer in the required groups.
+        """
+        import datetime
+        from dateutil.relativedelta import relativedelta
+        
+        session = self.db.get_session()
+        try:
+            from models.user import Utente
+            user = session.query(Utente).filter_by(id_telegram=user_id).first()
+            
+            if user and not ignore_activity:
+                # 6-month inactivity safeguard
+                six_months_ago = datetime.datetime.now() - relativedelta(months=6)
+                last_act = user.last_activity
+                
+                # If last_activity is None, we assume it's old (or pre-tracking)
+                if last_act and last_act > six_months_ago:
+                    print(f"[CLEANUP] Skipping deletion for active user {user_id} (Last activity: {last_act})")
+                    return False
+
+            print(f"[CLEANUP] Starting data deletion for user {user_id}...")
+            # Import models inside to avoid circular imports
+            from models.resources import UserResource, UserRefinedMaterial, RefineryQueue
+            from models.stats import UserStat
+            from models.achievements import UserAchievement, GameEvent
+            from models.equipment import UserEquipment
+            from models.crafting import CraftingQueue
+            from models.game import GiocoUtente
+            from models.user import Utente
+            from models.guild import GuildMember, Guild
+            from models.combat import CombatParticipation
+            from models.pve import RaidParticipation
+            from models.skins import UserSkin
+            
+            # 1. Combat & Participation
+            session.query(CombatParticipation).filter_by(user_id=user_id).delete()
+            session.query(RaidParticipation).filter_by(user_id=user_id).delete()
+            
+            # 2. Guilds
+            # First, check if user is a leader of any guild. 
+            # If so, we may need to delete the guild or the leader FK will block.
+            guilds_led = session.query(Guild).filter_by(leader_id=user_id).all()
+            for g in guilds_led:
+                # To delete a guild, we must first delete all its members and other dependents
+                session.query(GuildMember).filter_by(guild_id=g.id).delete()
+                # Deleting the guild itself
+                session.delete(g)
+            
+            # Now delete membership if they are just a member
+            session.query(GuildMember).filter_by(user_id=user_id).delete()
+            
+            # 3. Crafting & Resources
+            session.query(UserResource).filter_by(user_id=user_id).delete()
+            session.query(UserRefinedMaterial).filter_by(user_id=user_id).delete()
+            session.query(RefineryQueue).filter_by(user_id=user_id).delete()
+            session.query(CraftingQueue).filter_by(user_id=user_id).delete()
+            
+            # 4. Stats, Achievements, Skins
+            session.query(UserStat).filter_by(user_id=user_id).delete()
+            session.query(UserAchievement).filter_by(user_id=user_id).delete()
+            session.query(GameEvent).filter_by(user_id=user_id).delete()
+            session.query(UserSkin).filter_by(user_id=user_id).delete()
+            
+            # 5. Equipment & Items
+            session.query(UserEquipment).filter_by(user_id=user_id).delete()
+            
+            # Optional tables (try-except as they might be newer or in different modules)
+            try:
+                from models.inventory import Inventory
+                session.query(Inventory).filter_by(user_id=user_id).delete()
+            except: pass
+            
+            try:
+                from models.items import UserItem
+                session.query(UserItem).filter_by(user_id=user_id).delete()
+            except: pass
+
+            try:
+                from models.character_ownership import UserCharacter
+                session.query(UserCharacter).filter_by(user_id=user_id).delete()
+            except: pass
+            
+            # 6. Core User Data
+            session.query(GiocoUtente).filter_by(id_telegram=user_id).delete()
+            session.query(Utente).filter_by(id_telegram=user_id).delete()
+            
+            session.commit()
+            print(f"[CLEANUP] Successfully deleted all data for user {user_id}")
+            return True
+        except Exception as e:
+            print(f"[CLEANUP] [ERROR] Failed to delete data for {user_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            session.rollback()
+            return False
         finally:
             session.close()
         

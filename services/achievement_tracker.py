@@ -157,6 +157,13 @@ class AchievementTracker:
             
         rewards_to_award = []
         try:
+            # CHECK: Does user exist?
+            from models.user import Utente
+            user_exists = session.query(Utente).filter_by(id_telegram=user_id).first()
+            if not user_exists:
+                # If user doesn't exist, we shouldn't award achievements
+                return
+            
             # Get all achievements
             all_achievements = session.query(Achievement).all()
             
@@ -278,6 +285,16 @@ class AchievementTracker:
         """
         Grant rewards and notify user.
         """
+        # Ensure user_service is initialized
+        from services.user_service import UserService
+        user_service = UserService()
+        
+        # CHECK: Does user exist in 'utente' table?
+        user = user_service.get_user(user_id, session=session)
+        if not user:
+            print(f"[REWARD] Skipping reward for non-existent user {user_id}")
+            return
+            
         achievement_name = reward_data['achievement_name']
         achievement_description = reward_data['achievement_description']
         tier_name = reward_data['tier_name']
@@ -333,7 +350,12 @@ class AchievementTracker:
                 from settings import GRUPPO_AROMA
                 main.bot.send_message(GRUPPO_AROMA, public_msg, parse_mode='markdown')
         except Exception as e:
-            print(f"[WARNING] Could not send notification: {e}")
+            err_msg = str(e).lower()
+            if any(x in err_msg for x in ["chat not found", "bot was blocked", "user is deactivated", "bot can't initiate"]):
+                # Intentionally silent for common inactive user cases
+                pass
+            else:
+                print(f"[WARNING] Could not send notification to {user_id}: {e}")
 
     def on_chat_exp(self, user_id: int, total_chat_exp: int, increment: int = 0):
         value = increment if increment > 0 else total_chat_exp

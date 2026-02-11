@@ -204,9 +204,9 @@ class TestDungeonLogic(unittest.TestCase):
         attacked_user_id = None
         for event in events:
             msg = event['message']
-            # Handle escaped underscores in usernames if present
-            if "@user13_1" in msg or "@user13\_1" in msg or "User 13-1" in msg: attacked_user_id = 13001
-            elif "@user13_3" in msg or "@user13\_3" in msg or "User 13-3" in msg: attacked_user_id = 13003
+            # Handle new link-based mentions or names
+            if "id=13001" in msg or "User 13-1" in msg: attacked_user_id = 13001
+            elif "id=13003" in msg or "User 13-3" in msg: attacked_user_id = 13003
         
         self.assertIsNotNone(attacked_user_id, f"Could not identify attacked user in events: {events}")
         

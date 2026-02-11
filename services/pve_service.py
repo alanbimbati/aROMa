@@ -24,6 +24,27 @@ from services.equipment_service import EquipmentService
 SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(SERVICE_DIR)
 
+def escape_markdown(text):
+    """Helper to escape markdown characters for Telegram"""
+    if not text:
+        return ""
+    # Characters to escape for Markdown (V1)
+    # _, *, [, `
+    return str(text).replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("`", "\\`")
+
+def get_mention_markdown(user_id, name):
+    """Create a safe markdown mention that works with underscores and triggers notifications"""
+    if not name:
+        name = f"User {user_id}"
+    # Ensure it starts with @ if it looks like a username
+    if name and not name.startswith('@') and not any(c.isspace() for c in name): # Heuristic for username
+         # But wait, we don't know for sure if it's a username or first_name here if it's from target.nome
+         # Let's just trust whatever comes in.
+         pass
+    
+    safe_name = escape_markdown(name)
+    return f"[{safe_name}](tg://user?id={user_id})"
+
 class PvEService:
     def __init__(self):
         self.db = Database()
@@ -174,14 +195,14 @@ class PvEService:
             # Check if Resting (Inn)
             if db_user.resting_since:
                 session.close()
-                return False, "💤 Sei alla Locanda! Non puoi combattere mentre riposi. Usa /locanda per uscire."
+                return False, "💤 Sei alla Locanda! Non puoi combattere mentre riposi. Usa /locanda per uscire.", None
 
             # Check if dead
             current_hp = db_user.current_hp if hasattr(db_user, 'current_hp') and db_user.current_hp is not None else (db_user.health or 0)
             
             if current_hp <= 0:
                 session.close()
-                return False, "💀 Sei morto! Non puoi difenderti. Devi curarti alla Locanda."
+                return False, "💀 Sei morto! Non puoi difenderti. Devi curarti alla Locanda.", None
 
             # Check if there are active mobs in chat
             active_mob = None
@@ -189,7 +210,7 @@ class PvEService:
                 active_mob = session.query(Mob).filter_by(chat_id=chat_id, is_dead=False).first()
                 if not active_mob:
                     session.close()
-                    return False, "Non c'è nessuno da cui difenderti! I nemici sono stati sconfitti."
+                    return False, "Non c'è nessuno da cui difenderti! I nemici sono stati sconfitti.", None
 
             # Check Cooldown (Shared with attack)
             user_speed = getattr(db_user, 'speed', 0) or 0
@@ -201,7 +222,7 @@ class PvEService:
                 if elapsed < cooldown_seconds:
                     remaining = int(cooldown_seconds - elapsed)
                     session.close()
-                    return False, f"⏳ Sei stanco! (CD: {int(cooldown_seconds)}s)\nDevi riposare ancora per {remaining}s."
+                    return False, f"⏳ Sei stanco! (CD: {int(cooldown_seconds)}s)\nDevi riposare ancora per {remaining}s.", None
             
             # HP/Mana Recovery (2% of max)
             hp_recovery = int(db_user.max_health * 0.02)
@@ -230,7 +251,7 @@ class PvEService:
             
             if not parry_result['success']:
                 session.close()
-                return False, f"❌ {parry_result['error']}"
+                return False, f"❌ {parry_result['error']}", None
             
             # Update last action time (cooldown starts)
             self.user_service.update_user(db_user.id_telegram, {'last_attack_time': datetime.datetime.now()}, session=session)
@@ -254,7 +275,7 @@ class PvEService:
             
         except Exception as e:
             session.rollback()
-            return False, f"Errore durante la difesa: {e}"
+            return False, f"Errore durante la difesa: {e}", None
         finally:
             session.close()
 
@@ -1017,7 +1038,6 @@ class PvEService:
         # Capture data for extra_data before potential session close
         final_mob_id = mob.id
         final_mob_name = mob.name
-        final_is_dead = mob.health <= 0
         final_last_msg_id = mob.last_message_id
         # Determine image path (GIF priority for special attacks)
         final_image_path = self.get_enemy_image_path(mob)
@@ -1141,7 +1161,7 @@ class PvEService:
             'mob_id': final_mob_id,
             'image_path': final_image_path,
             'mob_name': final_mob_name,
-            'is_dead': final_is_dead,
+            'is_dead': mob.is_dead, # Use current state
             'delete_message_id': final_last_msg_id,
             'new_mob_ids': extra_data.get('new_mob_ids', [])
         }
@@ -1692,10 +1712,7 @@ class PvEService:
                             session=session
                         )
                         
-                        username = target.username.lstrip('@') if target.username else None
-                        tag_raw = f"@{username}" if username else target.nome
-                        # Escape tag for markdown
-                        tag = tag_raw.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace(']', '\\]').replace('(', '\\(').replace(')', '\\)')
+                        tag = get_mention_markdown(target.id_telegram, target.username if target.username else target.nome)
                         
                         # Add HP info to tag
                         current_hp = target.current_hp if hasattr(target, 'current_hp') and target.current_hp is not None else target.health
@@ -1952,15 +1969,13 @@ class PvEService:
             
             # Get username for the message
             p_user = session.query(Utente).filter_by(id_telegram=p.user_id).first()
-            if p_user:
-                p_name = p_user.game_name if p_user.game_name else (p_user.nome if p_user.nome else (p_user.username if p_user.username else f"User {p.user_id}"))
-            else:
-                p_name = f"User {p.user_id}"
+            p_name = p_user.game_name if p_user else f"User {p.user_id}"
             
             # Format: User: [Damage]/[Max HP] dmg -> [Rewards]
             # Cap displayed damage at mob's max HP to avoid confusion
             display_damage = min(p.damage_dealt, boss.max_health)
-            reward_line = f"👤 **{p_name}**: {display_damage}/{boss.max_health} dmg -> {p_xp} Exp, {p_wumpa} {PointsName}"
+            mention = get_mention_markdown(p_user.id_telegram if p_user else p.user_id, p_user.username if p_user and p_user.username else p_name)
+            reward_line = f"👤 {mention}: {display_damage}/{boss.max_health} dmg -> {p_xp} Exp, {p_wumpa} {PointsName}"
             
             if has_fled:
                 reward_line += " 🏃 (Fuggito)"

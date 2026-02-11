@@ -2,6 +2,7 @@ import random
 from settings import PointsName
 from services.status_effects import StatusEffect
 from models.user import Utente
+from utils.bot_utils import get_mention_markdown, escape_markdown
 
 class RewardService:
     def __init__(self, db, user_service, item_service, season_manager):
@@ -11,6 +12,25 @@ class RewardService:
         self.season_manager = season_manager
         from services.crafting_service import CraftingService
         self.crafting_service = CraftingService()
+        self.boss_data = self._load_boss_data()
+
+    def _load_boss_data(self):
+        """Load boss data from CSV"""
+        import csv
+        import os
+        bosses = []
+        try:
+            # Resolve path relative to BASE_DIR which is two levels up from this service
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            csv_path = os.path.join(base_dir, 'data', 'bosses.csv')
+            if os.path.exists(csv_path):
+                with open(csv_path, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        bosses.append(row)
+        except Exception as e:
+            print(f"Error loading bosses in RewardService: {e}")
+        return bosses
 
     def calculate_rewards(self, mob, participants):
         """
@@ -35,8 +55,22 @@ class RewardService:
         # Example: Lv 1, Tier 1 -> (1*5) * 1 ≈ 5 EXP
         # Example: Lv 50, Tier 5 -> (50*5) * (5^1.8) ≈ 250 * 18.1 ≈ 4,525 EXP
         mob_level = getattr(mob, 'mob_level', 1)
-        difficulty_multiplier = difficulty ** 1.8
-        base_xp_pool = int((mob_level * 5) * difficulty_multiplier)
+        
+        # Check if this is a boss and get its special pool
+        is_boss = getattr(mob, 'is_boss', False)
+        if is_boss:
+            boss_info = next((b for b in self.boss_data if b['nome'] == mob.name), None)
+            if boss_info:
+                base_xp_pool = int(boss_info.get('loot_exp', 10000))
+                fixed_wumpa_pool = int(boss_info.get('loot_wumpa', 1000))
+            else:
+                # Default boss pool if not in CSV
+                base_xp_pool = 10000
+                fixed_wumpa_pool = 1000
+        else:
+            difficulty_multiplier = difficulty ** 1.8
+            base_xp_pool = int((mob_level * 5) * difficulty_multiplier)
+            fixed_wumpa_pool = None
         
         # Add a small random variation (+/- 10%)
         variation = random.uniform(0.9, 1.1)
@@ -48,7 +82,11 @@ class RewardService:
             share = p.damage_dealt / total_damage
             
             # Wumpa (Points) calculation
-            wumpa = int(p.damage_dealt * 0.05 * difficulty)
+            if is_boss and fixed_wumpa_pool:
+                wumpa = int(fixed_wumpa_pool * share)
+            else:
+                wumpa = int(p.damage_dealt * 0.05 * difficulty)
+                
             if wumpa < 1: wumpa = 1
 
             # XP calculation
@@ -138,8 +176,8 @@ class RewardService:
             resource_msg = self._handle_resource_drop(user_id, mob, session=session)
             
             # Format Message
-            user_name = user.game_name or user.nome or f"User {user_id}"
-            line = f"👤 **{user_name}**: {damage} dmg -> {xp} Exp, {wumpa} {PointsName}"
+            mention = get_mention_markdown(user_id, user.username if user.username else (user.game_name or user.nome))
+            line = f"👤 {mention}: {damage} dmg -> {xp} Exp, {wumpa} {PointsName}"
             
             if has_fled:
                 line += " 🏃 (Fuggito)"
@@ -163,7 +201,13 @@ class RewardService:
             if user.health > user.max_health:
                  self.user_service.recalculate_stats(user_id, session=session)
 
-        header = f"💰 **Ricompense Distribuite!** ({total_wumpa_distributed} {PointsName} totali)"
+        if getattr(mob, 'is_boss', False):
+            header = f"🏆 **BOSS SCONFITTO!** 🏆\n"
+            header += f"🔥 Il {mob.name} è caduto!\n"
+            header += f"💰 **Ricompense Distribuite!** ({total_wumpa_distributed} {PointsName} totali)"
+        else:
+            header = f"💰 **Ricompense Distribuite!** ({total_wumpa_distributed} {PointsName} totali)"
+        
         return header + "\n" + "\n".join(summary_lines)
 
     def _handle_resource_drop(self, user_id, mob, session=None):
@@ -322,8 +366,8 @@ class RewardService:
             total_wumpa_global += amount_wumpa
             
             # Format
-            p_name = user.game_name or user.nome or f"User {user_id}"
-            line = f"👤 **{p_name}**: +{amount_xp} Exp, +{amount_wumpa} {PointsName}"
+            mention = get_mention_markdown(user_id, user.username if user.username else (user.game_name or user.nome))
+            line = f"👤 {mention}: +{amount_xp} Exp, +{amount_wumpa} {PointsName}"
             
             if has_fled: line += " 🏃"
             elif is_dead: line += " 💀"

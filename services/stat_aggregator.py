@@ -32,8 +32,18 @@ class StatAggregator:
         self._batch_cache = {}
         
         try:
+            # 1. Filter out users that don't exist in 'utente' table
+            user_ids = list(set(e.user_id for e in events))
+            from models.user import Utente
+            existing_user_ids = [r[0] for r in session.query(Utente.id_telegram).filter(Utente.id_telegram.in_(user_ids)).all()]
+            
             # 1. Aggregate all events in memory
             for event in events:
+                if event.user_id not in existing_user_ids:
+                    # Skip events for non-existent users (prevents achievement awards to non-users)
+                    event.processed = True
+                    continue
+                    
                 # Re-attach event to current session if needed
                 if event not in session:
                     event = session.merge(event)

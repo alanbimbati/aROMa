@@ -7,7 +7,7 @@ from services.user_service import UserService
 
 def migrate_refinery(db):
     engine = db.engine
-    print(f"Checking refinery_queue table for missing columns...")
+    print(f"Checking refinery tables for missing columns and constraints...")
     try:
         inspector = inspect(engine)
         
@@ -22,12 +22,59 @@ def migrate_refinery(db):
                 );
             """))
             session.commit()
+            
+            # Ensure user_refined_materials exists
+            session.execute(text("""
+                CREATE TABLE IF NOT EXISTS user_refined_materials (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL REFERENCES utente(id_Telegram),
+                    material_id INTEGER NOT NULL REFERENCES refined_materials(id),
+                    quantity INTEGER DEFAULT 0
+                );
+            """))
+            session.commit()
+
+            # Ensure unique constraint on user_refined_materials(user_id, material_id)
+            # This is CRITICAL for UPSERT (ON CONFLICT)
+            constraints = inspector.get_unique_constraints('user_refined_materials')
+            has_uix = any(c['name'] == 'uix_user_material' or set(c['column_names']) == {'user_id', 'material_id'} for c in constraints)
+            
+            if not has_uix:
+                print("Adding missing unique constraint uix_user_material to user_refined_materials...")
+                session.execute(text("""
+                    ALTER TABLE user_refined_materials 
+                    ADD CONSTRAINT uix_user_material UNIQUE (user_id, material_id);
+                """))
+                session.commit()
+
+            # Ensure refinery_daily exists and has unique constraint on date
+            session.execute(text("""
+                CREATE TABLE IF NOT EXISTS refinery_daily (
+                    id SERIAL PRIMARY KEY,
+                    date TIMESTAMP DEFAULT NOW(),
+                    resource_id INTEGER NOT NULL REFERENCES resources(id)
+                );
+            """))
+            session.commit()
+            
+            constraints_daily = inspector.get_unique_constraints('refinery_daily')
+            has_date_uix = any(set(c['column_names']) == {'date'} for c in constraints_daily)
+            if not has_date_uix:
+                print("Adding missing unique constraint to refinery_daily(date)...")
+                try:
+                    session.execute(text("ALTER TABLE refinery_daily ADD UNIQUE (date)"))
+                    session.commit()
+                except Exception as e:
+                    session.rollback()
+                    print(f"Note: Could not add unique constraint to refinery_daily (might already exist without name): {e}")
+
         except Exception as e:
             session.rollback()
-            print(f"Error creating refined_materials: {e}")
+            print(f"Error during refinery schema verification: {e}")
         finally:
             session.close()
 
+        # 1. Update refinery_queue columns
         columns = [col['name'] for col in inspector.get_columns('refinery_queue')]
         
         missing = []
