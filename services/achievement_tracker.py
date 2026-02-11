@@ -183,9 +183,11 @@ class AchievementTracker:
             if local_session:
                 session.close()
             
-        # Apply rewards AFTER session is closed to avoid locks
+        # Apply rewards AFTER session check (and potential flush/commit)
+        # Note: If local_session was False, the session is still open but flushed.
+        # We should pass it along if it's still alive.
         for reward_data in rewards_to_award:
-            self._apply_reward(user_id, reward_data)
+            self._apply_reward(user_id, reward_data, session=session if not local_session else None)
 
     def _check_single_achievement(self, session, user_id, achievement, stats_map, rewards_to_award, user_ach_map=None):
         """
@@ -272,7 +274,7 @@ class AchievementTracker:
         except ValueError:
             return False
 
-    def _apply_reward(self, user_id, reward_data):
+    def _apply_reward(self, user_id, reward_data, session=None):
         """
         Grant rewards and notify user.
         """
@@ -293,7 +295,7 @@ class AchievementTracker:
             try:
                 from services.user_service import UserService
                 user_service = UserService()
-                user_service.add_exp_by_id(user_id, exp_amount)
+                user_service.add_exp_by_id(user_id, exp_amount, session=session)
             except Exception as e:
                 print(f"[ERROR] Failed to award achievement EXP: {e}")
             
@@ -305,7 +307,7 @@ class AchievementTracker:
                 if 'user_service' not in locals():
                     from services.user_service import UserService
                     user_service = UserService()
-                user_service.add_title(user_id, title_text)
+                user_service.add_title(user_id, title_text, session=session)
             except Exception as e:
                 print(f"[ERROR] Failed to add title: {e}")
             

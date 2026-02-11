@@ -34,9 +34,13 @@ class SeasonManager:
             if local_session:
                 session.close()
             
-    def get_or_create_progress(self, user_id, season_id):
+    def get_or_create_progress(self, user_id, season_id, session=None):
         """Get or create user progress for a season"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         try:
             progress = session.query(SeasonProgress).filter_by(
                 user_id=user_id,
@@ -45,7 +49,7 @@ class SeasonManager:
             
             if not progress:
                 # Check if user is premium globally
-                user = self.user_service.get_user(user_id)
+                user = self.user_service.get_user(user_id, session=session)
                 is_premium = user.premium == 1 if user else False
                 
                 progress = SeasonProgress(
@@ -57,20 +61,28 @@ class SeasonManager:
                     last_update=datetime.datetime.now()
                 )
                 session.add(progress)
-                session.commit()
-                # Refresh to get ID
-                session.refresh(progress)
+                if local_session:
+                    session.commit()
+                # Refresh to get ID (if local) or just flush
+                if local_session:
+                    session.refresh(progress)
+                else:
+                    session.flush()
             else:
                 # Sync premium status if not already set
                 if not progress.has_premium_pass:
-                    user = self.user_service.get_user(user_id)
+                    user = self.user_service.get_user(user_id, session=session)
                     if user and user.premium == 1:
                         progress.has_premium_pass = True
-                        session.commit()
+                        if local_session:
+                            session.commit()
+                        else:
+                            session.flush()
                 
             return progress
         finally:
-            session.close()
+            if local_session:
+                session.close()
             
     def add_seasonal_exp(self, user_id, amount, session=None):
         """Add EXP to user's seasonal progress. Returns (rewards, season_end_msg)"""

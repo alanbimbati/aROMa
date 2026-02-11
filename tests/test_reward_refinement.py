@@ -36,7 +36,10 @@ class TestRewardLogicRefinement(unittest.TestCase):
         # Distribution
         session = MagicMock()
         user = Utente(id_telegram=123, current_hp=100, health=100, max_health=100, game_name="Fuggitivo")
-        session.query().filter_by().first.return_value = user
+        # Correctly mock the filter().all() chain used in distribute_rewards
+        session.query.return_value.filter.return_value.all.return_value = [user]
+        # Mock add_exp_by_id to return leveled_up info
+        self.user_service.add_exp_by_id.return_value = {'leveled_up': False}
         
         summary = self.reward_service.distribute_rewards(rewards_data, self.mob, session)
         
@@ -59,7 +62,8 @@ class TestRewardLogicRefinement(unittest.TestCase):
         # Distribution
         session = MagicMock()
         user = Utente(id_telegram=456, current_hp=0, health=100, max_health=100, game_name="Caduto")
-        session.query().filter_by().first.return_value = user
+        # Correctly mock the filter().all() chain used in distribute_rewards
+        session.query.return_value.filter.return_value.all.return_value = [user]
         
         # Mock add_exp_by_id to return leveled_up info
         self.user_service.add_exp_by_id.return_value = {'leveled_up': False}

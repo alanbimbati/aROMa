@@ -34,6 +34,8 @@ class TestRewardDistribution(unittest.TestCase):
         
         # Cleanup first
         session.query(CombatParticipation).delete()
+        from models.resources import UserResource
+        session.query(UserResource).filter(UserResource.user_id.in_([20001, 20002])).delete(synchronize_session=False)
         session.query(Mob).filter_by(chat_id=888).delete()
         session.query(Utente).filter(Utente.username.in_(['user1', 'user2'])).delete(synchronize_session=False)
         

@@ -7,6 +7,8 @@ from services.user_service import UserService
 from services.item_service import ItemService
 from models.seasons import Season
 import os
+import random
+import datetime
 
 # Dynamic path resolution
 SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -48,7 +50,7 @@ class DropService:
             return True
         return False
 
-    def maybe_drop(self, user, bot, message):
+    def maybe_drop(self, user, bot, message, session=None):
         """
         Consolidated chat drop system:
         - Resources (20%)
@@ -67,21 +69,51 @@ class DropService:
             return
 
         # Anti-spam check (time)
-        import datetime
         now = datetime.datetime.now()
         if user.last_chat_drop_time:
             elapsed = (now - user.last_chat_drop_time).total_seconds()
             if elapsed < 10:
                 return
             
-        # Get active season theme
-        session = self.db.get_session()
-        active_season = session.query(Season).filter_by(is_active=True).first()
-        theme = active_season.theme if active_season else None
-        session.close()
-
-        # Update last drop time immediately to reserve the slot
-        self.user_service.update_user(user.id_telegram, {'last_chat_drop_time': now})
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
+        try:
+            # Get active season theme
+            active_season = session.query(Season).filter_by(is_active=True).first()
+            theme = active_season.theme if active_season else None
+            
+            # Update last drop time immediately to reserve the slot
+            self.user_service.update_user(user.id_telegram, {'last_chat_drop_time': now}, session=session)
+            
+            if local_session:
+                session.commit()
+        except:
+             if local_session:
+                 session.rollback()
+             raise
+        finally:
+             if local_session:
+                 session.close() # Close if we opened it, but catch is we need it for later steps?
+                 # Actually, if we close it here, we lose it for Dragon Balls steps if we used local_session.
+                 # But we also need to commit the update_user.
+                 
+        # Re-open or keep open?
+        # If we passed session, it stays open.
+        # If we opened local, we committed and closed.
+        # But we need session for subsequent checks if they use it?
+        # Actually subsequent checks (Dragon Ball, Resources) might use distinct logic.
+        # BUT Dragon Ball add_item uses item_service which handles its own session.
+        # Resources lookup uses its own session block.
+        
+        # So it is safe to close local session here as long as we don't reuse 'session' variable for things expecting it to be open if it was local.
+        # If passed session, we didn't close it.
+        
+        # However, let's keep it simple. If passed session, use it. If local, use it and close at end of maybe_drop?
+        # But update_user needs commit to save timestamp.
+        # If we pass session, caller handles commit.
 
         # 1. Roll for Dragon Balls (5% during Dragon Ball season)
         if theme == 'Dragon Ball' and active_season and ("Saga 1" in active_season.name or "Stagione 1" in active_season.name):
@@ -91,7 +123,7 @@ class DropService:
                 if dragon_balls:
                     item = random.choice(dragon_balls)
                     item_name = item['nome']
-                    self.item_service.add_item(user.id_telegram, item_name, 1)
+                    self.item_service.add_item(user.id_telegram, item_name, 1, session=session)
                     bot.reply_to(message, f"🐉 **DRAGON BALL!**\nHai trovato: {item_name}!")
                     # Send sticker
                     try:
@@ -110,7 +142,7 @@ class DropService:
                 weights = [1/float(i['rarita']) for i in classic_items]
                 item = random.choices(classic_items, weights=weights, k=1)[0]
                 item_name = item['nome']
-                self.item_service.add_item(user.id_telegram, item_name, 1)
+                self.item_service.add_item(user.id_telegram, item_name, 1, session=session)
                 bot.reply_to(message, f"✨ **OGGETTO!**\nHai trovato: {item_name}!")
                 return
 
@@ -119,18 +151,23 @@ class DropService:
         if drops:
             # Drop messages/photos
             drop_messages = []
-            for resource_id, qty, image_path in drops:
-                resource_name = "Risorsa" # Fallback
-                try:
-                    from sqlalchemy import text
-                    s_res = self.db.get_session()
-                    resource_name = s_res.execute(text("SELECT name FROM resources WHERE id = :id"), {"id": resource_id}).scalar()
-                    s_res.close()
-                except: pass
-                
-                success = self.crafting_service.add_resource_drop(user.id_telegram, resource_id, quantity=qty, source="chat")
-                if success and resource_name:
-                    drop_messages.append(f"**{resource_name} x{qty}**")
+            # Use a single session for all resource name lookups in this drop
+            try:
+                with self.db.get_session() as lookup_session:
+                    for resource_id, qty, image_path in drops:
+                        resource_name = lookup_session.execute(
+                            text("SELECT name FROM resources WHERE id = :id"), 
+                            {"id": resource_id}
+                        ).scalar()
+                        
+                        success = self.crafting_service.add_resource_drop(user.id_telegram, resource_id, quantity=qty, source="chat")
+                        
+                        if success and resource_name:
+                            drop_messages.append(f"**{resource_name} x{qty}**")
+                        else:
+                            print(f"[DEBUG] DropService: Failed to add or name resource {resource_id} (Success: {success}, Name: {resource_name})")
+            except Exception as e:
+                print(f"[ERROR] DropService resource lookup/application failed: {e}")
             
             if drop_messages:
                 caption = "⚒️ **RISORSE!**\nHai trovato: " + ", ".join(drop_messages)
@@ -150,7 +187,6 @@ class DropService:
         """
         TNT: User has 3 seconds to write or loses Wumpa
         """
-        import datetime
         
         bot.reply_to(message, "💣 Ops!... Hai calpestato una Cassa TNT! Scrivi entro 3 secondi per evitarla!")
         
@@ -191,7 +227,6 @@ class DropService:
         """
         Check if user wrote in time to avoid TNT explosion
         """
-        import datetime
         
         if not user.start_tnt:
             return False

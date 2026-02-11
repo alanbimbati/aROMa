@@ -148,6 +148,16 @@ from services.crafting_service import CraftingService
 pending_attack_upload = {}
 pending_skin_upload = {}
 
+# Mob Display Locking (Anti-Spam)
+mob_display_locks = {}
+mob_locks_mutex = threading.Lock()
+
+def get_mob_display_lock(mob_id):
+    with mob_locks_mutex:
+        if mob_id not in mob_display_locks:
+            mob_display_locks[mob_id] = threading.Lock()
+        return mob_display_locks[mob_id]
+
 
 
 from services.equipment_service import EquipmentService
@@ -1318,7 +1328,12 @@ def handle_refinery_claim_all(call):
         handle_guild_refinery_view(call)
     else:
         # If it failed, show the error (e.g., "Nessun materiale pronto")
-        bot.answer_callback_query(call.id, result['error'], show_alert=True)
+        error_msg = result['error']
+        if len(error_msg) > 180:
+            bot.send_message(call.message.chat.id, f"❌ **Errore Ritiro**\n\n{error_msg}", parse_mode='markdown')
+            safe_answer_callback(call.id, "❌ Errore (vedi chat)", show_alert=True)
+        else:
+            bot.answer_callback_query(call.id, error_msg, show_alert=True)
         handle_guild_refinery_view(call)
 
 def handle_refinery_upgrade_view(call):
@@ -2271,35 +2286,34 @@ class BotCommands:
 
     def handle_guide_costs(self):
         msg = """💰 *LISTINO & GUIDA ACQUISTI* 💰
+        🎮 *COME COMPRARE GIOCHI*
+        Per acquistare un gioco che vedi in un canale o gruppo:
+        1. **Inoltra** il messaggio del gioco a questo bot.
+        2. Il bot ti scalerà i punti e ti invierà il gioco (e i file successivi).
 
-🎮 *COME COMPRARE GIOCHI*
-Per acquistare un gioco che vedi in un canale o gruppo:
-1. **Inoltra** il messaggio del gioco a questo bot.
-2. Il bot ti scalerà i punti e ti invierà il gioco (e i file successivi).
+        💎 *COSTI*
+        🔸 **Gioco da Canale/Inoltro**:
+        - Utenti Premium: **50** 🍑
+        - Utenti Normali: **150** 🍑
 
-💎 *COSTI*
-🔸 **Gioco da Canale/Inoltro**:
-   - Utenti Premium: **50** 🍑
-   - Utenti Normali: **150** 🍑
+        🔸 **Steam Games (Gacha)**:
+        - 🥉 Bronze Coin: **200** 🍑 (10% chance)
+        - 🥈 Silver Coin: **400** 🍑 (50% chance)
+        - 🥇 Gold Coin: **600** 🍑 (100% chance)
+        - 🎖 Platinum Coin: **800** 🍑 (Gioco a scelta)
 
-🔸 **Steam Games (Gacha)**:
-   - 🥉 Bronze Coin: **200** 🍑 (10% chance)
-   - 🥈 Silver Coin: **400** 🍑 (50% chance)
-   - 🥇 Gold Coin: **600** 🍑 (100% chance)
-   - 🎖 Platinum Coin: **800** 🍑 (Gioco a scelta)
+        🔸 **Altro**:
+        - 📦 Box Wumpa: **50** 🍑
+        - 👑 Premium (1 mese): **1000** 🍑
+        - 🔄 Reset Stats: **500** 🍑
 
-🔸 **Altro**:
-   - 📦 Box Wumpa: **50** 🍑
-   - 👑 Premium (1 mese): **1000** 🍑
-   - 🔄 Reset Stats: **500** 🍑
-
-🌟 *VANTAGGI PREMIUM*
-✅ Sconto 50% su Pozioni
-✅ Sconto 50% su Personaggi
-✅ Sconto su acquisto giochi (50 invece di 150)
-✅ Accesso a personaggi esclusivi
-✅ Badge "Utente Premium" nel profilo
-"""
+        🌟 *VANTAGGI PREMIUM*
+        ✅ Sconto 50% su Pozioni
+        ✅ Sconto 50% su Personaggi
+        ✅ Sconto su acquisto giochi (50 invece di 150)
+        ✅ Accesso a personaggi esclusivi
+        ✅ Badge "Utente Premium" nel profilo
+        """
         self.bot.reply_to(self.message, msg, parse_mode='markdown')
 
     def handle_daily_mob(self):
@@ -3116,6 +3130,7 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         msg = "🌐 **DASHBOARD WEB**\n\nAccedi alla tua dashboard personale per vedere achievement, statistiche e progressi stagionali con una grafica avanzata!"
         
         from telebot import types
+        from utils.bot_utils import SafeTeleBot
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("🌐 Apri Dashboard Web", url=dashboard_url))
         
@@ -3352,6 +3367,12 @@ Per acquistare un gioco che vedi in un canale o gruppo:
         if target_user:
             utente = target_user
         else:
+            # Self-healing: Ensure level is correct before showing profile
+            try:
+                user_service.check_level_up(self.chatid)
+            except Exception as e:
+                print(f"[ERROR] Failed to check level up for {self.chatid}: {e}")
+                
             utente = user_service.get_user(self.chatid)
         
         if not utente:
@@ -5566,129 +5587,135 @@ def trigger_dungeon_mob_attack(bot, chat_id, mob_ids):
                 send_combat_message(chat_id, msg, image_path, markup, mob_id, old_msg_id)
 
 def send_combat_message(chat_id, text, image_path, markup, mob_id, old_message_id=None, is_death=False):
-    # ANTI-SPAM: Automatically fetch old message ID from DB if not provided
-    mob = pve_service.get_mob_details(mob_id)
-    if not old_message_id and mob:
-        old_message_id = mob.get('last_message_id')
+    # Acquire lock for this mob to prevent race conditions (duplicate messages)
+    lock = get_mob_display_lock(mob_id)
+    with lock:
+        # ANTI-SPAM: Automatically fetch old message ID from DB if not provided
+        # Always re-fetch inside lock to get the latest state from other threads
+        mob = pve_service.get_mob_details(mob_id)
+        
+        # If we didn't have an old_message_id, or we want to be sure satisfy race condition:
+        # It's safer to rely on DB state inside the lock (unless we passed an explicit ID we know is valid)
+        current_db_msg_id = mob.get('last_message_id') if mob else None
+        
+        # Determine which ID to delete: explicit arg or DB value
+        id_to_delete = old_message_id if old_message_id else current_db_msg_id
+        
+        # If DB has a DIFFERENT ID than what was passed (and passed matches nothing currently known?), 
+        # it implies a race happened and another thread updated DB. 
+        # But we want to clean up whatever is there.
+        # Actually, if we are in lock, current_db_msg_id IS the authority.
+        # So we should prefer current_db_msg_id if available.
+        if current_db_msg_id:
+            id_to_delete = current_db_msg_id
 
-    if old_message_id:
-        try:
-            bot.delete_message(chat_id, old_message_id)
-        except Exception:
-            pass
-    
-    # Parse text to extract HP if it's in the old format or raw text
-    # But wait, the text passed here is usually constructed by the caller.
-    # We should modify the CALLER to format the text correctly, OR reformat it here if it's a simple string.
-    # However, pve_service.attack_mob returns a message that is already formatted.
-    # The user wants the ASCII card format.
-    # Let's check if the text is already an ASCII card.
-    
-    # Actually, the best place to format the message is in the caller (handle_combat_callback) 
-    # or inside pve_service.attack_mob return value.
-    # But pve_service returns a simple string.
-    # Let's modify send_combat_message to WRAP the text in the card if it's not already.
-    
-    # Wait, pve_service.attack_mob returns "Hai inflitto X danni...".
-    # We need to fetch the mob status again to build the card?
-    # Yes, handle_combat_callback does fetching if needed, or we can do it here.
-    
-    # Let's look at handle_combat_callback again. It constructs `full_msg = f"@{username}\n{msg}"`.
-    # This is just the attack result.
-    # The user wants the MOB STATUS CARD to be updated.
-    
-    # So we need to rebuild the card with the new HP.
-    # We need the mob object.
-    
-    mob = pve_service.get_mob_details(mob_id)
-    if mob:
-        hp_percent = int((mob['health'] / mob['max_health']) * 10)
-        hp_bar = "█" * hp_percent + "░" * (10 - hp_percent)
-        
-        # ASCII Card with HIDDEN HP (100%)
-        card = f"╔══════🕹 {mob['name'].upper()} ══════╗\n"
-        card += f" ❤️ Vita: {hp_bar} {int((mob['health']/mob['max_health'])*100)}%\n"
-        card += f" ⚡ Velocità: {mob.get('speed', 0)}\n"
-        card += f" 📊 Livello: {mob.get('level', 1)}\n"
-        card += f"          aROMa\n"
-        card += f"╚═══════════════════════╝\n"
-        
-        # Append the attack result text below the card ONLY if not already there
-        if "╔══════🕹" in text:
-            final_text = text
-        else:
-            final_text = f"{text}\n\n{card}"
-        
-        # Update image path if not provided (use mob's image)
-        if not image_path:
-            image_path = mob.get('image_path')
-    else:
-        final_text = text
-    
-    # Ensure text is string and not None
-    final_text = str(final_text or "")
-    
-    sent_msg = None
-    try:
-        if image_path and os.path.exists(image_path):
-            ext = os.path.splitext(image_path)[1].lower()
-            if ext in ['.gif']:
-                with open(image_path, 'rb') as animation:
-                    try:
-                        sent_msg = bot.send_animation(chat_id, animation, caption=final_text, reply_markup=markup, parse_mode='markdown')
-                    except Exception as e:
-                        if "can't parse entities" in str(e).lower():
-                            animation.seek(0)
-                            sent_msg = bot.send_animation(chat_id, animation, caption=final_text, reply_markup=markup)
-                        else: raise e
-            elif ext in ['.mp4', '.mov']:
-                with open(image_path, 'rb') as video:
-                    try:
-                        sent_msg = bot.send_video(chat_id, video, caption=final_text, reply_markup=markup, parse_mode='markdown')
-                    except Exception as e:
-                        if "can't parse entities" in str(e).lower():
-                            video.seek(0)
-                            sent_msg = bot.send_video(chat_id, video, caption=final_text, reply_markup=markup)
-                        else: raise e
-            else:
-                with open(image_path, 'rb') as photo:
-                    try:
-                        sent_msg = bot.send_photo(chat_id, photo, caption=final_text, reply_markup=markup, parse_mode='markdown')
-                    except Exception as e:
-                        if "can't parse entities" in str(e).lower():
-                            photo.seek(0)
-                            sent_msg = bot.send_photo(chat_id, photo, caption=final_text, reply_markup=markup)
-                        else: raise e
-        else:
+        if id_to_delete:
             try:
-                sent_msg = bot.send_message(chat_id, final_text, reply_markup=markup, parse_mode='markdown')
-            except Exception as e:
-                if "can't parse entities" in str(e).lower():
-                    sent_msg = bot.send_message(chat_id, final_text, reply_markup=markup)
-                else: raise e
+                bot.delete_message(chat_id, id_to_delete)
+            except Exception:
+                pass
         
-        if not is_death and sent_msg:
-            pve_service.update_mob_message_id(mob_id, sent_msg.message_id)
-    except Exception as e:
-        err_msg = str(e).lower()
-        print(f"[ERROR] send_combat_message failed for chat_id {chat_id}: {e}")
+        # ... logic to build final_text and send ...
+        # Since replace_file_content needs contiguous block, I have to include the rest of format logic
+        # OR I can just patch the beginning and end?
+        # But indentation will change.
         
-        # If it's a critical Telegram error (Chat not found, etc), re-raise to allow caller cleanup
-        if any(x in err_msg for x in ["chat not found", "chat_id_invalid", "bot was blocked"]):
-            raise e
-
+        # I'll paste the full function (truncated/summarized for tool limit if needed, BUT I need to be careful)
+        # The function logic is complex (ASCII card building). I should just wrap the WHOLE function body in indentation?
+        # No, that modifies too many lines.
+        
+        # Alternative: Just use the lock around the Critical Section (Delete -> Send -> Update).
+        # The formatting logic (card building) is local and safe.
+        
+        # Re-fetch mob details for formatting
+        if mob:
+            hp_percent = int((mob['health'] / mob['max_health']) * 10)
+            hp_bar = "█" * hp_percent + "░" * (10 - hp_percent)
+            
+            # ASCII Card with HIDDEN HP (100%)
+            card = f"╔══════🕹 {mob['name'].upper()} ══════╗\n"
+            card += f" ❤️ Vita: {hp_bar} {int((mob['health']/mob['max_health'])*100)}%\n"
+            card += f" ⚡ Velocità: {mob.get('speed', 0)}\n"
+            card += f" 📊 Livello: {mob.get('level', 1)}\n"
+            card += f"          aROMa\n"
+            card += f"╚═══════════════════════╝\n"
+            
+            # Append the attack result text below the card ONLY if not already there
+            if "╔══════🕹" in text:
+                final_text = text
+            else:
+                final_text = f"{text}\n\n{card}"
+            
+            # Update image path if not provided (use mob's image)
+            if not image_path:
+                image_path = mob.get('image_path')
+        else:
+            final_text = text
+        
+        # Ensure text is string and not None
+        final_text = str(final_text or "")
+        
+        sent_msg = None
         try:
-            # Final fallback: retry sending as a simple message without markdown
-            sent_msg = bot.send_message(chat_id, final_text, reply_markup=markup)
+            if image_path and os.path.exists(image_path):
+                ext = os.path.splitext(image_path)[1].lower()
+                if ext in ['.gif']:
+                    with open(image_path, 'rb') as animation:
+                        try:
+                            sent_msg = bot.send_animation(chat_id, animation, caption=final_text, reply_markup=markup, parse_mode='markdown')
+                        except Exception as e:
+                            if "can't parse entities" in str(e).lower():
+                                animation.seek(0)
+                                sent_msg = bot.send_animation(chat_id, animation, caption=final_text, reply_markup=markup)
+                            else: raise e
+                elif ext in ['.mp4', '.mov']:
+                    with open(image_path, 'rb') as video:
+                        try:
+                            sent_msg = bot.send_video(chat_id, video, caption=final_text, reply_markup=markup, parse_mode='markdown')
+                        except Exception as e:
+                            if "can't parse entities" in str(e).lower():
+                                video.seek(0)
+                                sent_msg = bot.send_video(chat_id, video, caption=final_text, reply_markup=markup)
+                            else: raise e
+                else:
+                    with open(image_path, 'rb') as photo:
+                        try:
+                            sent_msg = bot.send_photo(chat_id, photo, caption=final_text, reply_markup=markup, parse_mode='markdown')
+                        except Exception as e:
+                            if "can't parse entities" in str(e).lower():
+                                photo.seek(0)
+                                sent_msg = bot.send_photo(chat_id, photo, caption=final_text, reply_markup=markup)
+                            else: raise e
+            else:
+                try:
+                    sent_msg = bot.send_message(chat_id, final_text, reply_markup=markup, parse_mode='markdown')
+                except Exception as e:
+                    if "can't parse entities" in str(e).lower():
+                        sent_msg = bot.send_message(chat_id, final_text, reply_markup=markup)
+                    else: raise e
+            
             if not is_death and sent_msg:
                 pve_service.update_mob_message_id(mob_id, sent_msg.message_id)
-        except Exception as e2:
-            print(f"[ERROR] Critical failure in send_combat_message fallback for chat_id {chat_id}: {e2}")
-            # Re-raise critical errors even from fallback
-            if any(x in str(e2).lower() for x in ["chat not found", "chat_id_invalid", "bot was blocked"]):
-                raise e2
-            pass
-    return sent_msg
+        except Exception as e:
+            err_msg = str(e).lower()
+            print(f"[ERROR] send_combat_message failed for chat_id {chat_id}: {e}")
+            
+            # If it's a critical Telegram error (Chat not found, etc), re-raise to allow caller cleanup
+            if any(x in err_msg for x in ["chat not found", "chat_id_invalid", "bot was blocked"]):
+                raise e
+
+            try:
+                # Final fallback: retry sending as a simple message without markdown
+                sent_msg = bot.send_message(chat_id, final_text, reply_markup=markup)
+                if not is_death and sent_msg:
+                    pve_service.update_mob_message_id(mob_id, sent_msg.message_id)
+            except Exception as e2:
+                print(f"[ERROR] Critical failure in send_combat_message fallback for chat_id {chat_id}: {e2}")
+                # Re-raise critical errors even from fallback
+                if any(x in str(e2).lower() for x in ["chat not found", "chat_id_invalid", "bot was blocked"]):
+                    raise e2
+                pass
+        return sent_msg
 
 
 
@@ -7167,6 +7194,10 @@ def callback_query(call):
             success, msg = guild_service.upgrade_inn(call.from_user.id)
         elif upgrade_type == "bordello":
             success, msg = guild_service.upgrade_bordello(call.from_user.id)
+        elif upgrade_type == "armory":
+            success, msg = guild_service.upgrade_armory(call.from_user.id)
+        elif upgrade_type == "village":
+            success, msg = guild_service.expand_village(call.from_user.id)
             
         if success:
             safe_answer_callback(call.id, "Upgrade completato!")
@@ -9053,28 +9084,34 @@ def spawn_daily_mob_job():
                 msg_text = f"⚠️ Un {mob['name']} selvatico è apparso!\n{format_mob_stats(mob, show_full=False)}\n\nSconfiggilo per ottenere ricompense!"
                 
                 # Send with image if available
+                sent_spawn_msg = None
                 if mob.get('image') and os.path.exists(mob['image']):
                     try:
                         with open(mob['image'], 'rb') as photo:
-                            bot.send_photo(GRUPPO_AROMA, photo, caption=msg_text, reply_markup=markup)
+                            sent_spawn_msg = bot.send_photo(GRUPPO_AROMA, photo, caption=msg_text, reply_markup=markup)
                     except:
-                        bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup)
+                        sent_spawn_msg = bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup)
                 else:
-                    bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup, parse_mode='markdown')
+                    sent_spawn_msg = bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup, parse_mode='markdown')
+                
+                if sent_spawn_msg:
+                    pve_service.update_mob_message_id(mob_id, sent_spawn_msg.message_id)
                 
                 # Send immediate attack messages with buttons
+                last_known_msg_id = sent_spawn_msg.message_id if sent_spawn_msg else None
+                
                 if attack_events:
                     for event in attack_events:
                         msg = event['message']
                         image_path = event['image']
-                        try:
-                            if image_path and os.path.exists(image_path):
-                                with open(image_path, 'rb') as photo:
-                                    bot.send_photo(GRUPPO_AROMA, photo, caption=msg, reply_markup=markup)
-                            else:
-                                bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup)
-                        except:
-                            bot.send_message(GRUPPO_AROMA, msg, reply_markup=markup, parse_mode='markdown')
+                        mob_id = event['mob_id']
+                        
+                        # Use chained ID if available, otherwise event's ID
+                        id_to_delete = last_known_msg_id if last_known_msg_id else event.get('last_message_id')
+                        
+                        sent = send_combat_message(GRUPPO_AROMA, msg, image_path, markup, mob_id, id_to_delete)
+                        if sent:
+                            last_known_msg_id = sent.message_id
 
 def spawn_weekly_boss_job():
     success, msg, boss_id = pve_service.spawn_boss(chat_id=GRUPPO_AROMA)
@@ -9096,14 +9133,18 @@ def spawn_weekly_boss_job():
             msg_text += "\nUNITI PER SCONFIGGERLO!"
             
             # Send with image if available
+            sent_boss_msg = None
             if boss.get('image') and os.path.exists(boss['image']):
                 try:
                     with open(boss['image'], 'rb') as photo:
-                        bot.send_photo(GRUPPO_AROMA, photo, caption=msg_text, reply_markup=markup, parse_mode='markdown')
+                        sent_boss_msg = bot.send_photo(GRUPPO_AROMA, photo, caption=msg_text, reply_markup=markup, parse_mode='markdown')
                 except:
-                    bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup, parse_mode='markdown')
+                    sent_boss_msg = bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup, parse_mode='markdown')
             else:
-                bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup, parse_mode='markdown')
+                sent_boss_msg = bot.send_message(GRUPPO_AROMA, msg_text, reply_markup=markup, parse_mode='markdown')
+            
+            if sent_boss_msg:
+                pve_service.update_mob_message_id(boss_id, sent_boss_msg.message_id)
 
 def mob_attack_job():
     # Both mobs and bosses auto-attack periodically (all are Mob now, bosses have is_boss=True)
@@ -9127,13 +9168,27 @@ def mob_attack_job():
                     if attack_events:
                         markup = get_combat_markup("mob", enemy.id, chat_id)
                         
+                        # Chain message IDs to avoid spam
+                        current_last_msg_id = None
+                        first_event = True
+
                         for event in attack_events:
                             msg = event['message']
                             image_path = event['image']
                             mob_id = event['mob_id']
-                            old_msg_id = event['last_message_id']
                             
-                            sent = send_combat_message(chat_id, msg, image_path, markup, mob_id, old_msg_id)
+                            # Determine ID to delete:
+                            # 1. Use chained ID from previous iteration if available
+                            # 2. Else use event's last_message_id (DB state at fetch time)
+                            if not first_event and current_last_msg_id:
+                                id_to_delete = current_last_msg_id
+                            else:
+                                id_to_delete = event['last_message_id']
+                            
+                            sent = send_combat_message(chat_id, msg, image_path, markup, mob_id, id_to_delete)
+                            if sent:
+                                current_last_msg_id = sent.message_id
+                                first_event = False
                             if not sent:
                                 # If message failed to send, check if it's a "chat not found" error
                                 # This is handled inside send_combat_message but we can double check here
