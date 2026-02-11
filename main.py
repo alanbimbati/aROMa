@@ -354,8 +354,9 @@ def get_main_menu():
         types.KeyboardButton("🏨 Locanda")
     )
     
-    # Row 5: Guide only (Dungeon now runs automatically)
+    # Row 5: Dungeon and Guide
     markup.add(
+        types.KeyboardButton("🏰 Dungeon"),
         types.KeyboardButton("📖 Guida")
     )
     
@@ -590,11 +591,17 @@ def handle_gilda_button(message):
 def handle_locanda_button(message):
     handle_inn_cmd(message)
 
-# Dungeon button removed - dungeons now start automatically
-# @bot.message_handler(func=lambda message: message.text == "🏰 Dungeon")
-# def handle_dungeon_button(message):
-#     cmd = BotCommands(message, bot)
-#     cmd.handle_dungeons_list()
+@bot.message_handler(func=lambda message: message.text == "🏰 Dungeon")
+def handle_dungeon_button(message):
+    if message.chat.type == 'private':
+        text = "🏰 **DUNGEON SOLO** 🏰\n\n"
+        text += "Avviando un dungeon in chat privata affronterai le sfide in **SOLITARIA**!\n"
+        text += "Sconfiggi i mostri da solo per sbloccare **Achievement Speciali** e testare la tua forza.\n\n"
+        text += "Scegli il dungeon per iniziare:"
+        bot.send_message(message.chat.id, text, parse_mode='markdown')
+    
+    cmd = BotCommands(message, bot)
+    cmd.handle_dungeons_list()
 
 
 @bot.message_handler(func=lambda message: message.text == "📖 Guida")
@@ -2533,7 +2540,8 @@ class BotCommands:
                 displayed_participants = participants[:limit]
                 
                 for p in displayed_participants:
-                    mention = get_mention_markdown(u.id_telegram, u.username if u and u.username else (u.nome if u else f"Utente {p.user_id}"))
+                    u = user_service.get_user(p.user_id)
+                    mention = get_mention_markdown(p.user_id, u.username if u and u.username else (u.nome if u else f"Utente {p.user_id}"))
                     msg += f"- {mention}\n"
                 
                 if len(participants) > limit:
@@ -5638,10 +5646,14 @@ def send_combat_message(chat_id, text, image_path, markup, mob_id, old_message_i
 
         if is_death:
             # Check if someone else already sent the death message for this mob
-            # We only skip if last_message_id is ALREADY None, which means it was already processed
-            if mob and mob.get('last_message_id') is None:
+            # We use -999 as a special marker that death is being processed.
+            # If it's already -999, we skip. If it's anything else (including None), we proceed.
+            if current_db_msg_id == -999:
                 print(f"[DEBUG] Skipping duplicate death message for mob {mob_id}")
                 return None
+            
+            # Immediately mark as "death in progress/processed" to block other threads
+            pve_service.update_mob_message_id(mob_id, -999)
 
         if id_to_delete:
             try:
@@ -6702,7 +6714,8 @@ def callback_query(call):
                 participants = dungeon_service.get_dungeon_participants(dungeon.id)
                 msg_text += f"👥 Partecipanti ({len(participants)}):\n"
                 for p in participants:
-                    mention = get_mention_markdown(u.id_telegram, u.username if u and u.username else (u.nome if u else f"Utente {p.user_id}"))
+                    u = user_service.get_user(p.user_id)
+                    mention = get_mention_markdown(p.user_id, u.username if u and u.username else (u.nome if u else f"Utente {p.user_id}"))
                     msg_text += f"- {mention}\n"
                 
                 bot.edit_message_text(msg_text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
@@ -6730,8 +6743,8 @@ def callback_query(call):
                  msg_text += f"\n👥 Partecipanti ({len(participants)}):\n"
                  for p in participants:
                      u = user_service.get_user(p.user_id)
-                     name = f"@{u.username}" if u and u.username else (u.nome if u else f"Utente {p.user_id}")
-                     msg_text += f"- {name}\n"
+                     mention = get_mention_markdown(p.user_id, u.username if u and u.username else (u.nome if u else f"Utente {p.user_id}"))
+                     msg_text += f"- {mention}\n"
                      
                  bot.edit_message_text(msg_text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
         return
@@ -6835,7 +6848,7 @@ def callback_query(call):
              msg += f"\n👥 Partecipanti ({len(participants)}):\n"
              for p in participants:
                   u = user_service.get_user(p.user_id)
-                  mention = get_mention_markdown(u.id_telegram, u.username if u and u.username else (u.nome if u else f"Utente {p.user_id}"))
+                  mention = get_mention_markdown(p.user_id, u.username if u and u.username else (u.nome if u else f"Utente {p.user_id}"))
                   msg += f"- {mention}\n"
              
              bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
