@@ -61,5 +61,11 @@ def get_mention_markdown(user_id, name):
     """Create a safe markdown mention that works with underscores and triggers notifications"""
     if not name:
         name = f"User {user_id}"
-    safe_name = escape_markdown(name)
+    
+    # Prepend @ if it looks like a username (no spaces) and doesn't have it
+    display_name = str(name)
+    if display_name and not display_name.startswith('@') and ' ' not in display_name:
+        display_name = '@' + display_name
+        
+    safe_name = escape_markdown(display_name)
     return f"[{safe_name}](tg://user?id={user_id})"
