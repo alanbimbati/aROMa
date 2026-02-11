@@ -24,11 +24,42 @@ class SafeTeleBot(telebot.TeleBot):
                 print(f"[SafeTeleBot] Markdown error in reply: {e}. Falling back to plain text.")
                 return super().reply_to(message, text, parse_mode=None, **kwargs)
             raise e
+
+    def delete_message(self, chat_id, message_id, timeout=None):
+        """Override to handle rate limits and 'message not found' gracefully"""
+        import time
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                return super().delete_message(chat_id, message_id, timeout=timeout)
+            except ApiTelegramException as e:
+                err_msg = str(e).lower()
+                if "too many requests" in err_msg:
+                    if attempt < max_retries - 1:
+                        # Extract wait time if possible, else default
+                        import re
+                        wait_match = re.search(r'retry after (\d+)', err_msg)
+                        wait_time = int(wait_match.group(1)) if wait_match else 1
+                        print(f"[SafeTeleBot] Rate limited on delete. Waiting {wait_time}s...")
+                        time.sleep(wait_time)
+                        continue
+                elif any(x in err_msg for x in ["message to delete not found", "message can't be deleted", "chat not found"]):
+                    # These are expected if message was already deleted or chat is gone
+                    return False
+                raise e
+        return False
             
 def escape_markdown(text):
-    """Helper to escape markdown special characters"""
-    if not text: return ""
-    chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
-    for c in chars:
-        text = text.replace(c, f"\\{c}")
-    return text
+    """Helper to escape markdown characters for Telegram (V1)"""
+    if not text:
+        return ""
+    # Characters to escape for Markdown (V1)
+    # _, *, [, `
+    return str(text).replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("`", "\\`")
+
+def get_mention_markdown(user_id, name):
+    """Create a safe markdown mention that works with underscores and triggers notifications"""
+    if not name:
+        name = f"User {user_id}"
+    safe_name = escape_markdown(name)
+    return f"[{safe_name}](tg://user?id={user_id})"

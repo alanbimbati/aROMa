@@ -9,11 +9,12 @@ Features:
 """
 
 from database import Database
-from sqlalchemy import text
 import json
 import random
 from datetime import datetime, timedelta
-from sqlalchemy import text
+from sqlalchemy import text, func
+from models.resources import Resource, UserResource, RefinedMaterial, UserRefinedMaterial, RefineryDaily, RefineryQueue
+from models.equipment import Equipment, UserEquipment
 
 class CraftingService:
     """Manages equipment crafting and resources"""
@@ -32,24 +33,23 @@ class CraftingService:
             
         try:
             # Check if user already has this resource
-            existing = session.execute(text("""
-                SELECT id, quantity FROM user_resources
-                WHERE user_id = :uid AND resource_id = :rid
-            """), {"uid": user_id, "rid": resource_id}).fetchone()
+            existing = session.query(UserResource).filter_by(
+                user_id=user_id, 
+                resource_id=resource_id
+            ).first()
             
             if existing:
                 # Update quantity
-                session.execute(text("""
-                    UPDATE user_resources
-                    SET quantity = quantity + :qty
-                    WHERE id = :id
-                """), {"qty": quantity, "id": existing[0]})
+                existing.quantity += quantity
             else:
                 # Insert new
-                session.execute(text("""
-                    INSERT INTO user_resources (user_id, resource_id, quantity, source)
-                    VALUES (:uid, :rid, :qty, :source)
-                """), {"uid": user_id, "rid": resource_id, "qty": quantity, "source": source})
+                new_res = UserResource(
+                    user_id=user_id,
+                    resource_id=resource_id,
+                    quantity=quantity,
+                    source=source
+                )
+                session.add(new_res)
             
             if local_session:
                 session.commit()
@@ -77,22 +77,22 @@ class CraftingService:
         session = self.db.get_session()
         try:
             # Raw resources
-            raw = session.execute(text("""
-                SELECT r.id, r.name, r.rarity, COALESCE(ur.quantity, 0) as quantity
-                FROM resources r
-                LEFT JOIN user_resources ur ON r.id = ur.resource_id AND ur.user_id = :uid
-                WHERE (COALESCE(ur.quantity, 0) > 0 OR r.rarity = 1)
-                ORDER BY r.rarity ASC, r.name
-            """), {"uid": user_id}).fetchall()
+            raw_data = session.query(
+                Resource.id, Resource.name, Resource.rarity, func.coalesce(UserResource.quantity, 0)
+            ).outerjoin(
+                UserResource, (Resource.id == UserResource.resource_id) & (UserResource.user_id == user_id)
+            ).filter(
+                (func.coalesce(UserResource.quantity, 0) > 0) | (Resource.rarity == 1)
+            ).order_by(Resource.rarity.asc(), Resource.name.asc()).all()
             
-            # Refined materials (Aggregated to handle duplicates gracefully)
-            refined = session.execute(text("""
-                SELECT rm.id, rm.name, rm.rarity, SUM(COALESCE(urm.quantity, 0)) as quantity
-                FROM refined_materials rm
-                LEFT JOIN user_refined_materials urm ON rm.id = urm.material_id AND urm.user_id = :uid
-                GROUP BY rm.id, rm.name, rm.rarity
-                ORDER BY rm.rarity ASC
-            """), {"uid": user_id}).fetchall()
+            # Refined materials
+            refined_data = session.query(
+                RefinedMaterial.id, RefinedMaterial.name, RefinedMaterial.rarity, func.sum(func.coalesce(UserRefinedMaterial.quantity, 0))
+            ).outerjoin(
+                UserRefinedMaterial, (RefinedMaterial.id == UserRefinedMaterial.material_id) & (UserRefinedMaterial.user_id == user_id)
+            ).group_by(
+                RefinedMaterial.id, RefinedMaterial.name, RefinedMaterial.rarity
+            ).order_by(RefinedMaterial.rarity.asc()).all()
             
             return {
                 'raw': [{
@@ -100,13 +100,13 @@ class CraftingService:
                     'name': row[1],
                     'rarity': row[2],
                     'quantity': row[3]
-                } for row in raw],
+                } for row in raw_data],
                 'refined': [{
                     'material_id': row[0],
                     'name': row[1],
                     'rarity': row[2],
                     'quantity': row[3]
-                } for row in refined]
+                } for row in refined_data]
             }
         finally:
             session.close()
@@ -131,38 +131,46 @@ class CraftingService:
         session = self.db.get_session()
         try:
             # Check source quantity
-            user_qty = session.execute(text("""
-                SELECT quantity FROM user_refined_materials
-                WHERE user_id = :uid AND material_id = :mid
-            """), {"uid": user_id, "mid": source_id}).scalar() or 0
+            user_mat = session.query(UserRefinedMaterial).filter_by(
+                user_id=user_id, 
+                material_id=source_id
+            ).first()
+            user_qty = user_mat.quantity if user_mat else 0
             
             if user_qty < total_cost:
                 # Get names for error message
-                names = session.execute(text("SELECT id, name FROM refined_materials WHERE id IN (:s, :t)"), 
-                                       {"s": source_id, "t": target_id}).fetchall()
-                names_dict = {row[0]: row[1] for row in names}
+                names = session.query(RefinedMaterial).filter(
+                    RefinedMaterial.id.in_([source_id, target_id])
+                ).all()
+                names_dict = {m.id: m.name for m in names}
                 return {"success": False, "error": f"Non hai abbastanza {names_dict.get(source_id, 'materiali')}! (Richiesti: {total_cost}, Possiedi: {user_qty})"}
             
             # Consume source
-            session.execute(text("""
-                UPDATE user_refined_materials SET quantity = quantity - :q
-                WHERE user_id = :uid AND material_id = :mid
-            """), {"q": total_cost, "uid": user_id, "mid": source_id})
+            user_mat.quantity -= total_cost
             
-            # Add target (Atomic UPSERT)
-            session.execute(text("""
-                INSERT INTO user_refined_materials (user_id, material_id, quantity)
-                VALUES (:uid, :mid, :q)
-                ON CONFLICT (user_id, material_id) 
-                DO UPDATE SET quantity = user_refined_materials.quantity + EXCLUDED.quantity
-            """), {"uid": user_id, "mid": target_id, "q": count})
+            # Add target (Atomic UPSERT style)
+            target_mat = session.query(UserRefinedMaterial).filter_by(
+                user_id=user_id, 
+                material_id=target_id
+            ).first()
+            
+            if target_mat:
+                target_mat.quantity += count
+            else:
+                new_target = UserRefinedMaterial(
+                    user_id=user_id,
+                    material_id=target_id,
+                    quantity=count
+                )
+                session.add(new_target)
                 
             session.commit()
             
             # Get names for success message
-            names = session.execute(text("SELECT id, name FROM refined_materials WHERE id IN (:s, :t)"), 
-                                   {"s": source_id, "t": target_id}).fetchall()
-            names_dict = {row[0]: row[1] for row in names}
+            names = session.query(RefinedMaterial).filter(
+                RefinedMaterial.id.in_([source_id, target_id])
+            ).all()
+            names_dict = {m.id: m.name for m in names}
             
             return {
                 "success": True, 
@@ -187,35 +195,35 @@ class CraftingService:
         try:
             now = datetime.now().date()
             # Check if we already have one for today
-            daily = session.execute(text("""
-                SELECT resource_id FROM refinery_daily
-                WHERE DATE(date) = :today
-            """), {"today": now}).fetchone()
+            daily = session.query(RefineryDaily).filter(
+                func.date(RefineryDaily.date) == now
+            ).first()
             
             if daily:
-                res_id = daily[0]
+                res_id = daily.resource_id
             else:
-                # Pick a random resource (weighted by rarity - common more frequent)
-                # For simplicity, just pick a random one for now
-                all_res = session.execute(text("SELECT id FROM resources")).fetchall()
-                if not all_res:
+                # Pick a random resource
+                all_res_ids = [r.id for r in session.query(Resource.id).all()]
+                if not all_res_ids:
                     return None
-                res_id = random.choice(all_res)[0]
+                res_id = random.choice(all_res_ids)
                 
-                # Save it
-                session.execute(text("""
-                    INSERT INTO refinery_daily (date, resource_id)
-                    VALUES (:today, :rid)
-                    ON CONFLICT (date) DO UPDATE SET resource_id = :rid
-                """), {"today": now, "rid": res_id})
+                # Save it (UPSERT style)
+                new_daily = session.query(RefineryDaily).filter(
+                    func.date(RefineryDaily.date) == now
+                ).first()
+                
+                if new_daily:
+                    new_daily.resource_id = res_id
+                else:
+                    new_daily = RefineryDaily(date=datetime.now(), resource_id=res_id)
+                    session.add(new_daily)
                 session.commit()
             
             # Get details
-            resource = session.execute(text("""
-                SELECT id, name FROM resources WHERE id = :id
-            """), {"id": res_id}).fetchone()
+            resource = session.query(Resource).filter_by(id=res_id).first()
             
-            return {"id": resource[0], "name": resource[1]} if resource else None
+            return {"id": resource.id, "name": resource.name} if resource else None
         finally:
             if local_session:
                 session.close()
@@ -230,42 +238,36 @@ class CraftingService:
                 return {"success": False, "error": "Questo materiale non può essere raffinato oggi!"}
             
             # 2. Check if user has enough quantity
-            user_qty = session.execute(text("""
-                SELECT quantity FROM user_resources
-                WHERE user_id = :uid AND resource_id = :rid
-            """), {"uid": user_id, "rid": resource_id}).scalar() or 0
+            user_res = session.query(UserResource).filter_by(
+                user_id=user_id, 
+                resource_id=resource_id
+            ).first()
+            user_qty = user_res.quantity if user_res else 0
             
             if user_qty < quantity:
                 return {"success": False, "error": f"Non hai abbastanza materiali! (Possiedi {user_qty})"}
             
             # 3. Calculate time based on Armory level
             armory_level = self.get_guild_armory_level(guild_id)
-            # Base time: 30 seconds per unit?
-            # Reduction: Level 1 = 100%, Level 2 = 90%, etc.
             base_time_per_unit = 30
             reduction = max(0.2, 1.0 - (armory_level * 0.1))
             total_time = int(quantity * base_time_per_unit * reduction)
             
             # 4. Consume raw materials
-            session.execute(text("""
-                UPDATE user_resources
-                SET quantity = quantity - :qty
-                WHERE user_id = :uid AND resource_id = :rid
-            """), {"qty": quantity, "uid": user_id, "rid": resource_id})
+            user_res.quantity -= quantity
             
             # 5. Add to queue
             completion_time = datetime.now() + timedelta(seconds=total_time)
-            session.execute(text("""
-                INSERT INTO refinery_queue (user_id, guild_id, resource_id, quantity, start_time, completion_time, status)
-                VALUES (:uid, :gid, :rid, :qty, :start, :end, 'in_progress')
-            """), {
-                "uid": user_id,
-                "gid": guild_id,
-                "rid": resource_id,
-                "qty": quantity,
-                "start": datetime.now(),
-                "end": completion_time
-            })
+            new_job = RefineryQueue(
+                user_id=user_id,
+                guild_id=guild_id,
+                resource_id=resource_id,
+                quantity=quantity,
+                start_time=datetime.now(),
+                completion_time=completion_time,
+                status='in_progress'
+            )
+            session.add(new_job)
             
             session.commit()
             return {"success": True, "completion_time": completion_time, "total_time": total_time}
@@ -280,19 +282,21 @@ class CraftingService:
         """Process completion and generate materials using a single session for atomicity"""
         session = self.db.get_session()
         try:
-            job = session.execute(text("""
-                SELECT user_id, quantity, resource_id FROM refinery_queue
-                WHERE id = :id AND status = 'in_progress'
-            """), {"id": queue_id}).fetchone()
+            job = session.query(RefineryQueue).filter_by(
+                id=queue_id, 
+                status='in_progress'
+            ).first()
             
             if not job:
                 return {"success": False, "error": "Job non trovato o già processato"}
             
-            user_id, raw_qty, res_id = job
+            user_id = job.user_id
+            raw_qty = job.quantity
+            res_id = job.resource_id
             
             # Fetch resource rarity
-            res_info = session.execute(text("SELECT rarity FROM resources WHERE id = :id"), {"id": res_id}).fetchone()
-            resource_rarity = res_info[0] if res_info else 1
+            res_info = session.query(Resource).filter_by(id=res_id).first()
+            resource_rarity = res_info.rarity if res_info else 1
             
             # Formula (same as before)
             rarity_mult = 0.8 + (resource_rarity * 0.2)
@@ -313,14 +317,12 @@ class CraftingService:
             results = {'Rottami': qty_t1, 'Materiale Pregiato': qty_t2, 'Diamante': qty_t3}
             
             # 2. Update job status to 'completed' and store results
-            # NOTE: We NO LONGER add to inventory here, it's done during manual 'claim'
-            session.execute(text("""
-                UPDATE refinery_queue 
-                SET status = 'completed', result_t1 = :t1, result_t2 = :t2, result_t3 = :t3
-                WHERE id = :id
-            """), {"id": queue_id, "t1": qty_t1, "t2": qty_t2, "t3": qty_t3})
+            job.status = 'completed'
+            job.result_t1 = qty_t1
+            job.result_t2 = qty_t2
+            job.result_t3 = qty_t3
             
-            # 3. Award profession XP (this is fine to do here as it's proportional to work done)
+            # 3. Award profession XP
             xp_gained = raw_qty * 5
             self.add_profession_xp(user_id, xp_gained)
             
@@ -339,22 +341,23 @@ class CraftingService:
         results = []
         try:
             now = datetime.now()
-            ready = session.execute(text("""
-                SELECT rq.id, rq.user_id, rq.guild_id 
-                FROM refinery_queue rq
-                WHERE rq.status = 'in_progress' AND rq.completion_time <= :now
-            """), {"now": now}).fetchall()
+            ready = session.query(RefineryQueue).filter(
+                RefineryQueue.status == 'in_progress',
+                RefineryQueue.completion_time <= now
+            ).all()
             
             from services.user_service import UserService
-            from services.guild_service import GuildService
             user_service = UserService()
-            guild_service = GuildService()
             
-            for qid, uid, gid in ready:
+            for job in ready:
+                uid = job.user_id
+                gid = job.guild_id
+                qid = job.id
+                
                 user = user_service.get_user(uid)
                 if not user:
                     print(f"[REFINERY] User {uid} not found for job {qid}. Marking as cancelled.")
-                    session.execute(text("UPDATE refinery_queue SET status = 'cancelled' WHERE id = :id"), {"id": qid})
+                    job.status = 'cancelled'
                     continue
                     
                 armory_level = self.get_guild_armory_level(gid)
@@ -378,42 +381,43 @@ class CraftingService:
         session = self.db.get_session()
         try:
             # 2. Find all 'completed' jobs
-            jobs = session.execute(text("""
-                SELECT id, result_t1, result_t2, result_t3 FROM refinery_queue
-                WHERE user_id = :uid AND status = 'completed'
-            """), {"uid": user_id}).fetchall()
+            jobs = session.query(RefineryQueue).filter_by(
+                user_id=user_id, 
+                status='completed'
+            ).all()
             
             if not jobs:
                 return {"success": False, "error": "Nessun materiale pronto da ritirare."}
             
             totals = {'Rottami': 0, 'Materiale Pregiato': 0, 'Diamante': 0}
-            job_ids = []
             
-            for jid, t1, t2, t3 in jobs:
-                totals['Rottami'] += (t1 or 0)
-                totals['Materiale Pregiato'] += (t2 or 0)
-                totals['Diamante'] += (t3 or 0)
-                job_ids.append(jid)
+            for job in jobs:
+                totals['Rottami'] += (job.result_t1 or 0)
+                totals['Materiale Pregiato'] += (job.result_t2 or 0)
+                totals['Diamante'] += (job.result_t3 or 0)
+                job.status = 'claimed'
             
             # 3. Add to user_refined_materials
             for mat_name, total_qty in totals.items():
                 if total_qty <= 0: continue
                 
-                mat_id = session.execute(text("SELECT id FROM refined_materials WHERE name = :n"), {"n": mat_name}).scalar()
-                if not mat_id: continue
+                mat = session.query(RefinedMaterial).filter_by(name=mat_name).first()
+                if not mat: continue
                 
-                session.execute(text("""
-                    INSERT INTO user_refined_materials (user_id, material_id, quantity)
-                    VALUES (:uid, :mid, :q)
-                    ON CONFLICT (user_id, material_id) 
-                    DO UPDATE SET quantity = user_refined_materials.quantity + EXCLUDED.quantity
-                """), {"uid": user_id, "mid": mat_id, "q": total_qty})
-            
-            # 4. Mark jobs as claimed
-            session.execute(text("""
-                UPDATE refinery_queue SET status = 'claimed'
-                WHERE id IN :ids
-            """), {"ids": tuple(job_ids)})
+                user_mat = session.query(UserRefinedMaterial).filter_by(
+                    user_id=user_id, 
+                    material_id=mat.id
+                ).first()
+                
+                if user_mat:
+                    user_mat.quantity += total_qty
+                else:
+                    new_user_mat = UserRefinedMaterial(
+                        user_id=user_id,
+                        material_id=mat.id,
+                        quantity=total_qty
+                    )
+                    session.add(new_user_mat)
             
             session.commit()
             return {"success": True, "totals": totals, "job_count": len(jobs)}
@@ -429,16 +433,15 @@ class CraftingService:
         session = self.db.get_session()
         try:
             # Get equipment info
-            equipment = session.execute(text("""
-                SELECT id, name, rarity, crafting_time, crafting_requirements
-                FROM equipment
-                WHERE id = :eid
-            """), {"eid": equipment_id}).fetchone()
+            equipment = session.query(Equipment).filter_by(id=equipment_id).first()
             
             if not equipment:
                 return {"success": False, "error": "Equipment not found"}
             
-            eq_id, eq_name, eq_rarity, crafting_time, crafting_requirements = equipment
+            eq_name = equipment.name
+            eq_rarity = equipment.rarity
+            crafting_time = equipment.crafting_time
+            crafting_requirements = equipment.crafting_requirements
             
             # Check if item has crafting recipe
             if not crafting_requirements or crafting_requirements.strip() in ['', '{}', 'null']:
@@ -459,10 +462,10 @@ class CraftingService:
                 }
             
             # Check crafting slots (armory_level = number of parallel crafts allowed)
-            active_jobs = session.execute(text("""
-                SELECT COUNT(*) FROM crafting_queue
-                WHERE guild_id = :gid AND status = 'in_progress'
-            """), {"gid": guild_id}).scalar() or 0
+            active_jobs = session.query(func.count(RefineryQueue.id)).filter(
+                RefineryQueue.guild_id == guild_id,
+                RefineryQueue.status == 'in_progress'
+            ).scalar() or 0
             
             if active_jobs >= armory_level:
                 return {
@@ -474,17 +477,16 @@ class CraftingService:
             missing_resources = []
             for resource_name, quantity_needed in resources_needed.items():
                 # Get material ID by name
-                material_id = session.execute(text("""
-                    SELECT id FROM refined_materials WHERE name = :name
-                """), {"name": resource_name}).scalar()
+                material = session.query(RefinedMaterial).filter_by(name=resource_name).first()
                 
-                if not material_id:
+                if not material:
                     return {"success": False, "error": f"Material '{resource_name}' not found in database"}
                 
-                user_quantity = session.execute(text("""
-                    SELECT quantity FROM user_refined_materials
-                    WHERE user_id = :uid AND material_id = (SELECT id FROM refined_materials WHERE name = :name)
-                """), {"uid": user_id, "name": resource_name}).scalar() or 0
+                user_mat = session.query(UserRefinedMaterial).filter_by(
+                    user_id=user_id, 
+                    material_id=material.id
+                ).first()
+                user_quantity = user_mat.quantity if user_mat else 0
                 
                 if user_quantity < quantity_needed:
                     missing_resources.append(f"{resource_name}: {user_quantity}/{quantity_needed}")
@@ -502,10 +504,12 @@ class CraftingService:
                 error_msg += "📦 Costi:\n"
                 for resource_name, quantity_needed in resources_needed.items():
                     emoji = emoji_map.get(resource_name, "📦")
-                    user_qty = session.execute(text("""
-                        SELECT quantity FROM user_refined_materials
-                        WHERE user_id = :uid AND material_id = (SELECT id FROM refined_materials WHERE name = :name)
-                    """), {"uid": user_id, "name": resource_name}).scalar() or 0
+                    material = session.query(RefinedMaterial).filter_by(name=resource_name).first()
+                    user_mat = session.query(UserRefinedMaterial).filter_by(
+                        user_id=user_id, 
+                        material_id=material.id
+                    ).first() if material else None
+                    user_qty = user_mat.quantity if user_mat else 0
                     
                     status = "✅" if user_qty >= quantity_needed else "❌"
                     error_msg += f"{status} {emoji} {resource_name}: {user_qty}/{quantity_needed}\n"
@@ -514,26 +518,29 @@ class CraftingService:
             
             # Consume resources
             for resource_name, quantity_needed in resources_needed.items():
-                session.execute(text("""
-                    UPDATE user_refined_materials
-                    SET quantity = quantity - :qty
-                    WHERE user_id = :uid AND material_id = (SELECT id FROM refined_materials WHERE name = :name)
-                """), {"qty": quantity_needed, "uid": user_id, "name": resource_name})
+                material = session.query(RefinedMaterial).filter_by(name=resource_name).first()
+                if material:
+                    user_mat = session.query(UserRefinedMaterial).filter_by(
+                        user_id=user_id, 
+                        material_id=material.id
+                    ).first()
+                    if user_mat:
+                        user_mat.quantity -= quantity_needed
             
             # Add to crafting queue
             completion_time = datetime.now() + timedelta(seconds=crafting_time)
             
-            session.execute(text("""
-                INSERT INTO crafting_queue (guild_id, user_id, equipment_id, 
-                                           start_time, completion_time, status)
-                VALUES (:gid, :uid, :eid, :start, :end, 'in_progress')
-            """), {
-                "gid": guild_id,
-                "uid": user_id,
-                "eid": equipment_id,
-                "start": datetime.now(),
-                "end": completion_time
-            })
+            # Wait, the model for crafting_queue is CraftingQueue, imported as such
+            from models.crafting import CraftingQueue
+            new_job = CraftingQueue(
+                guild_id=guild_id,
+                user_id=user_id,
+                equipment_id=equipment_id,
+                start_time=datetime.now(),
+                completion_time=completion_time,
+                status='in_progress'
+            )
+            session.add(new_job)
             
             session.commit()
             
@@ -558,16 +565,16 @@ class CraftingService:
         session = self.db.get_session()
         try:
             # Get crafting job
-            job = session.execute(text("""
-                SELECT user_id, equipment_id, completion_time, status
-                FROM crafting_queue
-                WHERE id = :id
-            """), {"id": crafting_queue_id}).fetchone()
+            from models.crafting import CraftingQueue
+            job = session.query(CraftingQueue).filter_by(id=crafting_queue_id).first()
             
             if not job:
                 return {"success": False, "error": "Crafting job not found"}
             
-            user_id, equipment_id, completion_time, status = job
+            user_id = job.user_id
+            equipment_id = job.equipment_id
+            completion_time = job.completion_time
+            status = job.status
             
             if status != 'in_progress':
                 return {"success": False, "error": "Job already completed or cancelled"}
@@ -576,12 +583,10 @@ class CraftingService:
                 return {"success": False, "error": "Crafting not yet complete"}
             
             # Get base equipment rarity
-            base_rarity = session.execute(text("""
-                SELECT rarity FROM equipment WHERE id = :eid
-            """), {"eid": equipment_id}).scalar()
+            equipment = session.query(Equipment).filter_by(id=equipment_id).first()
+            base_rarity = equipment.rarity if equipment else 1
             
             # Calculate final rarity based on armory and profession level
-            # Formula: base chance + (profession * 0.5%) + (armory * 1%)
             upgrade_chance = (profession_level * 0.5) + (armory_level * 1.0)
             
             final_rarity = base_rarity
@@ -591,20 +596,20 @@ class CraftingService:
             # Add item to user's equipment
             # Generate Stats
             import json
-            slot = session.execute(text("SELECT slot FROM equipment WHERE id = :eid"), {"eid": equipment_id}).scalar()
+            slot = equipment.slot if equipment else 'chest'
             new_stats = self.generate_random_stats(final_rarity, slot)
             
-            session.execute(text("""
-                INSERT INTO user_equipment (user_id, equipment_id, equipped, stats_json)
-                VALUES (:uid, :eid, FALSE, :stats)
-            """), {"uid": user_id, "eid": equipment_id, "stats": json.dumps(new_stats)})
+            new_user_eq = UserEquipment(
+                user_id=user_id,
+                equipment_id=equipment_id,
+                equipped=False,
+                stats_json=json.dumps(new_stats)
+            )
+            session.add(new_user_eq)
             
             # Mark crafting as complete
-            session.execute(text("""
-                UPDATE crafting_queue
-                SET status = 'completed', actual_rarity = :rarity
-                WHERE id = :id
-            """), {"id": crafting_queue_id, "rarity": final_rarity})
+            job.status = 'completed'
+            job.actual_rarity = final_rarity
             
             session.commit()
             
@@ -642,12 +647,9 @@ class CraftingService:
         """Get guild's armory level"""
         session = self.db.get_session()
         try:
-            level = session.execute(text("""
-                SELECT armory_level FROM guilds
-                WHERE id = :gid
-            """), {"gid": guild_id}).scalar()
-            
-            return level or 1  # Default level 1
+            from models.guild import Guild
+            guild = session.query(Guild).filter_by(id=guild_id).first()
+            return guild.armory_level if guild else 1
         finally:
             session.close()
     
@@ -677,17 +679,12 @@ class CraftingService:
         try:
             for _ in range(num_drops):
                 # Standardized system: mostly common resources (IDs 1, 2, 3)
-                # We can roll for specific ID directly to be faster, or use DB
-                resource = session.execute(text("""
-                    SELECT id, image FROM resources
-                    ORDER BY RANDOM()
-                    LIMIT 1
-                """)).fetchone()
+                resource = session.query(Resource).order_by(func.random()).first()
                 
                 if resource:
                     # Quantity: 1-3 for normal, 5-15 for boss
                     qty = random.randint(5, 15) if mob_is_boss else random.randint(1, 3)
-                    drops.append((resource[0], qty, resource[1]))
+                    drops.append((resource.id, qty, resource.image))
             
             return drops
         finally:
@@ -724,22 +721,23 @@ class CraftingService:
 
     def get_profession_info(self, user_id):
         """Get user profession level and XP from UserStats"""
-        from services.stat_aggregator import StatAggregator
-        aggregator = StatAggregator()
+        from models.stats import UserStat
         session = self.db.get_session()
         try:
-            # We use UserStat to avoid adding columns to utente table
-            xp_stat = session.execute(text("""
-                SELECT value FROM user_stat 
-                WHERE user_id = :uid AND stat_key = 'profession_xp'
-            """), {"uid": user_id}).scalar() or 0
+            xp_stat = session.query(UserStat).filter_by(
+                user_id=user_id, 
+                stat_key='profession_xp'
+            ).first()
             
-            level_stat = session.execute(text("""
-                SELECT value FROM user_stat 
-                WHERE user_id = :uid AND stat_key = 'profession_level'
-            """), {"uid": user_id}).scalar() or 1
+            level_stat = session.query(UserStat).filter_by(
+                user_id=user_id, 
+                stat_key='profession_level'
+            ).first()
             
-            return {"level": int(level_stat), "xp": int(xp_stat)}
+            return {
+                "level": int(level_stat.value) if level_stat else 1, 
+                "xp": int(xp_stat.value) if xp_stat else 0
+            }
         finally:
             session.close()
 
@@ -778,23 +776,30 @@ class CraftingService:
                 break
         
         # Update stats in database
+        from models.stats import UserStat
         session = self.db.get_session()
         try:
-            # Update XP
-            session.execute(text("""
-                INSERT INTO user_stat (user_id, stat_key, value)
-                VALUES (:uid, 'profession_xp', :xp)
-                ON CONFLICT (user_id, stat_key) 
-                DO UPDATE SET value = :xp
-            """), {"uid": user_id, "xp": new_xp})
+            # Update XP (Atomic UPSERT style)
+            xp_entry = session.query(UserStat).filter_by(
+                user_id=user_id, 
+                stat_key='profession_xp'
+            ).first()
+            if xp_entry:
+                xp_entry.value = new_xp
+            else:
+                xp_entry = UserStat(user_id=user_id, stat_key='profession_xp', value=new_xp)
+                session.add(xp_entry)
             
             # Update Level
-            session.execute(text("""
-                INSERT INTO user_stat (user_id, stat_key, value)
-                VALUES (:uid, 'profession_level', :lvl)
-                ON CONFLICT (user_id, stat_key) 
-                DO UPDATE SET value = :lvl
-            """), {"uid": user_id, "lvl": new_level})
+            lvl_entry = session.query(UserStat).filter_by(
+                user_id=user_id, 
+                stat_key='profession_level'
+            ).first()
+            if lvl_entry:
+                lvl_entry.value = new_level
+            else:
+                lvl_entry = UserStat(user_id=user_id, stat_key='profession_level', value=new_level)
+                session.add(lvl_entry)
             
             session.commit()
         finally:
@@ -824,20 +829,22 @@ class CraftingService:
         session = self.db.get_session()
         results = []
         try:
-            # Find jobs that are 'in_progress' and past completion time
-            from sqlalchemy import text
+            from models.crafting import CraftingQueue
             from datetime import datetime
             now = datetime.now()
-            ready_jobs = session.execute(text("""
-                SELECT id, guild_id, user_id, equipment_id
-                FROM crafting_queue
-                WHERE status = 'in_progress' AND completion_time <= :now
-            """), {"now": now}).fetchall()
+            ready_jobs = session.query(CraftingQueue).filter(
+                CraftingQueue.status == 'in_progress',
+                CraftingQueue.completion_time <= now
+            ).all()
             
             from services.guild_service import GuildService
             guild_service = GuildService()
             
-            for job_id, guild_id, user_id, eq_id in ready_jobs:
+            for job in ready_jobs:
+                job_id = job.id
+                user_id = job.user_id
+                eq_id = job.equipment_id
+                
                 # Get context info
                 guild = guild_service.get_user_guild(user_id)
                 armory_level = guild['armory_level'] if guild else 1
@@ -851,11 +858,10 @@ class CraftingService:
                 # Add extra info for notification
                 if res['success']:
                     # Get item name for notification
-                    eq_name = session.execute(text("SELECT name FROM equipment WHERE id = :id"), {"id": eq_id}).scalar()
-                    res['item_name'] = eq_name
+                    equipment = session.query(Equipment).filter_by(id=eq_id).first()
+                    res['item_name'] = equipment.name if equipment else "Oggetto"
                     res['user_id'] = user_id
                     results.append(res)
-            
             
             return results
 

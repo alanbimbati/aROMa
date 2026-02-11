@@ -22,6 +22,15 @@ def escape_markdown(text):
     # _, *, [, `
     return str(text).replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("`", "\\`")
 
+def get_mention_markdown(user_id, name):
+    """Create a safe markdown mention that works with underscores and triggers notifications"""
+    if not name:
+        name = f"User {user_id}"
+    # Ensure it starts with @ if it looks like a username
+    # For now, let's just use the name provided.
+    safe_name = escape_markdown(name)
+    return f"[{safe_name}](tg://user?id={user_id})"
+
 def safe_answer_callback(call_id, text=None, show_alert=False):
     """Safely answer a callback query, ignoring timeout errors"""
     try:
@@ -155,6 +164,11 @@ mob_locks_mutex = threading.Lock()
 def get_mob_display_lock(mob_id):
     with mob_locks_mutex:
         if mob_id not in mob_display_locks:
+            # Periodic cleanup of old locks to prevent memory leak
+            if len(mob_display_locks) > 1000:
+                # Remove locks if mob_id is not recently active (optional, for now just clear oldest if too many)
+                # For simplicity, if we hit 1000, clear half
+                mob_display_locks.clear()
             mob_display_locks[mob_id] = threading.Lock()
         return mob_display_locks[mob_id]
 
@@ -255,7 +269,8 @@ def handle_trap_explosion(message):
             icon = "🟩" if trap_type == 'NITRO' else "💥"
             trap_name = "la NITRO" if trap_type == 'NITRO' else "la TNT"
             
-            msg = f"{icon} **BOOM!** @{username} ha fatto esplodere {trap_name}!\n💔 Hai perso {damage} HP (30%)!"
+            mention = get_mention_markdown(user_id, username)
+            msg = f"{icon} **BOOM!** {mention} ha fatto esplodere {trap_name}!\n💔 Hai perso {damage} HP (30%)!"
             if new_hp == 0:
                 msg += "\n💀 Sei morto carbonizzato!"
             
@@ -463,7 +478,24 @@ def handle_add_skin_cmd(message):
 @bot.message_handler(commands=['stats', 'me', 'profilo', 'info', 'profile'])
 def command_stats(message):
     """Unified handler for profile and stats commands"""
+    args = message.text.split()
     cmd = BotCommands(message, bot)
+    
+    if len(args) > 1:
+        target = args[1]
+        user = None
+        if target.startswith('@'):
+            user = user_service.get_user_by_username(target[1:])
+        elif target.isdigit():
+            user = user_service.get_user(int(target))
+        
+        if user:
+            cmd.handle_profile(target_user=user)
+            return
+        else:
+            bot.reply_to(message, "❌ Utente non trovato.")
+            return
+
     cmd.handle_profile()
 
 @bot.message_handler(commands=['inventory', 'inv'])
@@ -829,7 +861,7 @@ def handle_guild_cmd(message):
         # Show guild status
         msg = f"🏰 **Gilda: {guild['name']}**\n"
         leader = user_service.get_user(guild['leader_id'])
-        leader_name = f"@{leader.username}" if leader and leader.username else (leader.nome if leader else f"{guild['leader_id']}")
+        leader_name = get_mention_markdown(leader.id_telegram, leader.username if leader.username else leader.nome) if leader else f"{guild['leader_id']}"
         msg += f"👑 **Capo**: {leader_name}\n"
         msg += f"💰 **Banca**: {guild['wumpa_bank']} Wumpa\n"
         msg += f"👥 **Membri**: {guild['member_limit']} (max)\n\n"
@@ -2501,11 +2533,8 @@ class BotCommands:
                 displayed_participants = participants[:limit]
                 
                 for p in displayed_participants:
-                    u = user_service.get_user(p.user_id)
-                    name = f"@{u.username}" if u and u.username else (u.nome if u else f"Utente {p.user_id}")
-                    # Escape markdown
-                    name = name.replace("_", "\\_").replace("*", "\\*")
-                    msg += f"- {name}\n"
+                    mention = get_mention_markdown(u.id_telegram, u.username if u and u.username else (u.nome if u else f"Utente {p.user_id}"))
+                    msg += f"- {mention}\n"
                 
                 if len(participants) > limit:
                     msg += f"...e altri {len(participants) - limit} eroi!\n"
@@ -3002,8 +3031,7 @@ class BotCommands:
                 try:
                     from settings import GRUPPO_AROMA
                     # Use 'utente' object which is loaded from self.user_id
-                    user_label = f"@{utente.username}" if utente.username else utente.nome
-                    user_label = escape_markdown(user_label)
+                    user_label = get_mention_markdown(utente.id_telegram, utente.username if utente.username else utente.nome)
                     
                     group_caption = f"🐉 **EVENTO DRAGO!**\n\n👤 {user_label} ha evocato **SHENRON**!"
                     with open('images/shenron.png', 'rb') as photo:
@@ -3032,8 +3060,7 @@ class BotCommands:
                 try:
                     from settings import GRUPPO_AROMA
                     # Use 'utente' object which is loaded from self.user_id
-                    user_label = f"@{utente.username}" if utente.username else utente.nome
-                    user_label = escape_markdown(user_label)
+                    user_label = get_mention_markdown(utente.id_telegram, utente.username if utente.username else utente.nome)
                     
                     group_caption = f"🐲 **EVENTO DRAGO!**\n\n👤 {user_label} ha evocato **PORUNGA**!"
                     with open('images/porunga.png', 'rb') as photo:
@@ -5086,7 +5113,7 @@ def handle_photo(message):
             # Don't clear pending state on error so they can retry
 
 @bot.message_handler(content_types=['text'] + util.content_type_media)
-def any(message):
+def handle_any_message(message):
     # Initialize services needed
     from services.pve_service import PvEService
     pve_service = PvEService()
@@ -5390,8 +5417,8 @@ def any(message):
                 level_up_info = user_service.add_exp_by_id(message.from_user.id, passive_exp)
                 
                 if level_up_info['leveled_up']:
-                    username = escape_markdown(message.from_user.username if message.from_user.username else message.from_user.first_name)
-                    bot.send_message(message.chat.id, f"🎉 **LEVEL UP!** @{username} è salito al livello **{level_up_info['new_level']}**! 🚀", parse_mode='markdown')
+                    mention = get_mention_markdown(message.from_user.id, message.from_user.username if message.from_user.username else message.from_user.first_name)
+                    bot.send_message(message.chat.id, f"🎉 **LEVEL UP!** {mention} è salito al livello **{level_up_info['new_level']}**! 🚀", parse_mode='markdown')
                 
                 # Track chat EXP for achievements
                 new_chat_exp_total = user_service.add_chat_exp(message.from_user.id, passive_exp)
@@ -5609,23 +5636,21 @@ def send_combat_message(chat_id, text, image_path, markup, mob_id, old_message_i
         if current_db_msg_id:
             id_to_delete = current_db_msg_id
 
+        if is_death:
+            # Check if someone else already sent the death message for this mob
+            # We only skip if last_message_id is ALREADY None, which means it was already processed
+            if mob and mob.get('last_message_id') is None:
+                print(f"[DEBUG] Skipping duplicate death message for mob {mob_id}")
+                return None
+
         if id_to_delete:
             try:
+                # bot.delete_message is now robust due to SafeTeleBot override
                 bot.delete_message(chat_id, id_to_delete)
-            except Exception:
+            except Exception as e:
+                # Still log unexpected errors
+                print(f"[DEBUG] Non-critical error deleting message {id_to_delete}: {e}")
                 pass
-        
-        # ... logic to build final_text and send ...
-        # Since replace_file_content needs contiguous block, I have to include the rest of format logic
-        # OR I can just patch the beginning and end?
-        # But indentation will change.
-        
-        # I'll paste the full function (truncated/summarized for tool limit if needed, BUT I need to be careful)
-        # The function logic is complex (ASCII card building). I should just wrap the WHOLE function body in indentation?
-        # No, that modifies too many lines.
-        
-        # Alternative: Just use the lock around the Critical Section (Delete -> Send -> Update).
-        # The formatting logic (card building) is local and safe.
         
         # Re-fetch mob details for formatting
         if mob:
@@ -5655,6 +5680,18 @@ def send_combat_message(chat_id, text, image_path, markup, mob_id, old_message_i
         # Ensure text is string and not None
         final_text = str(final_text or "")
         
+        # CAPTION LIMIT HANDLING
+        # Telegram has a 1024 char limit for media captions. 
+        # If text is longer, we send image with truncated caption and the rest as a separate message.
+        display_text = final_text
+        follow_up_text = None
+        if len(final_text) > 1024:
+            # Try to find a good split point (last newline before 1000)
+            split_idx = final_text.rfind('\n', 0, 1000)
+            if split_idx == -1: split_idx = 1000
+            display_text = final_text[:split_idx] + "\n...(segue sotto)"
+            follow_up_text = final_text[split_idx:]
+
         sent_msg = None
         try:
             if image_path and os.path.exists(image_path):
@@ -5662,29 +5699,29 @@ def send_combat_message(chat_id, text, image_path, markup, mob_id, old_message_i
                 if ext in ['.gif']:
                     with open(image_path, 'rb') as animation:
                         try:
-                            sent_msg = bot.send_animation(chat_id, animation, caption=final_text, reply_markup=markup, parse_mode='markdown')
+                            sent_msg = bot.send_animation(chat_id, animation, caption=display_text, reply_markup=markup, parse_mode='markdown')
                         except Exception as e:
                             if "can't parse entities" in str(e).lower():
                                 animation.seek(0)
-                                sent_msg = bot.send_animation(chat_id, animation, caption=final_text, reply_markup=markup)
+                                sent_msg = bot.send_animation(chat_id, animation, caption=display_text, reply_markup=markup)
                             else: raise e
                 elif ext in ['.mp4', '.mov']:
                     with open(image_path, 'rb') as video:
                         try:
-                            sent_msg = bot.send_video(chat_id, video, caption=final_text, reply_markup=markup, parse_mode='markdown')
+                            sent_msg = bot.send_video(chat_id, video, caption=display_text, reply_markup=markup, parse_mode='markdown')
                         except Exception as e:
                             if "can't parse entities" in str(e).lower():
                                 video.seek(0)
-                                sent_msg = bot.send_video(chat_id, video, caption=final_text, reply_markup=markup)
+                                sent_msg = bot.send_video(chat_id, video, caption=display_text, reply_markup=markup)
                             else: raise e
                 else:
                     with open(image_path, 'rb') as photo:
                         try:
-                            sent_msg = bot.send_photo(chat_id, photo, caption=final_text, reply_markup=markup, parse_mode='markdown')
+                            sent_msg = bot.send_photo(chat_id, photo, caption=display_text, reply_markup=markup, parse_mode='markdown')
                         except Exception as e:
                             if "can't parse entities" in str(e).lower():
                                 photo.seek(0)
-                                sent_msg = bot.send_photo(chat_id, photo, caption=final_text, reply_markup=markup)
+                                sent_msg = bot.send_photo(chat_id, photo, caption=display_text, reply_markup=markup)
                             else: raise e
             else:
                 try:
@@ -5694,8 +5731,18 @@ def send_combat_message(chat_id, text, image_path, markup, mob_id, old_message_i
                         sent_msg = bot.send_message(chat_id, final_text, reply_markup=markup)
                     else: raise e
             
+            # If we had a follow-up, send it now
+            if follow_up_text:
+                try:
+                    bot.send_message(chat_id, follow_up_text, parse_mode='markdown')
+                except:
+                    bot.send_message(chat_id, follow_up_text)
+
             if not is_death and sent_msg:
                 pve_service.update_mob_message_id(mob_id, sent_msg.message_id)
+            elif is_death:
+                # Ensure we mark it as processed in DB (so duplicate death calls stop)
+                pve_service.update_mob_message_id(mob_id, None)
         except Exception as e:
             err_msg = str(e).lower()
             print(f"[ERROR] send_combat_message failed for chat_id {chat_id}: {e}")
@@ -5709,6 +5756,8 @@ def send_combat_message(chat_id, text, image_path, markup, mob_id, old_message_i
                 sent_msg = bot.send_message(chat_id, final_text, reply_markup=markup)
                 if not is_death and sent_msg:
                     pve_service.update_mob_message_id(mob_id, sent_msg.message_id)
+                elif is_death:
+                    pve_service.update_mob_message_id(mob_id, None)
             except Exception as e2:
                 print(f"[ERROR] Critical failure in send_combat_message fallback for chat_id {chat_id}: {e2}")
                 # Re-raise critical errors even from fallback
@@ -6653,9 +6702,8 @@ def callback_query(call):
                 participants = dungeon_service.get_dungeon_participants(dungeon.id)
                 msg_text += f"👥 Partecipanti ({len(participants)}):\n"
                 for p in participants:
-                    u = user_service.get_user(p.user_id)
-                    name = f"@{u.username}" if u and u.username else (u.nome if u else f"Utente {p.user_id}")
-                    msg_text += f"- {name}\n"
+                    mention = get_mention_markdown(u.id_telegram, u.username if u and u.username else (u.nome if u else f"Utente {p.user_id}"))
+                    msg_text += f"- {mention}\n"
                 
                 bot.edit_message_text(msg_text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
         except ValueError:
@@ -6755,7 +6803,8 @@ def callback_query(call):
     elif call.data == "flee_confirm":
         success, msg = dungeon_service.leave_dungeon(call.message.chat.id, call.from_user.id)
         safe_answer_callback(call.id, "Fuga completata!", show_alert=False)
-        bot.send_message(call.message.chat.id, f"🏃 @{call.from_user.username or call.from_user.first_name}: {msg}", parse_mode='markdown')
+        mention = get_mention_markdown(call.from_user.id, call.from_user.username if call.from_user.username else call.from_user.first_name)
+        bot.send_message(call.message.chat.id, f"🏃 {mention}: {msg}", parse_mode='markdown')
         # We can't edit the original message easily to 'restore' lobby for others if it was PM, 
         # but here it's likely a group chat. The user left, so valid.
         try:
@@ -6785,9 +6834,9 @@ def callback_query(call):
              participants = dungeon_service.get_dungeon_participants(active_dungeon.id, session=session)
              msg += f"\n👥 Partecipanti ({len(participants)}):\n"
              for p in participants:
-                 u = user_service.get_user(p.user_id)
-                 name = f"@{u.username}" if u and u.username else (u.nome if u else f"Utente {p.user_id}")
-                 msg += f"- {name}\n"
+                  u = user_service.get_user(p.user_id)
+                  mention = get_mention_markdown(u.id_telegram, u.username if u and u.username else (u.nome if u else f"Utente {p.user_id}"))
+                  msg += f"- {mention}\n"
              
              bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
         else:
@@ -6986,13 +7035,6 @@ def callback_query(call):
             # Send effect message
             if effect_msg:
                 bot.send_message(call.message.chat.id, effect_msg)
-                
-            # Handle Traps
-                active_traps[call.message.chat.id] = {
-                    'type': extra_data.get('trap_type', 'TNT'),
-                    'user_id': user_id,
-                    'time': datetime.datetime.now()
-                }
             
             # Handle Next Mob Effects
             if extra_data and extra_data.get('type') == 'next_mob_effect':
@@ -7090,8 +7132,8 @@ def callback_query(call):
                     for i in range(0, len(buttons), 5):
                         markup.row(*buttons[i:i+5])
                         
-                    username = escape_markdown(utente.username if utente.username else utente.nome)
-                    full_msg = f"@{username}\n{effect_msg}\n\n💰 Il Mob ha perso {dropped_amount} Wumpa!"
+                    mention = get_mention_markdown(utente.id_telegram, utente.username if utente.username else utente.nome)
+                    full_msg = f"{mention}\n{effect_msg}\n\n💰 Il Mob ha perso {dropped_amount} Wumpa!"
                     
                     old_msg_id = mob_data.get('last_message_id')
                     
@@ -7105,8 +7147,8 @@ def callback_query(call):
                         old_message_id=old_msg_id
                     )
                 else:
-                    username = escape_markdown(utente.username if utente.username else utente.nome)
-                    full_msg = f"@{username}\n{effect_msg}"
+                    mention = get_mention_markdown(utente.id_telegram, utente.username if utente.username else utente.nome)
+                    full_msg = f"{mention}\n{effect_msg}"
                     old_msg_id = mob_data.get('last_message_id')
                     
                     markup = get_combat_markup("mob", mob_id, call.message.chat.id)
@@ -7118,15 +7160,15 @@ def callback_query(call):
                     pve_service.pending_mob_effects[chat_id] = []
                 pve_service.pending_mob_effects[chat_id].append(data.get('effect'))
                 
-                username = escape_markdown(utente.username if utente.username else utente.nome)
-                full_msg = f"@{username}\n{effect_msg}"
+                mention = get_mention_markdown(utente.id_telegram, utente.username if utente.username else utente.nome)
+                full_msg = f"{mention}\n{effect_msg}"
                 old_msg_id = mob_data.get('last_message_id')
                 
                 markup = get_combat_markup("mob", mob_id, call.message.chat.id)
                 send_combat_message(call.message.chat.id, full_msg, None, markup, mob_id, old_msg_id)
             else:
-                username = escape_markdown(utente.username if utente.username else utente.nome)
-                full_msg = f"@{username}\n{effect_msg}"
+                mention = get_mention_markdown(utente.id_telegram, utente.username if utente.username else utente.nome)
+                full_msg = f"{mention}\n{effect_msg}"
                 old_msg_id = mob_data.get('last_message_id')
                 
                 markup = get_combat_markup("mob", mob_id, call.message.chat.id)
@@ -7166,7 +7208,7 @@ def callback_query(call):
         if guild:
             msg = f"🏰 **Gilda: {guild['name']}**\n"
             leader = user_service.get_user(guild['leader_id'])
-            leader_name = f"@{leader.username}" if leader and leader.username else (leader.nome if leader else f"{guild['leader_id']}")
+            leader_name = get_mention_markdown(leader.id_telegram, leader.username if leader.username else leader.nome) if leader else f"{guild['leader_id']}"
             msg += f"👑 **Capo**: {leader_name}\n"
             msg += f"💰 **Banca**: {guild['wumpa_bank']} Wumpa\n"
             msg += f"👥 **Membri**: {guild['member_limit']} (max)\n\n"
@@ -8326,8 +8368,8 @@ def callback_query(call):
             image_path = extra_data.get('image_path')
             old_msg_id = extra_data.get('delete_message_id')
             
-            username = escape_markdown(utente.username if utente.username else utente.nome)
-            full_msg = f"@{username}\n{msg}"
+            mention = get_mention_markdown(utente.id_telegram, utente.username if utente.username else utente.nome)
+            full_msg = f"{mention}\n{msg}"
             
             if enemy_died:
                 send_combat_message(call.message.chat.id, full_msg, image_path, None, enemy_id, old_msg_id, is_death=True)
@@ -8430,8 +8472,8 @@ def callback_query(call):
             special_name = character.get('special_attack_name', 'Attacco Speciale')
             msg = f"✨ **{special_name}!** ✨\n{msg}"
             
-            username = escape_markdown(utente.username if utente.username else utente.nome)
-            full_msg = f"@{username}\n{msg}"
+            mention = get_mention_markdown(utente.id_telegram, utente.username if utente.username else utente.nome)
+            full_msg = f"{mention}\n{msg}"
             
             if enemy_died:
                 send_combat_message(call.message.chat.id, full_msg, image_path, None, enemy_id, old_msg_id, is_death=True)
@@ -8476,8 +8518,8 @@ def callback_query(call):
             # But flee_mob might return a message saying "You fled from X"
             # We should update the chat message to reflect this.
             
-            username = escape_markdown(utente.username if utente.username else utente.nome)
-            full_msg = f"@{username}\n{msg}"
+            mention = get_mention_markdown(utente.id_telegram, utente.username if utente.username else utente.nome)
+            full_msg = f"{mention}\n{msg}"
             
             # Check if mob is dead/despawned (e.g. group flee triggered)
             # or if it's just this user fleeing.
@@ -8561,8 +8603,8 @@ def callback_query(call):
                     except:
                         pass
             
-            username = escape_markdown(utente.username if utente.username else utente.nome)
-            full_msg = f"@{username}\n{msg}"
+            mention = get_mention_markdown(utente.id_telegram, utente.username if utente.username else utente.nome)
+            full_msg = f"{mention}\n{msg}"
             
             # Send the summary message
             # We don't use send_combat_message here because it's a multi-target summary
@@ -8658,8 +8700,8 @@ def callback_query(call):
                 markup = None
 
             # Always show the full message with damage
-            username = escape_markdown(utente.username if utente.username else utente.nome)
-            bot.send_message(call.message.chat.id, f"@{username}\n{msg}", reply_markup=markup, parse_mode='markdown')
+            mention = get_mention_markdown(utente.id_telegram, utente.username if utente.username else utente.nome)
+            bot.send_message(call.message.chat.id, f"{mention}\n{msg}", reply_markup=markup, parse_mode='markdown')
         else:
             try:
                 safe_answer_callback(call.id, msg, show_alert=True)
@@ -8704,8 +8746,8 @@ def callback_query(call):
             else:
                 markup = None
                        
-            username = escape_markdown(utente.username if utente.username else utente.nome)
-            bot.send_message(call.message.chat.id, f"@{username}\n{msg}", reply_markup=markup, parse_mode='markdown')
+            mention = get_mention_markdown(utente.id_telegram, utente.username if utente.username else utente.nome)
+            bot.send_message(call.message.chat.id, f"{mention}\n{msg}", reply_markup=markup, parse_mode='markdown')
             
             # Handle counter-attacks
             if attack_events:
@@ -8758,8 +8800,8 @@ def callback_query(call):
             except Exception:
                 pass
             
-            username = escape_markdown(utente.username if utente.username else utente.nome)
-            full_msg = f"@{username}\n{msg}"
+            mention = get_mention_markdown(utente.id_telegram, utente.username if utente.username else utente.nome)
+            full_msg = f"{mention}\n{msg}"
             
             mob_id = mob_info.get('mob_id')
             old_msg_id = mob_info.get('last_message_id')
