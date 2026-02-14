@@ -196,17 +196,23 @@ class CombatService:
         Apply status effect from ability to target
         Returns dict with effect info if successful, else None
         Does NOT actually apply it here (done by PvE Service via StatusEffect)
-        Wait, PvE service calls this to CHECK if it applies.
-        So we should just return the data structure.
         """
-        if not ability or not ability.status_effect:
+        if not ability:
             return None
             
-        chance = ability.status_chance
+        # Handle ability as dict or object
+        status_effect = ability.get('status_effect') if isinstance(ability, dict) else getattr(ability, 'status_effect', None)
+        
+        if not status_effect:
+            return None
+            
+        chance = ability.get('status_chance', 0) if isinstance(ability, dict) else getattr(ability, 'status_chance', 0)
+        duration = ability.get('status_duration', 1) if isinstance(ability, dict) else getattr(ability, 'status_duration', 1)
+        
         if random.randint(1, 100) <= chance:
             return {
-                "effect": ability.status_effect,
-                "duration": ability.status_duration,
+                "effect": status_effect,
+                "duration": duration,
                 "source_id": source_id
             }
         return None

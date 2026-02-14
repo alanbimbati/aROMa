@@ -1546,7 +1546,16 @@ def handle_inn_cmd(message):
     """Access the Locanda (Private Chat Only)"""
     user_id = message.from_user.id
     
-    # Check if user is in combat
+    # Deadlock Fix: Check if user is resting BEFORE combat check
+    # If they are resting, they must be allowed to stop resting.
+    user = user_service.get_user(user_id)
+    if user and user.resting_since:
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("🛑 Smetti di Riposare", callback_data="profile_rest_stop"))
+        bot.send_message(message.chat.id, "🛌 Stai riposando in Locanda.\nVuoi smettere e tornare all'avventura?", reply_markup=markup)
+        return
+
+    # Check if user is in combat (only if trying to ENTER)
     if user_service.is_in_combat(user_id):
         bot.send_message(message.chat.id, "⚔️ Sei ancora in combattimento! Devi aspettare 10 minuti dall'ultima azione prima di entrare in Locanda.")
         return

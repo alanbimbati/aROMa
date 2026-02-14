@@ -657,7 +657,10 @@ class UserService:
                         return exp_at_55 + (n * 5000) + (n * (n - 1) // 2) * 2000
                 
                 if level >= 45:
-                    return 100 * (level ** 2)
+                    # SMOOTHING: for 45-49, use a slightly gentler curve to bridge the gap to 50
+                    # 45: ~160k, 46: ~170k, 47: ~180k, 48: ~190k, 49: ~200k
+                    # Old: 100 * 47^2 = 220k. New: 85 * 47^2 = ~187k
+                    return 85 * (level ** 2)
                 
                 # Fallback to DB if loader fails
                 level_data = self._get_livello_by_level(session, level)
