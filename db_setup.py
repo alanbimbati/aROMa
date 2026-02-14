@@ -52,10 +52,18 @@ def migrate_refinery(db):
                 CREATE TABLE IF NOT EXISTS refinery_daily (
                     id SERIAL PRIMARY KEY,
                     date TIMESTAMP DEFAULT NOW(),
+                    category VARCHAR(20) DEFAULT 'equipment',
                     resource_id INTEGER NOT NULL REFERENCES resources(id)
                 );
             """))
             session.commit()
+            
+            # Check for missing category column in existing refinery_daily table
+            columns_daily = [col['name'] for col in inspector.get_columns('refinery_daily')]
+            if 'category' not in columns_daily:
+                print("Adding missing category column to refinery_daily...")
+                session.execute(text("ALTER TABLE refinery_daily ADD COLUMN category VARCHAR(20) DEFAULT 'equipment'"))
+                session.commit()
             
             constraints_daily = inspector.get_unique_constraints('refinery_daily')
             has_date_uix = any(set(c['column_names']) == {'date'} for c in constraints_daily)
