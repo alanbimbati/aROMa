@@ -49,7 +49,8 @@ class RefineryDaily(Base):
     __tablename__ = "refinery_daily"
     
     id = Column(Integer, primary_key=True)
-    date = Column(DateTime, default=datetime.datetime.now, unique=True)
+    date = Column(DateTime, default=datetime.datetime.now)
+    category = Column(String(20), default='equipment')
     resource_id = Column(Integer, ForeignKey('resources.id'), nullable=False)
 
 class RefineryQueue(Base):

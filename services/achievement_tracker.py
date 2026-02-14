@@ -86,6 +86,65 @@ class AchievementTracker:
         finally:
             session.close()
         
+    def load_from_json(self, json_path=None):
+        """Load achievements from a JSON file, updating the database."""
+        if json_path is None:
+            json_path = os.path.join(BASE_DIR, "data", "achievements.json")
+        
+        if not os.path.exists(json_path):
+            print(f"[AchievementTracker] JSON file not found: {json_path}")
+            return
+
+        print(f"[AchievementTracker] Loading achievements from {json_path}...")
+        session = self.db.get_session()
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                count = 0
+                for item in data:
+                    key = item.get('achievement_key')
+                    if not key: continue
+
+                    ach = session.query(Achievement).filter_by(achievement_key=key).first()
+                    
+                    # Extract fields
+                    name = item.get('name')
+                    description = item.get('description')
+                    stat_key = item.get('stat_key')
+                    category = item.get('category')
+                    tiers_str = item.get('tiers')
+                    
+                    if isinstance(tiers_str, dict):
+                        tiers_str = json.dumps(tiers_str)
+                    
+                    if not ach:
+                        ach = Achievement(
+                            achievement_key=key,
+                            name=name,
+                            description=description,
+                            stat_key=stat_key,
+                            category=category,
+                            tiers=tiers_str
+                        )
+                        session.add(ach)
+                    else:
+                        ach.name = name
+                        ach.description = description
+                        ach.stat_key = stat_key
+                        ach.category = category
+                        ach.tiers = tiers_str
+                    
+                    count += 1
+                
+                session.commit()
+                print(f"[AchievementTracker] Successfully processed {count} achievements from JSON.")
+                
+        except Exception as e:
+            print(f"[AchievementTracker] Error loading JSON: {e}")
+            session.rollback()
+        finally:
+            session.close()
+
     def process_pending_events(self, limit=100, session=None):
         """
         Main loop:
@@ -200,7 +259,16 @@ class AchievementTracker:
         """
         Check if a specific achievement should be unlocked or upgraded.
         """
-        current_val = stats_map.get(achievement.stat_key, 0)
+        if achievement.stat_key == 'botanist_unique_count':
+            # Custom logic for unique herbs
+            # Count keys in stats_map that start with 'discovery_' and have value > 0
+            count = 0
+            for k, v in stats_map.items():
+                if k.startswith('discovery_') and v > 0:
+                    count += 1
+            current_val = count
+        else:
+            current_val = stats_map.get(achievement.stat_key, 0)
         
         # Get user's current progress
         user_ach = None
@@ -399,11 +467,17 @@ class AchievementTracker:
                 if next_tier and next_tier in tiers:
                     max_prog = tiers[next_tier].get('threshold', 0)
                 
+                # Get current title if any
+                current_title = None
+                if current_tier and current_tier in tiers:
+                    current_title = tiers[current_tier].get('rewards', {}).get('title')
+
                 result.append({
                     'key': ach.achievement_key,
                     'name': ach.name,
                     'description': ach.description,
                     'current_tier': user_ach.current_tier,
+                    'title': current_title, # The specific reward title
                     'progress': user_ach.progress_value,
                     'next_threshold': max_prog,
                     'unlocked_at': user_ach.unlocked_at

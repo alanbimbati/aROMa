@@ -57,8 +57,17 @@ class WishService:
         try:
             # Consume spheres in a single transaction
             if dragon_type.lower() == "shenron":
+                # Check spheres first to be safe
+                has_s, _ = self.check_dragon_balls(user)
+                if not has_s:
+                    return "❌ Non hai tutte le 7 sfere di Shenron!"
+
+                # Consume spheres in a single transaction
                 for i in range(1, 8):
-                    self.item_service.use_item(user.id_telegram, f"La Sfera del Drago Shenron {i}", session=session)
+                    success, _ = self.item_service.use_item(user.id_telegram, f"La Sfera del Drago Shenron {i}", session=session)
+                    if not success:
+                        session.rollback()
+                        return "❌ Non hai tutte le 7 sfere di Shenron! Forse hai già esaudito questo desiderio?"
                 
                 # Shenron: 1 Big Wish
                 if wish_type == "wumpa":
@@ -105,6 +114,19 @@ class WishService:
         """Grant a single Porunga wish (called 3 times)"""
         session = self.db.get_session()
         try:
+            # If it's the FIRST wish, consume the spheres immediately to prevent exploit
+            if wish_number == 1:
+                # Check spheres first
+                _, has_p = self.check_dragon_balls(user)
+                if not has_p:
+                    return "❌ Non hai tutte le 7 sfere di Porunga!"
+
+                for i in range(1, 8):
+                    success, _ = self.item_service.use_item(user.id_telegram, f"La Sfera del Drago Porunga {i}", session=session)
+                    if not success:
+                        session.rollback()
+                        return "❌ Non hai tutte le 7 sfere di Porunga! Forse hai già esaudito questo desiderio?"
+
             if wish_choice == "wumpa":
                 amount = random.randint(300, 500)
                 self.user_service.add_points_by_id(user.id_telegram, amount, session=session)

@@ -231,6 +231,22 @@ class StatAggregator:
         elif event_type == 'PROFESSION_LEVELUP':
             self._set_stat(user_id, 'profession_level', value)
 
+        # --- PROFESSION EVENTS (Garden & Alchemy) ---
+        elif event_type == 'garden_plant':
+            self._increment_stat(user_id, 'garden_plants_planted', value)
+            
+        elif event_type == 'garden_harvest':
+            self._increment_stat(user_id, 'garden_plants_harvested', value)
+            
+        elif event_type == 'alchemy_brew':
+            self._increment_stat(user_id, 'potions_brewed', value)
+            
+        elif event_type == 'herb_discovery':
+            herb_name = context.get('herb_name')
+            if herb_name:
+                stat_key = f"discovery_{herb_name.lower().replace(' ', '_')}"
+                self._increment_stat(user_id, stat_key, 1)
+
     def _increment_stat(self, user_id, stat_key, amount):
         """
         Queue a stat increment in local batch cache.

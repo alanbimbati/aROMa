@@ -18,6 +18,11 @@ class Equipment(Base):
     description = Column(Text, nullable=True)
     set_name = Column(String(100), nullable=True)
 
+    @property
+    def special_effect_id(self):
+        """Mapping for backward compatibility with pve_service"""
+        return self.effect_type
+
 class UserEquipment(Base):
     """Represents an equipment instance owned by a user"""
     __tablename__ = "user_equipment"

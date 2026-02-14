@@ -1,4 +1,34 @@
 from telebot import types, util
+
+# Monkey patch InlineKeyboardButton and KeyboardButton to support 'style' for Telegram Bot API 9.4+ (2026)
+# Accepted styles: 'success' (green), 'danger' (red), 'primary' (blue)
+_original_inline_init = types.InlineKeyboardButton.__init__
+def _patched_inline_init(self, *args, **kwargs):
+    self.style = kwargs.pop('style', None)
+    _original_inline_init(self, *args, **kwargs)
+types.InlineKeyboardButton.__init__ = _patched_inline_init
+
+_original_inline_to_dict = types.InlineKeyboardButton.to_dict
+def _patched_inline_to_dict(self):
+    res = _original_inline_to_dict(self)
+    if hasattr(self, 'style') and self.style:
+        res['style'] = self.style
+    return res
+types.InlineKeyboardButton.to_dict = _patched_inline_to_dict
+
+_original_kb_init = types.KeyboardButton.__init__
+def _patched_kb_init(self, *args, **kwargs):
+    self.style = kwargs.pop('style', None)
+    _original_kb_init(self, *args, **kwargs)
+types.KeyboardButton.__init__ = _patched_kb_init
+
+_original_kb_to_dict = types.KeyboardButton.to_dict
+def _patched_kb_to_dict(self):
+    res = _original_kb_to_dict(self)
+    if hasattr(self, 'style') and self.style:
+        res['style'] = self.style
+    return res
+types.KeyboardButton.to_dict = _patched_kb_to_dict
 from settings import *
 import schedule
 import time
@@ -30,6 +60,17 @@ def get_mention_markdown(user_id, name):
     # For now, let's just use the name provided.
     safe_name = escape_markdown(name)
     return f"[{safe_name}](tg://user?id={user_id})"
+
+def get_combat_link():
+    """Generates a combat link (URL) dynamic to TEST setting in settings.py"""
+    # GRUPPO_AROMA is expected to be an integer (e.g. -1001457029650)
+    # The URL format for private groups is https://t.me/c/[id without -100]/[msg_id]
+    group_id = str(GRUPPO_AROMA)
+    if group_id.startswith("-100"):
+        group_id = group_id[4:]
+    link = f"https://t.me/c/{group_id}/1"
+    print(f"[DEBUG] Combat Link Generated: {link}")
+    return link
 
 def safe_answer_callback(call_id, text=None, show_alert=False):
     """Safely answer a callback query, ignoring timeout errors"""
@@ -91,20 +132,29 @@ def format_mob_stats(mob, show_full=False):
     if show_full:
         # Full stats (Scouter active)
         hp_text = f"{mob['health']}/{mob['max_health']}"
+        mana_text = f"{mob.get('mana', 0)}/{mob.get('max_mana', 0)}"
         speed_text = f"{mob.get('speed', 30)}"
         res_text = f"{mob.get('resistance', 0)}%"
         atk_text = f"{mob['attack']}"
-        # extra = "👁️ **Scouter Attivo**: Statistiche complete visibili!"
-        extra = ""
+        # CD Details
+        cd_total = mob.get('cooldown_total', 0)
+        cd_next = mob.get('next_attack_in', 0)
+        
+        cd_info = f"\n⏱️ CD: {cd_total}s"
+        if cd_next > 0:
+            cd_info += f" | ⏳ Prossimo: {cd_next}s"
+        else:
+            cd_info += " | ⚠️ **ATTACCO IMMINENTE!**"
+            
+        extra = cd_info
+        return f"📊 Lv. {level} | ⚡ Vel: {speed_text} | 🛡️ Res: {res_text}\n❤️ Salute: {hp_text} HP\n💙 Mana: {mana_text}\n⚔️ Danno: {atk_text}{extra}"
     else:
         # Obscured stats (Default)
         hp_text = "???"
-        speed_text = "???"
         res_text = "???"
         atk_text = "???"
         extra = ""
-
-    return f"📊 Lv. {level} | ⚡ Vel: {speed_text} | 🛡️ Res: {res_text}\n❤️ Salute: {hp_text} HP\n⚔️ Danno: {atk_text}\n{extra}"
+        return f"📊 Lv. {level} | 🛡️ Res: {res_text}\n❤️ Salute: {hp_text} HP\n⚔️ Danno: {atk_text}{extra}"
 
 def get_rarity_emoji(rarity):
     """Get emoji for rarity level (1-5)"""
@@ -150,6 +200,7 @@ from services.transformation_service import TransformationService
 from services.stats_service import StatsService
 from services.drop_service import DropService
 from services.dungeon_service import DungeonService
+from services.alchemy_service import AlchemyService
 from services.achievement_tracker import AchievementTracker
 from services.crafting_service import CraftingService
 
@@ -191,7 +242,19 @@ transformation_service = TransformationService()
 stats_service = StatsService()
 drop_service = DropService()
 dungeon_service = DungeonService()
+alchemy_service = AlchemyService()
 equipment_service = EquipmentService()
+
+def has_equipped_scouter(user_id):
+    """Check if the user has any item with 'scan' effect equipped"""
+    try:
+        equipped = equipment_service.get_equipped_items(user_id)
+        for u_item, item in equipped:
+            if item.effect_type in ['scan', 'scouter_scan']:
+                return True
+    except Exception as e:
+        print(f"Error checking scan ability for {user_id}: {e}")
+    return False
 guide_service = GuideService()
 crafting_service = CraftingService()
 achievement_tracker = AchievementTracker()
@@ -243,7 +306,7 @@ def _auto_delete_message_handler(*args, **kwargs):
 bot.message_handler = _auto_delete_message_handler
 # --------------------------------------------------
 
-@bot.message_handler(func=lambda m: trap_service.has_volatile_trap(m.chat.id), content_types=['text', 'photo', 'sticker', 'video', 'voice'])
+@bot.message_handler(func=lambda m: trap_service.has_volatile_trap(m.chat.id) and m.from_user.id != trap_service.get_placer_id(m.chat.id), content_types=['text', 'photo', 'sticker', 'video', 'voice'])
 def handle_trap_explosion(message):
     """Handle Trap explosion (TNT/Nitro)"""
     # Trigger and consume trap
@@ -327,10 +390,9 @@ def get_main_menu():
         types.KeyboardButton("👤 Scegli Personaggio")
     )
     
-    # Row 2: Inventario e Negozio Pozioni
+    # Row 2: Inventario
     markup.add(
-        types.KeyboardButton("🎒 Inventario"),
-        types.KeyboardButton("🧪 Negozio Pozioni")
+        types.KeyboardButton("🎒 Inventario")
     )
 
     # Row 2.5: Mercato
@@ -358,6 +420,11 @@ def get_main_menu():
     markup.add(
         types.KeyboardButton("🏰 Dungeon"),
         types.KeyboardButton("📖 Guida")
+    )
+    
+    # Row 6: Shortcut to Combat
+    markup.add(
+        types.KeyboardButton("⚔️ Combatti")
     )
     
     return markup
@@ -564,6 +631,14 @@ def handle_shop_potions_button(message):
     cmd = BotCommands(message, bot)
     cmd.handle_shop_potions()
 
+@bot.message_handler(func=lambda message: message.text == "⚔️ Combatti")
+def handle_combatti_shortcut(message):
+    """Handle the 'Combatti' button from main menu"""
+    markup = types.InlineKeyboardMarkup()
+    combat_link = get_combat_link()
+    markup.add(types.InlineKeyboardButton("⚔️ Entra nel Group Combat", url=combat_link))
+    bot.send_message(message.chat.id, "🎯 **Pronto all'azione?**\nClicca il bottone qui sotto per tornare nel topic dei combattimenti!", reply_markup=markup, parse_mode='markdown')
+
 @bot.message_handler(func=lambda message: message.text == "👤 Scegli Personaggio")
 def handle_scegli_personaggio_button(message):
     cmd = BotCommands(message, bot)
@@ -604,6 +679,346 @@ def handle_dungeon_button(message):
     cmd.handle_dungeons_list()
 
 
+def handle_alchemy_menu(call):
+    """Show main alchemy menu"""
+    user_id = call.from_user.id
+    
+    # Get user alchemy stats
+    info = alchemy_service.get_alchemy_info(user_id)
+    level = info['level']
+    xp = info['xp']
+    
+    # Get active jobs
+    queue = alchemy_service.get_alchemy_status(user_id)
+    
+    text = f"⚗️ **LABORATORIO ALCHEMICO** ⚗️\n"
+    text += f"Livello: {level} | XP: {xp}\n\n"
+    
+    # Show Queue
+    if queue:
+        text += "🧪 **In Preparazione:**\n"
+        ready_count = 0
+        for job in queue:
+            if job['status'] == 'ready':
+                ready_count += 1
+                text += f"✅ {job['potion_name']} (PRONTA!)\n"
+            else:
+                m, s = divmod(job['time_left'], 60)
+                text += f"⏳ {job['potion_name']} ({m}m {s}s)\n"
+        text += "\n"
+    else:
+        text += "Il calderone è vuoto.\n\n"
+
+    markup = types.InlineKeyboardMarkup()
+    
+    # Claim Button if ready
+    ready_jobs = [j for j in queue if j['status'] == 'ready']
+    if ready_jobs:
+        markup.add(types.InlineKeyboardButton(f"🎁 Ritira ({len(ready_jobs)})", callback_data="alchemy_claim"))
+        
+    # NEW: Distillation button
+    markup.add(types.InlineKeyboardButton("⚗️ Distillazione", callback_data="alchemy_refine_view"))
+
+    # Recipe List
+    markup.add(types.InlineKeyboardButton("📜 Ricettario", callback_data="alchemy_recipes"))
+    markup.add(types.InlineKeyboardButton("🔄 Aggiorna", callback_data="alchemy_menu"))
+    markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guild_back_main"))
+    
+    try:
+        bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+    except Exception as e:
+         # Fallback
+         bot.send_message(call.message.chat.id, text, reply_markup=markup, parse_mode='markdown')
+
+def handle_alchemy_recipes(call):
+    """Show list of alchemy recipes"""
+    recipes = alchemy_service.get_recipes()
+    user_id = call.from_user.id
+    
+    # Get Guild Lab Bonus
+    speed_mult = guild_service.get_laboratory_bonus(user_id)
+    bonus_text = ""
+    if speed_mult > 1.0:
+        bonus_text = f"\n⚗️ **Bonus Laboratorio Gilda:** Velocità produzione x{speed_mult:.1f}"
+    
+    text = f"📜 **RICETTARIO ALCHEMICO** 📜{bonus_text}\n\n"
+    text += "Clicca su una pozione per produrla:\n\n"
+    
+    markup = types.InlineKeyboardMarkup()
+    for name, data in recipes.items():
+        base_time = data['crafting_time']
+        actual_time = int(base_time / speed_mult)
+        
+        # Check resources (simple check just for display?? too heavy? skip for now)
+        btn_text = f"{name} ({actual_time}s)"
+        markup.add(types.InlineKeyboardButton(btn_text, callback_data=f"alchemy_brew|{name}"))
+        
+    markup.add(types.InlineKeyboardButton("🔙 Torna al Lab", callback_data="alchemy_menu"))
+    
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+
+def handle_alchemy_brew(call):
+    """Start brewing a potion"""
+    user_id = call.from_user.id
+    try:
+        potion_name = call.data.split("|")[1]
+        
+        success, msg = alchemy_service.brew_potion(user_id, potion_name)
+        
+        if success:
+            bot.answer_callback_query(call.id, "Produzione avviata!", show_alert=False)
+            handle_alchemy_menu(call) # Return to main menu to show queue
+        else:
+            bot.answer_callback_query(call.id, f"❌ {msg}", show_alert=True)
+    except Exception as e:
+        print(f"Error brewing: {e}")
+        bot.answer_callback_query(call.id, "Errore generico.", show_alert=True)
+
+def handle_alchemy_claim(call):
+    """Claim finished potions"""
+    user_id = call.from_user.id
+    
+    success, msg = alchemy_service.claim_potions(user_id)
+    
+    if success:
+        bot.answer_callback_query(call.id, "Pozioni ritirate!", show_alert=False)
+        # Refresh menu to show empty queue
+        handle_alchemy_menu(call)
+        # Also send info message
+        bot.send_message(call.message.chat.id, msg, parse_mode='markdown')
+    else:
+        bot.answer_callback_query(call.id, f"❌ {msg}", show_alert=True)
+
+def handle_guild_lab_info(call):
+    """Show info about guild laboratory"""
+    user_id = call.from_user.id
+    guild = guild_service.get_user_guild(user_id)
+    
+    if not guild:
+         bot.answer_callback_query(call.id, "Non sei in una gilda!", show_alert=True)
+         return
+        
+    level = guild.get('laboratory_level', 1) or 1
+    # Calc speed bonus
+    bonus = 1.0 + ((level - 1) * 0.1)
+    
+    msg = f"⚗️ **LABORATORIO ALCHEMICO DI GILDA**\n"
+    msg += f"Livello: {level}/10\n"
+    msg += f"Bonus Velocità: x{bonus:.1f}\n\n"
+    msg += "Migliorare il laboratorio riduce il tempo di creazione delle pozioni per tutti i membri!"
+    
+    markup = types.InlineKeyboardMarkup()
+    if guild['role'] == "Leader" and level < 10:
+        COSTS = {1: 2500, 2: 5000, 3: 10000, 4: 20000, 5: 35000, 6: 50000, 7: 65000, 8: 80000, 9: 100000}
+        cost = COSTS.get(level, 100000)
+        markup.add(types.InlineKeyboardButton(f"⬆️ Potenzia (Costo: {cost} Wumpa)", callback_data="guild_upgrade_lab"))
+        
+    markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="alchemy_recipes"))
+    
+    bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+
+def handle_guild_upgrade_lab(call):
+    """Upgrade lab action"""
+    user_id = call.from_user.id
+    success, msg = guild_service.upgrade_laboratory(user_id)
+    
+    if success:
+        bot.answer_callback_query(call.id, "Upgrade completato!", show_alert=False)
+        handle_guild_lab_info(call) # Refresh view
+        bot.send_message(call.message.chat.id, f"🎉 {msg}")
+    else:
+        bot.answer_callback_query(call.id, f"❌ {msg}", show_alert=True)
+
+def handle_guild_upgrade_garden(call):
+    """Upgrade garden action"""
+    user_id = call.from_user.id
+    success, msg = guild_service.upgrade_garden(user_id)
+    
+    if success:
+        bot.answer_callback_query(call.id, "Upgrade completato!", show_alert=False)
+        handle_guild_garden_info(call) # Refresh view
+        bot.send_message(call.message.chat.id, f"🎉 {msg}")
+    else:
+        bot.answer_callback_query(call.id, f"❌ {msg}", show_alert=True)
+
+def handle_guild_garden_info(call):
+    """Show info about guild garden"""
+    user_id = call.from_user.id
+    guild = guild_service.get_user_guild(user_id)
+    
+    if not guild:
+        bot.answer_callback_query(call.id, "Non sei in una gilda!", show_alert=True)
+        return
+        
+    level = guild.get('garden_level', 1) or 1
+    # Capacity logic
+    slots = 3
+    if level >= 10: slots = 5
+    elif level >= 5: slots = 4
+    
+    msg = f"🌻 **GIARDINO DI GILDA**\n"
+    msg += f"Livello: {level}/10\n"
+    msg += f"Capacità: {slots} slot per membro\n\n"
+    msg += "Migliorare il giardino aumenta gli slot disponibili per tutti i membri della gilda!"
+    
+    markup = types.InlineKeyboardMarkup()
+    if guild['role'] == "Leader" and level < 10:
+        COSTS = {1: 3000, 2: 6000, 3: 12000, 4: 25000, 5: 40000, 6: 60000, 7: 80000, 8: 100000, 9: 150000}
+        cost = COSTS.get(level, 150000)
+        markup.add(types.InlineKeyboardButton(f"⬆️ Potenzia (Costo: {cost} Wumpa)", callback_data="guild_upgrade_garden"))
+        
+    markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="garden_view"))
+    
+    bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+
+def handle_garden_view(call):
+    """Show user's garden"""
+    user_id = call.from_user.id
+    from services.cultivation_service import CultivationService
+    cultivation_service = CultivationService()
+    
+    # Auto-check growth
+    cultivation_service.check_growth(user_id)
+    
+    slots, max_slots = cultivation_service.get_garden_slots(user_id)
+    
+    msg = "🌻 **IL TUO GIARDINO** 🌻\n\n"
+    msg += f"Capacità: {len(slots)}/{max_slots} slot\n\n"
+    
+    markup = types.InlineKeyboardMarkup()
+    
+    now = datetime.datetime.now()
+    
+    for slot in slots:
+        status_icon = "🟫" # Empty
+        status_text = "Vuoto"
+        btn_action = f"garden_plant_menu|{slot['slot_id']}"
+        
+        if slot['status'] == 'growing':
+            status_icon = "🌱"
+            remaining = slot['completion_time'] - now
+            mins = int(remaining.total_seconds() / 60)
+            if mins < 0: mins = 0
+            
+            moisture = slot.get('moisture', 100)
+            m_emoji = "💧" if moisture > 50 else "🏜️"
+            status_text = f"In crescita ({mins}m) | {moisture}% {m_emoji}"
+            btn_action = "ignore"
+            
+            markup.add(types.InlineKeyboardButton(f"💦 Irriga ({moisture}%)", callback_data=f"garden_water|{slot['slot_id']}"))
+        elif slot['status'] in ['ready', 'rotting', 'rotten']:
+            status_icon = "🍎"
+            status = slot['status']
+            moisture = slot.get('moisture', 100)
+            
+            if status == 'ready':
+                status_text = "PRONTO!"
+                if moisture >= 70: status_text += " ✨"
+            elif status == 'rotting':
+                status_icon = "🤢"
+                status_text = "In Marcimento"
+            else:
+                status_icon = "💀"
+                status_text = "MARCIO"
+            
+            btn_action = f"garden_harvest|{slot['slot_id']}"
+            if status != 'rotten':
+                markup.add(types.InlineKeyboardButton(f"💦 Irriga ({moisture}%)", callback_data=f"garden_water|{slot['slot_id']}"))
+        else:
+            status_icon = "🟫"
+            status_text = "Vuoto"
+            btn_action = f"garden_plant_menu|{slot['slot_id']}"
+            
+        msg += f"{status_icon} **Slot {slot['slot_id']}:** {status_text}\n"
+        
+        if btn_action != "ignore":
+            btn_label = "Pianta" if slot['status'] == 'empty' else "Raccogli"
+            markup.add(types.InlineKeyboardButton(f"{btn_label} Slot {slot['slot_id']}", callback_data=btn_action))
+            
+    # NEW: Composter button
+    markup.add(types.InlineKeyboardButton("💩 Compostiera", callback_data="garden_refine_view"))
+
+    markup.add(types.InlineKeyboardButton("🔄 Aggiorna", callback_data="garden_view"))
+    markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guild_back_main"))
+    
+    try:
+        bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+    except Exception as e:
+        if "message is not modified" in str(e):
+            bot.answer_callback_query(call.id, "Giardino già aggiornato!")
+        else:
+            print(f"Error in handle_garden_view: {e}")
+
+def handle_garden_plant_menu(call):
+    """Choose seed to plant"""
+    slot_id = call.data.split("|")[1]
+    
+    msg = f"🌱 **COSA VUOI PIANTARE NELLO SLOT {slot_id}?**\n\n"
+    
+    markup = types.InlineKeyboardMarkup()
+    markup.row(types.InlineKeyboardButton("🥭 Semi di Wumpa", callback_data=f"garden_plant_do|{slot_id}|Semi di Wumpa"))
+    markup.row(
+        types.InlineKeyboardButton("🌿 Seme Erba Verde", callback_data=f"garden_plant_do|{slot_id}|Seme d'Erba Verde"),
+        types.InlineKeyboardButton("💧 Seme Erba Blu", callback_data=f"garden_plant_do|{slot_id}|Seme d'Erba Blu")
+    )
+    markup.row(types.InlineKeyboardButton("✨ Seme Erba Gialla", callback_data=f"garden_plant_do|{slot_id}|Seme d'Erba Gialla"))
+    markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="garden_view"))
+    
+    bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+
+def handle_garden_plant_do(call):
+    """Execute planting"""
+    user_id = call.from_user.id
+    parts = call.data.split("|")
+    slot_id = parts[1]
+    seed_type = parts[2]
+    
+    from services.cultivation_service import CultivationService
+    cultivation_service = CultivationService()
+    
+    success, msg = cultivation_service.plant_seed(user_id, slot_id, seed_type)
+    
+    if success:
+        bot.answer_callback_query(call.id, "Piantato!", show_alert=False)
+        handle_garden_view(call) # Return to garden view
+    else:
+        bot.answer_callback_query(call.id, f"❌ {msg}", show_alert=True)
+
+def handle_garden_harvest(call):
+    """Execute harvest"""
+    user_id = call.from_user.id
+    slot_id = call.data.split("|")[1]
+    
+    from services.cultivation_service import CultivationService
+    cultivation_service = CultivationService()
+    
+    success, msg = cultivation_service.harvest_plant(user_id, slot_id)
+    
+    if success:
+        bot.answer_callback_query(call.id, "Raccolto!", show_alert=False)
+        bot.send_message(call.message.chat.id, f"🎉 {msg}")
+        handle_garden_view(call)
+    else:
+        bot.answer_callback_query(call.id, f"❌ {msg}", show_alert=True)
+
+def handle_garden_water(call):
+    """Water a plant in a slot"""
+    user_id = call.from_user.id
+    try:
+        parts = call.data.split("|")
+        slot_id = int(parts[1])
+        
+        from services.cultivation_service import CultivationService
+        cultivation_service = CultivationService()
+        success, msg = cultivation_service.water_plant(user_id, slot_id)
+        
+        bot.answer_callback_query(call.id, msg)
+        if success:
+            handle_garden_view(call)
+    except Exception as e:
+        print(f"Error in handle_garden_water: {e}")
+        bot.answer_callback_query(call.id, "Errore durante l'irrigazione.")
+
 @bot.message_handler(func=lambda message: message.text == "📖 Guida")
 def handle_guide_button(message):
     # Show main guide menu with detailed sub-guides
@@ -611,6 +1026,8 @@ def handle_guide_button(message):
     markup.add(
         types.InlineKeyboardButton("⚔️ Sistema di Combattimento", callback_data="guide|fight_system"),
         types.InlineKeyboardButton("🏰 Dungeon", callback_data="guide|dungeons"),
+        types.InlineKeyboardButton("⚗️ Alchimia", callback_data="guide|alchemy"),
+        types.InlineKeyboardButton("🌻 Giardino/Coltivazioni", callback_data="guide|garden"),
         types.InlineKeyboardButton("💎 Raffineria", callback_data="guide|refinery"),
         types.InlineKeyboardButton("🔨 Crafting & Forgia", callback_data="guide|crafting"),
         types.InlineKeyboardButton("📊 Allocazione Statistiche", callback_data="guide|stats_allocation"),
@@ -666,7 +1083,26 @@ def handle_inventario_cmd(message):
                 elif emoji == '🎒': 
                     emoji = '🧪'
 
-        msg += f"{emoji} {item} - {desc} (x{quantity})\n"
+        # Get additional info if it's an equipment
+        stats_desc = ""
+        from models.equipment import Equipment
+        try:
+            temp_session = user_service.db.get_session()
+            eq = temp_session.query(Equipment).filter_by(name=item).first()
+            if eq and eq.stats_json:
+                stats = json.loads(eq.stats_json) if isinstance(eq.stats_json, str) else eq.stats_json
+                if stats:
+                    stats_parts = []
+                    for k, v in stats.items():
+                        # Map internal stat names to user-friendly ones
+                        display_name = k.title().replace('_', ' ')
+                        if k == 'crit_chance': display_name = 'Critico'
+                        stats_parts.append(f"+{v} {display_name}")
+                    stats_desc = f" ({', '.join(stats_parts)})"
+            temp_session.close()
+        except: pass
+
+        msg += f"{emoji} {item} - {desc}{stats_desc} (x{quantity})\n"
     
     # Create buttons for each item
     markup = types.InlineKeyboardMarkup()
@@ -842,6 +1278,30 @@ def handle_guild_view(call):
     markup.add(types.InlineKeyboardButton(f"🏘️ Villaggio ({guild['village_level'] * 1000} W)", callback_data="guild_upgrade|village"))
     markup.add(types.InlineKeyboardButton(f"🔞 Bordello ({(guild['bordello_level'] + 1) * 1500} W)", callback_data="guild_upgrade|bordello"))
     
+    # Alchemy & Garden Upgrades
+    lab_lvl = guild.get('laboratory_level', 0) or 0
+    gar_lvl = guild.get('garden_level', 0) or 0
+    markup.add(
+        types.InlineKeyboardButton(f"🧪 Lab. Alchimia (Lv. {lab_lvl})", callback_data="guild_lab_info"),
+        types.InlineKeyboardButton(f"🌻 Giardino (Lv. {gar_lvl})", callback_data="guild_upgrade_garden_info")
+    )
+    
+    # New Upgrades: Dragon Stables, Ancient Temple, Magic Library
+    drag_lvl = guild.get('dragon_stables_level', 0) or 0
+    temple_lvl = guild.get('ancient_temple_level', 0) or 0
+    lib_lvl = guild.get('magic_library_level', 0) or 0
+    
+    markup.add(
+        types.InlineKeyboardButton(f"🐉 Scuderie (Lv. {drag_lvl})", callback_data="guild_upgrade|dragon_stables"),
+        types.InlineKeyboardButton(f"⛩️ Tempio (Lv. {temple_lvl})", callback_data="guild_upgrade|ancient_temple")
+    )
+    markup.add(
+        types.InlineKeyboardButton(f"📚 Biblioteca (Lv. {lib_lvl})", callback_data="guild_upgrade|magic_library")
+    )
+
+    # Customization Menu
+    markup.add(types.InlineKeyboardButton("✨ Personalizza Menu (5000 W)", callback_data="guild_personalize_menu"))
+    
     # Visual button for Locanda
     markup.add(types.InlineKeyboardButton("🏨 Vai alla Locanda", callback_data="guild_inn_view"))
     
@@ -875,12 +1335,22 @@ def handle_guild_cmd(message):
         msg += f"🏠 **Locanda**: Lv. {guild['inn_level']}\n"
         msg += f"⚔️ **Armeria**: Lv. {guild['armory_level']}\n"
         msg += f"🏘️ **Villaggio**: Lv. {guild['village_level']}\n"
+        msg += f"🧪 **Laboratorio**: Lv. {guild.get('laboratory_level', 0) or 0}\n"
+        msg += f"🌻 **Giardino**: Lv. {guild.get('garden_level', 0) or 0}\n\n"
         
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("👥 Membri", callback_data=f"guild_members|{guild['id']}"))
-        markup.add(types.InlineKeyboardButton("🏨 Locanda", callback_data="guild_inn_view"))
-        markup.add(types.InlineKeyboardButton("🔨 Armeria", callback_data="guild_armory_view"))
-        markup.add(types.InlineKeyboardButton("📦 Magazzino", callback_data="guild_warehouse"))
+        markup.add(
+            types.InlineKeyboardButton("🧪 Alchimia", callback_data="alchemy_recipes"),
+            types.InlineKeyboardButton("🌻 Giardino", callback_data="garden_view")
+        )
+        markup.add(
+            types.InlineKeyboardButton("🏨 Locanda", callback_data="guild_inn_view"),
+            types.InlineKeyboardButton("🔨 Armeria", callback_data="guild_armory_view")
+        )
+        markup.add(
+            types.InlineKeyboardButton("👥 Membri", callback_data=f"guild_members|{guild['id']}"),
+            types.InlineKeyboardButton("📦 Magazzino", callback_data="guild_warehouse")
+        )
         markup.add(types.InlineKeyboardButton("💰 Deposita Wumpa", callback_data="guild_deposit_start"))
         if guild['role'] == "Leader":
             markup.add(types.InlineKeyboardButton("⚙️ Gestisci Gilda", callback_data="guild_manage_menu"))
@@ -1033,7 +1503,8 @@ def show_inn_view(call_or_message, edit=False):
     # Image selection
     image_path = "images/locanda.png"
     if guild:
-        image_path = guild_service.get_inn_image(inn_level)
+        # Use custom image if set, otherwise default
+        image_path = guild.get('inn_image') or guild_service.get_inn_image(inn_level)
 
     try:
         if edit and hasattr(call_or_message, 'message'):
@@ -1049,28 +1520,52 @@ def show_inn_view(call_or_message, edit=False):
                     if not guild:
                         bot.locanda_file_id = res.photo[-1].file_id
     except Exception as e:
+        if "message is not modified" in str(e):
+            return
+        
         print(f"Error in show_inn_view: {e}")
-        # Fallback to message if photo edit fails or initial fail
+        # Only fallback to text edit if it's not a caption error (meaning it might be a text-only message)
         if edit and hasattr(call_or_message, 'message'):
-            bot.edit_message_text(msg, chat_id, call_or_message.message.message_id, reply_markup=markup, parse_mode='markdown')
+            try:
+                bot.edit_message_text(msg, chat_id, call_or_message.message.message_id, reply_markup=markup, parse_mode='markdown')
+            except Exception as e2:
+                if "message is not modified" not in str(e2):
+                    print(f"Fallback edit_message_text failed: {e2}")
         else:
             bot.send_message(chat_id, msg, reply_markup=markup, parse_mode='markdown')
+
+@bot.message_handler(commands=['alchimia', 'alchemy'])
+def handle_alchemy_cmd_redirect(message):
+    """Redirect to Alchemy Menu"""
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("⚗️ Laboratorio Alchemico", callback_data="alchemy_menu"))
+    bot.send_message(message.chat.id, "Il Laboratorio è aperto:", reply_markup=markup)
 
 @bot.message_handler(commands=['inn', 'locanda'])
 def handle_inn_cmd(message):
     """Access the Locanda (Private Chat Only)"""
-    if message.chat.type != 'private':
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("📩 Vai alla Locanda (Privato)", url=f"https://t.me/{bot.get_me().username}?start=inn"))
-        bot.send_message(message.chat.id, "❌ La Locanda è disponibile solo in chat privata!", reply_markup=markup)
+    user_id = message.from_user.id
+    
+    # Check if user is in combat
+    if user_service.is_in_combat(user_id):
+        bot.send_message(message.chat.id, "⚔️ Sei ancora in combattimento! Devi aspettare 10 minuti dall'ultima azione prima di entrare in Locanda.")
         return
-
-    show_inn_view(message)
+    
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("🍺 Entra in Locanda", callback_data="guild_inn_view"))
+    bot.send_message(message.chat.id, "Benvenuto viandante! Clicca per entrare:", reply_markup=markup)
 
 # Removed handle_guild_inn_view as it's merged into show_inn_view
 @bot.callback_query_handler(func=lambda call: call.data == "guild_inn_view")
 def handle_guild_inn_view(call):
     """Alias for show_inn_view to keep existing callbacks working"""
+    user_id = call.from_user.id
+    
+    # Check if user is in combat
+    if user_service.is_in_combat(user_id):
+        safe_answer_callback(call.id, "⚔️ Sei in combattimento! Aspetta 10 minuti dall'ultima azione.", show_alert=True)
+        return
+    
     safe_answer_callback(call.id)
     show_inn_view(call, edit=True)
 
@@ -1197,15 +1692,34 @@ def handle_guild_armory_view(call):
         if completed_count > 0:
             markup.add(types.InlineKeyboardButton(f"✅ Riscuoti {completed_count} Crafting Completati", callback_data="craft_claim_all"))
         
-        markup.add(types.InlineKeyboardButton("🔙 Torna alla Gilda", callback_data="guild_back_main"))
+        markup.add(types.InlineKeyboardButton("🔄 Aggiorna", callback_data="guild_armory_view"))
+        markup.add(types.InlineKeyboardButton(" Torna alla Gilda", callback_data="guild_back_main"))
         
-        bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, 
-                             reply_markup=markup, parse_mode='markdown')
+        try:
+            bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, 
+                                 reply_markup=markup, parse_mode='markdown')
+        except Exception as e:
+            if "message is not modified" in str(e):
+                bot.answer_callback_query(call.id, "Già aggiornato!")
+            else:
+                print(f"Error in armory view: {e}")
     finally:
         session.close()
 
 def handle_guild_refinery_view(call):
-    """View guild refinery status and daily rotation"""
+    """Main Equipment Refinery"""
+    handle_refinery_view_generic(call, category='equipment')
+
+def handle_alchemy_refine_view(call):
+    """Alchemy Distillation View"""
+    handle_refinery_view_generic(call, category='alchemy')
+
+def handle_garden_refine_view(call):
+    """Garden Composter View"""
+    handle_refinery_view_generic(call, category='garden')
+
+def handle_refinery_view_generic(call, category='equipment'):
+    """Generic view for guild refinery/distillation/composter"""
     safe_answer_callback(call.id)
     guild = guild_service.get_user_guild(call.from_user.id)
     if not guild:
@@ -1216,15 +1730,26 @@ def handle_guild_refinery_view(call):
     from datetime import datetime
     crafting_service = CraftingService()
     
-    daily_res = crafting_service.get_daily_refinable_resource()
+    daily_resources = crafting_service.get_daily_refinable_resources(category=category)
     
-    msg = f"💎 **Raffineria della Gilda: {guild['name']}**\n\n"
-    msg += f"📅 **Oggi si raffina**: {'❓' if not daily_res else daily_res['name']}\n"
-    msg += "_Solo questo materiale può essere processato oggi._\n\n"
+    titles = {
+        'equipment': f"💎 **Raffineria: {guild['name']}**",
+        'alchemy': f"⚗️ **Distillazione: {guild['name']}**",
+        'garden': f"💩 **Compostiera: {guild['name']}**"
+    }
     
-    # Show user's profession level
+    msg = f"{titles.get(category, '💎 Raffineria')}\n\n"
+    msg += "📅 **Disponibile Oggi**:\n"
+    cat_names = {'equipment': '⚔️ Equipaggiamento', 'alchemy': '🧪 Alchimia', 'garden': '🌿 Giardino'}
+    for res in daily_resources:
+        cat_label = cat_names.get(res['category'], '📦')
+        msg += f"- {cat_label}: {res['name']}\n"
+    msg += "\n_Puoi lavorare solo queste risorse oggi._\n\n"
+    
+    # Show user's profession level based on category
     prof_info = crafting_service.get_profession_info(call.from_user.id)
-    msg += f"🔨 **Armaiolo**: Lv. {prof_info['level']}/50 ({prof_info['xp']} XP)\n"
+    prof_label = "🔨 **Livello Armaiolo**" if category == 'equipment' else "🧪 **Livello Alchimista**" if category == 'alchemy' else "🌿 **Livello Erborista**"
+    msg += f"{prof_label}: {prof_info['level']}/50 ({prof_info['xp']} XP)\n"
     msg += "_Livelli più alti = maggiori probabilità di materiali rari_\n\n"
     
     # Active refinement jobs
@@ -1235,8 +1760,9 @@ def handle_guild_refinery_view(call):
             FROM refinery_queue rq
             JOIN resources r ON rq.resource_id = r.id
             WHERE rq.guild_id = :gid AND rq.status IN ('in_progress', 'completed')
+            AND EXISTS (SELECT 1 FROM resources r2 WHERE r2.id = rq.resource_id AND r2.id IN :res_ids)
             ORDER BY rq.completion_time ASC
-        """), {"gid": guild['id']}).fetchall()
+        """), {"gid": guild['id'], "res_ids": tuple([r['id'] for r in daily_resources] or [-1])}).fetchall()
         
         if active_jobs:
             msg += "⚡ **Processi in Corso**:\n"
@@ -1255,32 +1781,47 @@ def handle_guild_refinery_view(call):
             msg += "💤 Nessun processo attivo\n\n"
             
         markup = types.InlineKeyboardMarkup()
-        if daily_res:
-            markup.add(types.InlineKeyboardButton(f"⚒️ Raffina {daily_res['name']}", callback_data=f"refine_select_qty|{daily_res['id']}"))
+        for res in daily_resources:
+            btn_label = "Raffina" if category == 'equipment' else "Distilla" if category == 'alchemy' else "Composta"
+            markup.add(types.InlineKeyboardButton(f"⚒️ {btn_label} {res['name']}", callback_data=f"refine_select_qty|{category}|{res['id']}"))
             
-        # Claim button - use Python datetime for consistency with the display above
+        if category == 'equipment':
+            markup.add(types.InlineKeyboardButton("⬆️ Upgrade Materiali (10:1)", callback_data="refinery_upgrade_view"))
+            
+        # Claim button (filtered by category too?)
+        # Let's keep claim all as it is for simplicity or filter it. 
+        # Better show only if there are relevant materials.
         now_param = datetime.now()
-        # Count claimable jobs for the current user (either already completed or ready to be completed)
         completed_count = session.execute(text("""
-            SELECT COUNT(*) FROM refinery_queue
-            WHERE user_id = :uid AND (status = 'completed' OR (status = 'in_progress' AND completion_time <= :now))
-        """), {"uid": call.from_user.id, "now": now_param}).scalar() or 0
-        
-        print(f"[DEBUG REFINERY] Guild {guild['id']}, completed_count = {completed_count}, now = {now_param}")
+            SELECT COUNT(*) FROM refinery_queue rq
+            WHERE rq.user_id = :uid AND (rq.status = 'completed' OR (rq.status = 'in_progress' AND rq.completion_time <= :now))
+            AND rq.resource_id IN :res_ids
+        """), {"uid": call.from_user.id, "now": now_param, "res_ids": tuple([r['id'] for r in daily_resources] or [-1])}).scalar() or 0
         
         if completed_count > 0:
-            markup.add(types.InlineKeyboardButton(f"✅ Ritira {completed_count} Materiali", callback_data="refinery_claim_all"))
+            markup.add(types.InlineKeyboardButton(f"✅ Ritira {completed_count} Materiali", callback_data=f"refinery_claim_all|{category}"))
             
-        markup.add(types.InlineKeyboardButton("⬆️ Upgrade Materiali", callback_data="refinery_upgrade_view"))
-        markup.add(types.InlineKeyboardButton("🔙 Armeria", callback_data="guild_armory_view"))
+        refresh_call = "guild_refinery_view" if category == 'equipment' else "alchemy_refine_view" if category == 'alchemy' else "garden_refine_view"
+        back_call = "guild_armory_view" if category == 'equipment' else "alchemy_menu" if category == 'alchemy' else "garden_view"
         
-        bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+        markup.add(types.InlineKeyboardButton("🔄 Aggiorna", callback_data=refresh_call))
+        markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data=back_call))
+        
+        try:
+            bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+        except Exception as e:
+            if "message is not modified" in str(e):
+                bot.answer_callback_query(call.id, "Già aggiornato!")
+            else:
+                print(f"Error in refinery view generic: {e}")
     finally:
         session.close()
 
 def handle_refine_select_quantity(call):
     """Select quantity for refinement"""
-    res_id = int(call.data.split("|")[1])
+    parts = call.data.split("|")
+    category = parts[1]
+    res_id = int(parts[2])
     guild = guild_service.get_user_guild(call.from_user.id)
     
     from services.crafting_service import CraftingService
@@ -1294,22 +1835,25 @@ def handle_refine_select_quantity(call):
                                   {"uid": call.from_user.id, "rid": res_id}).scalar() or 0
         
         if user_qty <= 0:
-            bot.answer_callback_query(call.id, f"Non hai {resource[0]} da raffinare!", show_alert=True)
+            bot.answer_callback_query(call.id, f"Non hai {resource[0]} da lavorare!", show_alert=True)
             return
 
-        msg = f"⚒️ **Raffinazione: {resource[0]}**\n\n"
+        action_label = "Raffinazione" if category == 'equipment' else "Distillazione" if category == 'alchemy' else "Compostaggio"
+        msg = f"⚒️ **{action_label}: {resource[0]}**\n\n"
         msg += f"Possiedi: **x{user_qty}**\n\n"
-        msg += "Quanti ne vuoi raffinare?\n"
-        msg += "_Più ne raffini, più tempo ci vorrà._"
+        msg += "Quanti ne vuoi lavorare?\n"
+        msg += "_Più ne lavori, più tempo ci vorrà._"
         
         markup = types.InlineKeyboardMarkup()
         # Quantities: 10, 50, 100, All
         for q in [10, 50, 100]:
             if user_qty >= q:
-                markup.add(types.InlineKeyboardButton(f"Raffina {q}", callback_data=f"refine_do|{res_id}|{q}"))
+                markup.add(types.InlineKeyboardButton(f"Lavora {q}", callback_data=f"refine_do|{category}|{res_id}|{q}"))
         
-        markup.add(types.InlineKeyboardButton(f"Raffina TUTTI ({user_qty})", callback_data=f"refine_do|{res_id}|{user_qty}"))
-        markup.add(types.InlineKeyboardButton("🔙 Annulla", callback_data="guild_refinery_view"))
+        markup.add(types.InlineKeyboardButton(f"Lavora TUTTI ({user_qty})", callback_data=f"refine_do|{category}|{res_id}|{user_qty}"))
+        
+        back_view = "guild_refinery_view" if category == 'equipment' else "alchemy_refine_view" if category == 'alchemy' else "garden_refine_view"
+        markup.add(types.InlineKeyboardButton("🔙 Annulla", callback_data=back_view))
         
         bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
     finally:
@@ -1317,9 +1861,10 @@ def handle_refine_select_quantity(call):
 
 def handle_refine_do(call):
     """Execute refinement"""
-    _, res_id, qty = call.data.split("|")
-    res_id = int(res_id)
-    qty = int(qty)
+    parts = call.data.split("|")
+    category = parts[1]
+    res_id = int(parts[2])
+    qty = int(parts[3])
     
     guild = guild_service.get_user_guild(call.from_user.id)
     if not guild: return
@@ -1327,29 +1872,37 @@ def handle_refine_do(call):
     from services.crafting_service import CraftingService
     crafting_service = CraftingService()
     
-    result = crafting_service.start_refinement(guild['id'], call.from_user.id, res_id, qty)
+    result = crafting_service.start_refinement(guild['id'], call.from_user.id, res_id, qty, category=category)
     
     if result['success']:
-        bot.answer_callback_query(call.id, "Raffinazione avviata!", show_alert=False)
-        handle_guild_refinery_view(call)
+        bot.answer_callback_query(call.id, "Lavoro avviato!", show_alert=False)
+        back_view = "guild_refinery_view" if category == 'equipment' else "alchemy_refine_view" if category == 'alchemy' else "garden_refine_view"
+        call.data = back_view
+        handle_refinery_view_generic(call, category=category)
     else:
-        bot.answer_callback_query(call.id, result['error'], show_alert=True)
+        bot.answer_callback_query(call.id, f"❌ {result.get('error', 'Errore')}", show_alert=True)
 
 def handle_refinery_claim_all(call):
-    """Claim all completed refinements via CraftingService"""
+    """Claim all completed refinements via CraftingService. Can be filtered by category."""
     user_id = call.from_user.id
+    parts = call.data.split("|")
+    category = parts[1] if len(parts) > 1 else None
     
     from services.crafting_service import CraftingService
     crafting_service = CraftingService()
     
-    result = crafting_service.claim_user_refinements(user_id)
+    result = crafting_service.claim_user_refinements(user_id, category=category)
     
     if result['success']:
         totals = result['totals']
         job_count = result['job_count']
         
-        msg = f"✅ **Raffinazione Completata!**\n\nHai ritirato materiale da **x{job_count}** cicli:\n"
-        emoji_map = {'Rottami': '🔩', 'Materiale Pregiato': '💎', 'Diamante': '💍'}
+        msg = f"✅ **Lavoro Completato!**\n\nHai ritirato materiale da **x{job_count}** cicli:\n"
+        emoji_map = {
+            'Rottami': '🔩', 'Materiale Pregiato': '💎', 'Diamante': '💍',
+            'Frammenti Alchemici': '🧪', 'Estratto Puro': '🧪', 'Elisir Primordiale': '✨',
+            'Compost Organico': '💩', 'Concime Arricchito': '🪴', 'Essenza Botanica': '🌺'
+        }
         has_mats = False
         
         for mat, qty in totals.items():
@@ -1390,20 +1943,28 @@ def handle_refinery_upgrade_view(call):
     msg += "🔸 Tasso di conversione: **10:1**\n\n"
     msg += "💎 **Tuoi Materiali**:\n"
     
-    emoji_map = {"Rottami": "🔩", "Materiale Pregiato": "💎", "Diamante": "💍"}
+    emoji_map = {
+        "Rottami": "🔩", "Materiale Pregiato": "💎", "Diamante": "💍",
+        "Frammenti Alchemici": "⚗️", "Estratto Puro": "🧪", "Elisir Primordiale": "🌟",
+        "Compost Organico": "💩", "Concime Arricchito": "🪴", "Essenza Botanica": "🌺"
+    }
+    
     mats_by_id = {}
-    for item in res_data['refined']:
+    
+    # Sort by ID for clean display
+    sorted_mats = sorted(res_data['refined'], key=lambda x: x['material_id'])
+    
+    for item in sorted_mats:
         emoji = emoji_map.get(item['name'], '📦')
         msg += f"{emoji} {item['name']}: **x{item['quantity']}**\n"
         mats_by_id[item['material_id']] = item
         
     markup = types.InlineKeyboardMarkup()
     
-    # 1 -> 2
+    # Equip Upgrades
+    markup.add(types.InlineKeyboardButton("⚔️ --- Equipaggiamento ---", callback_data="ignore"))
     if mats_by_id.get(1, {}).get('quantity', 0) >= 10:
         markup.add(types.InlineKeyboardButton("🔩 ➡️ 💎 Upgrade Rottami", callback_data="refinery_upgrade_sel|1"))
-    
-    # 2 -> 3
     if mats_by_id.get(2, {}).get('quantity', 0) >= 10:
         markup.add(types.InlineKeyboardButton("💎 ➡️ 💍 Upgrade Pregiato", callback_data="refinery_upgrade_sel|2"))
         
@@ -1425,7 +1986,14 @@ def handle_refinery_upgrade_select_qty(call):
         bot.answer_callback_query(call.id, "Non hai abbastanza materiali!", show_alert=True)
         return
         
-    target_names = {1: "Materiale Pregiato", 2: "Diamante"}
+    target_names = {
+        1: "Materiale Pregiato", 
+        2: "Diamante",
+        4: "Estratto Puro",
+        5: "Elisir Primordiale",
+        7: "Concime Arricchito",
+        8: "Essenza Botanica"
+    }
     target_name = target_names.get(source_id, "???")
     
     msg = f"⬆️ **Upgrade: {source_item['name']}**\n\n"
@@ -1571,10 +2139,19 @@ def handle_craft_view_set(call):
             msg = f"🛡️ **{safe_set_name}**\n\n"
             if item_set and item_set.bonuses:
                 msg += "**Bonus Set:**\n"
+                stat_map = {
+                    'health': 'Vita', 'max_health': 'Vita',
+                    'mana': 'Mana', 'max_mana': 'Mana',
+                    'attack': 'Attacco', 'base_damage': 'Attacco',
+                    'defense': 'Difesa', 'resistance': 'Difesa',
+                    'crit_chance': 'Critico', 'crit': 'Critico',
+                    'speed': 'Velocità', 'all_stats': 'Tutte le Stat'
+                }
                 for threshold, bonuses in item_set.bonuses.items():
                     bonus_list = []
                     for stat, val in bonuses.items():
-                        bonus_list.append(f"+{val} {stat.title()}")
+                        label = stat_map.get(stat.lower(), stat.title())
+                        bonus_list.append(f"+{val} {label}")
                     bonus_str = ", ".join(bonus_list)
                     msg += f"🔹 **{threshold} Pezzi**: {escape_markdown(bonus_str)}\n"
             else:
@@ -1583,7 +2160,7 @@ def handle_craft_view_set(call):
             
             # Get Items in Set filtered by rarity
             items = session.execute(text("""
-                SELECT id, name, rarity, min_level, stats_json, slot
+                SELECT id, name, rarity, min_level, stats_json, slot, crafting_requirements, crafting_time
                 FROM equipment
                 WHERE set_name = :sname AND rarity <= :lvl
                 ORDER BY min_level ASC, slot ASC
@@ -1602,7 +2179,12 @@ def handle_craft_view_set(call):
             msg += f"Current Armory Lv. {armory_level}"
         
         for eq in items:
-            eq_id, name, rarity, min_lvl, stats_json, slot = eq
+            # Check if we have 8 columns (expanded) or 6 (old)
+            if len(eq) >= 8:
+                eq_id, name, rarity, min_lvl, stats_json, slot, requirements, craft_time = eq
+            else:
+                eq_id, name, rarity, min_lvl, stats_json, slot = eq[:6]
+                requirements, craft_time = "{}", 600
             
             symbol = rarity_symbols.get(rarity, '●')
             slot_icon = slot_emoji.get(slot, '📦')
@@ -1618,11 +2200,38 @@ def handle_craft_view_set(call):
             else:
                 stats = {}
             
-            stats_str = ", ".join([f"+{v} {escape_markdown(k.title())}" for k, v in stats.items()])
+            # Stat mapping for translation
+            stat_map = {
+                'health': 'Vita', 'max_health': 'Vita',
+                'mana': 'Mana', 'max_mana': 'Mana',
+                'attack': 'Attacco', 'base_damage': 'Attacco',
+                'defense': 'Difesa', 'resistance': 'Difesa',
+                'crit_chance': 'Critico', 'crit': 'Critico',
+                'speed': 'Velocità', 'all_stats': 'Tutte le Stat'
+            }
+            
+            stats_list = []
+            for k, v in stats.items():
+                if k.lower() == 'wisdom': continue # Skip old wisdom
+                label = stat_map.get(k.lower(), k.title())
+                stats_list.append(f"+{v} {escape_markdown(label)}")
+            
+            stats_str = ", ".join(stats_list)
+            
+            # Parse requirements for display
+            try:
+                if isinstance(requirements, str):
+                    req_dict = json.loads(requirements)
+                else:
+                    req_dict = requirements or {}
+                req_str = ", ".join([f"{v}x {k}" for k, v in req_dict.items()])
+            except:
+                req_str = "N/A"
             
             safe_name = escape_markdown(name)
             msg += f"{symbol} {slot_icon} **{safe_name}** (Lv.{min_lvl})\n"
-            msg += f"   └ {stats_str}\n"
+            msg += f"   └ Stats: {stats_str}\n"
+            msg += f"   └ Costi: {req_str} ({int(craft_time/60)}m)\n"
             
             markup.add(types.InlineKeyboardButton(f"🔨 Crafta {name}", callback_data=f"craft_item|{eq_id}"))
             
@@ -2033,12 +2642,16 @@ def handle_character_selection_callback(call):
         # Build a "Back" button to main menu or just leave it
         # We can just update the text content and remove the keyboard or show a "Done" status
         
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=msg_text, parse_mode='markdown')
         safe_answer_callback(call.id, f"Hai scelto {character_name}!")
+        
+        try:
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=msg_text, parse_mode='markdown')
+        except Exception as e:
+            print(f"[DEBUG] Could not edit selection message: {e}")
         
     except Exception as e:
         print(f"[ERROR] Char select callback: {e}")
-        safe_answer_callback(call.id, "Errore nella selezione.")
+        safe_answer_callback(call.id, "Errore nella selezione.", show_alert=True)
 
 @bot.callback_query_handler(func=lambda call: call.data == "dungeon_leave_global")
 def handle_dungeon_leave_global(call):
@@ -2154,64 +2767,72 @@ def handle_potion_use_callback(call):
     user_id = call.from_user.id
     potion_name = call.data.split("|")[1]
     
-    # potion_name = "Pozione Salute" if potion_type == "health_potion" else "Pozione Mana"
-    
     from services.potion_service import PotionService
     potion_service = PotionService()
     user = user_service.get_user(user_id)
     
     success, msg = potion_service.use_potion(user, potion_name)
+    safe_answer_callback(call.id, msg, show_alert=not success)
     
     if success:
-        # Refresh profile to show updated stats
-        safe_answer_callback(call.id, msg)
-        # We need to call handle_profile but as a callback update
-        # Creating a pseudo-message object
-        call.message.from_user = call.from_user # Ensure user is correct
-        
-        # Re-fetch user to get updated stats
-        user = user_service.get_user(user_id) # Refresh
-        
-        # Re-render profile text
-        # Reuse logic from BotCommands.handle_profile? Ideally yes but it's an instance method.
-        # We can just manually construct the message again or call the command handler if we instantiate BotCommands
-        # For simplicity, let's just trigger the profile command which sends a new message? 
-        # No, better to edit the existing one to be smooth.
-        
-        # Instantiate BotCommands just for profile logic... a bit heavy but works
+        # Refresh potions submenu
         cmd = BotCommands(call.message, bot, user_id=user_id)
-        # We need to override reply_to/send_message to edit_message_text in this context OR
-        # just copy the profile generation logic or make it a static helper.
-        # Let's try to just call handle_profile and let it reply (user asked for smooth update)
-        # To strictly do "Update immediate", implementation needs to be edit_message.
+        cmd.chatid = user_id
+        cmd.handle_profile_potions()
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("potion_buy|"))
+def handle_potion_buy_profile(call):
+    """Handle potion purchase from profile"""
+    user_id = call.from_user.id
+    potion_name = call.data.split("|")[1]
+    
+    from services.potion_service import PotionService
+    potion_service = PotionService()
+    user = user_service.get_user(user_id)
+    
+    success, msg = potion_service.buy_potion(user, potion_name)
+    safe_answer_callback(call.id, msg, show_alert=not success)
+    
+    if success:
+        # Refresh potions submenu
+        cmd = BotCommands(call.message, bot, user_id=user_id)
+        cmd.chatid = user_id
+        cmd.handle_profile_potions()
+
+@bot.callback_query_handler(func=lambda call: call.data == "profile_rest_start")
+def handle_profile_rest_start(call):
+    """Start resting from profile"""
+    user_id = call.from_user.id
+    user_service.start_resting(user_id)
+    safe_answer_callback(call.id, "🛌 Hai iniziato a riposare in Locanda!")
+    
+    # Refresh profile
+    cmd = BotCommands(call.message, bot, user_id=user_id)
+    cmd.chatid = user_id
+    try: bot.delete_message(call.message.chat.id, call.message.message_id)
+    except: pass
+    cmd.handle_profile()
+
+@bot.callback_query_handler(func=lambda call: call.data == "profile_rest_stop")
+def handle_profile_rest_stop(call):
+    """Stop resting from profile"""
+    user_id = call.from_user.id
+    
+    multiplier = 1.0
+    guild = guild_service.get_user_guild(user_id)
+    if guild:
+        inn_level = guild.get('inn_level', 1) or 1
+        multiplier = 1.0 + (inn_level * 0.5)
         
-        # Let's delete the old message and send new one? Or try to edit.
-        # Since handle_profile uses reply_to, it sends a NEW message.
-        # Let's try to just update the text here by extracting the profile generation logic?
-        # That's duplication.
-        
-        # Helper approach: Call handle_profile but trick it? No.
-        # Let's just send the feedback as alert (done above) and then update the message text.
-        
-        # ... actually, let's just use the BotCommands instance but modifying the message to be editable?
-        # Too complex.
-        
-        # Just answer alert (done) and send a tiny text update? 
-        # User request: "aggiornamento immediato" (immediate update).
-        # Editing the message is best.
-        
-        # Refactor profile generation to a static method?
-        # Let's do that in a separate step if needed. For now, let's just try to call handle_profile().
-        # It will send a new message. That's "immediate feedback" but maybe not "in-place update".
-        # But if I delete the old one?
-        try:
-            bot.delete_message(call.message.chat.id, call.message.message_id)
-        except:
-            pass
-        cmd.handle_profile()
-        
-    else:
-        safe_answer_callback(call.id, f"❌ {msg}", show_alert=True)
+    success, msg = user_service.stop_resting(user_id, recovery_multiplier=multiplier)
+    safe_answer_callback(call.id, msg)
+    
+    # Refresh profile
+    cmd = BotCommands(call.message, bot, user_id=user_id)
+    cmd.chatid = user_id
+    try: bot.delete_message(call.message.chat.id, call.message.message_id)
+    except: pass
+    cmd.handle_profile()
 
 
 
@@ -2229,6 +2850,7 @@ class BotCommands:
         print(f"[DEBUG] BotCommands Init: user_id={self.user_id}, message_from={message.from_user.id if message.from_user else 'None'}")
         
         self.chat_id = message.chat.id
+        self.thread_id = getattr(message, 'message_thread_id', None)
         self.chatid = self.user_id # Keep for backward compatibility during transition
         
         # Track activity for mob targeting
@@ -2993,24 +3615,34 @@ class BotCommands:
         
         # Health potions
         if health_potions:
+            btns = []
             for potion in health_potions:
                 price = int(potion['prezzo'] * 0.5) if utente.premium == 1 else potion['prezzo']
-                btn_text = f"💚 {potion['nome']} - {price}🍑"
-                markup.add(types.InlineKeyboardButton(btn_text, callback_data=f"buy_potion|{potion['nome']}"))
+                btn_text = f"💚 {potion['nome']} ({price}🍑)"
+                btns.append(types.InlineKeyboardButton(btn_text, callback_data=f"buy_potion|{potion['nome']}"))
+            # Add in rows of 2 for compacter look
+            for i in range(0, len(btns), 2):
+                markup.row(*btns[i:i+2])
         
         # Mana potions
         if mana_potions:
+            btns = []
             for potion in mana_potions:
                 price = int(potion['prezzo'] * 0.5) if utente.premium == 1 else potion['prezzo']
-                btn_text = f"💙 {potion['nome']} - {price}🍑"
-                markup.add(types.InlineKeyboardButton(btn_text, callback_data=f"buy_potion|{potion['nome']}"))
+                btn_text = f"💙 {potion['nome']} ({price}🍑)"
+                btns.append(types.InlineKeyboardButton(btn_text, callback_data=f"buy_potion|{potion['nome']}"))
+            for i in range(0, len(btns), 2):
+                markup.row(*btns[i:i+2])
         
         # Special potions
         if special_potions:
+            btns = []
             for potion in special_potions:
                 price = int(potion['prezzo'] * 0.5) if utente.premium == 1 else potion['prezzo']
-                btn_text = f"✨ {potion['nome']} - {price}🍑"
-                markup.add(types.InlineKeyboardButton(btn_text, callback_data=f"buy_potion|{potion['nome']}"))
+                btn_text = f"✨ {potion['nome']} ({price}🍑)"
+                btns.append(types.InlineKeyboardButton(btn_text, callback_data=f"buy_potion|{potion['nome']}"))
+            for i in range(0, len(btns), 2):
+                markup.row(*btns[i:i+2])
         
         self.bot.reply_to(self.message, msg, reply_markup=markup, parse_mode='markdown')
 
@@ -3029,10 +3661,10 @@ class BotCommands:
             # Send to user (photo + caption)
             try:
                 with open('images/shenron.png', 'rb') as photo:
-                    self.bot.send_photo(self.chatid, photo, caption=caption, reply_markup=markup, parse_mode='markdown')
+                    self.bot.send_photo(self.chatid, photo, caption=caption, reply_markup=markup, parse_mode='markdown', protect_content=True)
             except Exception as e:
                 print(f"[ERROR] Shenron image: {e}")
-                self.bot.send_message(self.chatid, caption, reply_markup=markup, parse_mode='markdown')
+                self.bot.send_message(self.chatid, caption, reply_markup=markup, parse_mode='markdown', protect_content=True)
 
             # Announce to group if summoned in private
             if self.message.chat.type == 'private':
@@ -3058,10 +3690,10 @@ class BotCommands:
             # Send to user (photo + caption)
             try:
                 with open('images/porunga.png', 'rb') as photo:
-                    self.bot.send_photo(self.chatid, photo, caption=caption, reply_markup=markup, parse_mode='markdown')
+                    self.bot.send_photo(self.chatid, photo, caption=caption, reply_markup=markup, parse_mode='markdown', protect_content=True)
             except Exception as e:
                 print(f"[ERROR] Porunga image: {e}")
-                self.bot.send_message(self.chatid, caption, reply_markup=markup, parse_mode='markdown')
+                self.bot.send_message(self.chatid, caption, reply_markup=markup, parse_mode='markdown', protect_content=True)
 
             # Announce to group if summoned in private
             if self.message.chat.type == 'private':
@@ -3393,11 +4025,11 @@ class BotCommands:
         
         msg = f"👤 **SCEGLI IL TUO PERSONAGGIO**\n\nEcco i personaggi che hai sbloccato. Clicca su un pulsante per equipaggiarlo:"
         
-        self.bot.send_message(self.chatid, msg, reply_markup=markup, parse_mode='markdown')
+        self.bot.send_message(self.chatid, msg, reply_markup=markup, parse_mode='markdown', message_thread_id=self.thread_id)
         # Remove next step handler for text input
         # self.bot.register_next_step_handler(self.message, process_character_selection)
 
-    def handle_profile(self, target_user=None):
+    def handle_profile(self, target_user=None, is_potions=False, is_callback=False):
         """Show comprehensive user profile with stats and transformations"""
         if target_user:
             utente = target_user
@@ -3530,98 +4162,159 @@ class BotCommands:
             msg += "─" * 20 + "\n" + "\n".join(status_extras) + "\n"
             
         markup = types.InlineKeyboardMarkup()
-    
-        # Potions
-        if not target_user or target_user.id_telegram == self.chatid:
+
+        if is_potions:
+            msg = "🧪 **GESTIONE POZIONI**\n\n" + msg
+            # Potion sub-menu buttons
+            from services.potion_service import PotionService
+            potion_service = PotionService()
+            all_potions = potion_service.get_all_potions()
+            
             from services.item_service import ItemService
-            item_service = ItemService()
-            inventory = item_service.get_inventory(utente.id_telegram)
+            item_service_local = ItemService()
+            inventory = item_service_local.get_inventory(utente.id_telegram)
             inventory_dict = {name: count for name, count in inventory}
             
-            hp_hierarchy = [
-                ('Pozione Completa', '🧪 Vita Max'), 
-                ('Pozione Grande', '🧪 Vita G'), 
-                ('Pozione Media', '🧪 Vita M'), 
-                ('Pozione Salute', '🧪 Vita P'),
-                ('Pozione Piccola', '🧪 Vita P'),
-                ('Pozione d\'Amore', '🧪 Vita ❤️')
-            ]
-            mana_hierarchy = [
-                ('Pozione Mana Completa', '🧪 Mana Max'), 
-                ('Pozione Mana Grande', '🧪 Mana G'), 
-                ('Pozione Mana Media', '🧪 Mana M'), 
-                ('Pozione Mana', '🧪 Mana P'),
-                ('Pozione Mana Piccola', '🧪 Mana P')
-            ]
+            hp_pots = sorted([p for p in all_potions if p['tipo'] == 'health_potion'], key=lambda x: x['effetto_valore'])
+            mana_pots = sorted([p for p in all_potions if p['tipo'] == 'mana_potion'], key=lambda x: x['effetto_valore'])
             
-            pot_buttons = []
+            hp_pots = sorted([p for p in all_potions if p['tipo'] == 'health_potion'], key=lambda x: x['effetto_valore'])
+            mana_pots = sorted([p for p in all_potions if p['tipo'] == 'mana_potion'], key=lambda x: x['effetto_valore'])
             
-            # HP Potion: show best available or default to Piccola (x0)
-            best_hp = None
-            for p_name, p_label in hp_hierarchy:
-                if inventory_dict.get(p_name, 0) > 0:
-                    best_hp = (p_name, p_label, inventory_dict[p_name])
-                    break
-            
-            if best_hp:
-                pot_buttons.append(types.InlineKeyboardButton(f"{best_hp[1]} (x{best_hp[2]})", callback_data=f"potion_use|{best_hp[0]}"))
-            else:
-                pot_buttons.append(types.InlineKeyboardButton("🧪 Vita P (x0)", callback_data="potion_use|Pozione Piccola"))
+            # Map names to ultra-short codes
+            code_map = {
+                "Piccola": "PP", "Media": "PM", "Grande": "PG", "Completa": "PC"
+            }
 
-            # Mana Potion: show best available or default to Piccola (x0)
-            best_mana = None
-            for p_name, p_label in mana_hierarchy:
-                if inventory_dict.get(p_name, 0) > 0:
-                    best_mana = (p_name, p_label, inventory_dict[p_name])
-                    break
-            
-            if best_mana:
-                pot_buttons.append(types.InlineKeyboardButton(f"{best_mana[1]} (x{best_mana[2]})", callback_data=f"potion_use|{best_mana[0]}"))
-            else:
-                pot_buttons.append(types.InlineKeyboardButton("🧪 Mana P (x0)", callback_data="potion_use|Pozione Mana Piccola"))
+            def get_short_code(name):
+                for key, code in code_map.items():
+                    if key in name: return code
+                return "??"
 
-            if pot_buttons: markup.row(*pot_buttons)
+            # Grid layout: 2 potions per row (each with its cart)
+            # We process HP and Mana in parallel for a 4-button row [HP][🛒][MP][🛒]
+            max_len = max(len(hp_pots), len(mana_pots))
+            for i in range(max_len):
+                row_btns = []
+                # HP column
+                if i < len(hp_pots):
+                    p = hp_pots[i]
+                    count = inventory_dict.get(p['nome'], 0)
+                    code = get_short_code(p['nome'])
+                    row_btns.append(types.InlineKeyboardButton(f"❤️{code} ({count})", callback_data=f"potion_use|{p['nome']}", style="success"))
+                    row_btns.append(types.InlineKeyboardButton("🛒", callback_data=f"potion_buy|{p['nome']}"))
+                else:
+                    row_btns.extend([types.InlineKeyboardButton(" ", callback_data="none")] * 2)
 
-        # Action Buttons
-        if not target_user or target_user.id_telegram == self.chatid:
-            markup.row(
-                types.InlineKeyboardButton("📊 Statistiche", callback_data="stat_edit_start"),
-                types.InlineKeyboardButton("🎒 Equip", callback_data="view_equipment")
+                # Mana column
+                if i < len(mana_pots):
+                    p = mana_pots[i]
+                    count = inventory_dict.get(p['nome'], 0)
+                    code = get_short_code(p['nome'])
+                    row_btns.append(types.InlineKeyboardButton(f"💙{code} ({count})", callback_data=f"potion_use|{p['nome']}", style="primary"))
+                    row_btns.append(types.InlineKeyboardButton("🛒", callback_data=f"potion_buy|{p['nome']}"))
+                else:
+                    row_btns.extend([types.InlineKeyboardButton(" ", callback_data="none")] * 2)
+                
+                markup.row(*row_btns)
+                
+            # Add Elisir row
+            elisirs = [p for p in all_potions if p['tipo'] == 'full_restore']
+            if elisirs:
+                e = elisirs[0]
+                count = inventory_dict.get(e['nome'], 0)
+                markup.row(
+                    types.InlineKeyboardButton(f"✨ Elisir ({count})", callback_data=f"potion_use|{e['nome']}", style="success"),
+                    types.InlineKeyboardButton("🛒", callback_data=f"potion_buy|{e['nome']}")
+                )
+                
+            markup.add(
+                types.InlineKeyboardButton("🔄 Aggiorna", callback_data="profile_potions"),
+                types.InlineKeyboardButton("🔙 Profilo", callback_data="profile_refresh")
             )
-            markup.row(
-                types.InlineKeyboardButton("🏆 Titoli", callback_data="title_menu"),
-                types.InlineKeyboardButton("🎭 Skin", callback_data=f"skin_menu|{character['id']}" if character else "none")
-            )
             
-            if character:
-                transforms = char_loader.get_transformation_chain(character['id'])
-                if transforms:
-                    markup.add(types.InlineKeyboardButton("🔥 Trasformazione", callback_data=f"transform_menu|{character['id']}"))
+            # Combat Shortcut ONLY in Potion Submenu
+            combat_link = get_combat_link()
+            markup.add(types.InlineKeyboardButton("⚔️ Combatti", url=combat_link))
+        else:
+            # Potion Submenu Button
+            markup.add(types.InlineKeyboardButton("🧪 Pozioni", callback_data="profile_potions"))
+            
+            # Inn Rest Button
+            resting_status = user_service.get_resting_status(utente.id_telegram)
+            if resting_status:
+                markup.add(types.InlineKeyboardButton("🛌 Svegliati", callback_data="profile_rest_stop"))
+            else:
+                markup.add(types.InlineKeyboardButton("🛌 Riposa in Locanda", callback_data="profile_rest_start"))
 
-        # Send with Image
-        image_sent = False
+            # Refresh button for Profile
+            markup.add(types.InlineKeyboardButton("🔄 Aggiorna", callback_data="profile_refresh"))
+
+            # Action Buttons
+            if not target_user or target_user.id_telegram == self.chatid:
+                markup.row(
+                    types.InlineKeyboardButton("📊 Statistiche", callback_data="stat_edit_start"),
+                    types.InlineKeyboardButton("🎒 Equip", callback_data="view_equipment")
+                )
+                markup.row(
+                    types.InlineKeyboardButton("🏆 Titoli", callback_data="title_menu"),
+                    types.InlineKeyboardButton("🎭 Skin", callback_data=f"skin_menu|{character['id']}" if character else "none")
+                )
+                
+                if character:
+                    transforms = char_loader.get_transformation_chain(character['id'])
+                    if transforms:
+                        markup.add(types.InlineKeyboardButton("🔥 Trasformazione", callback_data=f"transform_menu|{character['id']}"))
+
+        # Send or Edit with Image
+        image_handled = False
+        is_media = self.message.content_type in ['photo', 'animation', 'video']
+        
+        # Determine if we should edit or send
+        should_edit = is_potions or is_callback
+        
         if character:
             equipped_skin = skin_service.get_equipped_skin(utente.id_telegram, character['id'])
             if equipped_skin:
                 try:
                     gif_path = f"images/skins/{equipped_skin.gif_path}"
                     if os.path.exists(gif_path):
-                        with open(gif_path, 'rb') as animation:
-                            self.bot.send_animation(self.message.chat.id, animation, caption=msg, parse_mode='markdown', reply_markup=markup)
-                            image_sent = True
+                        if should_edit and is_media:
+                            try:
+                                self.bot.edit_message_caption(chat_id=self.chat_id, message_id=self.message.message_id, caption=msg, reply_markup=markup, parse_mode='markdown')
+                                image_handled = True
+                            except: pass
+                        
+                        if not image_handled:
+                            with open(gif_path, 'rb') as animation:
+                                self.bot.send_animation(self.chat_id, animation, caption=msg, parse_mode='markdown', reply_markup=markup, message_thread_id=self.thread_id)
+                                image_handled = True
                 except Exception as e: print(f"Error skin: {e}")
 
-            if not image_sent:
+            if not image_handled:
                 from services.character_loader import get_character_image
                 image_data = get_character_image(character, is_locked=False)
                 if image_data:
                     try:
-                        self.bot.send_photo(self.message.chat.id, image_data, caption=msg, parse_mode='markdown', reply_markup=markup)
-                        image_sent = True
+                        if should_edit and is_media:
+                            try:
+                                self.bot.edit_message_caption(chat_id=self.chat_id, message_id=self.message.message_id, caption=msg, reply_markup=markup, parse_mode='markdown')
+                                image_handled = True
+                            except: pass
+                            
+                        if not image_handled:
+                            self.bot.send_photo(self.chat_id, image_data, caption=msg, parse_mode='markdown', reply_markup=markup, message_thread_id=self.thread_id)
+                            image_handled = True
                     except Exception as e: print(f"Error photo: {e}")
         
-        if not image_sent:
-            self.bot.send_message(self.message.chat.id, msg, parse_mode='markdown', reply_markup=markup)
+        if not image_handled:
+            if should_edit:
+                try:
+                    self.bot.edit_message_text(msg, self.chat_id, self.message.message_id, parse_mode='markdown', reply_markup=markup)
+                except:
+                    self.bot.send_message(self.chat_id, msg, parse_mode='markdown', reply_markup=markup, message_thread_id=self.thread_id)
+            else:
+                self.bot.send_message(self.chat_id, msg, parse_mode='markdown', reply_markup=markup, message_thread_id=self.thread_id)
 
 
     def handle_nome_in_game(self):
@@ -3630,6 +4323,10 @@ class BotCommands:
         markup.add('🔙 Indietro')
         msg = self.bot.reply_to(self.message, "Seleziona la tua piattaforma:", reply_markup=markup)
         self.bot.register_next_step_handler(msg, self.process_platform_selection)
+
+    def handle_profile_potions(self):
+        """Show a dedicated potion management submenu within the profile"""
+        self.handle_profile(is_potions=True, is_callback=True)
 
     def process_platform_selection(self, message):
         if message.text == "🔙 Indietro":
@@ -3775,16 +4472,22 @@ class BotCommands:
             potion_names = [p['nome'] for p in all_potions]
             
             for oggetto in inventario:
+                # Hide Nitro and TNT for now
+                if oggetto.oggetto in ["Nitro", "TNT"]:
+                    continue
+                    
                 # Check if it's a potion
                 if oggetto.oggetto in potion_names:
-                    # Add potion button with appropriate emoji
+                    # Add potion button with appropriate emoji and clear text
                     if 'Mana' in oggetto.oggetto:
-                        emoji = "💙"
+                        emoji, tipo = "💙", "Recupera Mana"
                     elif 'Elisir' in oggetto.oggetto:
-                        emoji = "✨"
+                        emoji, tipo = "✨", "Recupera Tutto"
                     else:
-                        emoji = "💚"
-                    markup.add(types.InlineKeyboardButton(f"{emoji} Usa {oggetto.oggetto}", callback_data=f"use_potion|{oggetto.oggetto}"))
+                        emoji, tipo = "💚", "Recupera Vita"
+                    
+                    btn_text = f"{emoji} Usa {oggetto.oggetto} ({tipo})"
+                    markup.add(types.InlineKeyboardButton(btn_text, callback_data=f"use_potion|{oggetto.oggetto}"))
                 # Check if it's a regular item
                 elif oggetto.oggetto in item_emoji:
                     emoji = item_emoji.get(oggetto.oggetto, "🔹")
@@ -3930,8 +4633,7 @@ class BotCommands:
             self.bot.edit_message_text(msg, self.message.chat.id, self.message.message_id, reply_markup=markup, parse_mode='markdown')
         except Exception as e:
             # If edit fails (e.g. content same, or not bot message), send new
-            # print(f"Edit failed (expected for new command): {e}")
-            self.bot.send_message(self.message.chat.id, msg, reply_markup=markup, parse_mode='markdown')
+            self.bot.send_message(self.message.chat.id, msg, reply_markup=markup, parse_mode='markdown', message_thread_id=self.thread_id)
 
     def handle_nome_in_game(self):
         # Logic for game names
@@ -4016,9 +4718,9 @@ class BotCommands:
             
         text, markup = get_stat_editor_ui(stats)
         if is_callback:
-            self.bot.edit_message_text(text, self.chatid, self.message.message_id, reply_markup=markup, parse_mode='markdown')
+            self.bot.edit_message_text(text, self.chat_id, self.message.message_id, reply_markup=markup, parse_mode='markdown')
         else:
-            self.bot.send_message(self.chatid, text, reply_markup=markup, parse_mode='markdown')
+            self.bot.send_message(self.chat_id, text, reply_markup=markup, parse_mode='markdown', message_thread_id=self.thread_id)
 
     def handle_title_selection(self, is_callback=False, call_id=None):
         """Show menu to select a title from unlocked achievements"""
@@ -4045,7 +4747,8 @@ class BotCommands:
         for ach in achievements:
             if ach['current_tier']:
                 emoji = tier_emojis.get(ach['current_tier'], '')
-                title_display = f"{ach['name']} {emoji}"
+                actual_title = ach.get('title') or ach['name']
+                title_display = f"{actual_title} {emoji}"
                 unlocked_titles.append(title_display)
             
         if not unlocked_titles:
@@ -4075,7 +4778,8 @@ class BotCommands:
         for ach in achievements:
             if ach['current_tier']:
                 emoji = tier_emojis.get(ach['current_tier'], '')
-                title_display = f"{ach['name']} {emoji}"
+                actual_title = ach.get('title') or ach['name']
+                title_display = f"{actual_title} {emoji}"
                 
                 # Check if current
                 icon = "✅" if utente.title == title_display else "▪️"
@@ -4089,9 +4793,9 @@ class BotCommands:
             try:
                 self.bot.edit_message_text(msg, self.message.chat.id, self.message.message_id, reply_markup=markup, parse_mode='markdown')
             except:
-                self.bot.send_message(self.message.chat.id, msg, reply_markup=markup, parse_mode='markdown')
+                self.bot.send_message(self.message.chat.id, msg, reply_markup=markup, parse_mode='markdown', message_thread_id=self.thread_id)
         else:
-            self.bot.send_message(self.chatid, msg, reply_markup=markup, parse_mode='markdown')
+            self.bot.send_message(self.chat_id, msg, reply_markup=markup, parse_mode='markdown', message_thread_id=self.thread_id)
 
     def handle_stat_callback(self, call):
         """Handle stat allocation callbacks"""
@@ -4386,9 +5090,9 @@ class BotCommands:
             }
         
         if image_data:
-            self.bot.send_photo(self.chatid, image_data, caption=msg, reply_markup=markup, parse_mode='markdown')
+            self.bot.send_photo(self.chat_id, image_data, caption=msg, reply_markup=markup, parse_mode='markdown', message_thread_id=self.thread_id)
         else:
-            self.bot.send_message(self.chatid, msg, reply_markup=markup, parse_mode='markdown')
+            self.bot.send_message(self.chat_id, msg, reply_markup=markup, parse_mode='markdown', message_thread_id=self.thread_id)
 
 
     def handle_shop_characters(self):
@@ -4441,12 +5145,14 @@ class BotCommands:
             self.bot.reply_to(message, "Personaggio non trovato.", reply_markup=get_main_menu())
             self.handle_shop_characters()
             
-    def handle_guide(self):
+    def handle_guide(self, is_callback=False, call_id=None, message_id=None):
         """Show guide menu"""
         markup = types.InlineKeyboardMarkup(row_width=1)
         markup.add(
             types.InlineKeyboardButton("⚔️ Sistema di Combattimento", callback_data="guide|fight_system"),
             types.InlineKeyboardButton("🏰 Dungeon", callback_data="guide|dungeons"),
+            types.InlineKeyboardButton("⚗️ Alchimia", callback_data="guide|alchemy"),
+            types.InlineKeyboardButton("🌻 Giardino/Coltivazioni", callback_data="guide|garden"),
             types.InlineKeyboardButton("💎 Raffineria", callback_data="guide|refinery"),
             types.InlineKeyboardButton("🔨 Crafting & Forgia", callback_data="guide|crafting"),
             types.InlineKeyboardButton("📊 Allocazione Statistiche", callback_data="guide|stats_allocation"),
@@ -4458,7 +5164,14 @@ class BotCommands:
         msg += "Benvenuto nella sezione guide! Qui puoi imparare tutto su aROMa RPG.\n"
         msg += "Seleziona un argomento per leggere la guida completa:"
         
-        self.bot.reply_to(self.message, msg, reply_markup=markup, parse_mode='markdown')
+        if is_callback and message_id:
+            try:
+                self.bot.edit_message_text(msg, self.chat_id, message_id, reply_markup=markup, parse_mode='markdown')
+            except Exception as e:
+                # Fallback if text is same or message too old
+                self.bot.send_message(self.chat_id, msg, reply_markup=markup, parse_mode='markdown')
+        else:
+            self.bot.send_message(self.chat_id, msg, reply_markup=markup, parse_mode='markdown')
 
     def handle_spawn(self):
         utente = user_service.get_user(self.chatid)
@@ -5181,7 +5894,7 @@ def handle_any_message(message):
                         SELECT 1 FROM user_equipment ue
                         JOIN equipment e ON ue.equipment_id = e.id
                         WHERE ue.user_id = :uid AND ue.equipped = TRUE 
-                        AND e.effect_type = 'scan'
+                        AND e.effect_type IN ('scan', 'scouter_scan')
                     """), {"uid": user_id}).fetchone()
                     
                     if has_scouter:
@@ -5417,10 +6130,6 @@ def handle_any_message(message):
                     can_receive_reward = False
             
             if can_receive_reward:
-
-                # Update last drop time
-                user_service.update_user(message.from_user.id, {'last_chat_drop_time': datetime.datetime.now()})
-
                 passive_exp = random.randint(1, 10)
                 level_up_info = user_service.add_exp_by_id(message.from_user.id, passive_exp)
                 
@@ -5489,6 +6198,12 @@ def handle_any_message(message):
         # Random Mob Spawn
         spawn_chance = 0.08 # Increased from 0.05
         
+        # Profumino check (Double spawn chance and notifications)
+        is_profumino_active = False
+        if utente.profumino_until and utente.profumino_until > datetime.datetime.now():
+            spawn_chance *= 2
+            is_profumino_active = True
+            
         markup = None # Initialize markup to avoid UnboundLocalError
         
         if random.random() < spawn_chance:
@@ -5499,6 +6214,42 @@ def handle_any_message(message):
                 success, msg, mob_id = pve_service.spawn_specific_mob(chat_id=message.chat.id, reference_level=utente.livello)
             
             if mob_id:
+                # Notify Profumino users in this chat
+                try:
+                    session = user_service.db.get_session()
+                    from models.user import Utente
+                    # Get all users with active Profumino in this group
+                    # We approximate "in this group" by users who have been active recently in this chat
+                    # Since we don't have a direct user_group mapping easily accessible, we check recent activity
+                    profumino_users = session.query(Utente).filter(
+                        Utente.profumino_until > datetime.datetime.now()
+                    ).all()
+                    
+                    for p_user in profumino_users:
+                        # Only notify if they are "active" in the bot or specifically this chat if possible
+                        # For now, let's notify them privately if they have it active
+                        try:
+                            # We check if they were the one who triggered the spawn OR if they are in the same chat
+                            # To avoid spamming everyone globally, we should ideally restrict to chat members.
+                            # Since Telegram doesn't give us chat members easily, we'll notify the triggerer 
+                            # and maybe others if we had a way to track group membership.
+                            
+                            # Simple logic: If they triggered it, they get a special mention.
+                            # If they have Profumino active and are the triggerer, they already see it.
+                            # User says: "nel bot si viene notificati appena esce un nemico"
+                            # I will send a private message to all users with active Profumino when a mob spawns.
+                            # (They might want to jump into the group)
+                            
+                            p_msg = f"🌸 **PROFUMINO ATTIVO!** 🌸\n🧟 Un nemico è appena apparso nel gruppo `{message.chat.title or message.chat.id}`!\nVai a combatterlo! ⚔️"
+                            bot.send_message(p_user.id_telegram, p_msg, parse_mode='markdown')
+                        except:
+                            pass
+                    session.close()
+                except Exception as e:
+                    print(f"Error notifying profumino users: {e}")
+                    try: session.close()
+                    except: pass
+
                 mob = pve_service.get_current_mob_status(mob_id)
                 if mob:
                     markup = get_combat_markup("mob", mob_id, message.chat.id)
@@ -5876,7 +6627,8 @@ def handle_stat_callbacks(call):
                     bot.delete_message(call.message.chat.id, call.message.message_id)
                 except:
                     pass
-                bot.send_message(call.message.chat.id, text, reply_markup=markup, parse_mode='markdown')
+                thread_id = getattr(call.message, 'message_thread_id', None)
+                bot.send_message(call.message.chat.id, text, reply_markup=markup, parse_mode='markdown', message_thread_id=thread_id)
             
         # 2. Change Stat (+/-)
         elif data.startswith("stat_change|"):
@@ -5894,6 +6646,8 @@ def handle_stat_callbacks(call):
             text, markup = get_stat_editor_ui(stats)
             # This is already in the editor, so it should be text
             bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+            # Ensure callback is answered to stop loading state
+            safe_answer_callback(call.id)
             
         # 3. Confirm Changes
         elif data == "stat_confirm":
@@ -5944,6 +6698,7 @@ def handle_stat_callbacks(call):
             stats = stat_service.get_temp_stats(user_id)
             text, markup = get_stat_editor_ui(stats)
             bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+
     except Exception as e:
         print(f"[ERROR] handle_stat_callbacks: {e}")
         import traceback
@@ -5959,6 +6714,24 @@ def callback_query(call):
     
     # Track activity for mob targeting IMMEDIATELY
     user_service.track_activity(user_id, chat_id)
+
+    # --- Profile & Potion Callbacks ---
+    if call.data == "profile_refresh":
+        # Delete old message to avoid duplicate photos/animations
+        try:
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except:
+            pass
+        cmd = BotCommands(call.message, bot, user_id=user_id)
+        cmd.chatid = user_id
+        cmd.handle_profile(is_callback=True)
+        return
+    elif call.data == "profile_potions":
+        safe_answer_callback(call.id)
+        cmd = BotCommands(call.message, bot, user_id=user_id)
+        cmd.chatid = user_id
+        cmd.handle_profile_potions()
+        return
 
     # --- Crafting Callbacks (handle before other callbacks) ---
     if call.data == "craft_select_equipment":
@@ -5984,13 +6757,19 @@ def callback_query(call):
     elif call.data == "guild_refinery_view":
         handle_guild_refinery_view(call)
         return
+    elif call.data == "alchemy_refine_view":
+        handle_alchemy_refine_view(call)
+        return
+    elif call.data == "garden_refine_view":
+        handle_garden_refine_view(call)
+        return
     elif call.data.startswith("refine_select_qty|"):
         handle_refine_select_quantity(call)
         return
     elif call.data.startswith("refine_do|"):
         handle_refine_do(call)
         return
-    elif call.data == "refinery_claim_all":
+    elif call.data.startswith("refinery_claim_all"):
         handle_refinery_claim_all(call)
         return
     elif call.data == "refinery_upgrade_view":
@@ -6001,6 +6780,49 @@ def callback_query(call):
         return
     elif call.data.startswith("refinery_upgrade_do|"):
         handle_refinery_upgrade_do(call)
+        return
+
+    # --- Alchemy Callbacks ---
+    elif call.data == "alchemy_recipes":
+        handle_alchemy_recipes(call)
+        return
+    elif call.data.startswith("alchemy_brew|"):
+        handle_alchemy_brew(call)
+        return
+    elif call.data == "alchemy_claim":
+        handle_alchemy_claim(call)
+        return
+    elif call.data == "guild_lab_info":
+        handle_guild_lab_info(call)
+        return
+    elif call.data == "guild_upgrade_garden_info":
+        handle_guild_garden_info(call)
+        return
+
+    # --- Guild Facility Upgrades ---
+    elif call.data == "guild_upgrade_lab":
+        handle_guild_upgrade_lab(call)
+        return
+    elif call.data == "guild_upgrade_garden":
+        handle_guild_upgrade_garden(call)
+        return
+        
+    # --- Garden Callbacks ---
+    elif call.data == "garden_view":
+        handle_garden_view(call)
+        return
+    elif call.data.startswith("garden_plant_menu|"):
+        handle_garden_plant_menu(call)
+        return
+    elif call.data.startswith("garden_plant_do|"):
+        handle_garden_plant_do(call)
+        return
+    elif call.data.startswith("garden_harvest|"):
+        handle_garden_harvest(call)
+        return
+        
+    elif call.data.startswith("garden_water|"):
+        handle_garden_water(call)
         return
 
     # --- Ranking Callbacks ---
@@ -6151,14 +6973,34 @@ def callback_query(call):
             msg += f"║ 1️⃣ {acc1}\n"
             msg += f"║ 2️⃣ {acc2}\n"
             
-            msg += f"╠════════════════════════════════════\n"
+            msg += f"╠═════════════ TOTALE BONUS ════════════\n"
+            from services.equipment_service import EquipmentService
+            eq_service = EquipmentService()
+            total_stats = eq_service.calculate_equipment_stats(user_id, session=session)
             
-            # Count inventory items
-            inventory_count = len([i for i in items if not i[1]])  # not equipped
-            equipped_count = len([i for i in items if i[1]])
+            if total_stats:
+                stat_labels = {
+                    'max_health': '❤️ HP', 'max_mana': '💙 MP', 
+                    'base_damage': '⚔️ Atk', 'resistance': '🛡️ Res',
+                    'crit_chance': '💥 Crit', 'speed': '⚡ Vel'
+                }
+                stats_rows = []
+                current_row = []
+                for k, v in total_stats.items():
+                    label = stat_labels.get(k, k.title())
+                    current_row.append(f"{label}: +{v}")
+                    if len(current_row) == 2:
+                        stats_rows.append("║ " + "  ".join(current_row))
+                        current_row = []
+                if current_row:
+                    stats_rows.append("║ " + "  ".join(current_row))
+                msg += "\n".join(stats_rows) + "\n"
+            else:
+                msg += f"║ _Nessun bonus attivo_\n"
             
+            msg += f"╠═══════════════════════════════════════\n"
             msg += f"║ 📦 Inv: {inventory_count} item   ⚔️ Equip: {equipped_count} / 12\n"
-            msg += f"╚════════════════════════════════════\n"
+            msg += f"╚═══════════════════════════════════════\n"
             msg += f"```"
             
         except Exception as e:
@@ -6179,7 +7021,8 @@ def callback_query(call):
             bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, 
                                 parse_mode='markdown', reply_markup=markup)
         except:
-            bot.send_message(call.message.chat.id, msg, parse_mode='markdown', reply_markup=markup)
+            thread_id = getattr(call.message, 'message_thread_id', None)
+            bot.send_message(call.message.chat.id, msg, parse_mode='markdown', reply_markup=markup, message_thread_id=thread_id)
         return
 
     if call.data == "equip_inventory":
@@ -6192,7 +7035,7 @@ def callback_query(call):
         
         try:
             items = session.execute(text("""
-                SELECT ue.id, e.name, e.slot, e.rarity, e.min_level, e.description
+                SELECT ue.id, e.name, e.slot, e.rarity, e.min_level, e.description, e.stats_json
                 FROM user_equipment ue
                 JOIN equipment e ON ue.equipment_id = e.id
                 WHERE ue.user_id = :uid AND ue.equipped = FALSE
@@ -6214,11 +7057,30 @@ def callback_query(call):
                 msg += "Tutti gli oggetti sono equipaggiati."
             else:
                 msg = f"📦 **Inventario Equipaggiamento** ({len(items)} item)\n\n"
+                for item in items:
+                    # id, name, slot, rarity, min_level, desc, stats_json
+                    symbol = rarity_symbols.get(item[3], '●')
+                    emoji = slot_emoji.get(item[2], '📦')
+                    
+                    # Format stats
+                    stats_str = ""
+                    if item[6]:
+                        try:
+                            stats = json.loads(item[6]) if isinstance(item[6], str) else item[6]
+                            if stats:
+                                parts = []
+                                for k, v in stats.items():
+                                    parts.append(f"+{v} {k.title().replace('_', ' ')}")
+                                stats_str = f" _({', '.join(parts)})_"
+                        except: pass
+                    
+                    msg += f"{symbol} {emoji} **{item[1]}** (Lv.{item[4]}){stats_str}\n"
+                msg += "\nSeleziona un oggetto per equipaggiarlo:"
                 
             markup = types.InlineKeyboardMarkup(row_width=1)
             
             for item in items:
-                item_id, name, slot, rarity, min_level, desc = item
+                item_id, name, slot, rarity, min_level, desc, stats_json = item
                 symbol = rarity_symbols.get(rarity, '●')
                 emoji = slot_emoji.get(slot, '📦')
                 
@@ -6434,7 +7296,8 @@ def callback_query(call):
             for ach in achievements:
                 if ach['key'] == key and ach['current_tier']:
                     emoji = tier_emojis.get(ach['current_tier'], '')
-                    selected_title = f"{ach['name']} {emoji}"
+                    actual_title = ach.get('title') or ach['name']
+                    selected_title = f"{actual_title} {emoji}"
                     break
             
             if selected_title:
@@ -6497,7 +7360,9 @@ def callback_query(call):
         last_attack = getattr(utente, 'last_attack_time', None)
         in_combat = False
         remaining = 0
+        
         if last_attack:
+            import datetime
             elapsed = (datetime.datetime.now() - last_attack).total_seconds()
             if elapsed < 120: # 2 minutes
                 in_combat = True
@@ -6713,6 +7578,7 @@ def callback_query(call):
                 
                 participants = dungeon_service.get_dungeon_participants(dungeon.id)
                 msg_text += f"👥 Partecipanti ({len(participants)}):\n"
+                u = None
                 for p in participants:
                     u = user_service.get_user(p.user_id)
                     mention = get_mention_markdown(p.user_id, u.username if u and u.username else (u.nome if u else f"Utente {p.user_id}"))
@@ -6741,6 +7607,7 @@ def callback_query(call):
                  
                  participants = dungeon_service.get_dungeon_participants(dungeon.id)
                  msg_text += f"\n👥 Partecipanti ({len(participants)}):\n"
+                 u = None
                  for p in participants:
                      u = user_service.get_user(p.user_id)
                      mention = get_mention_markdown(p.user_id, u.username if u and u.username else (u.nome if u else f"Utente {p.user_id}"))
@@ -6846,6 +7713,7 @@ def callback_query(call):
              # Get participants
              participants = dungeon_service.get_dungeon_participants(active_dungeon.id, session=session)
              msg += f"\n👥 Partecipanti ({len(participants)}):\n"
+             u = None
              for p in participants:
                   u = user_service.get_user(p.user_id)
                   mention = get_mention_markdown(p.user_id, u.username if u and u.username else (u.nome if u else f"Utente {p.user_id}"))
@@ -7228,12 +8096,22 @@ def callback_query(call):
             msg += f"🏠 **Locanda**: Lv. {guild['inn_level']}\n"
             msg += f"⚔️ **Armeria**: Lv. {guild['armory_level']}\n"
             msg += f"🏘️ **Villaggio**: Lv. {guild['village_level']}\n"
+            msg += f"🧪 **Laboratorio**: Lv. {guild.get('laboratory_level', 0) or 0}\n"
+            msg += f"🌻 **Giardino**: Lv. {guild.get('garden_level', 0) or 0}\n\n"
             
             markup = types.InlineKeyboardMarkup()
-            markup.add(types.InlineKeyboardButton("👥 Membri", callback_data=f"guild_members|{guild['id']}"))
-            markup.add(types.InlineKeyboardButton("🏨 Locanda", callback_data="guild_inn_view"))
-            markup.add(types.InlineKeyboardButton("🔨 Armeria", callback_data="guild_armory_view"))
-            markup.add(types.InlineKeyboardButton("📦 Magazzino", callback_data="guild_warehouse"))
+            markup.add(
+                types.InlineKeyboardButton("🧪 Alchimia", callback_data="alchemy_recipes"),
+                types.InlineKeyboardButton("🌻 Giardino", callback_data="garden_view")
+            )
+            markup.add(
+                types.InlineKeyboardButton("🏨 Locanda", callback_data="guild_inn_view"),
+                types.InlineKeyboardButton("🔨 Armeria", callback_data="guild_armory_view")
+            )
+            markup.add(
+                types.InlineKeyboardButton("👥 Membri", callback_data=f"guild_members|{guild['id']}"),
+                types.InlineKeyboardButton("📦 Magazzino", callback_data="guild_warehouse")
+            )
             markup.add(types.InlineKeyboardButton("💰 Deposita Wumpa", callback_data="guild_deposit_start"))
             if guild['role'] == "Leader":
                 markup.add(types.InlineKeyboardButton("⚙️ Gestisci Gilda", callback_data="guild_manage_menu"))
@@ -7253,6 +8131,12 @@ def callback_query(call):
             success, msg = guild_service.upgrade_armory(call.from_user.id)
         elif upgrade_type == "village":
             success, msg = guild_service.expand_village(call.from_user.id)
+        elif upgrade_type == "dragon_stables":
+            success, msg = guild_service.upgrade_dragon_stables(call.from_user.id)
+        elif upgrade_type == "ancient_temple":
+            success, msg = guild_service.upgrade_ancient_temple(call.from_user.id)
+        elif upgrade_type == "magic_library":
+            success, msg = guild_service.upgrade_magic_library(call.from_user.id)
             
         if success:
             safe_answer_callback(call.id, "Upgrade completato!")
@@ -7265,6 +8149,35 @@ def callback_query(call):
     elif call.data == "guild_back_main":
         safe_answer_callback(call.id)
         handle_guild_cmd(call.message)
+        return
+
+    elif call.data == "guild_personalize_menu":
+        guild = guild_service.get_user_guild(call.from_user.id)
+        if not guild or guild['role'] != "Leader":
+            safe_answer_callback(call.id, "Solo il capogilda può personalizzare i menu!", show_alert=True)
+            return
+        
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("🏠 Locanda", callback_data="guild_pers_choice|inn"))
+        markup.add(types.InlineKeyboardButton("🔞 Bordello", callback_data="guild_pers_choice|bordello"))
+        markup.add(types.InlineKeyboardButton("🧪 Laboratorio", callback_data="guild_pers_choice|laboratory"))
+        markup.add(types.InlineKeyboardButton("🌻 Giardino", callback_data="guild_pers_choice|garden"))
+        markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guild_manage_menu"))
+        
+        msg = "✨ **Personalizzazione Menu Gilda**\n\n"
+        msg += "Puoi cambiare l'immagine di sfondo di un menu per **5000 Wumpa**.\n"
+        msg += "Seleziona quale menu vuoi personalizzare:"
+        bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+        return
+
+    elif call.data.startswith("guild_pers_choice|"):
+        menu_type = call.data.split("|")[1]
+        msg = f"Invia il **link (URL)** dell'immagine che vuoi usare per il menu: {menu_type}.\n\n"
+        msg += "⚠️ L'immagine deve essere accessibile pubblicamente.\n"
+        msg += "Scrivi 'annulla' per interrompere."
+        
+        sent = bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, parse_mode='markdown')
+        bot.register_next_step_handler(sent, handle_guild_personalize_url, menu_type)
         return
 
     action = call.data
@@ -8098,6 +9011,30 @@ def callback_query(call):
         db_user = session.query(Utente).filter_by(id_telegram=user_id).first()
         db_user.mana -= mana_cost
         db_user.livello_selezionato = trans_id  # Change to transformed character
+        
+        # REGISTER EXPIRATION
+        from models.system import CharacterTransformation, UserTransformation
+        import datetime
+        
+        # Find the transformation rule
+        trans_rule = session.query(CharacterTransformation).filter_by(transformed_character_id=trans_id).first()
+        if trans_rule:
+            # Deactivate any currently active transformations for this user
+            session.query(UserTransformation).filter_by(user_id=user_id).update({"is_active": False})
+            
+            # Create or update activation record
+            now = datetime.datetime.now()
+            expires = now + datetime.timedelta(days=trans_rule.duration_days)
+            
+            user_trans = UserTransformation(
+                user_id=user_id,
+                transformation_id=trans_rule.id,
+                activated_at=now,
+                expires_at=expires,
+                is_active=True
+            )
+            session.add(user_trans)
+            
         session.commit()
         
         # Recalculate stats to apply bonuses/caps
@@ -8133,7 +9070,7 @@ def callback_query(call):
         return
     
     elif action == "no_mana":
-        safe_answer_callback(call.id, "❌ Non hai abbastanza mana! Rigenera +10 ogni ora.")
+        safe_answer_callback(call.id, "❌ Non hai abbastanza mana! Puoi riposare in Locanda.")
         return
     
     elif action == "back_to_profile":
@@ -8307,6 +9244,32 @@ def callback_query(call):
         return
 
 
+    elif action.startswith("scan_mob|"):
+        # Scouter Scan Effect
+        try:
+            mob_id = int(action.split("|")[1])
+        except:
+            safe_answer_callback(call.id, "❌ ID mostro non valido.", show_alert=True)
+            return
+
+        if not has_equipped_scouter(user_id):
+            safe_answer_callback(call.id, "❌ Hai bisogno di uno Scouter equipaggiato per farlo!", show_alert=True)
+            return
+            
+        mob = pve_service.get_mob_status_by_id(mob_id)
+        if not mob:
+            safe_answer_callback(call.id, "❌ Dati mostro non trovati. Forse è fuggito?", show_alert=True)
+            return
+            
+        msg = f"🔍 ANALISI SCOUTER: {mob['name']}\n\n"
+        stats_text = format_mob_stats(mob, show_full=True)
+        # Remove markdown bolding for alert compatibility
+        stats_text = stats_text.replace("**", "")
+        msg += stats_text
+            
+        safe_answer_callback(call.id, msg, show_alert=True)
+        return
+
     elif action.startswith("attack_enemy|"):
         # New unified attack system: attack_enemy|{type}|{id}
         # Type can be 'mob' or 'raid'
@@ -8432,6 +9395,9 @@ def callback_query(call):
         
         # Check mana
         mana_cost = character.get('special_attack_mana_cost', 0)
+        multiplier = guild_service.get_mana_cost_multiplier(utente.id_telegram)
+        mana_cost = int(mana_cost * multiplier)
+        
         if utente.mana < mana_cost:
             safe_answer_callback(call.id, f"❌ Mana insufficiente! Serve: {mana_cost}", show_alert=True)
             return
@@ -8911,13 +9877,13 @@ def callback_query(call):
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton(f"💰 {PointsName} (300-500)", callback_data="wish|Shenron|wumpa"))
             markup.add(types.InlineKeyboardButton("⭐ EXP (300-500)", callback_data="wish|Shenron|exp"))
-            bot.send_message(user_id, "🐉 Shenron è stato evocato!\n\nEsprimi il tuo desiderio!", reply_markup=markup)
+            bot.send_message(user_id, "🐉 Shenron è stato evocato!\n\nEsprimi il tuo desiderio!", reply_markup=markup, protect_content=True)
         elif dragon == "porunga" and has_porunga:
             wish_service.log_summon(user_id, "Porunga")
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton(f"💰 {PointsName} (50-100)", callback_data="pwish|1|wumpa"))
             markup.add(types.InlineKeyboardButton("🎁 Oggetto Raro", callback_data="pwish|1|item"))
-            bot.send_message(user_id, "🐲 Porunga è stato evocato!\n\nEsprimi 3 desideri!\n\n[Desiderio 1/3]", reply_markup=markup)
+            bot.send_message(user_id, "🐲 Porunga è stato evocato!\n\nEsprimi 3 desideri!\n\n[Desiderio 1/3]", reply_markup=markup, protect_content=True)
         else:
             bot.send_message(user_id, "❌ Non hai le sfere necessarie!")
 
@@ -8933,10 +9899,10 @@ def callback_query(call):
         
         try:
             msg = wish_service.grant_wish(utente, wish, dragon)
-            bot.send_message(call.message.chat.id, msg)
+            bot.send_message(call.message.chat.id, msg, protect_content=True)
         except Exception as e:
             print(f"[ERROR] wish handler failed: {e}")
-            bot.send_message(call.message.chat.id, f"❌ Errore durante l'esaudimento del desiderio: {e}")
+            bot.send_message(call.message.chat.id, f"❌ Errore durante l'esaudimento del desiderio: {e}", protect_content=True)
         return
 
     elif action.startswith("pwish|"):
@@ -8959,25 +9925,33 @@ def callback_query(call):
                 markup = types.InlineKeyboardMarkup()
                 markup.add(types.InlineKeyboardButton(f"💰 {PointsName} (50-100)", callback_data=f"pwish|{wish_number+1}|wumpa"))
                 markup.add(types.InlineKeyboardButton("🎁 Oggetto Raro", callback_data=f"pwish|{wish_number+1}|item"))
-                bot.send_message(call.message.chat.id, f"{msg}\n\n[Desiderio {wish_number+1}/3]", reply_markup=markup)
+                bot.send_message(call.message.chat.id, f"{msg}\n\n[Desiderio {wish_number+1}/3]", reply_markup=markup, protect_content=True)
             else:
-                # Final wish
-                # Consume spheres now (in a single transaction)
-                session = wish_service.db.get_session()
-                try:
-                    for i in range(1, 8):
-                        item_service.use_item(user_id, f"La Sfera del Drago Porunga {i}", session=session)
-                    session.commit()
-                except Exception as e:
-                    session.rollback()
-                    print(f"[ERROR] Failed to consume Porunga spheres: {e}")
-                finally:
-                    session.close()
-                    
-                bot.send_message(call.message.chat.id, f"{msg}\n\n🐲 PORUNGA HA ESAUDITO I TUOI 3 DESIDERI!")
+                # Final wish (3rd)
+                # Note: Spheres were consumed at the first wish by wish_service
+                bot.send_message(call.message.chat.id, f"{msg}\n\n🐲 PORUNGA HA ESAUDITO I TUOI 3 DESIDERI!", protect_content=True)
         except Exception as e:
             print(f"[ERROR] pwish handler failed: {e}")
             bot.send_message(call.message.chat.id, f"❌ Errore durante il desiderio {wish_number}: {e}")
+        return
+
+    elif action == "guide_main":
+        self.handle_guide(is_callback=True, call_id=call.id, message_id=call.message.message_id)
+        safe_answer_callback(call.id)
+        return
+
+    # ALCHEMY
+    elif action == "alchemy_menu":
+        handle_alchemy_menu(call)
+        return
+    elif action == "alchemy_recipes":
+        handle_alchemy_recipes(call)
+        return
+    elif action.startswith("alchemy_brew|"):
+        handle_alchemy_brew(call)
+        return
+    elif action == "alchemy_claim":
+        handle_alchemy_claim(call)
         return
 
     elif action.startswith("guide|"):
@@ -8990,7 +9964,8 @@ def callback_query(call):
                 os.path.join(BASE_DIR, "guides", f"{guide_name}.md"),
                 os.path.join(BASE_DIR, "Guides", f"{guide_name}.md"),
                 os.path.join(BASE_DIR, "docs", "guides", f"{guide_name}.md"),
-                os.path.join(os.getcwd(), "guides", f"{guide_name}.md")
+                os.path.join(os.getcwd(), "guides", f"{guide_name}.md"),
+                os.path.join("/home/alan/Documenti/Coding/aroma", "guides", f"{guide_name}.md") # Explicit fallback for some environments
             ]
             
             file_path = None
@@ -9000,10 +9975,14 @@ def callback_query(call):
                     break
             
             if file_path:
+                import html
                 with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
+                    raw_content = f.read()
                 
-                # Simple Markdown to HTML conversion for basic elements
+                # 1. Escape HTML entities FIRST to prevent Telegram errors from the source MD
+                content = html.escape(raw_content)
+                
+                # 2. Simple Markdown to HTML conversion for basic elements (after escaping)
                 import re
                 content = re.sub(r'^# +(.*)$', r'<b>\1</b>', content, flags=re.MULTILINE)
                 content = re.sub(r'^## +(.*)$', r'<b>\1</b>', content, flags=re.MULTILINE)
@@ -9032,11 +10011,18 @@ def callback_query(call):
                         
                     for i, part in enumerate(parts):
                         if i == len(parts) - 1:
-                            bot.send_message(call.message.chat.id, part, reply_markup=markup, parse_mode='HTML')
+                            # Try editing first message if possible, but mostly send new for parts
+                            if i == 0: 
+                                bot.edit_message_text(part, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='HTML')
+                            else:
+                                bot.send_message(call.message.chat.id, part, reply_markup=markup, parse_mode='HTML')
                         else:
-                            bot.send_message(call.message.chat.id, part, parse_mode='HTML')
+                             if i == 0:
+                                 bot.edit_message_text(part, call.message.chat.id, call.message.message_id, parse_mode='HTML')
+                             else:
+                                 bot.send_message(call.message.chat.id, part, parse_mode='HTML')
                 else:
-                    bot.send_message(call.message.chat.id, content, reply_markup=markup, parse_mode='HTML')
+                    bot.edit_message_text(content, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='HTML')
                     
                 safe_answer_callback(call.id, "📖 Guida aperta!")
             else:
@@ -9577,6 +10563,58 @@ def process_refinery_queue_job():
         import traceback
         traceback.print_exc()
 
+def process_alchemy_queue_job():
+    """Background job to check and complete finished alchemy projects"""
+    from datetime import datetime
+    print(f"[ALCHEMY JOB] Running at {datetime.now().strftime('%H:%M:%S')}")
+    try:
+        from services.alchemy_service import AlchemyService
+        alchemy_service = AlchemyService()
+        results = alchemy_service.process_queue()
+        print(f"[ALCHEMY JOB] Processed {len(results)} jobs")
+        
+        for res in results:
+            user_id = res['user_id']
+            potion_name = res['potion_name']
+            
+            print(f"[ALCHEMY JOB] Notifying user {user_id} about {potion_name}")
+            try:
+                msg = f"🧪 **ALCHIMIA COMPLETATA!**\n\n"
+                msg += f"La tua **{potion_name}** è pronta!\n"
+                msg += "Puoi ritirarla nel menu `/alchimia`."
+                
+                bot.send_message(user_id, msg, parse_mode='markdown')
+            except Exception as e:
+                print(f"[ALCHEMY JOB] Could not notify user {user_id}: {e}")
+    except Exception as e:
+        print(f"[ALCHEMY JOB] Error: {e}")
+
+def process_garden_growth_job():
+    """Background job to check and complete plant growth"""
+    from datetime import datetime
+    print(f"[GARDEN JOB] Running at {datetime.now().strftime('%H:%M:%S')}")
+    try:
+        from services.cultivation_service import CultivationService
+        garden_service = CultivationService()
+        results = garden_service.process_all_growth()
+        print(f"[GARDEN JOB] Processed {len(results)} plants")
+        
+        for res in results:
+            user_id = res['user_id']
+            seed_type = res['seed_type']
+            
+            print(f"[GARDEN JOB] Notifying user {user_id} about garden growth")
+            try:
+                msg = f"🌻 **GIARDINAGGIO!**\n\n"
+                msg += f"Il tuo **{seed_type}** è cresciuto ed è pronto per essere raccolto!\n"
+                msg += "Usa il menu della Gilda per accedere al tuo Giardino."
+                
+                bot.send_message(user_id, msg, parse_mode='markdown')
+            except Exception as e:
+                print(f"[GARDEN JOB] Could not notify user {user_id}: {e}")
+    except Exception as e:
+        print(f"[GARDEN JOB] Error: {e}")
+
 # Schedule the check every minute
 # Schedule Jobs
 schedule.every(30).minutes.do(spawn_daily_mob_job)
@@ -9585,6 +10623,8 @@ schedule.every(10).seconds.do(mob_attack_job)
 schedule.every(30).seconds.do(process_achievements_job)
 schedule.every(1).minutes.do(process_crafting_queue_job)
 schedule.every(1).minutes.do(process_refinery_queue_job)
+schedule.every(1).minutes.do(process_alchemy_queue_job)
+schedule.every(1).minutes.do(process_garden_growth_job)
 schedule.every(1).minutes.do(job_dungeon_check)
 schedule.every().sunday.at("20:00").do(job_weekly_ranking)
 schedule.every().sunday.at("21:00").do(job_guild_weekly_rewards)
@@ -9594,28 +10634,14 @@ schedule.every().day.at("00:00").do(job_dungeon_night_reset) # Midnight Flee
 @bot.message_handler(content_types=['text'], func=lambda message: message.reply_to_message is not None)
 def scan_mob_reply(message):
     """Handle replies (e.g. Scanning a mob via Scouter)"""
-    if "⚠️ Un" in message.reply_to_message.caption or "⚠️ Un" in message.reply_to_message.text:
-        # Check for Scouter
-        try:
-            from services.equipment_service import EquipmentService
-            from sqlalchemy import text
-            eq_service = EquipmentService()
-            session = eq_service.db.get_session()
-            
-            chat_id_user = message.from_user.id
-            
-            has_scouter = session.execute(text("""
-                SELECT 1 FROM user_equipment ue
-                JOIN equipment e ON ue.equipment_id = e.id
-                WHERE ue.user_id = :uid AND ue.equipped = TRUE AND e.effect_type = 'scouter'
-            """), {"uid": chat_id_user}).scalar()
-            
-            session.close()
-            
-            if not has_scouter:
+    try:
+        if "⚠️ Un" in message.reply_to_message.caption or "⚠️ Un" in message.reply_to_message.text:
+            # Check for Scouter
+            user_id = message.from_user.id
+            if not has_equipped_scouter(user_id):
                 bot.reply_to(message, "🚫 Non hai uno **Scouter** o un **Visore** equipaggiato!")
                 return
-            
+                
             # Parse Mob Name
             original_text = message.reply_to_message.caption or message.reply_to_message.text
             import re
@@ -9623,30 +10649,30 @@ def scan_mob_reply(message):
             if match:
                 mob_name = match.group(1)
                 
-                from services.pve_service import PVEService
-                pve_service = PVEService()
-                
                 # Find recent active mob
-                session = eq_service.db.get_session()
-                mob_data = session.execute(text("""
-                    SELECT id FROM mob 
-                    WHERE name = :name AND current_hp > 0
-                    ORDER BY id DESC LIMIT 1
-                """), {"name": mob_name}).first()
-                session.close()
+                from database import Database
+                from models.pve import Mob
+                from sqlalchemy import desc
+                db = Database()
+                session = db.get_session()
+                active_mob = session.query(Mob).filter(Mob.name == mob_name, Mob.is_dead == False).order_by(desc(Mob.id)).first()
                 
-                if mob_data:
-                    mob = pve_service.get_mob_status_by_id(mob_data[0])
+                if active_mob:
+                    mob_id = active_mob.id
+                    session.close()
+                    mob = pve_service.get_mob_status_by_id(mob_id)
                     if mob:
                         txt = f"🔍 **Scansione Completata!**\n\n{format_mob_stats(mob, show_full=True)}"
                         bot.reply_to(message, txt, parse_mode='markdown')
                         return
-                        
+                else:
+                    session.close()
+                            
             bot.reply_to(message, "Non riesco a scansionare questo bersaglio.")
-            
-        except Exception as e:
-            print(f"Error scanning mob: {e}")
-            bot.reply_to(message, "Errore durante la scansione.")
+                
+    except Exception as e:
+        print(f"Error scanning mob: {e}")
+        bot.reply_to(message, "Errore durante la scansione.")
 
 @bot.message_handler(commands=['guild_rank', 'grank'])
 def handle_guild_rank_cmd(message):
@@ -9691,6 +10717,7 @@ if __name__ == '__main__':
     
     # Reload achievements from CSV
     achievement_tracker.load_from_csv()
+    achievement_tracker.load_from_json()
     
     # NEW: Validate user stats on startup
     user_service.validate_and_fix_user_stats()
@@ -9710,3 +10737,19 @@ if __name__ == '__main__':
     except Exception as e:
         print(f"Bot polling crash: {e}")
 
+
+def handle_guild_personalize_url(message, menu_type):
+    """Capture the URL for guild personalization"""
+    user_id = message.from_user.id
+    url = message.text.strip()
+    
+    if url.lower() == 'annulla':
+        bot.reply_to(message, "Personalizzazione annullata.")
+        return
+
+    if not url.startswith(('http://', 'https://')):
+        bot.reply_to(message, "❌ Link non valido. Assicurati che inizi con http:// o https://")
+        return
+        
+    success, msg = guild_service.set_custom_menu_image(user_id, menu_type, url)
+    bot.reply_to(message, msg)

@@ -152,10 +152,8 @@ class EquipmentService:
                         total_stats['base_damage'] = total_stats.get('base_damage', 0) + value
                     elif stat == 'defense':
                         total_stats['resistance'] = total_stats.get('resistance', 0) + value
-                    elif stat in ['crit', 'perception', 'luck']:
+                    elif stat in ['crit', 'crit_chance']:
                         total_stats['crit_chance'] = total_stats.get('crit_chance', 0) + value
-                    elif stat == 'wisdom':
-                        total_stats['max_mana'] = total_stats.get('max_mana', 0) + value
                     elif stat == 'all_stats':
                         # Valid for "Anello del Tempo" etc.
                         total_stats['max_health'] = total_stats.get('max_health', 0) + (value * 10)

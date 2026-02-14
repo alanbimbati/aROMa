@@ -11,7 +11,7 @@ id,base_character_name,transformed_character_name,transformation_name,wumpa_cost
 10,Vegeta SSJ3,Vegeta SSJ4,Super Saiyan 4,150000,3,180,100,160,1,9,36
 11,Vegeta SSJ4,Vegeta SSJ Blue,Super Saiyan Blue,200000,3,220,120,200,1,10,40
 12,Gohan SSJ,Gohan SSJ2,Super Saiyan 2,60000,3,120,60,100,0,,26
-13,Piccolo,Piccolo Orange,Orange Piccolo,250000,3,250,120,220,0,,50
+13,Piccolo,Orange Piccolo,Orange Piccolo,250000,3,250,120,220,0,,50
 14,Charizard,Mega Charizard X,Mega Evolution X,50000,3,120,60,110,0,,50
 15,Charizard,Mega Charizard Y,Mega Evolution Y,50000,3,110,80,120,0,,50
 16,Blastoise,Mega Blastoise,Mega Evolution,50000,3,130,60,100,0,,50

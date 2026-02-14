@@ -6,6 +6,7 @@ from database import Database
 from services.user_service import UserService
 from services.item_service import ItemService
 from models.seasons import Season
+from sqlalchemy import text
 import os
 import random
 import datetime
@@ -68,7 +69,7 @@ class DropService:
         if not message.text or len(message.text) < 4:
             return
 
-        # Anti-spam check (time)
+        # Anti-spam check (time) - Standard 10s cooldown
         now = datetime.datetime.now()
         if user.last_chat_drop_time:
             elapsed = (now - user.last_chat_drop_time).total_seconds()
@@ -81,107 +82,102 @@ class DropService:
             local_session = True
             
         try:
-            # Get active season theme
+            # 1. Get active season metadata BEFORE closing any potentially local session
+            # We need theme and name for Dragon Ball checks.
             active_season = session.query(Season).filter_by(is_active=True).first()
             theme = active_season.theme if active_season else None
+            season_name = active_season.name if active_season else ""
             
-            # Update last drop time immediately to reserve the slot
+            # 2. Reserving the slot: Update last drop time immediately
+            # We do this here using the active session to avoid detached errors and redundant updates
             self.user_service.update_user(user.id_telegram, {'last_chat_drop_time': now}, session=session)
             
-            if local_session:
-                session.commit()
-        except:
-             if local_session:
-                 session.rollback()
-             raise
-        finally:
-             if local_session:
-                 session.close() # Close if we opened it, but catch is we need it for later steps?
-                 # Actually, if we close it here, we lose it for Dragon Balls steps if we used local_session.
-                 # But we also need to commit the update_user.
-                 
-        # Re-open or keep open?
-        # If we passed session, it stays open.
-        # If we opened local, we committed and closed.
-        # But we need session for subsequent checks if they use it?
-        # Actually subsequent checks (Dragon Ball, Resources) might use distinct logic.
-        # BUT Dragon Ball add_item uses item_service which handles its own session.
-        # Resources lookup uses its own session block.
-        
-        # So it is safe to close local session here as long as we don't reuse 'session' variable for things expecting it to be open if it was local.
-        # If passed session, we didn't close it.
-        
-        # However, let's keep it simple. If passed session, use it. If local, use it and close at end of maybe_drop?
-        # But update_user needs commit to save timestamp.
-        # If we pass session, caller handles commit.
+            # 3. Roll for Dragon Balls (5% during Dragon Ball season)
+            if theme == 'Dragon Ball' and ("Saga 1" in season_name or "Stagione 1" in season_name):
+                if random.random() < 0.05:
+                    items_data = self.item_service.load_items_from_csv()
+                    dragon_balls = [item for item in items_data if "Sfera del Drago" in item['nome']]
+                    if dragon_balls:
+                        item = random.choice(dragon_balls)
+                        item_name = item['nome']
+                        self.item_service.add_item(user.id_telegram, item_name, 1, session=session)
+                        bot.reply_to(message, f"🐉 **DRAGON BALL!**\nHai trovato: {item_name}!")
+                        # Send sticker
+                        try:
+                            sticker_path = os.path.join(BASE_DIR, "Stickers", item['sticker'])
+                            if os.path.exists(sticker_path):
+                                with open(sticker_path, 'rb') as sti:
+                                    bot.send_sticker(message.chat.id, sti)
+                        except: pass
+                        
+                        if local_session: session.commit()
+                        return
 
-        # 1. Roll for Dragon Balls (5% during Dragon Ball season)
-        if theme == 'Dragon Ball' and active_season and ("Saga 1" in active_season.name or "Stagione 1" in active_season.name):
-            if random.random() < 0.05:
+            # 4. Roll for Classic Items (1% chance)
+            if random.random() < 0.01:
                 items_data = self.item_service.load_items_from_csv()
-                dragon_balls = [item for item in items_data if "Sfera del Drago" in item['nome']]
-                if dragon_balls:
-                    item = random.choice(dragon_balls)
+                classic_items = [item for item in items_data if "Sfera del Drago" not in item['nome']]
+                if classic_items:
+                    # Weighted roll for items
+                    weights = [1/float(i['rarita']) for i in classic_items]
+                    item = random.choices(classic_items, weights=weights, k=1)[0]
                     item_name = item['nome']
                     self.item_service.add_item(user.id_telegram, item_name, 1, session=session)
-                    bot.reply_to(message, f"🐉 **DRAGON BALL!**\nHai trovato: {item_name}!")
-                    # Send sticker
-                    try:
-                        sticker_path = os.path.join(BASE_DIR, "Stickers", item['sticker'])
-                        with open(sticker_path, 'rb') as sti:
-                            bot.send_sticker(message.chat.id, sti)
-                    except: pass
+                    bot.reply_to(message, f"✨ **OGGETTO!**\nHai trovato: {item_name}!")
+                    
+                    if local_session: session.commit()
                     return
 
-        # 2. Roll for Classic Items (1% chance)
-        if random.random() < 0.01:
-            items_data = self.item_service.load_items_from_csv()
-            classic_items = [item for item in items_data if "Sfera del Drago" not in item['nome']]
-            if classic_items:
-                # Weighted roll for items
-                weights = [1/float(i['rarita']) for i in classic_items]
-                item = random.choices(classic_items, weights=weights, k=1)[0]
-                item_name = item['nome']
-                self.item_service.add_item(user.id_telegram, item_name, 1, session=session)
-                bot.reply_to(message, f"✨ **OGGETTO!**\nHai trovato: {item_name}!")
-                return
-
-        # 3. Roll for Resources (20% chance)
-        drops = self.crafting_service.roll_chat_drop(chance=20)
-        if drops:
-            # Drop messages/photos
-            drop_messages = []
-            # Use a single session for all resource name lookups in this drop
-            try:
-                with self.db.get_session() as lookup_session:
-                    for resource_id, qty, image_path in drops:
-                        resource_name = lookup_session.execute(
-                            text("SELECT name FROM resources WHERE id = :id"), 
-                            {"id": resource_id}
-                        ).scalar()
-                        
-                        success = self.crafting_service.add_resource_drop(user.id_telegram, resource_id, quantity=qty, source="chat")
-                        
-                        if success and resource_name:
-                            drop_messages.append(f"**{resource_name} x{qty}**")
-                        else:
-                            print(f"[DEBUG] DropService: Failed to add or name resource {resource_id} (Success: {success}, Name: {resource_name})")
-            except Exception as e:
-                print(f"[ERROR] DropService resource lookup/application failed: {e}")
-            
-            if drop_messages:
-                caption = "⚒️ **RISORSE!**\nHai trovato: " + ", ".join(drop_messages)
-                first_image = drops[0][2] # image from the first drop
-                import os
-                if first_image and os.path.exists(first_image):
-                    try:
-                        with open(first_image, 'rb') as photo:
-                            bot.send_photo(message.chat.id, photo, caption=caption, reply_to_message_id=message.message_id, parse_mode='markdown')
-                        return
-                    except: pass
+            # 5. Roll for Resources (20% chance)
+            # Use the already open session if possible, but roll_chat_drop opens its own.
+            # However, we can use the current session for adding the drop.
+            drops = self.crafting_service.roll_chat_drop(chance=20)
+            if drops:
+                drop_messages = []
+                for resource_id, qty, image_path in drops:
+                    # Get resource name using current session
+                    resource_name = session.execute(
+                        text("SELECT name FROM resources WHERE id = :id"), 
+                        {"id": resource_id}
+                    ).scalar()
+                    
+                    success = self.crafting_service.add_resource_drop(user.id_telegram, resource_id, quantity=qty, source="chat", session=session)
+                    
+                    if success and resource_name:
+                        drop_messages.append(f"**{resource_name} x{qty}**")
                 
-                bot.reply_to(message, caption, parse_mode='markdown')
-                return
+                if drop_messages:
+                    caption = "⚒️ **RISORSE!**\nHai trovato: " + ", ".join(drop_messages)
+                    first_image = drops[0][2] # image from the first drop
+                    
+                    # Try to send photo, fallback to reply
+                    sent = False
+                    if first_image and os.path.exists(first_image):
+                        try:
+                            with open(first_image, 'rb') as photo:
+                                bot.send_photo(message.chat.id, photo, caption=caption, reply_to_message_id=message.message_id, parse_mode='markdown')
+                                sent = True
+                        except: pass
+                    
+                    if not sent:
+                        bot.reply_to(message, caption, parse_mode='markdown')
+                    
+                    if local_session: session.commit()
+                    return
+
+            # If no drop occurred, we still need to commit the update_user for the cooldown
+            if local_session:
+                session.commit()
+                
+        except Exception as e:
+            if local_session:
+                session.rollback()
+            print(f"[ERROR] DropService.maybe_drop: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            if local_session:
+                session.close()
     
     def handle_tnt(self, user, bot, message):
         """

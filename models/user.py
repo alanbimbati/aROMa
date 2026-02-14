@@ -92,6 +92,7 @@ class Utente(Base):
     
     # Activity Tracking
     last_activity = Column(DateTime, nullable=True)
+    profumino_until = Column(DateTime, nullable=True)
 
 
 class Admin(Base):

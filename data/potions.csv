@@ -8,3 +8,4 @@ Pozione Mana Media,mana_potion,60,30,Recupera 60 Mana,5
 Pozione Mana Grande,mana_potion,100,40,Recupera 100 Mana,8
 Pozione Mana Completa,mana_potion,999,120,Recupera tutto il Mana,15
 Elisir,full_restore,999,200,Recupera HP e Mana completamente,20
+Profumino,attractor,7200,150,Raddoppia spawn per 2h + notifiche,10

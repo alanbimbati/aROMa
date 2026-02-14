@@ -1,0 +1,10 @@
+potion_name,required_resources,crafting_time,xp_gain
+Pozione Piccola,"{""Erba Verde"": 3}",60,10
+Pozione Media,"{""Erba Verde"": 5, ""Erba Blu"": 1}",120,25
+Pozione Grande,"{""Erba Verde"": 8, ""Erba Blu"": 3}",300,60
+Pozione Completa,"{""Erba Verde"": 15, ""Erba Blu"": 5, ""Polvere di Stelle"": 1}",600,150
+Pozione Mana Piccola,"{""Erba Blu"": 3}",60,10
+Pozione Mana Media,"{""Erba Blu"": 5, ""Erba Verde"": 1}",120,25
+Pozione Mana Grande,"{""Erba Blu"": 8, ""Erba Verde"": 3}",300,60
+Pozione Mana Completa,"{""Erba Blu"": 15, ""Erba Verde"": 5, ""Polvere di Stelle"": 1}",600,150
+Elisir,"{""Erba Gialla"": 2, ""Polvere di Stelle"": 1, ""Essenza Vitale"": 1}",1200,400

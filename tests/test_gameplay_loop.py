@@ -225,6 +225,8 @@ class TestGameplayLoop(unittest.TestCase):
         
         # Parse stats_json
         stats = ue.stats_json if ue.stats_json else {}
+        if isinstance(stats, str):
+            stats = json.loads(stats)
         hp_bonus = stats.get('hp', 0)
         atk_bonus = stats.get('attack', 0)
         

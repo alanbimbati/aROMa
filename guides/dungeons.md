@@ -4,41 +4,40 @@ I Dungeon sono sfide avanzate dove puoi affrontare ondate di nemici per ottenere
 
 ## 🔑 Come Accedere
 
-Per entrare in un Dungeon, hai bisogno di una **Chiave del Dungeon**.
-• Le chiavi possono essere droppate dai Mob rari o acquistate nel Negozio (se disponibile).
-• Usa il comando /dungeon per vedere i dungeon disponibili.
+I Dungeon appaiono **randomicamente** nel gruppo di gioco!
+• Non servono chiavi.
+• Basta unirti alla battaglia quando appare un Dungeon.
+• Segui la chat per non perderti l'evento!
 
-## ⚙️ Funzionamento
+## ⚙️ Meccaniche del Dungeon (Raid)
 
-1. **Stanze**: Un Dungeon è composto da diverse stanze.
-2. **Nemici**: Ogni stanza contiene uno o più nemici che devi sconfiggere.
-3. **Boss**: L'ultima stanza è protetta da un Boss potente.
+I Dungeon funzionano come **Raid Cooperativi**:
 
-## 🏆 Ricompense
+### 🏥 Preparazione Automatica
+All'inizio del Dungeon, tutti i partecipanti vengono **curati completamente** (HP e Mana al 100%). Non è necessario sprecare pozioni prima di entrare!
 
-Completare un Dungeon garantisce:
-• 💰 **Wumpa**: Una grande quantità di monete.
-• ✨ **EXP**: Molta esperienza per salire di livello.
-• 🎁 **Oggetti Rari**: Possibilità di trovare oggetti unici o equipaggiamento.
+### 📈 Difficoltà Progressiva
+Il livello dei nemici e dei Boss cresce con l'avanzare del dungeon. Ogni stage (stanza) è più difficile del precedente.
+- **Boss Finale**: Ha molta più salute e difesa di un mob normale.
 
-## ⚠️ Attenzione
+### 💰 Distribuzione Ricompense
+Le ricompense indicate nella descrizione del dungeon sono il **pool totale**.
+- **Esperienza (EXP)**: Divisa in base al danno inflitto ad ogni nemico (Contributo).
+- **Wumpa**: Divisi proporzionalmente al contributo totale nel dungeon.
+- **Oggetti**: Alcuni nemici hanno drop fissi, altri casuali.
+- **Achievements**: Completare i dungeon sblocca obiettivi speciali che garantiscono EXP extra!
 
-• Se muori in un Dungeon, vieni espulso e devi ricominciare (o usare oggetti di resurrezione se disponibili).
-• Assicurati di avere abbastanza Pozioni di Cura e Mana prima di entrare!
+---
 
-## 🎯 Strategie Consigliate
+## ⚠️ Regole e Prerequisiti
 
-**Preparazione**
-• **Porta almeno 5 Pozioni di Cura** per emergenze
-• **Porta 3-5 Pozioni Mana** se usi attacchi speciali
-• **Equipaggia il personaggio migliore** per il tuo livello
+1. **Partecipazione Libera**: Chiunque può unirsi al combattimento.
+2. **Tempo Limite**: Se il dungeon non viene completato entro **3 ore**, i nemici fuggono e il dungeon fallisce.
+3. **Morte**: Se muori durante un combattimento, non riceverai EXP per quel nemico specifico, ma resterai nel dungeon per le stanze successive (se i tuoi compagni vincono).
 
-**Durante il Dungeon**
-• **Usa Attacchi Normali sui nemici deboli** per risparmiare mana
-• **Riserva Attacchi Speciali per il Boss** finale
-• **Monitora la tua salute**: meglio usare una pozione in più che morire
+---
 
-**Build Ottimali**
-• **Tank**: Resistenza + Salute per sopravvivere alle ondate
-• **DPS**: Danno + Critico per eliminare nemici velocemente
-• **Mago**: Mana + Velocità per spam di abilità speciali
+## 🎯 Strategie per Pro
+- **Coordina i Tank**: Chi attiva la difesa attira gli attacchi del Boss (15x Aggro), permettendo ai DPS (Danni) di colpire indisturbati.
+- **Risparmio Mana**: Usa l'attacco base nelle prime stanze per conservare il mana per le skill devastanti da usare sul Boss finale.
+- **Equilibrio**: Un gruppo bilanciato con almeno un Tank, un Healer e dei DPS ha probabilità di successo molto più alte nei dungeon di Tier 3+.

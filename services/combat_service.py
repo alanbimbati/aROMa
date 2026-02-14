@@ -82,6 +82,11 @@ class CombatService:
         
         damage = (total_power - (defense / 2)) * effectiveness
         
+        # Apply Attacker Buffs (Status Effects)
+        from services.status_effects import StatusEffect
+        if StatusEffect.has_effect(attacker, 'buff_attack'):
+            damage *= StatusEffect.EFFECTS['buff_attack']['damage_multiplier']
+            
         if is_crit:
             damage *= crit_multiplier
             
@@ -145,6 +150,10 @@ class CombatService:
         if StatusEffect.has_effect(user, 'defense_up'):
             # Add 5% resistance
             user_res += 5
+            
+        # Check for Buff Defense status
+        if StatusEffect.has_effect(user, 'buff_defense'):
+            user_res += StatusEffect.EFFECTS['buff_defense']['resistance_bonus']
             
         # Hard cap at 75%
         user_res = min(user_res, 75)

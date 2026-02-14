@@ -119,8 +119,14 @@ class CharacterService:
             current_owners_count = session.query(CharacterOwnership).filter(
                 CharacterOwnership.character_id.in_(family_ids)
             ).count()
+
+            # Check if user already owns/equips one of them (re-equipping same or switching form)
+            user_owns_in_family = session.query(CharacterOwnership).filter(
+                CharacterOwnership.character_id.in_(family_ids),
+                CharacterOwnership.user_id == user.id_telegram
+            ).first()
             
-            if current_owners_count >= max_owners:
+            if current_owners_count >= max_owners and not user_owns_in_family:
                 session.close()
                 return False, f"❌ Questo personaggio (o una sua trasformazione) è già in uso da qualcun altro!"
         

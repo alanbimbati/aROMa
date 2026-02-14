@@ -25,7 +25,11 @@ class TransformationService:
         available = []
         for trans in transformations:
             # Check level requirement
-            if trans.required_level and user.livello < trans.required_level:
+            # BYPASS: If user is already using the base character of this transformation,
+            # we allow it even if level is too low (incentive to use that char).
+            level_bypass = (user.livello_selezionato == trans.base_character_id)
+            
+            if not level_bypass and trans.required_level and user.livello < trans.required_level:
                 continue
             
             # Check if progressive and requires previous transformation

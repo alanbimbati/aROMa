@@ -78,12 +78,11 @@ class StatBuildService:
     def get_presets(self):
         """Return available presets definition"""
         return {
-            'Titan': {'desc': '🛡️ Tank Puro (Vita/Res)', 'ratios': {'health': 0.5, 'resistance': 0.5}},
-            'Berserker': {'desc': '⚔️ DPS Puro (Danno/Vel)', 'ratios': {'damage': 0.6, 'speed': 0.4}},
-            'Arcanist': {'desc': '🔮 Mago Puro (Mana/Crit)', 'ratios': {'mana': 0.5, 'crit': 0.5}},
-            'Paladin': {'desc': '⚖️ Hybrid Tank', 'ratios': {'health': 0.4, 'mana': 0.3, 'resistance': 0.3}},
-            'Assassin': {'desc': '🗡️ Hybrid DPS', 'ratios': {'damage': 0.4, 'crit': 0.4, 'speed': 0.2}},
-            'Spellsword': {'desc': '⚔️ Hybrid Magic', 'ratios': {'damage': 0.4, 'mana': 0.4, 'speed': 0.2}},
+            'Ladro': {'desc': '🗡️ Ladro (Danno/Vel)', 'ratios': {'damage': 0.4, 'speed': 0.4, 'crit': 0.2}},
+            'Tank': {'desc': '🛡️ Tank (Vita/Res)', 'ratios': {'health': 0.5, 'resistance': 0.3, 'mana': 0.2}},
+            'Stregone': {'desc': '🔮 Stregone (Mana/Danno)', 'ratios': {'mana': 0.5, 'damage': 0.5}},
+            'Mago': {'desc': '⚡ Mago (Mana/Vel)', 'ratios': {'mana': 0.5, 'speed': 0.5}},
+            'Bilanciato': {'desc': '⚖️ Bilanciato', 'ratios': {'health': 0.2, 'mana': 0.2, 'damage': 0.2, 'resistance': 0.2, 'speed': 0.2}},
         }
 
     def apply_preset(self, user_id, preset_name):

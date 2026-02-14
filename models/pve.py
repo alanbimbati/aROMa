@@ -50,6 +50,33 @@ class Mob(Base):
     # Dungeon integration
     dungeon_id = Column(Integer, ForeignKey('dungeon.id'), nullable=True)
 
+    # Tactical Intelligence
+    mana = Column(Integer, default=0)
+    max_mana = Column(Integer, default=0)
+    is_defending = Column(Boolean, default=False)
+
+    def __getitem__(self, key):
+        """Allow dict-style access for legacy code compatibility"""
+        # Map old dict keys to new object attributes
+        mapping = {
+            'level': 'mob_level',
+            'nome': 'name',
+            'image': 'image_path',
+            'attack': 'attack_damage',
+        }
+        attr = mapping.get(key, key)
+        if hasattr(self, attr):
+            return getattr(self, attr)
+        raise KeyError(f"Mob has no attribute or mapping for '{key}'")
+
+    def get(self, key, default=None):
+        """Allow dict-style get for legacy code compatibility"""
+        try:
+            val = self[key]
+            return val if val is not None else default
+        except (KeyError, AttributeError):
+            return default
+
 class Raid(Base):
     __tablename__ = "raid"
     id = Column(Integer, primary_key=True)

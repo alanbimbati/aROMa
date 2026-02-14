@@ -82,6 +82,20 @@ class StatusEffect:
             'stackable': False,
             'message': '🛡️ {target} è in Difesa!',
             'icon': '🛡️'
+        },
+        'buff_attack': {
+            'damage_multiplier': 1.2, # +20% Damage dealt
+            'duration': 2,
+            'stackable': False,
+            'message': '💪 {target} ha aumentato l\'Attacco!',
+            'icon': '💪'
+        },
+        'buff_defense': {
+            'resistance_bonus': 10,  # +10% Resistance
+            'duration': 2,
+            'stackable': False,
+            'message': '🛡️ {target} ha aumentato la Difesa!',
+            'icon': '🛡️'
         }
     }
     

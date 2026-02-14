@@ -119,7 +119,11 @@ class CraftingService:
         # Allowed upgrades
         valid_upgrades = {
             1: 2, # Rottami -> Pregiato
-            2: 3  # Pregiato -> Diamante
+            2: 3, # Pregiato -> Diamante
+            4: 5, # Frammenti -> Estratto
+            5: 6, # Estratto -> Elisir
+            7: 8, # Compost -> Concime
+            8: 9  # Concime -> Essenza
         }
         
         if valid_upgrades.get(source_id) != target_id:
@@ -185,57 +189,80 @@ class CraftingService:
         finally:
             session.close()
 
-    def get_daily_refinable_resource(self, session=None):
-        """Get today's refinable resource. Rotates daily."""
+    def get_daily_refinable_resources(self, category=None, session=None):
+        """Get the refinable resources for today, optionally filtered by category"""
         local_session = False
         if not session:
             session = self.db.get_session()
             local_session = True
-        
+            
         try:
             now = datetime.now().date()
-            # Check if we already have one for today
-            daily = session.query(RefineryDaily).filter(
+            # We check for today's entries.
+            entries = session.query(RefineryDaily).filter(
                 func.date(RefineryDaily.date) == now
-            ).first()
+            ).all()
             
-            if daily:
-                res_id = daily.resource_id
+            # Define categories by ID ranges
+            categories = {
+                'equipment': [1, 2, 3, 6, 7],
+                'alchemy': [4, 5],
+                'garden': [8] # Semi di Wumpa
+            }
+            
+            # If category is provided, only look at that one
+            if category and category in categories:
+                target_categories = {category: categories[category]}
             else:
-                # Pick a random resource
-                all_res_ids = [r.id for r in session.query(Resource.id).all()]
-                if not all_res_ids:
-                    return None
-                res_id = random.choice(all_res_ids)
-                
-                # Save it (UPSERT style)
-                new_daily = session.query(RefineryDaily).filter(
-                    func.date(RefineryDaily.date) == now
-                ).first()
-                
-                if new_daily:
-                    new_daily.resource_id = res_id
+                target_categories = categories
+            
+            selected_ids = [e.resource_id for e in entries]
+            final_resources = []
+            
+            # Ensure we have one for each target category
+            for cat_name, cat_ids in target_categories.items():
+                # Check if this category is represented
+                category_entry = next((e for e in entries if e.category == cat_name), None)
+                if category_entry:
+                    res_id = category_entry.resource_id
                 else:
-                    new_daily = RefineryDaily(date=datetime.now(), resource_id=res_id)
-                    session.add(new_daily)
+                    # Pick new for this category
+                    available = session.query(Resource.id).filter(Resource.id.in_(cat_ids)).all()
+                    if available:
+                        res_id = random.choice([r[0] for r in available])
+                        # Save it
+                        new_daily = RefineryDaily(date=datetime.now(), category=cat_name, resource_id=res_id)
+                        session.add(new_daily)
+                        session.flush() # Ensure it's in the session
+                    else:
+                        continue
+                
+                # Fetch details
+                res = session.query(Resource).filter_by(id=res_id).first()
+                if res:
+                    final_resources.append({"id": res.id, "name": res.name, "category": cat_name})
+
+            if not entries and final_resources:
                 session.commit()
-            
-            # Get details
-            resource = session.query(Resource).filter_by(id=res_id).first()
-            
-            return {"id": resource.id, "name": resource.name} if resource else None
+                
+            return final_resources
         finally:
             if local_session:
                 session.close()
 
-    def start_refinement(self, guild_id, user_id, resource_id, quantity):
-        """Start refining raw items into materials"""
+    def get_daily_refinable_resource(self, category=None, session=None):
+        """Legacy compatibility/Helper: returns one resource for the given category"""
+        res = self.get_daily_refinable_resources(category=category, session=session)
+        return res[0] if res else None
+
+    def start_refinement(self, guild_id, user_id, resource_id, quantity, category='equipment'):
+        """Start refining raw items into materials. Defaults to equipment category."""
         session = self.db.get_session()
         try:
-            # 1. Check if resource is refinable today
-            daily = self.get_daily_refinable_resource(session)
+            # 1. Check if resource is refinable today in its category
+            daily = self.get_daily_refinable_resource(category=category, session=session)
             if not daily or daily['id'] != resource_id:
-                return {"success": False, "error": "Questo materiale non può essere raffinato oggi!"}
+                return {"success": False, "error": "Questo materiale non può essere lavorato oggi!"}
             
             # 2. Check if user has enough quantity
             user_res = session.query(UserResource).filter_by(
@@ -309,18 +336,32 @@ class CraftingService:
             t2_chance = min(15, (2 + (prof_level * 0.3) + (char_level * 0.05)) * t2_boost)
             t3_chance = min(5, (0.5 + (prof_level * 0.15) + (char_level * 0.02)) * t3_boost)
             
+            # Determine Category and Material IDs
+            # Ranges: 1-3, 6, 7 -> Equip (1,2,3); 4, 5 -> Alchemy (4,5,6); 8+ -> Garden (7,8,9)
+            if res_id in [1, 2, 3, 6, 7]:
+                mat_ids = [1, 2, 3] # Rottami, Pregiato, Diamante
+                mat_names = ['Rottami', 'Materiale Pregiato', 'Diamante']
+            elif res_id in [4, 5]:
+                mat_ids = [4, 5, 6] # Frammenti, Estratto, Elisir
+                mat_names = ['Frammenti Alchemici', 'Estratto Puro', 'Elisir Primordiale']
+            else:
+                mat_ids = [7, 8, 9] # Compost, Concime, Essenza
+                mat_names = ['Compost Organico', 'Concime Arricchito', 'Essenza Botanica']
+            
             qty_t3 = int(total_mass * (t3_chance / 100.0) * random.uniform(0.8, 1.2))
             remaining = total_mass - qty_t3
             qty_t2 = int(remaining * (t2_chance / (100.0 - t3_chance)) * random.uniform(0.8, 1.2))
             qty_t1 = max(0, total_mass - qty_t3 - qty_t2)
             
-            results = {'Rottami': qty_t1, 'Materiale Pregiato': qty_t2, 'Diamante': qty_t3}
+            results = {mat_names[0]: qty_t1, mat_names[1]: qty_t2, mat_names[2]: qty_t3}
             
             # 2. Update job status to 'completed' and store results
             job.status = 'completed'
             job.result_t1 = qty_t1
             job.result_t2 = qty_t2
             job.result_t3 = qty_t3
+            # Store the mat_ids for claiming later if needed (though we currently rely on job.result_t1/2/3)
+            # We'll use the IDs to look up the materials in claim_user_refinements.
             
             # 3. Award profession XP
             xp_gained = raw_qty * 5
@@ -373,28 +414,49 @@ class CraftingService:
         finally:
             session.close()
 
-    def claim_user_refinements(self, user_id):
-        """Claim all completed jobs for a user and add materials to inventory"""
+    def claim_user_refinements(self, user_id, category=None):
+        """Claim all completed jobs for a user and add materials to inventory. Optionally filtered by category."""
         # 1. First, process any ready jobs
         self.process_refinery_queue()
         
         session = self.db.get_session()
         try:
             # 2. Find all 'completed' jobs
-            jobs = session.query(RefineryQueue).filter_by(
+            query = session.query(RefineryQueue).filter_by(
                 user_id=user_id, 
                 status='completed'
-            ).all()
+            )
+            
+            # Filter by category if requested
+            if category:
+                res_ids = {
+                    'equipment': [1, 2, 3, 6, 7],
+                    'alchemy': [4, 5],
+                    'garden': [8]
+                }.get(category, [])
+                query = query.filter(RefineryQueue.resource_id.in_(res_ids))
+            
+            jobs = query.all()
             
             if not jobs:
-                return {"success": False, "error": "Nessun materiale pronto da ritirare."}
+                return {"success": False, "error": "Nessun materiale pronto da ritirare per questa categoria." if category else "Nessun materiale pronto da ritirare."}
             
-            totals = {'Rottami': 0, 'Materiale Pregiato': 0, 'Diamante': 0}
+            totals = {} # Dynamic totals
             
             for job in jobs:
-                totals['Rottami'] += (job.result_t1 or 0)
-                totals['Materiale Pregiato'] += (job.result_t2 or 0)
-                totals['Diamante'] += (job.result_t3 or 0)
+                # Determine Category and Material Names (match complete_refinement mapping)
+                if job.resource_id in [1, 2, 3, 6, 7]:
+                    mat_names = ['Rottami', 'Materiale Pregiato', 'Diamante']
+                elif job.resource_id in [4, 5]:
+                    mat_names = ['Frammenti Alchemici', 'Estratto Puro', 'Elisir Primordiale']
+                else:
+                    mat_names = ['Compost Organico', 'Concime Arricchito', 'Essenza Botanica']
+
+                # Accumulate
+                for i, name in enumerate(mat_names):
+                    val = getattr(job, f"result_t{i+1}") or 0
+                    totals[name] = totals.get(name, 0) + val
+                
                 job.status = 'claimed'
             
             # 3. Add to user_refined_materials
