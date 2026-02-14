@@ -98,3 +98,40 @@ class Database:
     def drop_all_tables(self):
         """Drop all tables (use with caution!)"""
         Base.metadata.drop_all(bind=self.engine)
+        
+    @staticmethod
+    def transaction_retry(max_retries=3, initial_delay=0.1):
+        """
+        Decorator to retry database transactions on OperationalError (Deadlock).
+        """
+        def decorator(func):
+            from functools import wraps
+            import time
+            from sqlalchemy.exc import OperationalError
+            import random
+
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                retries = 0
+                delay = initial_delay
+                while True:
+                    try:
+                        return func(*args, **kwargs)
+                    except OperationalError as e:
+                        # Check if it's a deadlock or similar transient error
+                        error_str = str(e).lower()
+                        if "deadlock" in error_str or "locked" in error_str or "could not serialize" in error_str:
+                            retries += 1
+                            if retries > max_retries:
+                                print(f"[DB] Max retries ({max_retries}) reached for {func.__name__}. Error: {e}")
+                                raise e
+                            
+                            # Exponential backoff with jitter
+                            sleep_time = delay * (1 + random.random())
+                            print(f"[DB] Deadlock detected in {func.__name__}. Retrying ({retries}/{max_retries}) in {sleep_time:.2f}s...")
+                            time.sleep(sleep_time)
+                            delay *= 2
+                        else:
+                            raise e
+            return wrapper
+        return decorator

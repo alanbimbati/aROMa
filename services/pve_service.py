@@ -74,6 +74,8 @@ class PvEService:
         self.equipment_service = EquipmentService()
         self.reward_service = RewardService(self.db, self.user_service, self.item_service, self.season_manager)
         self.parry_service = ParryService()
+        from services.skill_service import SkillService
+        self.skill_service = SkillService()
         
         self.mob_data = self.load_mob_data()
         self.boss_data = self.load_boss_data()
@@ -247,6 +249,14 @@ class PvEService:
             parry_service = self.parry_service
             
             mob_id = active_mob.id if active_mob else None
+            
+            # Direct Taunt: Set user as primary target for the mob
+            if active_mob:
+                active_mob.aggro_target_id = db_user.id_telegram
+                active_mob.aggro_end_time = datetime.datetime.now() + datetime.timedelta(minutes=2)
+                session.flush()
+                print(f"[Aggro] {db_user.id_telegram} TAUNTED mob {active_mob.id}")
+
             parry_result = parry_service.activate_parry(db_user.id_telegram, mob_id)
             
             if not parry_result['success']:
@@ -398,7 +408,7 @@ class PvEService:
         points = level
         
         # Stats to distribute points into
-        stats = ['hp', 'dmg', 'speed', 'res']
+        stats = ['hp', 'dmg', 'speed', 'res', 'mana']
         allocation = {s: 0 for s in stats}
         
         for _ in range(points):
@@ -415,8 +425,38 @@ class PvEService:
         dmg_bonus = allocation['dmg'] * 2
         speed = base_speed + (allocation['speed'] * 1)
         resistance = min(50, base_resistance + (allocation['res'] * 1))
+        mana_bonus = allocation['mana'] * 10
             
-        return speed, resistance, hp_bonus, dmg_bonus
+        return speed, resistance, hp_bonus, dmg_bonus, mana_bonus
+    
+    def _calculate_character_mana(self, character_name, level, is_boss=False):
+        """
+        Calculate mana based on character's base mana from characters.csv.
+        Applies multipliers: mob=3x, boss=5x to allow multiple special attacks.
+        """
+        from services.character_loader import get_character_loader
+        
+        # Get character data
+        loader = get_character_loader()
+        character = loader.get_character_by_name(character_name)
+        
+        if not character:
+            # Fallback: use level-based formula
+            base_mana = 50 + (level * 5)
+        else:
+            # Characters have base mana that scales with level
+            # Use same formula as players: 50 + (level * 5)
+            # But we can also check if character has specific mana in CSV
+            base_mana = 50 + (level * 5)
+        
+        # Apply multipliers based on type
+        if is_boss:
+            multiplier = 5.0  # Bosses have 5x mana for multiple special attacks
+        else:
+            multiplier = 3.0  # Mobs have 3x mana
+        
+        max_mana = int(base_mana * multiplier)
+        return max_mana
 
     def spawn_specific_mob(self, mob_name=None, chat_id=None, reference_level=None, ignore_limit=False, session=None):
         """Spawn a specific mob by name or a random one if None. Returns (success, msg, mob_id)"""
@@ -533,13 +573,16 @@ class PvEService:
         # level is already determined above
         
         # Allocate dynamic stats
-        speed, resistance, hp_bonus, dmg_bonus = self._allocate_mob_stats(level, difficulty, is_boss=False)
+        speed, resistance, hp_bonus, dmg_bonus, mana_bonus = self._allocate_mob_stats(level, difficulty, is_boss=False)
         
         # Adjust HP and Damage based on level proportionally
         # HP: base + (level * 10) + hp_bonus (was 15)
         # Damage: base + (level * 1) + dmg_bonus (was 3)
         hp = int(mob_data['hp']) + (level * 10) + hp_bonus
         damage = int(mob_data['attack_damage']) + (level * 1) + dmg_bonus
+        
+        # Mana: Use character-based calculation with 3x multiplier for mobs
+        max_mana = self._calculate_character_mana(mob_data['nome'], level, is_boss=False)
         
         new_mob = Mob(
             name=mob_data['nome'],
@@ -550,6 +593,8 @@ class PvEService:
             difficulty_tier=int(mob_data.get('difficulty', 1)),
             speed=speed,
             resistance=resistance,
+            mana=max_mana,
+            max_mana=max_mana,
             is_boss=False,  # Normal mobs are not bosses
             chat_id=chat_id,
             last_attack_time=datetime.datetime.now() - datetime.timedelta(hours=1), # Allow immediate attack
@@ -666,13 +711,16 @@ class PvEService:
         # Allocate dynamic stats
         # User requested only HP scales like a boss, rest like a mob.
         # So we pass is_boss=False to get standard speed/stats allocation.
-        speed, resistance, hp_bonus, dmg_bonus = self._allocate_mob_stats(level, difficulty, is_boss=False)
+        speed, resistance, hp_bonus, dmg_bonus, mana_bonus = self._allocate_mob_stats(level, difficulty, is_boss=False)
         
         # Scale HP and Damage
         # HP: base + (level * 200) + hp_bonus (Boss HP scaling)
         # Damage: base + (level * 1) + dmg_bonus (Standard Mob scaling)
         hp = hp_base + (level * 200) + hp_bonus
         damage = int(boss_data['attack_damage']) + (level * 1) + dmg_bonus
+        
+        # Mana: Use character-based calculation with 5x multiplier for bosses
+        max_mana = self._calculate_character_mana(boss_data['nome'], level, is_boss=True)
         
         new_boss = Mob(
             name=boss_data['nome'],
@@ -683,6 +731,8 @@ class PvEService:
             difficulty_tier=int(boss_data.get('difficulty', 5)),  # Bosses are high difficulty
             speed=speed,  # Bosses are faster
             resistance=resistance,
+            mana=max_mana,
+            max_mana=max_mana,
             description=boss_data.get('description', ''),
             is_boss=True,
             chat_id=chat_id,
@@ -741,32 +791,42 @@ class PvEService:
         finally:
             session.close()
 
-    def get_mob_details(self, mob_id):
-        """Get mob details for display"""
+    def get_mob_scan_data(self, mob_id):
+        """
+        Get detailed mob statistics for Scouter 'Scan' effect.
+        Provides precise HP, Damage, Speed, and Cooldown.
+        """
         session = self.db.get_session()
-        mob = session.query(Mob).filter_by(id=mob_id).first()
-        if not mob:
-            session.close()
-            return None
+        try:
+            mob = session.query(Mob).filter_by(id=mob_id).first()
+            if not mob or mob.is_dead:
+                return None
             
-        data = {
-            'id': mob.id,
-            'name': mob.name,
-            'level': getattr(mob, 'mob_level', 1),
-            'health': mob.health,
-            'max_health': mob.max_health,
-            'attack': getattr(mob, 'attack_damage', 10),
-            'defense': 0,
-            'speed': getattr(mob, 'speed', 0),
-            'resistance': getattr(mob, 'resistance', 0),
-            'image_path': self.get_enemy_image_path(mob),
-            'dungeon_id': mob.dungeon_id,
-            'is_boss': mob.is_boss,
-            'spawn_time': mob.spawn_time,
-            'last_message_id': mob.last_message_id
-        }
-        session.close()
-        return data
+            # Calculate precise cooldown
+            mob_speed = mob.speed if mob.speed else 30
+            cooldown_seconds = 60 / (1 + mob_speed * 0.05)
+            
+            next_attack_in = 0
+            if mob.last_attack_time:
+                elapsed = (datetime.datetime.now() - mob.last_attack_time).total_seconds()
+                next_attack_in = max(0, cooldown_seconds - elapsed)
+            
+            data = {
+                'name': mob.name,
+                'level': getattr(mob, 'mob_level', 1),
+                'hp': mob.health,
+                'max_health': mob.max_health,
+                'hp_percent': int((mob.health / mob.max_health) * 100) if mob.max_health > 0 else 0,
+                'damage': mob.attack_damage,
+                'speed': mob_speed,
+                'resistance': mob.resistance,
+                'cooldown_total': round(cooldown_seconds, 1),
+                'next_attack_in': round(next_attack_in, 1),
+                'is_boss': mob.is_boss
+            }
+            return data
+        finally:
+            session.close()
 
     def attack_mob(self, user, base_damage=0, use_special=False, ability=None, mob_id=None, chat_id=None, mana_cost=0, session=None):
         """Attack current mob using CombatService"""
@@ -873,12 +933,19 @@ class PvEService:
         char_loader = get_character_loader()
         character = char_loader.get_character_by_id(user.livello_selezionato)
         
+        # Auto-fetch ability if this is a special attack and no ability object was passed
+        if use_special and not ability:
+            char_abilities = self.skill_service.get_character_abilities(user.livello_selezionato)
+            if char_abilities:
+                ability = char_abilities[0]
+        
         # Prepare attacker object wrapper for CombatService
         pve_self = self
         class AttackerWrapper:
             def __init__(self, user, char, base_dmg):
                 self.damage_total = base_dmg
                 self.elemental_type = char.get('elemental_type', "Normal") if char else "Normal"
+                self.active_status_effects = getattr(user, 'active_status_effects', '[]')
                 
                 # Base crit from char + allocated crit rate
                 # Base crit from char + allocated crit rate
@@ -938,6 +1005,25 @@ class PvEService:
             reduction = mob.resistance / 100.0
             damage = int(damage * (1 - reduction))
             combat_result['resistance_applied'] = mob.resistance
+
+        # NEW: Mob Tactical Defense Logic
+        mob_counter_msg = ""
+        if getattr(mob, 'is_defending', False):
+            # 50% extra damage reduction for defending
+            damage = int(damage * 0.5)
+            combat_result['mob_defending'] = True
+            
+            # Counterattack: Mob deals 30% of its attack damage back
+            mob_counter_dmg = self.combat_service.calculate_mob_damage_to_user(mob, user, is_aoe=False)
+            mob_counter_dmg = max(1, int(mob_counter_dmg * 0.3)) # Counter deals 30% power
+            
+            new_hp, died = self.user_service.damage_health(user, mob_counter_dmg, session=session)
+            mob_counter_msg = f"\n↩️ **CONTRATTACCO!** {mob.name} risponde al colpo e ti infligge **{mob_counter_dmg}** danni!"
+            if died:
+                mob_counter_msg += "\n💀 Sei caduto vittima del contrattacco!"
+            
+            # Reset defense after being hit
+            mob.is_defending = False
         
         # Detect One Shot
         is_one_shot = (mob.health == mob.max_health) and (damage >= mob.health)
@@ -964,6 +1050,9 @@ class PvEService:
             },
             session=session
         )
+        
+        # Store counter msg for later use in build message
+        extra_data['mob_counter_msg'] = mob_counter_msg
         
         # NEW: Guild Dungeon Damage Tracking
         if mob.dungeon_id:
@@ -1029,11 +1118,29 @@ class PvEService:
             
         msg += f"⚔️ Hai inflitto {damage} danni ({combat_result['type']}) a {mob.name}!"
         
+        if combat_result.get('mob_defending'):
+            msg += "\n🛡️ **Il nemico era in posizione difensiva!** (Danni dimezzati)"
+        
+        if extra_data.get('mob_counter_msg'):
+            msg += extra_data['mob_counter_msg']
+        
         if combat_result.get('is_counter'):
             msg = f"↩️ **CONTRATTACCO!** (CRITICO ASSICURATO)\n" + msg
         
         if 'resistance_applied' in combat_result:
             msg += f" (Resistenza {combat_result['resistance_applied']}%)"
+        
+        # Apply Status Effects from Ability
+        if ability:
+            status_data = self.combat_service.apply_status_effect(user, ability, source_id=None)
+            if status_data:
+                effect_name = status_data['effect']
+                duration = status_data['duration']
+                from services.status_effects import StatusEffect
+                StatusEffect.apply_status(user, effect_name, duration=duration, source_id=user.id_telegram)
+                
+                effect_icon = StatusEffect.EFFECTS.get(effect_name, {}).get('icon', '✨')
+                msg += f"\n{effect_icon} **ATTIVATO:** {effect_name.replace('_', ' ').title()}!"
         
         # Capture data for extra_data before potential session close
         final_mob_id = mob.id
@@ -1100,7 +1207,9 @@ class PvEService:
                     'mob_name': mob_name,
                     'is_boss': is_boss,
                     'solo_kill': solo_kill,
-                    'damage_dealt': participation.damage_dealt if participation else 0
+                    'damage_dealt': participation.damage_dealt if participation else 0,
+                    'mob_level': level,
+                    'player_level': user_level
                 },
                 session=session
             )
@@ -1317,21 +1426,35 @@ class PvEService:
             def __init__(self, user, char, base_dmg, multiplier=0.7):
                 self.damage_total = int(base_dmg * multiplier)
                 self.elemental_type = char.get('elemental_type', "Normal") if char else "Normal"
+                self.active_status_effects = getattr(user, 'active_status_effects', '[]')
                 char_crit = char.get('crit_chance', 5) if char else 5
                 user_crit = getattr(user, 'crit_chance', 0) or 0
                 self.crit_chance = char_crit + user_crit
                 self.crit_multiplier = char.get('crit_multiplier', 1.5) if char else 1.5
+        
+        # Fetch ability for special AoE to allow status effects
+        ability = None
+        if use_special:
+            char_abilities = self.skill_service.get_character_abilities(user.livello_selezionato)
+            if char_abilities:
+                ability = char_abilities[0]
         
         # Limit to 5 mobs
         mobs = mobs[:5]
         mob_count = len(mobs)
         
         title = "🌟 **ATTACCO SPECIALE AD AREA!**" if use_special else "💥 **ATTACCO AD AREA!**"
-        summary_msg = f"{title} (Max 5 bersagli)\n"
-        extra_data = {
-            'delete_message_ids': [],
-            'mob_ids': [m.id for m in mobs]
-        }
+        # Apply Status Effects from Ability (Once for the user)
+        from services.status_effects import StatusEffect
+        if ability:
+            status_data = self.combat_service.apply_status_effect(user, ability, source_id=None)
+            if status_data:
+                effect_name = status_data['effect']
+                duration = status_data['duration']
+                StatusEffect.apply_status(user, effect_name, duration=duration, source_id=user.id_telegram)
+                
+                effect_icon = StatusEffect.EFFECTS.get(effect_name, {}).get('icon', '✨')
+                summary_msg += f"{effect_icon} **ATTIVATO:** {effect_name.replace('_', ' ').title()}!\n"
         
         for mob in mobs:
             # 70% to target, 50% to others
@@ -1501,6 +1624,7 @@ class PvEService:
         finally:
             session.close()
 
+    @Database.transaction_retry(max_retries=3)
     def mob_random_attack(self, specific_mob_id=None, chat_id=None, session=None):
         """Mobs attack random users. If specific_mob_id is provided, only that mob attacks."""
         local_session = False
@@ -1547,7 +1671,14 @@ class PvEService:
 
                             continue
 
-                    # Check mob cooldown based on speed
+                    # 1. Start of Turn: Mana Regeneration & Reset Defense
+                    mob.is_defending = False
+                    if (mob.max_mana or 0) > 0:
+                        # Regenerate 5% of max mana per turn
+                        reg = max(1, int(mob.max_mana * 0.05))
+                        mob.mana = min(mob.max_mana, (mob.mana or 0) + reg)
+
+                    # 2. Check mob cooldown based on speed
                     mob_speed = mob.speed if mob.speed else 30
                     cooldown_seconds = 60 / (1 + mob_speed * 0.05)
                     
@@ -1556,14 +1687,50 @@ class PvEService:
                         elapsed = (datetime.datetime.now() - last_attack).total_seconds()
                         if elapsed < cooldown_seconds:
                             continue # This mob is on cooldown
-                    
-                    # AoE Logic
-                    is_aoe = False
+
+                    # 3. Decision Logic (Tactical AI)
+                    action = "attack" # Default action
                     difficulty = mob.difficulty_tier if mob.difficulty_tier else 1
+                    
+                    # Tactical Decision: High difficulty mobs might defend
+                    if difficulty >= 2 and random.random() < 0.15:
+                        action = "defend"
+                    
+                    # Tactical Decision: Use special attack if enough mana
+                    is_special = False
+                    if action == "attack" and (mob.mana or 0) >= 30:
+                        # 40% chance to use special if mana available
+                        if random.random() < 0.40:
+                            is_special = True
+                            mob.mana -= 30
+
+                    # 4. Execute Defense Early if chosen
+                    if action == "defend":
+                        mob.is_defending = True
+                        mob.last_attack_time = datetime.datetime.now()
+                        
+                        # Add a defense "event" to show in chat
+                        msg_def = f"🛡️ **{mob.name}** si mette in posizione difensiva!"
+                        # Get status card to show updated state (e.g. mana)
+                        card_def = self.get_status_card(mob) # We don't have user_id here for scouter, but its fine for defense log
+                        msg_def += f"\n\n{card_def}"
+                        
+                        attack_events.append({
+                            'message': msg_def,
+                            'image': self.get_enemy_image_path(mob),
+                            'mob_name': mob.name,
+                            'mob_id': mob.id,
+                            'last_message_id': mob.last_message_id
+                        })
+                        continue
+
+                    # 5. AoE Logic (Part of decision or separate?)
+                    # If special attack used, it has higher chance of being AoE
+                    is_aoe = False
                     if mob.is_boss:
                         if random.random() < 0.85:
                             is_aoe = True
-                    elif difficulty >= 3 and random.random() < 0.20:
+                    elif is_special or (difficulty >= 3 and random.random() < 0.20):
                         is_aoe = True
                     
                     # Get targets using TargetingService
@@ -1618,7 +1785,7 @@ class PvEService:
                                 effects = StatusEffect.get_active_effects(t_user)
                                 # Check for Defense Up (Shield)
                                 if any(e.get('effect') == 'defense_up' for e in effects):
-                                    weight *= 5.0 # 5x Aggro (Massive increase to ensure Tank role works)
+                                    weight *= 15.0 # 15x Aggro (Massive increase for Tank role)
                         except:
                             pass
                             
@@ -1695,6 +1862,10 @@ class PvEService:
                         is_aoe_target = is_aoe
                         damage = self.combat_service.calculate_mob_damage_to_user(mob, target, is_aoe=is_aoe_target, is_boss=mob.is_boss)
                         
+                        # Apply special attack multiplier
+                        if is_special:
+                            damage = int(damage * 1.5)
+                        
                         # NEW: Parry Processing
                         parry_result = self.parry_service.process_enemy_attack(target.id_telegram, mob.id, damage)
                         if parry_result['success']:
@@ -1759,12 +1930,14 @@ class PvEService:
                                 else:
                                     prefix = "🛡️ **PARATA!**\n⚡ Cooldown azzerato! Contrattacco entro 5s → **CRITICO ASSICURATO**!\n"
                                     
-                            msg = f"☠️ **Attacco del Boss!**\n**{boss_name_escaped}** ha attaccato {tag}\n{prefix}💥 Danni inflitti: **{damage}**"
+                            special_text = "✨ **ATTACCO SPECIALE!**\n" if is_special else ""
+                            msg = f"☠️ **Attacco del Boss!**\n{special_text}**{boss_name_escaped}** ha attaccato {tag}\n{prefix}💥 Danni inflitti: **{damage}**"
                     else:
                         if is_aoe:
                             tags = ", ".join([r['tag'] for r in damage_results])
                             avg_damage = sum([r['damage'] for r in damage_results]) // len(damage_results)
-                            msg = f"🔥 **Attacco ad Area!**\n**{mob.name}** ha colpito: {tags}\n💥 Danni inflitti: **{avg_damage}** (media)"
+                            special_text = "✨ **Attacco Speciale ad Area!**\n" if is_special else "🔥 **Attacco ad Area!**\n"
+                            msg = f"{special_text}**{mob.name}** ha colpito: {tags}\n💥 Danni inflitti: **{avg_damage}** (media)"
                         else:
                             res = damage_results[0]
                             tag = res['tag']
@@ -1777,12 +1950,25 @@ class PvEService:
                                 else:
                                     prefix = "🛡️ **PARATA!**\n⚡ Cooldown azzerato! Contrattacco entro 5s → **CRITICO ASSICURATO**!\n"
                                     
-                            msg = f"⚠️ **{mob.name}** ha attaccato {tag}\n{prefix}💥 Danni inflitti: **{damage}**"
+                            special_text = "✨ **ATTACCO SPECIALE!**\n" if is_special else ""
+                            msg = f"⚠️ {special_text}**{mob.name}** ha attaccato {tag}\n{prefix}💥 Danni inflitti: **{damage}**"
                         
                         # Pass the first target's ID to check for Scouter
                         target_id_for_scouter = targets[0].id_telegram if targets else None
                         card = self.get_status_card(mob, user_id=target_id_for_scouter, session=session)
-                        msg += f"\n\n{card}\n⏳ Cooldown: {int(cooldown_seconds)}s"
+                        msg += f"\n\n{card}"
+                        
+                        # Check Scouter for Cooldown visibility
+                        has_scouter = False
+                        if target_id_for_scouter:
+                            equipped = self.equipment_service.get_equipped_items(target_id_for_scouter, session=session)
+                            for ui, item in equipped:
+                                if item.effect_type == 'scouter_scan':
+                                    has_scouter = True
+                                    break
+                        
+                        if has_scouter:
+                            msg += f"\n⏳ Cooldown: {int(cooldown_seconds)}s"
                     
                     if death_messages:
                         msg += "\n\n" + "\n".join(death_messages)
@@ -1967,6 +2153,11 @@ class PvEService:
             # Actually, we might want to show the season end msg?
             # For now, just consume it safely.
             
+            # Item Drops
+            item_msg = self.reward_service._handle_item_drop(p.user_id, True, session=session)
+            # Resource Drops
+            resource_msg = self.reward_service._handle_resource_drop(p.user_id, boss, session=session)
+            
             # Get username for the message
             p_user = session.query(Utente).filter_by(id_telegram=p.user_id).first()
             p_name = p_user.game_name if p_user else f"User {p.user_id}"
@@ -1991,33 +2182,58 @@ class PvEService:
                     reward_line += f" (Prossimo livello: {level_up_info['next_level_exp']} Exp)"
                 reward_line += f" (+2 punti statistica)"
             
+            if item_msg:
+                reward_line += f"\n   {item_msg}"
+            if resource_msg:
+                reward_line += f"\n   {resource_msg}"
+            
             reward_details.append(reward_line)
         
         if local_session:
             session.close()
         return reward_details, actual_total_wumpa, actual_total_xp
 
+    def get_mob_details(self, mob_id):
+        """Get the full Mob ORM object by ID"""
+        session = self.db.get_session()
+        try:
+            return session.query(Mob).filter_by(id=mob_id).first()
+        finally:
+            session.close()
+
     def get_mob_status_by_id(self, mob_id):
         """Get specific mob info for display by ID"""
         session = self.db.get_session()
-        mob = session.query(Mob).filter_by(id=mob_id).first()
-        session.close()
-        
-        if not mob:
-            return None
-        
-        return {
-            'name': mob.name,
-            'health': mob.health,
-            'max_health': mob.max_health,
-            'attack': mob.attack_damage,
-            'type': mob.attack_type,
-            'level': mob.mob_level if hasattr(mob, 'mob_level') and mob.mob_level else 1,
-            'speed': mob.speed if hasattr(mob, 'speed') else 30,
-            'resistance': mob.resistance if hasattr(mob, 'resistance') else 0,
-            'image': self.get_enemy_image_path(mob),
-            'is_boss': mob.is_boss
-        }
+        try:
+            mob = session.query(Mob).filter_by(id=mob_id).first()
+            if not mob:
+                return None
+            
+            # Calculate precise cooldown
+            mob_speed = mob.speed if mob.speed else 30
+            cooldown_seconds = 60 / (1 + mob_speed * 0.05)
+            
+            next_attack_in = 0
+            if mob.last_attack_time:
+                elapsed = (datetime.datetime.now() - mob.last_attack_time).total_seconds()
+                next_attack_in = max(0, cooldown_seconds - elapsed)
+            
+            return {
+                'name': mob.name,
+                'health': mob.health,
+                'max_health': mob.max_health,
+                'attack': mob.attack_damage,
+                'type': mob.attack_type,
+                'level': mob.mob_level if hasattr(mob, 'mob_level') and mob.mob_level else 1,
+                'speed': mob_speed,
+                'resistance': mob.resistance if hasattr(mob, 'resistance') else 0,
+                'image': self.get_enemy_image_path(mob),
+                'is_boss': mob.is_boss,
+                'cooldown_total': round(cooldown_seconds, 1),
+                'next_attack_in': round(next_attack_in, 1)
+            }
+        finally:
+            session.close()
 
     def get_current_mob_status(self, mob_id=None):
         """Get current mob info for display"""
@@ -2140,34 +2356,24 @@ class PvEService:
         if is_user:
              card += f" ❤️ **Vita**: {hp}/{max_hp}\n"
         else:
-            # Check Scouter
-            has_scouter = False
-            if user_id:
-                equipped = self.equipment_service.get_equipped_items(user_id, session=session)
-                for ui, item in equipped:
-                    if item.special_effect_id == 'scouter_scan':
-                        has_scouter = True
-                        break
+            # Percentage Bar
+            safe_hp = hp if hp is not None else 0
+            safe_max_hp = max_hp if max_hp is not None else 1
+            if safe_max_hp <= 0: safe_max_hp = 1
             
-            if has_scouter:
-                card += f" ❤️ **Vita**: {hp}/{max_hp} (Scouter Active)\n"
-            else:
-                # Percentage Bar
-                safe_hp = hp if hp is not None else 0
-                safe_max_hp = max_hp if max_hp is not None else 1
-                if safe_max_hp <= 0: safe_max_hp = 1
-                
-                percent = int((safe_hp / safe_max_hp) * 100)
-                bar_len = 10
-                filled = int((percent / 100) * bar_len)
-                bar = "█" * filled + "░" * (bar_len - filled)
-                card += f" ❤️ **Vita**: {bar} {percent}%\n"
+            percent = int((safe_hp / safe_max_hp) * 100)
+            bar_len = 10
+            filled = int((percent / 100) * bar_len)
+            bar = "█" * filled + "░" * (bar_len - filled)
+            card += f" ❤️ **Vita**: {bar} {percent}%\n"
 
-        card += f" ⚡ **Velocità**: {speed}\n"
-        if mana is not None:
+        # Stats Display Logic (Speed, Mana, Level)
+        if is_user:
+            card += f" ⚡ **Velocità**: {speed}\n"
             card += f" 🌀 **Mana**: {mana}/{max_mana}\n"
-        if not is_user:
+        else:
             card += f" 📊 **Livello**: {level}\n"
+
         card += "          *aROMa*\n"
         card += "╚═══════════════════════╝"
         return card

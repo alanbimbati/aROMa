@@ -207,20 +207,200 @@ def migrate_parry_system(db):
     finally:
         session.close()
 
-def migrate_premium_currency(db):
-    """Add cristalli_aroma column to utente table"""
+def migrate_alchemy_system(db):
+    """Create alchemy queue table"""
     session = db.get_session()
     try:
+        print("Checking alchemy system tables...")
         inspector = inspect(db.engine)
-        columns = [col['name'] for col in inspector.get_columns('utente')]
-        if 'cristalli_aroma' not in columns:
-            print("Adding cristalli_aroma column to utente table...")
-            session.execute(text("ALTER TABLE utente ADD COLUMN cristalli_aroma INTEGER NOT NULL DEFAULT 0"))
-            session.commit()
-            print("✅ Successfully added cristalli_aroma column!")
+        existing_table_names = inspector.get_table_names()
+        
+        if 'alchemy_queue' not in existing_table_names:
+            print("Creating alchemy_queue table...")
+            session.execute(text("""
+                CREATE TABLE alchemy_queue (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL REFERENCES utente(id_Telegram),
+                    potion_name VARCHAR(100) NOT NULL,
+                    start_time TIMESTAMP NOT NULL DEFAULT NOW(),
+                    completion_time TIMESTAMP NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'in_progress',
+                    xp_gain INTEGER DEFAULT 0
+                );
+                CREATE INDEX idx_alchemy_user ON alchemy_queue(user_id, status);
+            """))
+            print("✅ alchemy_queue table created")
+        session.commit()
     except Exception as e:
         session.rollback()
-        print(f"Error migrating premium currency: {e}")
+        print(f"Error migrating alchemy system: {e}")
+    finally:
+        session.close()
+
+def migrate_guild_facilities(db):
+    """Add laboratory and garden levels to guilds table"""
+    session = db.get_session()
+    try:
+        print("Checking guild facilities columns...")
+        inspector = inspect(db.engine)
+        columns = [col['name'] for col in inspector.get_columns('guilds')]
+        
+        if 'laboratory_level' not in columns:
+            print("Adding laboratory_level to guilds...")
+            session.execute(text("ALTER TABLE guilds ADD COLUMN laboratory_level INTEGER DEFAULT 1"))
+        
+        if 'garden_level' not in columns:
+            print("Adding garden_level to guilds...")
+            session.execute(text("ALTER TABLE guilds ADD COLUMN garden_level INTEGER DEFAULT 1"))
+            
+        session.commit()
+        print("✅ Guild facilities columns verified!")
+    except Exception as e:
+        session.rollback()
+        print(f"Error migrating guild facilities: {e}")
+    finally:
+        session.close()
+
+def migrate_guild_upgrades_v2(db):
+    """Add new themed upgrades and customization columns to guilds table"""
+    session = db.get_session()
+    try:
+        print("Checking new guild upgrade columns...")
+        inspector = inspect(db.engine)
+        columns = [col['name'] for col in inspector.get_columns('guilds')]
+        
+        new_cols = {
+            'dragon_stables_level': 'INTEGER DEFAULT 0',
+            'ancient_temple_level': 'INTEGER DEFAULT 0',
+            'magic_library_level': 'INTEGER DEFAULT 0',
+            'inn_image': 'VARCHAR(255)',
+            'bordello_image': 'VARCHAR(255)',
+            'laboratory_image': 'VARCHAR(255)',
+            'garden_image': 'VARCHAR(255)'
+        }
+        
+        missing = []
+        for col_name, col_type in new_cols.items():
+            if col_name not in columns:
+                missing.append(f"ALTER TABLE guilds ADD COLUMN {col_name} {col_type}")
+        
+        if missing:
+            print(f"Adding {len(missing)} new columns to guilds...")
+            for sql in missing:
+                session.execute(text(sql))
+            session.commit()
+            print("✅ Guild upgrade columns added!")
+        else:
+            print("✅ Guild upgrade columns already exist.")
+            
+    except Exception as e:
+        session.rollback()
+        print(f"Error migrating guild upgrades v2: {e}")
+    finally:
+        session.close()
+
+def migrate_cultivation_system(db):
+    """Create garden_slots table if not exists"""
+    session = db.get_session()
+    try:
+        print("Checking cultivation tables...")
+        inspector = inspect(db.engine)
+        tables = inspector.get_table_names()
+        
+        if 'garden_slots' not in tables:
+            print("Creating garden_slots table...")
+            # We use SQLAlchemy create_all for new tables efficiently
+            from models.cultivation import GardenSlot
+            GardenSlot.__table__.create(db.engine)
+            print("✅ garden_slots table created!")
+        else:
+            # Check for missing columns in existing table
+            columns = [col['name'] for col in inspector.get_columns('garden_slots')]
+            missing = []
+            if 'moisture' not in columns:
+                missing.append("ALTER TABLE garden_slots ADD COLUMN moisture INTEGER DEFAULT 100")
+            if 'last_watered_at' not in columns:
+                missing.append("ALTER TABLE garden_slots ADD COLUMN last_watered_at TIMESTAMP")
+            if 'rot_time' not in columns:
+                missing.append("ALTER TABLE garden_slots ADD COLUMN rot_time TIMESTAMP")
+            
+            if missing:
+                print(f"Adding {len(missing)} missing columns to garden_slots...")
+                for sql in missing:
+                    session.execute(text(sql))
+                session.commit()
+                print("✅ Garden columns added successfully!")
+            
+    except Exception as e:
+        session.rollback()
+        print(f"Error migrating cultivation system: {e}")
+    finally:
+        session.close()
+
+def migrate_user_table(db):
+    """Add missing columns to utente table"""
+    session = db.get_session()
+    try:
+        print("Checking utente table for missing columns...")
+        inspector = inspect(db.engine)
+        columns = [col['name'] for col in inspector.get_columns('utente')]
+        
+        if 'profumino_until' not in columns:
+            print("Adding profumino_until to utente...")
+            session.execute(text("ALTER TABLE utente ADD COLUMN profumino_until TIMESTAMP WITHOUT TIME ZONE"))
+            
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(f"Error migrating utente table: {e}")
+    finally:
+        session.close()
+
+def migrate_mob_tactical(db):
+    """Add mana and defense columns to mob table"""
+    session = db.get_session()
+    try:
+        print("Checking mob table for tactical columns...")
+        
+        # Check existing columns using information_schema directly (no locks)
+        existing_cols = session.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'mob'
+        """)).fetchall()
+        existing_cols = [row[0] for row in existing_cols]
+        
+        missing = []
+        if 'mana' not in existing_cols:
+            missing.append("ALTER TABLE mob ADD COLUMN mana INTEGER DEFAULT 0")
+        if 'max_mana' not in existing_cols:
+            missing.append("ALTER TABLE mob ADD COLUMN max_mana INTEGER DEFAULT 0")
+        if 'is_defending' not in existing_cols:
+            missing.append("ALTER TABLE mob ADD COLUMN is_defending BOOLEAN DEFAULT FALSE")
+            
+        if missing:
+            print(f"Adding {len(missing)} tactical columns to mob table...")
+            # Set timeout to avoid hanging indefinitely if table is locked
+            try:
+                session.execute(text("SET lock_timeout = '5s'"))
+            except Exception as e:
+                print(f"Could not set lock_timeout (might not be supported): {e}")
+
+            for sql in missing:
+                try:
+                    session.execute(text(sql))
+                    print(f"Executed: {sql}")
+                except Exception as e:
+                    print(f"⚠️ Failed to execute {sql}: {e}")
+                    session.rollback()
+            session.commit()
+            print("✅ Mob tactical columns check complete!")
+        else:
+            print("✅ Mob tactical columns already exist.")
+            
+    except Exception as e:
+        session.rollback()
+        print(f"Error migrating mob table: {e}")
     finally:
         session.close()
 
@@ -248,7 +428,17 @@ def seed_refined_materials(db):
         materials = [
             {'id': 1, 'name': 'Rottami', 'rarity': 1},
             {'id': 2, 'name': 'Materiale Pregiato', 'rarity': 2},
-            {'id': 3, 'name': 'Diamante', 'rarity': 3}
+            {'id': 3, 'name': 'Diamante', 'rarity': 3},
+            
+            # Alchemy Materials
+            {'id': 4, 'name': 'Frammenti Alchemici', 'rarity': 1},
+            {'id': 5, 'name': 'Estratto Puro', 'rarity': 2},
+            {'id': 6, 'name': 'Elisir Primordiale', 'rarity': 3},
+            
+            # Garden Materials
+            {'id': 7, 'name': 'Compost Organico', 'rarity': 1},
+            {'id': 8, 'name': 'Concime Arricchito', 'rarity': 2},
+            {'id': 9, 'name': 'Essenza Botanica', 'rarity': 3}
         ]
         for mat in materials:
             session.execute(text("""
@@ -320,15 +510,16 @@ def seed_equipment(db):
             for row in reader:
                 session.execute(text("""
                     INSERT INTO equipment (id, name, slot, rarity, min_level, stats_json, 
-                                          crafting_time, crafting_requirements, description, set_name)
+                                          crafting_time, crafting_requirements, description, set_name, effect_type)
                     VALUES (:id, :name, :slot, :rarity, :min_level, :stats_json, 
-                            :crafting_time, :crafting_requirements, :description, :set_name)
+                            :crafting_time, :crafting_requirements, :description, :set_name, :effect_type)
                     ON CONFLICT (id) DO UPDATE SET
                         name = EXCLUDED.name, slot = EXCLUDED.slot, rarity = EXCLUDED.rarity,
                         min_level = EXCLUDED.min_level, stats_json = EXCLUDED.stats_json,
                         crafting_time = EXCLUDED.crafting_time, 
                         crafting_requirements = EXCLUDED.crafting_requirements,
-                        description = EXCLUDED.description, set_name = EXCLUDED.set_name
+                        description = EXCLUDED.description, set_name = EXCLUDED.set_name,
+                        effect_type = EXCLUDED.effect_type
                 """), {
                     'id': int(row['id']),
                     'name': row['name'],
@@ -339,7 +530,8 @@ def seed_equipment(db):
                     'crafting_time': int(row.get('crafting_time', 0)),
                     'crafting_requirements': row.get('crafting_requirements', '{}'),
                     'description': row.get('description', ''),
-                    'set_name': row.get('set_name', '')
+                    'set_name': row.get('set_name', ''),
+                    'effect_type': row.get('effect_type', None)
                 })
         session.commit()
         print("✅ Equipment seeded!")
@@ -405,7 +597,13 @@ def init_database():
     print("🔄 Running schema migrations...")
     migrate_refinery(db)
     migrate_parry_system(db)
-    migrate_premium_currency(db)
+    # migrate_premium_currency(db) # Definition missing
+    migrate_alchemy_system(db)
+    migrate_guild_facilities(db)
+    migrate_guild_upgrades_v2(db)
+    migrate_cultivation_system(db)
+    migrate_user_table(db)
+    migrate_mob_tactical(db)
     migrate_recalculate_stats(db)
     
     # 3. Seeding (Idempotent ON CONFLICT)

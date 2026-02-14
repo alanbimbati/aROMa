@@ -35,96 +35,70 @@ Quando appare un nemico (Mob o Boss), hai tre opzioni:
    • **Cooldown**: Il tempo di ricarica è raddoppiato rispetto a un attacco normale.
    • **Utilità**: Ideale quando ci sono molti nemici deboli. Disponibile solo con almeno 2 nemici.
 
-**Formule di Danno**
+## 🥊 Formule di Combattimento
 
-**Attacco Normale**
-Danno Finale = (Danno Base + Random(10, 30)) × Moltiplicatore Critico
+Per i giocatori più tecnici, ecco come il sistema calcola i risultati delle tue azioni:
 
-**Attacco Speciale**
-Danno Finale = (Danno Base + Danno Skill Personaggio) × Moltiplicatore Critico
+### ⚔️ Danno Finale
+Il danno non è mai fisso, ma oscilla per rendere ogni turno unico:
+- **Attacco Base**: `(Danno Base + Random(10, 30)) × Moltiplicatore Critico`
+- **Attacco Speciale**: `(Danno Base + Potenza Skill) × Moltiplicatore Critico`
+- **Attacco AoE**: `(Danno Base × 0.70) × Moltiplicatore Critico` (70% al main, 50% agli altri)
 
-**Attacco AoE**
-Danno Finale = (Danno Base × 0.7) × Moltiplicatore Critico (su ogni bersaglio)
+### ⚡ Cooldown (Tempo di Ricarica)
+La velocità riduce il tempo che devi aspettare tra un attacco e l'altro:
+- **Formula**: `60 / (1 + Velocità × 0.05)` secondi.
+- **Esempio**: Con 20 punti velocità, il tempo scende da 60 a 30 secondi.
 
-**Critico**
-• **Probabilità Base**: 5% + (Punti Critico × 1%)
-• **Moltiplicatore**: 1.5x (o superiore per alcuni personaggi)
+### 🔥 Aggro & Taunt (Minaccia)
+I nemici decidono chi attaccare in base alla "Minaccia" generata:
+- **Attacco**: Genera minaccia pari al danno inflitto (`1:1`).
+- **Difesa (Tank)**: Attivare la difesa moltiplica la tua minaccia attuale per **15x** e imposta un "Taunt" diretto sul mostro per 2 minuti.
 
-**Resistenza**
-Danno Subito = Danno Nemico × (1 - Resistenza%)
-Esempio: Con 20% resistenza, un attacco da 100 danni diventa 80.
+---
 
-## 🛡️ Nemici
+## 🛡️ Sistema Anti-Farming & Affaticamento
 
-I nemici hanno diverse caratteristiche:
-• **Livello**: Determina la loro forza.
-• **Salute**: I punti vita che devi azzerare.
-• **Velocità**: Determina chi attacca per primo.
-• **Resistenza**: Riduce il danno subito (in percentuale).
+Per mantenere l'equilibrio del mondo di Aura, esistono meccanismi che impediscono lo sfruttamento di nemici troppo deboli.
 
-## 💀 Morte e Recupero
+### 🚫 Penalità di Livello (Anti-Farming)
+Affrontare nemici molto più deboli di te riduce drasticamente i guadagni:
+- **Condizione**: Se il tuo livello supera quello del mostro di oltre **10 livelli**.
+- **Effetto**: 
+    - **EXP**: Ridotta del **50%**.
+    - **Wumpa**: Ridotti del **75%**.
 
-Se la tua salute scende a 0:
-• Non puoi più attaccare.
-• Devi aspettare il recupero automatico giornaliero (20% HP) o usare una **Pozione di Cura**.
-• Puoi acquistare pozioni nel Negozio con il comando /shop.
+### 🥱 Affaticamento (Fatigue)
+L'uso intensivo delle proprie energie porta a un calo dell'efficienza giornaliera:
+- **Soglia**: Dopo aver guadagnato **300 Wumpa** in un singolo giorno.
+- **Effetto**: Tutte le ricompense (EXP e Wumpa) subiscono una riduzione del **10%**.
+- **Reset**: Il contatore si azzera ogni giorno a mezzanotte.
+
+---
+
+## 🌟 Crescita e Scaling
+
+L'ascesa verso il potere diventa più ardua man mano che ci si avvicina alle vette del mondo:
+
+- **EXP Necessaria**: La quantità di esperienza richiesta per salire segue una curva quadratica (`100 × Livello^2`). 
+- **Scaling Alto Livello**: Oltre il livello 50, la curva diventa più ripida per riflettere la rarità dei guerrieri leggendari.
+- **Consiglio**: Per livellare in modo efficiente, cerca sempre di affrontare nemici vicini al tuo livello (entro il range di +/- 5 livelli) per massimizzare il bonus di Tier e contributo.
+
+---
 
 ## 💰 Ricompense e Drop
 
-Ogni vittoria in combattimento ti garantisce diverse ricompense:
+Ogni vittoria garantisce ricompense calcolate con precisione:
 
 ### 🌟 Esperienza (EXP)
-
-L'esperienza è calcolata in base a diversi fattori:
-
 **Formula Base:**
 ```
 EXP = (Livello Nemico × 5) × (Tier Difficoltà ^ 1.8) × Contributo
 ```
-
-**Tier Difficoltà:**
-- **Tier 1**: Mob deboli e comuni (×1 EXP)
-- **Tier 2**: Mob standard (×3.5 EXP)
-- **Tier 3**: Mob forti (×6.7 EXP)
-- **Tier 4**: Mob elite (×10.6 EXP)
-- **Tier 5-6**: Mini-boss (×18-25 EXP)
-- **Tier 7-8**: Boss principali (×35-50 EXP)
-
-**Contributo:** L'EXP totale del nemico viene distribuita in base al danno inflitto.
-- Se infliggi il 50% del danno totale, ricevi il 50% dell'EXP
-- Chi dà il colpo finale non riceve bonus extra
-- Variazione casuale: ±10% sull'EXP finale
-
-**Esempi:**
-- Cell Junior (Lv 9, Tier 4): ~475 EXP circa
-- Boss Lv 20 (Tier 7): ~2,400 EXP circa
-- Mob comune Lv 5 (Tier 1): ~25 EXP circa
-
-**NOTA**: L'EXP necessaria per salire di livello aumenta progressivamente. A livelli alti (50+), servono decine di mob per leveluppare.
+- **Fattore Tier**: I Boss (Tier 7-8) forniscono un moltiplicatore massiccio (fino a 50x) rispetto ai mob comuni.
+- **Contributo**: L'EXP totale viene divisa proporzionalmente al danno che hai inflitto al nemico.
 
 ### 💎 Punti (Wumpa)
-
-I Frutti Wumpa 🍑 sono la moneta di gioco:
-- **Formula**: Danno inflitto × 0.05 × Tier Difficoltà
-- **Uso**: Comprare pozioni, personaggi e item dal negozio (/shop)
-
-### 🔩 Risorse Grezze
-
-Frammenti di metallo, cristalli e altri materiali:
-- **Mob Comuni**: Drop basato su livello e fortuna
-- **Boss**: Garantiscono sempre drop di risorse rare ed epiche
-- **Utilizzo**: Necessarie per la Raffineria e Crafting
-
-### ✨ Cristalli aROMa (Premium)
-
-I **Cristalli aROMa** sono una valuta premium esclusiva utilizzata per:
-- **Skin personalizzate** per personaggi
-- **Effetti visivi** speciali
-- **Oggetti cosmetici** unici
-
-**Come ottenerli:**
-- Supportando il progetto tramite **donazioni**
-- Eventi speciali e ricompense stagionali
-- Premi esclusivi per la community
-
-**NOTA**: I Cristalli aROMa NON danno vantaggi di gioco - sono puramente estetici!
+I Frutti Wumpa 🍑 sono calcolati in base all'efficacia del tuo combattimento:
+- **Formula**: `Danno inflitto × 0.05 × Tier Difficoltà`.
+- **Esempio**: Fare 100 danni a un Boss Tier 8 ti darà molti più Wumpa che farli a un mob Tier 1.

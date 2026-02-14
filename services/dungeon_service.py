@@ -4,6 +4,7 @@ from models.dungeon_progress import DungeonProgress
 from models.pve import Mob
 from models.user import Utente
 from models.system_state import SystemState
+from services.event_dispatcher import EventDispatcher
 import datetime
 import random
 import csv
@@ -18,6 +19,7 @@ class DungeonService:
     def __init__(self):
         self.db = Database()
         self.dungeons_cache = self.load_dungeons()
+        self.event_dispatcher = EventDispatcher()
 
     def check_daily_dungeon_trigger(self, chat_id=None, bot=None):
         """Checks if a dungeon should start or if hype phase is due. Run periodically."""
@@ -867,6 +869,15 @@ class DungeonService:
             if user:
                 name = user.username if user.username else user.nome
                 participant_names.append(name)
+                
+                # NEW: Log dungeon run event for achievement
+                self.event_dispatcher.log_event(
+                    event_type='dungeon_run',
+                    user_id=p.user_id,
+                    value=1,
+                    context={'dungeon_id': dungeon_id, 'dungeon_name': dungeon.name},
+                    session=session
+                )
         
         participants_str = ", ".join(participant_names) if participant_names else "nessuno"
         

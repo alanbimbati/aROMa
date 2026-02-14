@@ -8,10 +8,11 @@ La Raffineria permette di trasformare le risorse grezze ottenute dai mostri in m
 2. **Accedi alla Raffineria**: Usa il comando `/guild` → Armeria → Raffineria
 3. **Raffina**: Seleziona la risorsa del giorno e scegli la quantità da raffinare
 4. **Attendi**: La raffinazione richiede tempo reale (30 secondi per unità, ridotto dal livello Armeria)
-5. **Ricevi Automaticamente**: Una volta terminata, riceverai automaticamente i materiali con una notifica
+5. **Ritira Manualmente**: Una volta terminata, devi ritirare i materiali cliccando su "Ritira" nella raffineria.
 
-> [!NOTE]
-> La raffineria permette di lavorare **solo una risorsa al giorno**. La risorsa cambia ogni 24 ore.
+> [!IMPORTANT]
+> **Restrizione Materiali**: La Raffineria ora lavora **solo materiali per Equipaggiamento** (Metallo, Tessuto, Cristallo, Polvere di Stelle, Essenza Vitale).
+> Per i materiali del Giardino usa la **Compostiera**, per quelli Alchemici usa la **Distillazione** nel Laboratorio.
 
 ## 📊 Formula di Raffinazione
 

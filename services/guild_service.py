@@ -89,7 +89,16 @@ class GuildService:
             'brewery_level': guild.brewery_level,
             'emblem': guild.emblem,
             'skin_id': guild.skin_id,
-            'description': guild.description
+            'description': guild.description,
+            'laboratory_level': guild.laboratory_level,
+            'garden_level': guild.garden_level,
+            'dragon_stables_level': guild.dragon_stables_level,
+            'ancient_temple_level': guild.ancient_temple_level,
+            'magic_library_level': guild.magic_library_level,
+            'inn_image': guild.inn_image,
+            'bordello_image': guild.bordello_image,
+            'laboratory_image': guild.laboratory_image,
+            'garden_image': guild.garden_image
         }
         session.close()
         return guild_data
@@ -597,6 +606,219 @@ class GuildService:
         session.commit()
         session.close()
         return True, f"Gilda rinominata da '{old_name}' a '{new_name}'!"
+
+    def upgrade_laboratory(self, leader_id):
+        """Upgrade the guild laboratory"""
+        session = self.db.get_session()
+        member = session.query(GuildMember).filter_by(user_id=leader_id, role="Leader").first()
+        if not member:
+            session.close()
+            return False, "Solo il capogilda può gestire gli upgrade!"
+            
+        guild = session.query(Guild).filter_by(id=member.guild_id).first()
+        
+        # Default if null
+        if guild.laboratory_level is None: guild.laboratory_level = 1
+        
+        if guild.laboratory_level >= 10:
+            session.close()
+            return False, "Il Laboratorio è già al livello massimo (Lv. 10)!"
+            
+        # Cost Logic: 
+        # Lv 1->2: 2,500
+        # ...
+        # Lv 9->10: 100,000
+        # Curve: Base * (Multiplier ^ (Level - 1))?
+        # Let's use specific values similar to user request
+        COSTS = {
+            1: 2500,
+            2: 5000,
+            3: 10000,
+            4: 20000,
+            5: 35000,
+            6: 50000,
+            7: 65000,
+            8: 80000,
+            9: 100000
+        }
+        cost = COSTS.get(guild.laboratory_level, 100000)
+        
+        if guild.wumpa_bank < cost:
+            session.close()
+            return False, f"Servono {cost} Wumpa nella banca della gilda per questo upgrade!"
+            
+        guild.wumpa_bank -= cost
+        guild.laboratory_level += 1
+        new_level = guild.laboratory_level
+        
+        session.commit()
+        session.close()
+        return True, f"Laboratorio Alchemico potenziato al livello {new_level}!"
+
+    def upgrade_garden(self, leader_id):
+        """Upgrade the guild garden"""
+        session = self.db.get_session()
+        member = session.query(GuildMember).filter_by(user_id=leader_id, role="Leader").first()
+        if not member:
+            session.close()
+            return False, "Solo il capogilda può gestire gli upgrade!"
+            
+        guild = session.query(Guild).filter_by(id=member.guild_id).first()
+        
+        # Default if null
+        if guild.garden_level is None: guild.garden_level = 1
+        
+        if guild.garden_level >= 10:
+            session.close()
+            return False, "Il Giardino è già al livello massimo (Lv. 10)!"
+            
+        # Same cost structure as Lab
+        COSTS = {
+            1: 2500,
+            2: 5000,
+            3: 10000,
+            4: 20000,
+            5: 35000,
+            6: 50000,
+            7: 65000,
+            8: 80000,
+            9: 100000
+        }
+        cost = COSTS.get(guild.garden_level, 100000)
+        
+        if guild.wumpa_bank < cost:
+            session.close()
+            return False, f"Servono {cost} Wumpa nella banca della gilda per questo upgrade!"
+            
+        guild.wumpa_bank -= cost
+        guild.garden_level += 1
+        new_level = guild.garden_level
+        
+        session.commit()
+        session.close()
+        return True, f"Giardino Botanico potenziato al livello {new_level}!"
+
+    def upgrade_dragon_stables(self, leader_id):
+        """Upgrade the dragon stables (Reduced CD)"""
+        session = self.db.get_session()
+        member = session.query(GuildMember).filter_by(user_id=leader_id, role="Leader").first()
+        if not member:
+            session.close()
+            return False, "Solo il capogilda può gestire gli upgrade!"
+        guild = session.query(Guild).filter_by(id=member.guild_id).first()
+        
+        if guild.dragon_stables_level >= 5:
+            session.close()
+            return False, "Le Scuderie dei Draghi sono già al livello massimo (Lv. 5)!"
+            
+        cost = (guild.dragon_stables_level + 1) * 2000
+        if guild.wumpa_bank < cost:
+            session.close()
+            return False, f"Servono {cost} Wumpa in banca per questo upgrade!"
+            
+        guild.wumpa_bank -= cost
+        guild.dragon_stables_level += 1
+        new_level = guild.dragon_stables_level
+        session.commit()
+        session.close()
+        return True, f"🐉 Scuderie dei Draghi potenziate al livello {new_level}! Il tempo di ricarica dei tuoi membri è ridotto."
+
+    def upgrade_ancient_temple(self, leader_id):
+        """Upgrade the ancient temple (Crit bonus)"""
+        session = self.db.get_session()
+        member = session.query(GuildMember).filter_by(user_id=leader_id, role="Leader").first()
+        if not member:
+            session.close()
+            return False, "Solo il capogilda può gestire gli upgrade!"
+        guild = session.query(Guild).filter_by(id=member.guild_id).first()
+        
+        if guild.ancient_temple_level >= 5:
+            session.close()
+            return False, "L'Antico Tempio è già al livello massimo (Lv. 5)!"
+            
+        cost = (guild.ancient_temple_level + 1) * 2500
+        if guild.wumpa_bank < cost:
+            session.close()
+            return False, f"Servono {cost} Wumpa in banca per questo upgrade!"
+            
+        guild.wumpa_bank -= cost
+        guild.ancient_temple_level += 1
+        new_level = guild.ancient_temple_level
+        session.commit()
+        session.close()
+        return True, f"⛩️ Antico Tempio potenziato al livello {new_level}! Il colpo critico dei tuoi membri è aumentato."
+
+    def upgrade_magic_library(self, leader_id):
+        """Upgrade the magic library (Mana bonus)"""
+        session = self.db.get_session()
+        member = session.query(GuildMember).filter_by(user_id=leader_id, role="Leader").first()
+        if not member:
+            session.close()
+            return False, "Solo il capogilda può gestire gli upgrade!"
+        guild = session.query(Guild).filter_by(id=member.guild_id).first()
+        
+        if guild.magic_library_level >= 5:
+            session.close()
+            return False, "La Biblioteca Magica è già al livello massimo (Lv. 5)!"
+            
+        cost = (guild.magic_library_level + 1) * 3000
+        if guild.wumpa_bank < cost:
+            session.close()
+            return False, f"Servono {cost} Wumpa in banca per questo upgrade!"
+            
+        guild.wumpa_bank -= cost
+        guild.magic_library_level += 1
+        new_level = guild.magic_library_level
+        session.commit()
+        session.close()
+        return True, f"📚 Biblioteca Magica potenziata al livello {new_level}! Il Mana massimo dei tuoi membri è aumentato."
+
+    def set_custom_menu_image(self, leader_id, menu_type, image_url):
+        """Set a custom image for a guild menu (Costs 5000 Wumpa)"""
+        session = self.db.get_session()
+        member = session.query(GuildMember).filter_by(user_id=leader_id, role="Leader").first()
+        if not member:
+            session.close()
+            return False, "Solo il capogilda può personalizzare i menu!"
+        
+        guild = session.query(Guild).filter_by(id=member.guild_id).first()
+        cost = 5000
+        if guild.wumpa_bank < cost:
+            session.close()
+            return False, f"Servono {cost} Wumpa in banca per acquistare una personalizzazione!"
+            
+        field_map = {
+            'inn': 'inn_image',
+            'bordello': 'bordello_image',
+            'laboratory': 'laboratory_image',
+            'garden': 'garden_image'
+        }
+        
+        if menu_type not in field_map:
+            session.close()
+            return False, "Tipo di menu non valido."
+            
+        setattr(guild, field_map[menu_type], image_url)
+        guild.wumpa_bank -= cost
+        session.commit()
+        session.close()
+        return True, f"✨ Menu '{menu_type}' personalizzato con successo! (Costo: {cost} Wumpa)"
+
+    def get_laboratory_bonus(self, user_id):
+        """Get Alchemy bonus based on guild lab level"""
+        guild = self.get_user_guild(user_id)
+        if not guild:
+            return 1.0
+            
+        # Bonus: Speed up crafting?
+        # Lv 1: 1.0
+        # Lv 10: 2.0 (Double speed / Half time)
+        # Formula: 1.0 + (Level - 1) * 0.11
+        lab_level = guild.get('laboratory_level', 1) or 1
+        
+        # multiplier: e.g. 1.0 to 2.0
+        multiplier = 1.0 + ((lab_level - 1) * 0.1)
+        return multiplier
 
     def delete_guild(self, leader_id):
         """Delete the guild (Leader only)"""

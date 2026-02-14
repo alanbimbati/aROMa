@@ -17,6 +17,11 @@ class Guild(Base):
     village_level = Column(Integer, default=1)
     bordello_level = Column(Integer, default=0)
     brewery_level = Column(Integer, default=1)
+    laboratory_level = Column(Integer, default=1)     # Alchemy
+    garden_level = Column(Integer, default=1)         # Cultivation
+    dragon_stables_level = Column(Integer, default=0) # CD Reduction
+    ancient_temple_level = Column(Integer, default=0) # Crit Bonus
+    magic_library_level = Column(Integer, default=0)  # Mana Bonus
     
     # Location on pixelated map
     map_x = Column(Integer, nullable=True)
@@ -26,6 +31,12 @@ class Guild(Base):
     emblem = Column(String(255), nullable=True) # Emoji or URL
     skin_id = Column(String(64), nullable=True) # UI Skin ID
     description = Column(String(512), nullable=True) # Guild Bio
+    
+    # Menu Images (Customizable)
+    inn_image = Column(String(255), nullable=True) 
+    bordello_image = Column(String(255), nullable=True)
+    laboratory_image = Column(String(255), nullable=True)
+    garden_image = Column(String(255), nullable=True)
     
     created_at = Column(DateTime, default=datetime.datetime.now)
     

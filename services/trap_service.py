@@ -80,6 +80,12 @@ class TrapService:
                 del self._active_traps[chat_id]
                 return trap
         return None
+
+    def get_placer_id(self, chat_id):
+        """Get the ID of the user who placed the trap in this chat."""
+        if chat_id in self._active_traps:
+            return self._active_traps[chat_id].get('placer_id')
+        return None
         
     # Validation helpers
     def is_trap_active(self, chat_id):

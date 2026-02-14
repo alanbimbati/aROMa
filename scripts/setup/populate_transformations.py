@@ -20,11 +20,22 @@ def populate_transformations():
     
     print(f"📋 Found {len(transformations)} transformations")
     
+    from services.character_loader import get_character_loader
+    char_loader = get_character_loader()
+    
     for trans_data in transformations:
+        # Find IDs by name
+        base_char = char_loader.get_character_by_name(trans_data['base_character_name'])
+        trans_char = char_loader.get_character_by_name(trans_data['transformed_character_name'])
+        
+        if not base_char or not trans_char:
+            print(f"⚠️ Skipping '{trans_data['transformation_name']}': base or trans char not found!")
+            continue
+            
         transformation = CharacterTransformation(
             id=int(trans_data['id']),
-            base_character_id=int(trans_data['base_character_id']) if trans_data['base_character_id'] else None,
-            transformed_character_id=int(trans_data['transformed_character_id']) if trans_data['transformed_character_id'] else None,
+            base_character_id=base_char['id'],
+            transformed_character_id=trans_char['id'],
             transformation_name=trans_data['transformation_name'],
             wumpa_cost=int(trans_data['wumpa_cost']),
             duration_days=float(trans_data['duration_days']),

@@ -164,8 +164,40 @@ class UserService:
             session.rollback()
         finally:
             session.close()
+    
+    def is_in_combat(self, user_id, session=None):
+        """
+        Check if user is currently in combat (within 10 minutes of last activity).
+        Returns True if in combat, False otherwise.
+        """
+        import datetime
         
-    def check_group_membership(self, user_id):
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
+        try:
+            from models.user import Utente
+            user = session.query(Utente).filter_by(id_telegram=user_id).first()
+            
+            if not user or not user.last_activity:
+                return False
+                
+            # Check if last activity was within 10 minutes
+            ten_minutes_ago = datetime.datetime.now() - datetime.timedelta(minutes=10)
+            is_active = user.last_activity > ten_minutes_ago
+            
+            print(f"[DEBUG] is_in_combat for {user_id}: last_activity={user.last_activity}, in_combat={is_active}")
+            return is_active
+            
+        except Exception as e:
+            print(f"[ERROR] is_in_combat check failed for {user_id}: {e}")
+            return False
+        finally:
+            if local_session:
+                session.close()
+        
         """
         Verify if user is a member of the official or test group.
         Returns True if member of at least one, False otherwise.
@@ -613,8 +645,17 @@ class UserService:
                          return csv_exp
                 
                 # We use a consistent quadratic curve (100 * level^2) for levels >= 45 IF not in CSV.
-                # This prevents extreme spikes found in some legacy character data
-                # and ensures that difficulty continues to scale as requested.
+                # SPECIAL REQUEST: Lv 50-55 -> 5k gap per level. Lv 55-60 -> steeper curve.
+                if level >= 50:
+                    exp_at_50 = 100 * (50 ** 2) # 250,000
+                    if 50 < level <= 55:
+                        return exp_at_50 + (level - 50) * 5000
+                    elif level > 55:
+                        exp_at_55 = exp_at_50 + (5 * 5000) # 275,000
+                        # Smoother curve: starting at 5k gap, adding 2000 per level
+                        n = level - 55
+                        return exp_at_55 + (n * 5000) + (n * (n - 1) // 2) * 2000
+                
                 if level >= 45:
                     return 100 * (level ** 2)
                 
@@ -1041,6 +1082,8 @@ class UserService:
             local_session = True
             
         try:
+            self.check_transformation_expiration(user_id, session)
+            
             utente = session.query(Utente).filter_by(id_telegram=user_id).first()
             if not utente:
                 if local_session:
@@ -1129,6 +1172,37 @@ class UserService:
         finally:
             if local_session:
                 session.close()
+
+    def check_transformation_expiration(self, user_id, session):
+        """Check if current active transformation has expired and revert character if so"""
+        from models.system import UserTransformation, CharacterTransformation
+        import datetime
+        
+        try:
+            # Find active transformation for this user
+            active_trans = session.query(UserTransformation).filter_by(
+                user_id=user_id,
+                is_active=True
+            ).order_by(UserTransformation.expires_at.desc()).first()
+            
+            if active_trans and active_trans.expires_at and datetime.datetime.now() > active_trans.expires_at:
+                # Expired!
+                active_trans.is_active = False
+                
+                # Find the character to revert to (base_character_id)
+                trans_rule = session.query(CharacterTransformation).filter_by(id=active_trans.transformation_id).first()
+                if trans_rule:
+                    utente = session.query(Utente).filter_by(id_telegram=user_id).first()
+                    if utente:
+                        # Only revert if the user is STILL using the transformed character
+                        if utente.livello_selezionato == trans_rule.transformed_character_id:
+                            utente.livello_selezionato = trans_rule.base_character_id
+                            print(f"[TRANS] Transformation {trans_rule.transformation_name} expired for {user_id}. Reverted to base character {trans_rule.base_character_id}")
+                return True
+        except Exception as e:
+            print(f"[ERROR] Error in check_transformation_expiration: {e}")
+            
+        return False
 
     def get_resting_status(self, user_id, session=None, recovery_multiplier=1.0):
         """Check how much HP/Mana would be recovered if resting stopped now"""
