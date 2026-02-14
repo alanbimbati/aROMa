@@ -9,23 +9,8 @@ Esegui questo comando dal tuo terminale locale (nella cartella del progetto):
 scp aroma_bot_prod_ready.sql.gz dietpi@192.168.1.21:~/Bot/aroma/backups/
 ```
 
-## 2. Eseguire il ripristino sul server
-Puoi usare lo script di ripristino esistente o eseguire i comandi manualmente.
-
-### Opzione A: Usare lo script (Consigliato)
-Accedi in SSH al server e lancia lo script fornendo il nome del file:
-
-```bash
-ssh dietpi@192.168.1.21
-cd ~/Bot/aroma
-./restore_backup.sh aroma_bot_prod_ready.sql.gz
-```
-
-> [!NOTE]
-> Lo script fermerà il bot automaticamente, ricreerà il database e lo riavvierà al termine.
-
-### Opzione B: Comandi manuali (Via Docker)
-Se preferisci farlo passo dopo passo:
+### Opzione A: Comandi Docker (Consigliato se psql non è installato sul host)
+Dato che il database gira in Docker, usa questi comandi che non richiedono l'installazione di PostgreSQL sul server host:
 
 ```bash
 # Entra nel server
@@ -35,17 +20,18 @@ cd ~/Bot/aroma
 # Ferma il bot
 docker compose stop aroma_bot
 
-# Decomprimi il dump
-gunzip -c backups/aroma_bot_prod_ready.sql.gz > /tmp/restore.sql
+# Decomprimi il dump in una cartella temporanea
+gunzip -k backups/aroma_bot_prod_ready.sql.gz -c > restore.sql
 
-# Ricrea il database
+# Ricrea il database usando psql DENTRO il container
 docker compose exec -T postgres psql -U alan -d postgres -c "DROP DATABASE IF EXISTS aroma_bot;"
 docker compose exec -T postgres psql -U alan -d postgres -c "CREATE DATABASE aroma_bot;"
 
-# Importa i dati
-docker compose exec -T postgres psql -U alan -d aroma_bot < /tmp/restore.sql
+# Importa i dati passando il file allo standard input del container
+cat restore.sql | docker compose exec -T postgres psql -U alan -d aroma_bot
 
-# Riavvia il bot
+# Rimuovi il file temporaneo e riavvia
+rm restore.sql
 docker compose start aroma_bot
 ```
 
