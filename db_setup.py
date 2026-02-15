@@ -114,6 +114,12 @@ def migrate_parry_system(db):
     session = db.get_session()
     try:
         print("Checking parry system tables...")
+        # Set timeout to avoid hanging if another migration is running
+        try:
+            session.execute(text("SET lock_timeout = '10s'"))
+        except Exception:
+            pass  # Some PostgreSQL versions might not support this
+        
         inspector = inspect(db.engine)
         existing_table_names = inspector.get_table_names()
         
