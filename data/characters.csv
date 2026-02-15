@@ -160,9 +160,9 @@ id,nome,livello,lv_premium,exp_required,special_attack_name,special_attack_damag
 159,Inkling,53,2,135000,Splat Roller,595,272,21830,Il ragazzo calamaro,Splatoon,1,0,Normal,,Neutral,5,1.5,,103,0,,,,160,30,32,5,5,5,,Playable,false,1.0
 160,Octoling,53,2,135000,Octo Shot,592,271,21830,La ragazza polpo,Splatoon,1,0,Normal,,Neutral,5,1.5,,103,0,,,,160,30,32,5,5,5,,Playable,false,1.0
 161,Agent 3,53,1,135000,Splashdown,605,275,21830,L'agente speciale (Premium),Splatoon,1,0,Normal,,Neutral,5,1.5,,103,0,,,,160,30,32,5,5,5,,Playable,false,1.0
-162,Steve,54,2,140000,Diamond Sword,610,278,22670,Il minatore,Minecraft,1,0,Normal,,Neutral,5,1.5,,104,0,,,,170,25,34,5,5,5,,Playable,false,1.0
-163,Alex,54,2,140000,TNT Blast,608,277,22670,La costruttrice,Minecraft,1,0,Normal,,Neutral,5,1.5,,104,0,,,,170,25,34,5,5,5,,Playable,false,1.0
-164,Herobrine,54,1,140000,Nether Portal,620,282,22670,La leggenda oscura (Premium),Minecraft,1,0,Normal,,Neutral,5,1.5,,104,0,,,,170,25,34,5,5,5,,Playable,false,1.0
+162,Steve,3,2,140000,Diamond Sword,610,278,22670,Il minatore,Minecraft,1,0,Normal,,Neutral,5,1.5,,104,0,,,,170,25,34,5,5,5,,Playable,false,1.0
+163,Alex,8,2,140000,TNT Blast,608,277,22670,La costruttrice,Minecraft,1,0,Normal,,Neutral,5,1.5,,104,0,,,,170,25,34,5,5,5,,Playable,false,1.0
+164,Herobrine,15,1,140000,Nether Portal,620,282,22670,La leggenda oscura (Premium),Minecraft,1,0,Normal,,Neutral,5,1.5,,104,0,,,,170,25,34,5,5,5,,Playable,false,1.0
 165,Ryu Hayabusa,55,1,145000,Izuna Drop,630,288,23530,Il ninja drago (Premium),Ninja Gaiden,1,0,Normal,,Neutral,5,1.5,,105,0,,,,170,30,34,5,5,5,,Playable,false,1.0
 166,Ayane,55,2,145000,Art of the Raging Mountain God,625,286,23530,La kunoichi viola,Ninja Gaiden,1,0,Normal,,Neutral,5,1.5,,105,0,,,,170,30,34,5,5,5,,Playable,false,1.0
 167,Kasumi,55,2,145000,Tearing Wind Combo,622,285,23530,La kunoichi fuggitiva,Ninja Gaiden,1,0,Normal,,Neutral,5,1.5,,105,0,,,,170,30,34,5,5,5,,Playable,false,1.0
