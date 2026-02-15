@@ -93,6 +93,11 @@ class Utente(Base):
     # Activity Tracking
     last_activity = Column(DateTime, nullable=True)
     profumino_until = Column(DateTime, nullable=True)
+    
+    # Transformation Tracking
+    transformation_expires_at = Column(DateTime, nullable=True)  # When current transformation expires
+    current_transformation = Column(String(100), nullable=True)  # Name of current transformation
+
 
 
 class Admin(Base):
