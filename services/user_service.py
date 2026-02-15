@@ -128,7 +128,7 @@ class UserService:
         except (ValueError, TypeError):
             pass
             
-        now = datetime.now()
+        now = datetime.datetime.now()
         key = (user_id, chat_id)
         self.recent_activities[key] = now
         
