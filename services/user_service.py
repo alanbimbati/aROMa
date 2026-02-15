@@ -6,7 +6,7 @@ from models.game import GiocoUtente
 from services.character_loader import get_character_loader
 from sqlalchemy import desc, asc, text, inspect
 from sqlalchemy.orm import defer
-import datetime
+from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from settings import PointsName
 from services.event_dispatcher import EventDispatcher
@@ -128,7 +128,7 @@ class UserService:
         except (ValueError, TypeError):
             pass
             
-        now = datetime.datetime.now()
+        now = datetime.now()
         key = (user_id, chat_id)
         self.recent_activities[key] = now
         
@@ -185,7 +185,7 @@ class UserService:
                 return False
                 
             # Check if last activity was within 10 minutes
-            ten_minutes_ago = datetime.datetime.now() - datetime.timedelta(minutes=10)
+            ten_minutes_ago = datetime.now() - timedelta(minutes=10)
             is_active = user.last_activity > ten_minutes_ago
             
             print(f"[DEBUG] is_in_combat for {user_id}: last_activity={user.last_activity}, in_combat={is_active}")
@@ -242,7 +242,7 @@ class UserService:
             
             if user and not ignore_activity:
                 # 6-month inactivity safeguard
-                six_months_ago = datetime.datetime.now() - relativedelta(months=6)
+                six_months_ago = datetime.now() - relativedelta(months=6)
                 last_act = user.last_activity
                 
                 # If last_activity is None, we assume it's old (or pre-tracking)
@@ -331,7 +331,7 @@ class UserService:
     def get_recent_users(self, chat_id=None, minutes=30):
         """Get users active within the last N minutes, sorted by recency (most recent first)"""
         import datetime
-        cutoff = datetime.datetime.now() - datetime.timedelta(minutes=minutes)
+        cutoff = datetime.now() - timedelta(minutes=minutes)
         
         try:
             if chat_id is not None:
@@ -416,9 +416,9 @@ class UserService:
                 utente.points = 5
                 utente.premium = 0
                 utente.livello_selezionato = 1
-                utente.start_tnt = datetime.datetime.now() + relativedelta(month=1)
-                utente.end_tnt = datetime.datetime.now()
-                utente.scadenza_premium = datetime.datetime.now()
+                utente.start_tnt = datetime.now() + relativedelta(month=1)
+                utente.end_tnt = datetime.now()
+                utente.scadenza_premium = datetime.now()
                 utente.abbonamento_attivo = 0
                 utente.stat_points = 2 # Level 1 * 2
                 utente.shield_hp = 0
@@ -467,7 +467,7 @@ class UserService:
 
     def check_daily_reset(self, utente):
         """Check if daily limits need to be reset"""
-        now = datetime.datetime.now()
+        now = datetime.now()
         last_reset = utente.last_wumpa_reset
         
         # If last reset was not today (or never), reset
@@ -1154,7 +1154,7 @@ class UserService:
             
             # Check combat cooldown: 10 minutes since last attack or defense
             COMBAT_COOLDOWN_MINUTES = 10
-            now = datetime.datetime.now()
+            now = datetime.now()
             
             if user.last_attack_time:
                 time_since_combat = (now - user.last_attack_time).total_seconds() / 60
@@ -1162,7 +1162,7 @@ class UserService:
                     remaining = int(COMBAT_COOLDOWN_MINUTES - time_since_combat)
                     return False, f"⚔️ Sei ancora in modalità combattimento! Devi aspettare {remaining} minut{'o' if remaining == 1 else 'i'} prima di poter riposare."
                 
-            user.resting_since = datetime.datetime.now()
+            user.resting_since = datetime.now()
             if local_session:
                 session.commit()
             else:
@@ -1188,7 +1188,7 @@ class UserService:
                 is_active=True
             ).order_by(UserTransformation.expires_at.desc()).first()
             
-            if active_trans and active_trans.expires_at and datetime.datetime.now() > active_trans.expires_at:
+            if active_trans and active_trans.expires_at and datetime.now() > active_trans.expires_at:
                 # Expired!
                 active_trans.is_active = False
                 
@@ -1219,7 +1219,7 @@ class UserService:
             if not user or not user.resting_since:
                 return None
                 
-            now = datetime.datetime.now()
+            now = datetime.now()
             elapsed_minutes = int((now - user.resting_since).total_seconds() / 60)
             
             # Base: 1 HP and 1 Mana per minute
@@ -1358,7 +1358,7 @@ class UserService:
         if not user.invincible_until:
             return False
             
-        return datetime.datetime.now() < user.invincible_until
+        return datetime.now() < user.invincible_until
 
     def check_fatigue(self, user):
         """Check if user is fatigued (low HP)"""
