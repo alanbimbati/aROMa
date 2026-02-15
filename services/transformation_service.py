@@ -117,6 +117,17 @@ class TransformationService:
     
     def activate_transformation(self, user, transformation_id, session=None):
         """Activate a purchased transformation"""
+        
+        # Check if transformation is time-restricted (e.g. Great Ape at night only)
+        from services.character_loader import get_character_loader
+        loader = get_character_loader()
+        transformation = loader.get_character_by_id(transformation_id)
+        
+        if transformation and 'Great Ape' in transformation.get('nome', ''):
+            # Great Ape only at night (18:00-06:00)
+            current_hour = datetime.datetime.now().hour
+            if not (current_hour >= 18 or current_hour < 6):
+                return False, "🌙 Le trasformazioni Great Ape sono disponibili solo di notte (18:00-06:00)!"
         local_session = False
         if not session:
             session = self.db.get_session()
@@ -149,6 +160,27 @@ class TransformationService:
         user_trans.activated_at = datetime.datetime.now()
         user_trans.expires_at = datetime.datetime.now() + datetime.timedelta(days=transformation.duration_days)
         
+        # Set transformation expiry in user table for SSJ
+        if transformation:
+            from services.character_loader import get_character_loader
+            loader = get_character_loader()
+            trans_char = loader.get_character_by_id(transformation_id)
+            
+            if trans_char:
+                transformation_name = trans_char.get('nome', '')
+                
+                # Super Saiyan transformations have 6h duration
+                if 'SSJ' in transformation_name or 'Super Saiyan' in transformation_name:
+                    duration_seconds = 21600  # 6 hours
+                    expiry = datetime.datetime.now() + datetime.timedelta(seconds=duration_seconds)
+                    
+                    # Update user with transformation expiry
+                    db_user = session.query(Utente).filter_by(id_telegram=user.id_telegram).first()
+                    if db_user:
+                        db_user.transformation_expires_at = expiry
+                        db_user.current_transformation = transformation_name
+                        db_user.livello_selezionato = transformation_id
+        
         if local_session:
             session.commit()
             session.close()
@@ -158,7 +190,15 @@ class TransformationService:
         # Recalculate stats to apply bonuses/caps
         self.user_service.recalculate_stats(user.id_telegram, session=session)
         
-        return True, f"Trasformazione '{transformation.transformation_name}' attivata per {transformation.duration_days} giorni!"
+        # Check if SSJ and return special message
+        if transformation:
+            from services.character_loader import get_character_loader
+            loader = get_character_loader()
+            trans_char = loader.get_character_by_id(transformation_id)
+            if trans_char and ('SSJ' in trans_char.get('nome', '') or 'Super Saiyan' in trans_char.get('nome', '')):
+                return True, f"⚡ Trasformazione {trans_char['nome']} attivata! Dura 6 ore."
+        
+        return True, f"✨ Trasformazione '{transformation.transformation_name}' attivata per {transformation.duration_days} giorni!"
     
     def get_active_transformation(self, user, session=None):
         """Get user's currently active transformation"""
