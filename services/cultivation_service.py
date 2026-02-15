@@ -371,3 +371,35 @@ class CultivationService:
             return False, f"Errore irrigazione: {e}"
         finally:
             session.close()
+
+    def clear_rotten_slot(self, user_id, slot_id):
+        """Clear a rotten/rotting plant from a slot without getting rewards"""
+        session = self.db.get_session()
+        try:
+            slot = session.query(GardenSlot).filter_by(user_id=user_id, slot_id=slot_id).first()
+            if not slot:
+                return False, "Slot non trovato"
+            
+            if slot.status not in ['rotting', 'rotten']:
+                return False, "Questo slot non contiene una pianta marcia!"
+                
+            seed_name = slot.seed_type or "pianta"
+            
+            # Reset Slot completely
+            slot.status = 'empty'
+            slot.seed_type = None
+            slot.planted_at = None
+            slot.completion_time = None
+            slot.moisture = 100
+            slot.rot_time = None
+            slot.last_watered_at = None
+            
+            session.commit()
+            
+            return True, f"💀 Hai ripulito lo slot! La {seed_name} marcia è stata rimossa."
+            
+        except Exception as e:
+            session.rollback()
+            return False, f"Errore durante la pulizia: {e}"
+        finally:
+            session.close()
