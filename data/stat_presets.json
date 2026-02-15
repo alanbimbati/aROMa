@@ -1,0 +1,68 @@
+{
+    "presets": [
+        {
+            "id": "mage",
+            "name": "Mago",
+            "description": "Focus su Mana e Critico per attacchi speciali devastanti",
+            "icon": "🧙",
+            "allocations": {
+                "health": 2,
+                "mana": 8,
+                "damage": 2,
+                "resistance": 1,
+                "crit": 5,
+                "speed": 2
+            },
+            "total_points": 20,
+            "recommended_for": "Personaggi con attacchi speciali potenti (es. Goku, Vegeta, personaggi Dragon Ball)"
+        },
+        {
+            "id": "hybrid_tank",
+            "name": "Tank Ibrido",
+            "description": "Bilanciamento tra difesa e velocità per contrattacchi efficaci",
+            "icon": "🛡️",
+            "allocations": {
+                "health": 7,
+                "mana": 2,
+                "damage": 3,
+                "resistance": 4,
+                "crit": 1,
+                "speed": 3
+            },
+            "total_points": 20,
+            "recommended_for": "Personaggi tank o bruiser che vogliono resistere e contrattaccare"
+        },
+        {
+            "id": "balanced",
+            "name": "Bilanciato",
+            "description": "Distribuzione equilibrata per versatilità",
+            "icon": "⚖️",
+            "allocations": {
+                "health": 4,
+                "mana": 3,
+                "damage": 4,
+                "resistance": 3,
+                "crit": 3,
+                "speed": 3
+            },
+            "total_points": 20,
+            "recommended_for": "Tutti i personaggi, buon punto di partenza"
+        },
+        {
+            "id": "bruiser",
+            "name": "Attaccante Fisico",
+            "description": "Massimo danno e velocità per eliminazioni rapide",
+            "icon": "⚔️",
+            "allocations": {
+                "health": 3,
+                "mana": 1,
+                "damage": 8,
+                "resistance": 2,
+                "crit": 4,
+                "speed": 2
+            },
+            "total_points": 20,
+            "recommended_for": "Personaggi DPS fisici con attacchi normali forti"
+        }
+    ]
+}
