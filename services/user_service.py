@@ -633,22 +633,19 @@ class UserService:
             
             # Helper to get exp required from CharacterLoader (source of truth)
             def get_exp_required_for_level(level):
-                # We use a consistent quadratic curve (100 * level^2) for levels >= 45.
-                # This prevents extreme spikes found in some legacy character data
-                # and ensures that difficulty continues to scale as requested.
-                loader = get_character_loader()
-                chars = loader.get_characters_by_level(level)
-                if chars:
-                    # Always prioritize CSV value if available (e.g. Inkling Lv 53 = 135k)
-                    csv_exp = chars[0].get('exp_required')
-                    if csv_exp and csv_exp > 0:
-                         return csv_exp
+                """
+                Calculate EXP required for a specific level using a global formula.
+                Check implementation_plan.md for details.
+                """
+                # Global Formula - Decoupled from Character Data
                 
-                # We use a consistent quadratic curve (100 * level^2) for levels >= 45 IF not in CSV.
-                # SPECIAL REQUEST: Lv 50-55 -> 5k gap per level. Lv 55-60 -> steeper curve.
+                # Levels 50+ (High Level Curve)
                 if level >= 50:
                     exp_at_50 = 100 * (50 ** 2) # 250,000
-                    if 50 < level <= 55:
+                    if level == 50:
+                        return exp_at_50
+                    elif 50 < level <= 55:
+                        # 5k gap per level
                         return exp_at_50 + (level - 50) * 5000
                     elif level > 55:
                         exp_at_55 = exp_at_50 + (5 * 5000) # 275,000
@@ -656,19 +653,12 @@ class UserService:
                         n = level - 55
                         return exp_at_55 + (n * 5000) + (n * (n - 1) // 2) * 2000
                 
-                if level >= 45:
-                    # SMOOTHING: for 45-49, use a slightly gentler curve to bridge the gap to 50
-                    # 45: ~160k, 46: ~170k, 47: ~180k, 48: ~190k, 49: ~200k
-                    # Old: 100 * 47^2 = 220k. New: 85 * 47^2 = ~187k
-                    return 85 * (level ** 2)
-                
-                # Fallback to DB if loader fails
-                level_data = self._get_livello_by_level(session, level)
-                if level_data and hasattr(level_data, 'exp_required') and level_data.exp_required is not None:
-                    return level_data.exp_required
-                
-                # Final fallback: Formula
-                return 100 * (level ** 2)
+                # Levels 1-49 (Standardized Smoother Curve)
+                # We use 85 * level^2 instead of 100 * level^2 to essentially nerf the requirement
+                # for the 1-50 bracket, ensuring Lv 47 is ~187k (User Request from Mardok) 
+                # and Lv 44 (164k) < Lv 45 (172k), preventing regression.
+                # Lv 49 = ~204k -> Lv 50 = 250k (Tier Jump)
+                return int(85 * (level ** 2))
 
             # Check for level-up
             next_exp_req = get_exp_required_for_level(utente.livello + 1)
@@ -1161,6 +1151,16 @@ class UserService:
             
             if user.resting_since:
                 return False, "Stai già riposando!"
+            
+            # Check combat cooldown: 10 minutes since last attack or defense
+            COMBAT_COOLDOWN_MINUTES = 10
+            now = datetime.datetime.now()
+            
+            if user.last_attack_time:
+                time_since_combat = (now - user.last_attack_time).total_seconds() / 60
+                if time_since_combat < COMBAT_COOLDOWN_MINUTES:
+                    remaining = int(COMBAT_COOLDOWN_MINUTES - time_since_combat)
+                    return False, f"⚔️ Sei ancora in modalità combattimento! Devi aspettare {remaining} minut{'o' if remaining == 1 else 'i'} prima di poter riposare."
                 
             user.resting_since = datetime.datetime.now()
             if local_session:
