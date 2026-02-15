@@ -12,7 +12,7 @@ from services.damage_calculator import DamageCalculator
 from services.status_effects import StatusEffect
 from services.targeting_service import TargetingService
 from services.parry_service import ParryService
-import datetime
+from datetime import datetime, timedelta
 import random
 import csv
 import os
@@ -254,7 +254,7 @@ class PvEService:
             # Direct Taunt: Set user as primary target for the mob
             if active_mob:
                 active_mob.aggro_target_id = db_user.id_telegram
-                active_mob.aggro_end_time = datetime.now() + datetime.timedelta(minutes=2)
+                active_mob.aggro_end_time = datetime.now() + timedelta(minutes=2)
                 session.flush()
                 print(f"[Aggro] {db_user.id_telegram} TAUNTED mob {active_mob.id}")
 
@@ -598,7 +598,7 @@ class PvEService:
             max_mana=max_mana,
             is_boss=False,  # Normal mobs are not bosses
             chat_id=chat_id,
-            last_attack_time=datetime.now() - datetime.timedelta(hours=1), # Allow immediate attack
+            last_attack_time=datetime.now() - timedelta(hours=1), # Allow immediate attack
             last_message_id=None # Will be updated by main.py
         )
         
@@ -737,7 +737,7 @@ class PvEService:
             description=boss_data.get('description', ''),
             is_boss=True,
             chat_id=chat_id,
-            last_attack_time=datetime.now() - datetime.timedelta(hours=1), # Allow immediate attack
+            last_attack_time=datetime.now() - timedelta(hours=1), # Allow immediate attack
             # NEW: Advanced mechanics from CSV
             active_abilities=boss_data.get('abilities', '[]'),
             ai_behavior=boss_data.get('ai_behavior', 'aggressive'),
@@ -773,7 +773,7 @@ class PvEService:
             # Set aggro
             mob.aggro_target_id = user.id_telegram
             # Lasts for 5 minutes or until overwritten
-            mob.aggro_end_time = datetime.now() + datetime.timedelta(minutes=5)
+            mob.aggro_end_time = datetime.now() + timedelta(minutes=5)
             session.commit()
             return True, f"🛡️ **{user.nome}** sta provocando {mob.name}! Il nemico ora attaccherà solo lui!"
         except Exception as e:
@@ -1888,7 +1888,7 @@ class PvEService:
                         if parry_result['success']:
                             damage = parry_result['damage_taken']
                             # Reset cooldown as requested
-                            self.user_service.update_user(target.id_telegram, {'last_attack_time': datetime.now() - datetime.timedelta(minutes=5)}, session=session)
+                            self.user_service.update_user(target.id_telegram, {'last_attack_time': datetime.now() - timedelta(minutes=5)}, session=session)
                         
                         new_hp, died = self.user_service.damage_health(target, damage, session=session)
                         
