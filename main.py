@@ -932,8 +932,16 @@ def handle_garden_view(call):
         msg += f"{status_icon} **Slot {slot['slot_id']}:** {status_text}\n"
         
         if btn_action != "ignore":
-            btn_label = "Pianta" if slot['status'] == 'empty' else "Raccogli"
-            markup.add(types.InlineKeyboardButton(f"{btn_label} Slot {slot['slot_id']}", callback_data=btn_action))
+            if slot['status'] == 'empty':
+                markup.add(types.InlineKeyboardButton(f"🌱 Pianta Slot {slot['slot_id']}", callback_data=btn_action))
+            elif slot['status'] in ['rotting', 'rotten']:
+                # Offri entrambe le opzioni: raccogliere le ricompense ridotte O ripulire senza ricompensa
+                markup.row(
+                    types.InlineKeyboardButton(f"🍎 Raccogli", callback_data=f"garden_harvest|{slot['slot_id']}"),
+                    types.InlineKeyboardButton(f"🗑️ Ripulisci", callback_data=f"garden_clear|{slot['slot_id']}")
+                )
+            else:
+                markup.add(types.InlineKeyboardButton(f"🍎 Raccogli Slot {slot['slot_id']}", callback_data=btn_action))
             
     # NEW: Composter button
     markup.add(types.InlineKeyboardButton("💩 Compostiera", callback_data="garden_refine_view"))
@@ -1018,6 +1026,27 @@ def handle_garden_water(call):
     except Exception as e:
         print(f"Error in handle_garden_water: {e}")
         bot.answer_callback_query(call.id, "Errore durante l'irrigazione.")
+
+def handle_garden_clear(call):
+    """Clear a rotten/rotting plant from a slot"""
+    user_id = call.from_user.id
+    try:
+        parts = call.data.split("|")
+        slot_id = int(parts[1])
+        
+        from services.cultivation_service import CultivationService
+        cultivation_service = CultivationService()
+        success, msg = cultivation_service.clear_rotten_slot(user_id, slot_id)
+        
+        if success:
+            bot.answer_callback_query(call.id, "Slot ripulito!", show_alert=False)
+            bot.send_message(call.message.chat.id, msg)
+            handle_garden_view(call)
+        else:
+            bot.answer_callback_query(call.id, f"❌ {msg}", show_alert=True)
+    except Exception as e:
+        print(f"Error in handle_garden_clear: {e}")
+        bot.answer_callback_query(call.id, "Errore durante la pulizia dello slot.")
 
 @bot.message_handler(func=lambda message: message.text == "📖 Guida")
 def handle_guide_button(message):
@@ -6833,6 +6862,11 @@ def callback_query(call):
     elif call.data.startswith("garden_water|"):
         handle_garden_water(call)
         return
+    
+    elif call.data.startswith("garden_clear|"):
+        handle_garden_clear(call)
+        return
+
 
     # --- Ranking Callbacks ---
     if call.data.startswith("ranking|"):
@@ -9363,7 +9397,7 @@ def callback_query(call):
                 send_combat_message(call.message.chat.id, full_msg, image_path, markup, enemy_id, old_msg_id)
                 
             # Check for new mobs (Dungeon progression)
-            if extra_data and 'new_mob_ids' in extra_data:
+            if extra_data and 'new_mob_ids' in extra_data and extra_data['new_mob_ids']:
                 for new_mob_id in extra_data['new_mob_ids']:
                     display_mob_spawn(bot, call.message.chat.id, new_mob_id)
                 

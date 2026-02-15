@@ -193,6 +193,7 @@ class PvEService:
         try:
             # Re-fetch user in this session
             db_user = session.merge(user)
+            db_user.last_activity = datetime.datetime.now()
             
             # Check if Resting (Inn)
             if db_user.resting_since:
@@ -837,6 +838,16 @@ class PvEService:
         extra_data = {}
         rewards_to_distribute = []
         
+        # UPDATE ACTIVITY: Ensure user is marked as active to prevent Inn entry during combat
+        from models.user import Utente
+        from datetime import datetime
+        db_user = session.query(Utente).filter_by(id_telegram=user.id_telegram).first()
+        if db_user:
+            db_user.last_activity = datetime.now()
+            # Sync the passed user object if it's different (e.g. from main.py cache)
+            if user is not db_user and hasattr(user, 'last_activity'):
+                user.last_activity = db_user.last_activity
+        
         # 0. STRICT DEATH CHECK (User)
         # Handle detached instances by merging or querying fresh if needed, but 'user' here acts as our object.
         # Ideally we use the session to check fresh state if we suspect desync.
@@ -1444,6 +1455,11 @@ class PvEService:
         mob_count = len(mobs)
         
         title = "🌟 **ATTACCO SPECIALE AD AREA!**" if use_special else "💥 **ATTACCO AD AREA!**"
+        
+        # Initialize summary_msg and extra_data
+        summary_msg = title
+        extra_data = {'delete_message_ids': []}
+        
         # Apply Status Effects from Ability (Once for the user)
         from services.status_effects import StatusEffect
         if ability:
@@ -1454,7 +1470,7 @@ class PvEService:
                 StatusEffect.apply_status(user, effect_name, duration=duration, source_id=user.id_telegram)
                 
                 effect_icon = StatusEffect.EFFECTS.get(effect_name, {}).get('icon', '✨')
-                summary_msg += f"{effect_icon} **ATTIVATO:** {effect_name.replace('_', ' ').title()}!\n"
+                summary_msg += f"\n{effect_icon} **ATTIVATO:** {effect_name.replace('_', ' ').title()}!"
         
         for mob in mobs:
             # 70% to target, 50% to others
