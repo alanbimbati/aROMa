@@ -65,6 +65,11 @@ class CharacterLoader:
                         'crit_chance': safe_int(row.get('crit_chance'), 5),
                         'crit_multiplier': safe_float(row.get('crit_multiplier'), 1.5),
                         'speed': safe_int(row.get('speed'), 30),
+                        # New unified schema fields
+                        'alignment': row.get('alignment', 'Good'),
+                        'entity_type': row.get('entity_type', 'Playable'),
+                        'spawn_eligible': row.get('spawn_eligible', 'false').lower() == 'true',
+                        'base_stat_multiplier': safe_float(row.get('base_stat_multiplier'), 1.0),
                         'required_character_id': safe_int(row.get('required_character_id'), None) if row.get('required_character_id', '').strip() else None,
                         # Transformation fields
                         'is_transformation': safe_int(row.get('is_transformation'), 0),
@@ -244,6 +249,32 @@ class CharacterLoader:
                     queue.append(child['id'])
                     
         return list(family_ids)
+    
+    # New unified schema helper functions
+    def get_playable_characters(self) -> List[Dict[str, Any]]:
+        """Get all playable characters (all entities in unified schema)"""
+        if not self._cache:
+            self.load_characters_from_csv()
+        # ALL entities are playable now
+        return [c for c in self._cache if c.get('entity_type') != 'Mob' or c.get('entity_type') != 'Boss' or True]
+    
+    def get_spawnable_entities(self) -> List[Dict[str, Any]]:
+        """Get all entities eligible for spawning in chat (Evil only)"""
+        if not self._cache:
+            self.load_characters_from_csv()
+        return [c for c in self._cache if c.get('spawn_eligible', False)]
+    
+    def get_boss_entities(self) -> List[Dict[str, Any]]:
+        """Get all boss entities"""
+        if not self._cache:
+            self.load_characters_from_csv()
+        return [c for c in self._cache if c.get('entity_type') == 'Boss']
+    
+    def get_mob_entities(self) -> List[Dict[str, Any]]:
+        """Get all mob entities"""
+        if not self._cache:
+            self.load_characters_from_csv()
+        return [c for c in self._cache if c.get('entity_type') == 'Mob']
 
     def clear_cache(self):
         """Clear the cache (useful for testing or reloading data)"""
