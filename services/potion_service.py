@@ -5,7 +5,7 @@ from database import Database
 from services.user_service import UserService
 import csv
 import os
-import datetime
+from datetime import datetime, timedelta
 
 # Dynamic path resolution
 SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -127,7 +127,7 @@ class PotionService:
         elif tipo == 'attractor':
             # Profumino effect: set profumino_until to now + valore seconds
             duration_seconds = valore
-            user.profumino_until = datetime.datetime.now() + datetime.timedelta(seconds=duration_seconds)
+            user.profumino_until = datetime.now() + timedelta(seconds=duration_seconds)
             return True, f"🌸 Hai usato il Profumino! Per le prossime {duration_seconds // 3600} ore i nemici appariranno più spesso e verrai notificato!"
             
         return False, "Tipo di pozione sconosciuto."

@@ -112,7 +112,7 @@ class CombatService:
 
         # Invincibility check
         import datetime
-        if user.invincible_until and datetime.datetime.now() < user.invincible_until:
+        if user.invincible_until and datetime.now() < user.invincible_until:
             return 0
 
         base_damage = mob.attack_damage if mob.attack_damage else 10

@@ -5,7 +5,7 @@ Handles user stat point allocation and reset
 from database import Database
 from services.user_service import UserService
 from settings import PointsName
-import datetime
+from datetime import datetime, timedelta
 
 class StatsService:
     def __init__(self):
@@ -105,7 +105,7 @@ class StatsService:
             'allocated_speed': 0,
             'allocated_resistance': 0,
             'allocated_crit': 0,
-            'last_stat_reset': datetime.datetime.now()
+            'last_stat_reset': datetime.now()
         })
         
         # Recalculate everything from base

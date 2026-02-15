@@ -5,7 +5,7 @@ sys.path.insert(0, '/home/alan/Documenti/Coding/aroma')
 
 from database import Database
 from models.user import Utente
-import datetime
+from datetime import datetime, timedelta
 
 def check_and_revert_transformations():
     """Check all users and revert expired transformations"""
@@ -13,7 +13,7 @@ def check_and_revert_transformations():
     session = db.get_session()
     
     try:
-        now = datetime.datetime.now()
+        now = datetime.now()
         
         # Find users with expired transformations
         expired_users = session.query(Utente).filter(

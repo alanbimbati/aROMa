@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime, timedelta
 import random
 from database import Database
 from models.guild import Guild, GuildMember, GuildUpgrade, GuildItem
@@ -416,7 +416,7 @@ class GuildService:
             return 1.0
             
         # Check if 30 minutes have passed
-        now = datetime.datetime.now()
+        now = datetime.now()
         if (now - user.last_beer_usage).total_seconds() > 1800: # 30 mins
             session.close()
             return 1.0
@@ -443,7 +443,7 @@ class GuildService:
             return False, "Non fai parte di nessuna gilda!"
             
         # Daily limit check (reset at midnight)
-        now = datetime.datetime.now()
+        now = datetime.now()
         if user.last_beer_usage and user.last_beer_usage.date() == now.date():
              session.close()
              return False, "🍺 Hai già bevuto la tua birra giornaliera! Torna domani."
@@ -554,7 +554,7 @@ class GuildService:
             return False, "La tua gilda non ha ancora un Bordello delle Elfe!"
             
         # Daily limit
-        now = datetime.datetime.now()
+        now = datetime.now()
         if user.last_brothel_usage and user.last_brothel_usage.date() == now.date():
              session.close()
              return False, "🔞 Hai già visitato il Bordello oggi! Torna domani."
@@ -564,7 +564,7 @@ class GuildService:
         
         # FIXED Duration: 30 minutes
         duration_minutes = 30
-        user.vigore_until = datetime.datetime.now() + datetime.timedelta(minutes=duration_minutes)
+        user.vigore_until = datetime.now() + timedelta(minutes=duration_minutes)
         
         session.commit()
         session.close()
@@ -578,7 +578,7 @@ class GuildService:
             session.close()
             return 1.0
             
-        if user.vigore_until > datetime.datetime.now():
+        if user.vigore_until > datetime.now():
             session.close()
             return 0.5
             

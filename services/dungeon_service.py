@@ -5,7 +5,7 @@ from models.pve import Mob
 from models.user import Utente
 from models.system_state import SystemState
 from services.event_dispatcher import EventDispatcher
-import datetime
+from datetime import datetime, timedelta
 import random
 import csv
 import json
@@ -29,11 +29,11 @@ class DungeonService:
         
         session = self.db.get_session()
         try:
-            now = datetime.datetime.now()
+            now = datetime.now()
             today_date = now.date()
             
             # 0. AUTO-CLEANUP: Clear extremely stale dungeons (e.g. older than 3 hours)
-            stale_cutoff = now - datetime.timedelta(hours=3)
+            stale_cutoff = now - timedelta(hours=3)
             stale_dungeons = session.query(Dungeon).filter(
                 Dungeon.chat_id == chat_id,
                 Dungeon.status.in_(["registration", "active"]),
@@ -81,7 +81,7 @@ class DungeonService:
                 # If active, check if in hype phase and ready to start
                 if reg.is_hype_active:
                     # 2 minutes hype duration
-                    trigger_time = reg.hype_start_time + datetime.timedelta(minutes=2)
+                    trigger_time = reg.hype_start_time + timedelta(minutes=2)
                     if now >= trigger_time:
                         print(f"[DUNGEON] Hype finished. Starting dungeon!")
                         res = self.start_dungeon_auto(chat_id)
@@ -119,7 +119,7 @@ class DungeonService:
                     else:
                         # Last was today, check 2-hour gap after completion (preferred) or creation
                         reference_time = last.completed_at if last.completed_at else last.created_at
-                        if now >= reference_time + datetime.timedelta(hours=2):
+                        if now >= reference_time + timedelta(hours=2):
                             should_schedule = True
                 
                 if should_schedule:
@@ -143,7 +143,7 @@ class DungeonService:
                 return None
                 
             dungeon.status = 'fled'
-            dungeon.completed_at = datetime.datetime.now()
+            dungeon.completed_at = datetime.now()
             
             # Kill valid mobs
             mobs = session.query(Mob).filter_by(dungeon_id=dungeon.id, is_dead=False).all()
@@ -166,7 +166,7 @@ class DungeonService:
             local_session = True
             
         try:
-            now = datetime.datetime.now()
+            now = datetime.now()
             
             # Determine next dungeon index from SystemState
             current_idx_str = SystemState.get_val(session, 'current_dungeon_index', '1')
@@ -185,7 +185,7 @@ class DungeonService:
             
             # Schedule for 5-30 minutes from now
             delay_mins = random.randint(5, 30)
-            scheduled_time = now + datetime.timedelta(minutes=delay_mins)
+            scheduled_time = now + timedelta(minutes=delay_mins)
             
             if scheduled_time.hour >= 23:
                 return
@@ -227,7 +227,7 @@ class DungeonService:
             return
             
         dungeon.is_hype_active = True
-        dungeon.hype_start_time = datetime.datetime.now()
+        dungeon.hype_start_time = datetime.now()
         session.commit()
         session.close()
         
@@ -299,7 +299,7 @@ class DungeonService:
             # Start Dungeon
             dungeon.status = "active"
             dungeon.current_stage = 1
-            dungeon.start_time = datetime.datetime.now()
+            dungeon.start_time = datetime.now()
             
             # Spawn Step 1
             # We call spawn_step using the SAME session to ensure atomicity
@@ -320,7 +320,7 @@ class DungeonService:
             if 'dungeon' in locals() and dungeon:
                  try:
                      dungeon.status = "failed"
-                     dungeon.completed_at = datetime.datetime.now()
+                     dungeon.completed_at = datetime.now()
                      session.commit()
                  except:
                      pass
@@ -594,7 +594,7 @@ class DungeonService:
             
         dungeon.status = "active"
         dungeon.current_stage = 1
-        dungeon.start_time = datetime.datetime.now()
+        dungeon.start_time = datetime.now()
         d_id = dungeon.id
         d_def_id = dungeon.dungeon_def_id
         
@@ -804,7 +804,7 @@ class DungeonService:
             
         dungeon = session.query(Dungeon).filter_by(id=dungeon_id).first()
         dungeon.status = "completed"
-        dungeon.completed_at = datetime.datetime.now()
+        dungeon.completed_at = datetime.now()
         
         # Calculate Score
         score, details = self.calculate_score(dungeon)
@@ -1000,7 +1000,7 @@ class DungeonService:
         1. Have 0 participants (registration ghost)
         2. Are stale (older than 2 hours)
         """
-        cutoff = datetime.datetime.now() - datetime.timedelta(hours=2)
+        cutoff = datetime.now() - timedelta(hours=2)
         
         ghosts = session.query(Dungeon).filter(
             Dungeon.chat_id == chat_id,
@@ -1016,7 +1016,7 @@ class DungeonService:
                 reason = "0 participants" if participant_count == 0 else "stale (>2h)"
                 print(f"[DEBUG] _cleanup_ghost_dungeons: Failing ghost dungeon {dungeon.id} ({dungeon.name}) - Reason: {reason}")
                 dungeon.status = "failed"
-                dungeon.end_time = datetime.datetime.now()
+                dungeon.end_time = datetime.now()
                 # Mark associated mobs as dead
                 session.query(Mob).filter_by(dungeon_id=dungeon.id, is_dead=False).update({'is_dead': True, 'health': 0})
                 cleaned_any = True
@@ -1100,7 +1100,7 @@ class DungeonService:
         
         if remaining == 0:
             dungeon.status = "failed"
-            dungeon.end_time = datetime.datetime.now()
+            dungeon.end_time = datetime.now()
             
             # Mark all mobs in this dungeon as dead so they disappear
             mobs = session.query(Mob).filter_by(dungeon_id=dungeon.id, is_dead=False).all()
@@ -1147,7 +1147,7 @@ class DungeonService:
         msg = None
         if all_dead:
             dungeon.status = "failed"
-            dungeon.end_time = datetime.datetime.now()
+            dungeon.end_time = datetime.now()
             
             # Mark all mobs in this dungeon as dead so they disappear
             mobs = session.query(Mob).filter_by(dungeon_id=dungeon.id, is_dead=False).all()
@@ -1177,7 +1177,7 @@ class DungeonService:
             
             # Mark as failed
             dungeon.status = 'failed'
-            dungeon.completed_at = datetime.datetime.now()
+            dungeon.completed_at = datetime.now()
             
             # Kill all mobs
             mobs = session.query(Mob).filter_by(dungeon_id=dungeon.id, is_dead=False).all()

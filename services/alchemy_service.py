@@ -4,7 +4,7 @@ Alchemy Service - Handle potion crafting (brewing)
 import csv
 import os
 import json
-import datetime
+from datetime import datetime, timedelta
 from database import Database
 from models.user import Utente
 from models.alchemy import AlchemyQueue
@@ -75,7 +75,7 @@ class AlchemyService:
             speed_mult = guild_service.get_laboratory_bonus(user_id)
             
             crafting_time = int(recipe['crafting_time'] / speed_mult)
-            completion_time = datetime.datetime.now() + datetime.timedelta(seconds=crafting_time)
+            completion_time = datetime.now() + timedelta(seconds=crafting_time)
             
             new_job = AlchemyQueue(
                 user_id=user_id,
@@ -104,7 +104,7 @@ class AlchemyService:
         """Find all jobs that are done and mark as completed"""
         session = self.db.get_session()
         try:
-            now = datetime.datetime.now()
+            now = datetime.now()
             ready_jobs = session.query(AlchemyQueue).filter(
                 AlchemyQueue.status == 'in_progress',
                 AlchemyQueue.completion_time <= now
@@ -259,7 +259,7 @@ class AlchemyService:
             ).all()
             
             queue_data = []
-            now = datetime.datetime.now()
+            now = datetime.now()
             
             for job in jobs:
                 time_left = (job.completion_time - now).total_seconds()

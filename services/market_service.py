@@ -5,7 +5,7 @@ from models.items import Collezionabili
 from services.event_dispatcher import EventDispatcher
 from services.user_service import UserService
 from services.item_service import ItemService
-import datetime
+from datetime import datetime, timedelta
 
 class MarketService:
     def __init__(self):
@@ -77,7 +77,7 @@ class MarketService:
                 item_name=item_name,
                 quantity=quantity,
                 price_per_unit=price_per_unit,
-                expires_at=datetime.datetime.now() + datetime.timedelta(days=days_valid),
+                expires_at=datetime.now() + timedelta(days=days_valid),
                 status='active'
             )
             session.add(listing)
@@ -114,7 +114,7 @@ class MarketService:
                 return False, "Non puoi acquistare i tuoi oggetti."
             
             # Check expiration
-            if listing.expires_at < datetime.datetime.now():
+            if listing.expires_at < datetime.now():
                 listing.status = 'expired'
                 session.commit()
                 return False, "Annuncio scaduto."
@@ -147,7 +147,7 @@ class MarketService:
             # 4. Update listing
             listing.status = 'sold'
             listing.buyer_id = buyer_id
-            listing.sold_at = datetime.datetime.now()
+            listing.sold_at = datetime.now()
             
             session.commit()
             
@@ -195,13 +195,13 @@ class MarketService:
             offset = (page - 1) * limit
             listings = session.query(MarketListing).options(joinedload(MarketListing.seller)).filter(
                 MarketListing.status == 'active',
-                MarketListing.expires_at > datetime.datetime.now()
+                MarketListing.expires_at > datetime.now()
             ).order_by(MarketListing.created_at.desc()).offset(offset).limit(limit).all()
             
             # Count for pagination
             total = session.query(MarketListing).filter(
                 MarketListing.status == 'active',
-                MarketListing.expires_at > datetime.datetime.now()
+                MarketListing.expires_at > datetime.now()
             ).count()
             
             # Expunge to detach from session but keep data (optional, but safer is eager load which we did)

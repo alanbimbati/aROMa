@@ -6,7 +6,7 @@ from services.user_service import UserService
 from services.character_loader import get_character_loader
 from services.event_dispatcher import EventDispatcher
 from settings import PointsName
-import datetime
+from datetime import datetime, timedelta
 
 class CharacterService:
     def __init__(self):
@@ -226,7 +226,7 @@ class CharacterService:
         ownership = CharacterOwnership(
             character_id=char_id,
             user_id=user.id_telegram,
-            equipped_at=datetime.datetime.now(),
+            equipped_at=datetime.now(),
             last_change_date=datetime.date.today()
         )
         session.add(ownership)

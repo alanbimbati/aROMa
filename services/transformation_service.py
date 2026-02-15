@@ -5,7 +5,7 @@ Handles character transformations (e.g., Goku SSJ, Ichigo Bankai)
 from database import Database
 from models.system import CharacterTransformation, UserTransformation, Livello
 from models.user import Utente
-import datetime
+from datetime import datetime, timedelta
 
 class TransformationService:
     def __init__(self):
@@ -103,7 +103,7 @@ class TransformationService:
             user_id=user.id_telegram,
             transformation_id=transformation_id,
             activated_at=None,
-            expires_at=datetime.datetime.now(),
+            expires_at=datetime.now(),
             is_active=False
         )
         session.add(user_trans)
@@ -125,7 +125,7 @@ class TransformationService:
         
         if transformation and 'Great Ape' in transformation.get('nome', ''):
             # Great Ape only at night (18:00-06:00)
-            current_hour = datetime.datetime.now().hour
+            current_hour = datetime.now().hour
             if not (current_hour >= 18 or current_hour < 6):
                 return False, "🌙 Le trasformazioni Great Ape sono disponibili solo di notte (18:00-06:00)!"
         local_session = False
@@ -157,8 +157,8 @@ class TransformationService:
         
         # Activate this transformation
         user_trans.is_active = True
-        user_trans.activated_at = datetime.datetime.now()
-        user_trans.expires_at = datetime.datetime.now() + datetime.timedelta(days=transformation.duration_days)
+        user_trans.activated_at = datetime.now()
+        user_trans.expires_at = datetime.now() + timedelta(days=transformation.duration_days)
         
         # Set transformation expiry in user table for SSJ
         if transformation:
@@ -172,7 +172,7 @@ class TransformationService:
                 # Super Saiyan transformations have 6h duration
                 if 'SSJ' in transformation_name or 'Super Saiyan' in transformation_name:
                     duration_seconds = 21600  # 6 hours
-                    expiry = datetime.datetime.now() + datetime.timedelta(seconds=duration_seconds)
+                    expiry = datetime.now() + timedelta(seconds=duration_seconds)
                     
                     # Update user with transformation expiry
                     db_user = session.query(Utente).filter_by(id_telegram=user.id_telegram).first()
@@ -218,7 +218,7 @@ class TransformationService:
             return None
         
         # Check if expired
-        if user_trans.expires_at and datetime.datetime.now() > user_trans.expires_at:
+        if user_trans.expires_at and datetime.now() > user_trans.expires_at:
             user_trans.is_active = False
             if local_session:
                 session.commit()
@@ -252,7 +252,7 @@ class TransformationService:
                 return {"health": 0, "mana": 0, "damage": 0}
                 
             # Check expiration
-            if user_trans.expires_at and datetime.datetime.now() > user_trans.expires_at:
+            if user_trans.expires_at and datetime.now() > user_trans.expires_at:
                 user_trans.is_active = False
                 if local_session:
                     session.commit()
@@ -301,8 +301,8 @@ class TransformationService:
             transformation_id=transformation_id
         ).first()
         
-        now = datetime.datetime.now()
-        expires = now + datetime.timedelta(minutes=duration_minutes)
+        now = datetime.now()
+        expires = now + timedelta(minutes=duration_minutes)
         
         if user_trans:
             user_trans.is_active = True
