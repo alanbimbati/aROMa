@@ -408,46 +408,46 @@ id,nome,livello,lv_premium,exp_required,special_attack_name,special_attack_damag
 10093,Splicer,1,0,0,physical,12,10,100,Lo squartatore,Bioshock,-1,0,Normal,Bioshock,Evil,5,1.5,,40,0,,,,0,0,0,0,0,0,,Playable,true,1.5
 10094,Houdini Splicer,1,0,0,magic,16,10,100,Il mago pazzo,Bioshock,-1,0,Normal,Bioshock,Evil,5,1.5,,50,0,,,,0,0,0,0,0,0,,Playable,true,1.5
 10095,Nitro Splicer,1,0,0,explosive,20,10,100,L'esplosivo,Bioshock,-1,0,Normal,Bioshock,Evil,5,1.5,,50,0,,,,0,0,0,0,0,0,,Playable,true,1.5
-10096,Saibaman,2,0,0,physical,15,10,100,Il mostro verde nato dal terreno,Dragon Ball,-1,0,Normal,Dragon Ball,Evil,5,1.5,,40,0,,,,6,0,1,0,0,0,,Playable,true,1.5
-10097,Soldato di Freezer,10,0,0,ranged,20,10,100,Un soldato dell'armata di Freezer,Dragon Ball,-1,0,Normal,Dragon Ball,Evil,5,1.5,,50,0,,,,30,0,3,0,0,0,,Playable,true,1.5
+10096,Saibaman,2,0,0,physical,15,10,100,Il mostro verde nato dal terreno,Dragon Ball,-1,0,Normal,Dragon Ball,Evil,5,1.5,,40,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10097,Soldato di Freezer,10,0,0,ranged,20,10,100,Un soldato dell'armata di Freezer,Dragon Ball,-1,0,Normal,Dragon Ball,Evil,5,1.5,,50,0,,,,0,0,0,0,0,0,,Playable,true,1.5
 10098,Cell Junior,1,0,0,physical,35,10,100,La prole di Cell,Dragon Ball,-1,0,Normal,Dragon Ball,Evil,5,1.5,,70,0,,,,0,0,0,0,0,0,,Playable,true,1.5
 10099,Majin Minion,1,0,0,magic,30,10,100,Un servo di Majin Buu,Dragon Ball,-1,0,Normal,Dragon Ball,Evil,5,1.5,,60,0,,,,0,0,0,0,0,0,,Playable,true,1.5
 10100,Saibaman Elite,1,0,0,physical,25,10,100,Un Saibaman potenziato,Dragon Ball,-1,0,Normal,Dragon Ball,Evil,5,1.5,,50,0,,,,0,0,0,0,0,0,,Playable,true,1.5
-10101,Raditz,8,0,0,physical,45,10,100,Il fratello di Goku,Dragon Ball,-1,0,Normal,Saiyan,Evil,5,1.5,,45,0,,,,24,0,2,0,0,0,,Playable,true,1.5
-10102,Nappa,10,0,0,physical,80,10,100,Il brutale Saiyan,Dragon Ball,-1,0,Normal,Saiyan,Evil,5,1.5,,50,0,,,,30,0,3,0,0,0,,Playable,true,1.5
-10103,Vegeta (Scouter),12,0,0,ranged,100,10,100,Il principe dei Saiyan,Dragon Ball,-1,0,Normal,Saiyan,Evil,5,1.5,,55,0,,,,36,0,4,0,0,0,,Playable,true,1.5
-10104,Cui,12,0,0,ranged,40,10,100,Il rivale di Vegeta,Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,45,0,,,,36,0,4,0,0,0,,Playable,true,1.5
-10105,Dodoria,15,0,0,physical,70,10,100,Il guerriero rosa di Freezer,Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,45,0,,,,45,0,5,0,0,0,,Playable,true,1.5
-10106,Zarbon,16,0,0,physical,75,10,100,Il braccio destro di Freezer,Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,50,0,,,,48,0,5,0,0,0,,Playable,true,1.5
-10107,Guldo,14,0,0,magic,30,10,100,Il piccolo della Squadra Ginyu,Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,30,0,,,,42,0,4,0,0,0,,Playable,true,1.5
-10108,Recoome,18,0,0,physical,90,10,100,Il bruto della Squadra Ginyu,Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,40,0,,,,54,0,6,0,0,0,,Playable,true,1.5
-10109,Burter,17,0,0,physical,60,10,100,La velocità blu,Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,80,0,,,,51,0,5,0,0,0,,Playable,true,1.5
-10110,Jeice,17,0,0,ranged,70,10,100,Il rosso della Squadra Ginyu,Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,60,0,,,,51,0,5,0,0,0,,Playable,true,1.5
-10111,Capitano Ginyu,20,0,0,physical,110,10,100,Il capitano della Squadra Ginyu,Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,65,0,,,,60,0,6,0,0,0,,Playable,true,1.5
-10112,Freezer (First Form),20,0,0,ranged,120,10,100,Il tiranno galattico (Forma 1),Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,60,0,,,,60,0,6,0,0,0,,Playable,true,1.5
-10113,Freezer (Second Form),23,0,0,physical,140,10,100,Il tiranno galattico (Forma 2),Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,65,0,,,,69,0,7,0,0,0,,Playable,true,1.5
-10114,Freezer (Third Form),26,0,0,ranged,160,10,100,Il tiranno galattico (Forma 3),Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,75,0,,,,78,0,8,0,0,0,,Playable,true,1.5
-10115,Freezer (Final Form),30,0,0,ranged,200,10,100,Il tiranno galattico (Forma Finale),Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,85,0,,,,90,0,10,0,0,0,,Playable,true,1.5
-10116,Golden Freezer,40,0,0,magic,500,10,100,L'evoluzione dorata,Dragon Ball,-1,0,Normal,Super,Evil,5,1.5,,95,0,,,,120,0,13,0,0,0,,Playable,true,1.5
-10117,C16,22,0,0,physical,180,10,100,L'androide pacifico,Dragon Ball,-1,0,Normal,Androids,Evil,5,1.5,,50,0,,,,66,0,7,0,0,0,,Playable,true,1.5
-10118,C17,23,0,0,ranged,190,10,100,L'androide illimitato,Dragon Ball,-1,0,Normal,Androids,Evil,5,1.5,,80,0,,,,69,0,7,0,0,0,,Playable,true,1.5
-10119,C18,23,0,0,ranged,185,10,100,L'androide biondo,Dragon Ball,-1,0,Normal,Androids,Evil,5,1.5,,80,0,,,,69,0,7,0,0,0,,Playable,true,1.5
-10120,Cell (Imperfect),25,0,0,physical,150,10,100,L'insetto bio-androide,Dragon Ball,-1,0,Normal,Androids,Evil,5,1.5,,60,0,,,,75,0,8,0,0,0,,Playable,true,1.5
-10121,Cell (Semi-Perfect),30,0,0,physical,220,10,100,Cell dopo aver assorbito C17,Dragon Ball,-1,0,Normal,Androids,Evil,5,1.5,,70,0,,,,90,0,10,0,0,0,,Playable,true,1.5
-10122,Cell (Perfect),35,0,0,ranged,300,10,100,L'essere perfetto,Dragon Ball,-1,0,Normal,Androids,Evil,5,1.5,,90,0,,,,105,0,11,0,0,0,,Playable,true,1.5
-10123,Cell (Super Perfect),38,0,0,ranged,350,10,100,Cell tornato dall'autodistruzione,Dragon Ball,-1,0,Normal,Androids,Evil,5,1.5,,95,0,,,,114,0,12,0,0,0,,Playable,true,1.5
-10124,Majin Buu (Fat),35,0,0,magic,250,10,100,Il demone gommoso,Dragon Ball,-1,0,Normal,Buu,Evil,5,1.5,,60,0,,,,105,0,11,0,0,0,,Playable,true,1.5
-10125,Super Buu,42,0,0,physical,380,10,100,Buu malvagio,Dragon Ball,-1,0,Normal,Buu,Evil,5,1.5,,90,0,,,,126,0,14,0,0,0,,Playable,true,1.5
-10126,Kid Buu,45,0,0,physical,400,10,100,La pura malvagità,Dragon Ball,-1,0,Normal,Buu,Evil,5,1.5,,95,0,,,,135,0,15,0,0,0,,Playable,true,1.5
-10127,Beerus,80,0,0,magic,2000,10,100,Il Dio della Distruzione,Dragon Ball,-1,0,Normal,Super,Evil,5,1.5,,150,0,,,,240,0,26,0,0,0,,Playable,true,1.5
-10128,Goku Black Base,55,0,0,physical,100,10,100,Il misterioso guerriero nero,Dragon Ball,-1,0,Normal,Future Trunks,Evil,5,1.5,,60,0,,,,165,0,18,0,0,0,,Playable,true,1.5
-10129,Zamasu,55,0,0,magic,90,10,100,L'apprendista Kaiohshin,Dragon Ball,-1,0,Normal,Future Trunks,Evil,5,1.5,,55,0,,,,165,0,18,0,0,0,,Playable,true,1.5
-10130,Immortal Zamasu,58,0,0,magic,120,10,100,Zamasu Immortale,Dragon Ball,-1,0,Normal,Future Trunks,Evil,5,1.5,,65,0,,,,174,0,19,0,0,0,,Playable,true,1.5
-10131,Whis,90,0,0,magic,3000,10,100,L'angelo guida,Dragon Ball,-1,0,Normal,Super,Evil,5,1.5,,200,0,,,,270,0,30,0,0,0,,Playable,true,1.5
-10132,Goku Black,58,0,0,physical,120,10,100,Zamasu nel corpo di Goku,Dragon Ball,-1,0,Normal,Future Trunks,Evil,5,1.5,,65,0,,,,174,0,19,0,0,0,,Playable,true,1.5
-10133,Goku Black (Rose),60,0,0,magic,600,10,100,Il Super Saiyan Rose,Dragon Ball,-1,0,Normal,Future Trunks,Evil,5,1.5,,100,0,,,,180,0,20,0,0,0,,Playable,true,1.5
-10134,Zamasu,55,0,0,magic,100,10,100,L'apprendista Kaiohshin,Dragon Ball,-1,0,Normal,Future Trunks,Evil,5,1.5,,60,0,,,,165,0,18,0,0,0,,Playable,true,1.5
-10135,Fused Zamasu,65,0,0,magic,900,10,100,La fusione suprema,Dragon Ball,-1,0,Normal,Future Trunks,Evil,5,1.5,,110,0,,,,195,0,21,0,0,0,,Playable,true,1.5
+10101,Raditz,8,0,0,physical,45,10,100,Il fratello di Goku,Dragon Ball,-1,0,Normal,Saiyan,Evil,5,1.5,,45,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10102,Nappa,10,0,0,physical,80,10,100,Il brutale Saiyan,Dragon Ball,-1,0,Normal,Saiyan,Evil,5,1.5,,50,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10103,Vegeta (Scouter),12,0,0,ranged,100,10,100,Il principe dei Saiyan,Dragon Ball,-1,0,Normal,Saiyan,Evil,5,1.5,,55,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10104,Cui,12,0,0,ranged,40,10,100,Il rivale di Vegeta,Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,45,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10105,Dodoria,15,0,0,physical,70,10,100,Il guerriero rosa di Freezer,Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,45,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10106,Zarbon,16,0,0,physical,75,10,100,Il braccio destro di Freezer,Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,50,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10107,Guldo,14,0,0,magic,30,10,100,Il piccolo della Squadra Ginyu,Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,30,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10108,Recoome,18,0,0,physical,90,10,100,Il bruto della Squadra Ginyu,Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,40,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10109,Burter,17,0,0,physical,60,10,100,La velocità blu,Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,80,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10110,Jeice,17,0,0,ranged,70,10,100,Il rosso della Squadra Ginyu,Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,60,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10111,Capitano Ginyu,20,0,0,physical,110,10,100,Il capitano della Squadra Ginyu,Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,65,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10112,Freezer (First Form),20,0,0,ranged,120,10,100,Il tiranno galattico (Forma 1),Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,60,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10113,Freezer (Second Form),23,0,0,physical,140,10,100,Il tiranno galattico (Forma 2),Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,65,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10114,Freezer (Third Form),26,0,0,ranged,160,10,100,Il tiranno galattico (Forma 3),Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,75,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10115,Freezer (Final Form),30,0,0,ranged,200,10,100,Il tiranno galattico (Forma Finale),Dragon Ball,-1,0,Normal,Namek,Evil,5,1.5,,85,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10116,Golden Freezer,40,0,0,magic,500,10,100,L'evoluzione dorata,Dragon Ball,-1,0,Normal,Super,Evil,5,1.5,,95,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10117,C16,22,0,0,physical,180,10,100,L'androide pacifico,Dragon Ball,-1,0,Normal,Androids,Evil,5,1.5,,50,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10118,C17,23,0,0,ranged,190,10,100,L'androide illimitato,Dragon Ball,-1,0,Normal,Androids,Evil,5,1.5,,80,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10119,C18,23,0,0,ranged,185,10,100,L'androide biondo,Dragon Ball,-1,0,Normal,Androids,Evil,5,1.5,,80,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10120,Cell (Imperfect),25,0,0,physical,150,10,100,L'insetto bio-androide,Dragon Ball,-1,0,Normal,Androids,Evil,5,1.5,,60,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10121,Cell (Semi-Perfect),30,0,0,physical,220,10,100,Cell dopo aver assorbito C17,Dragon Ball,-1,0,Normal,Androids,Evil,5,1.5,,70,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10122,Cell (Perfect),35,0,0,ranged,300,10,100,L'essere perfetto,Dragon Ball,-1,0,Normal,Androids,Evil,5,1.5,,90,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10123,Cell (Super Perfect),38,0,0,ranged,350,10,100,Cell tornato dall'autodistruzione,Dragon Ball,-1,0,Normal,Androids,Evil,5,1.5,,95,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10124,Majin Buu (Fat),35,0,0,magic,250,10,100,Il demone gommoso,Dragon Ball,-1,0,Normal,Buu,Evil,5,1.5,,60,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10125,Super Buu,42,0,0,physical,380,10,100,Buu malvagio,Dragon Ball,-1,0,Normal,Buu,Evil,5,1.5,,90,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10126,Kid Buu,45,0,0,physical,400,10,100,La pura malvagità,Dragon Ball,-1,0,Normal,Buu,Evil,5,1.5,,95,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10127,Beerus,80,0,0,magic,2000,10,100,Il Dio della Distruzione,Dragon Ball,-1,0,Normal,Super,Evil,5,1.5,,150,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10128,Goku Black Base,55,0,0,physical,100,10,100,Il misterioso guerriero nero,Dragon Ball,-1,0,Normal,Future Trunks,Evil,5,1.5,,60,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10129,Zamasu,55,0,0,magic,90,10,100,L'apprendista Kaiohshin,Dragon Ball,-1,0,Normal,Future Trunks,Evil,5,1.5,,55,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10130,Immortal Zamasu,58,0,0,magic,120,10,100,Zamasu Immortale,Dragon Ball,-1,0,Normal,Future Trunks,Evil,5,1.5,,65,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10131,Whis,90,0,0,magic,3000,10,100,L'angelo guida,Dragon Ball,-1,0,Normal,Super,Evil,5,1.5,,200,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10132,Goku Black,58,0,0,physical,120,10,100,Zamasu nel corpo di Goku,Dragon Ball,-1,0,Normal,Future Trunks,Evil,5,1.5,,65,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10133,Goku Black (Rose),60,0,0,magic,600,10,100,Il Super Saiyan Rose,Dragon Ball,-1,0,Normal,Future Trunks,Evil,5,1.5,,100,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10134,Zamasu,55,0,0,magic,100,10,100,L'apprendista Kaiohshin,Dragon Ball,-1,0,Normal,Future Trunks,Evil,5,1.5,,60,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10135,Fused Zamasu,65,0,0,magic,900,10,100,La fusione suprema,Dragon Ball,-1,0,Normal,Future Trunks,Evil,5,1.5,,110,0,,,,0,0,0,0,0,0,,Playable,true,1.5
 10136,Guldo,1,0,0,magic,30,10,100,Il controllo temporale,Dragon Ball,-1,0,Normal,Naming Force,Evil,5,1.5,,40,0,,,,0,0,0,0,0,0,,Playable,true,1.5
 10137,Recoome,1,0,0,physical,90,10,100,La forza bruta,Dragon Ball,-1,0,Normal,Naming Force,Evil,5,1.5,,50,0,,,,0,0,0,0,0,0,,Playable,true,1.5
 10138,Burter,1,0,0,physical,60,10,100,La velocità blu,Dragon Ball,-1,0,Normal,Naming Force,Evil,5,1.5,,120,0,,,,0,0,0,0,0,0,,Playable,true,1.5
@@ -461,15 +461,15 @@ id,nome,livello,lv_premium,exp_required,special_attack_name,special_attack_damag
 10146,Majin Buu (Fat),1,0,0,magic,250,10,100,Il demone innocente,Dragon Ball,-1,0,Normal,Buu Saga,Evil,5,1.5,,60,0,,,,0,0,0,0,0,0,,Playable,true,1.5
 10147,Super Buu,1,0,0,physical,380,10,100,Il male incarnato,Dragon Ball,-1,0,Normal,Buu Saga,Evil,5,1.5,,90,0,,,,0,0,0,0,0,0,,Playable,true,1.5
 10148,Kid Buu,1,0,0,physical,400,10,100,Il caos puro,Dragon Ball,-1,0,Normal,Buu Saga,Evil,5,1.5,,95,0,,,,0,0,0,0,0,0,,Playable,true,1.5
-10149,Buuhan,48,0,0,magic,450,10,100,Buu con Gohan assorbito,Dragon Ball,-1,0,Normal,Buu Saga,Evil,5,1.5,,100,0,,,,144,0,16,0,0,0,,Playable,true,1.5
-10150,Haze Shenron,45,0,0,physical,100,10,100,Il drago della nebbia (2 stelle),Dragon Ball GT,-1,0,Normal,Shadow Dragons,Evil,5,1.5,,50,0,,,,135,0,15,0,0,0,,Playable,true,1.5
-10151,Rage Shenron,47,0,0,magic,150,10,100,Il drago elettrico (5 stelle),Dragon Ball GT,-1,0,Normal,Shadow Dragons,Evil,5,1.5,,60,0,,,,141,0,15,0,0,0,,Playable,true,1.5
-10152,Oceanus Shenron,48,0,0,magic,180,10,100,Il drago del vento (6 stelle),Dragon Ball GT,-1,0,Normal,Shadow Dragons,Evil,5,1.5,,70,0,,,,144,0,16,0,0,0,,Playable,true,1.5
-10153,Naturon Shenron,49,0,0,physical,200,10,100,Il drago talpa (7 stelle),Dragon Ball GT,-1,0,Normal,Shadow Dragons,Evil,5,1.5,,60,0,,,,147,0,16,0,0,0,,Playable,true,1.5
-10154,Nuova Shenron,52,0,0,magic,300,10,100,Il drago del sole (4 stelle),Dragon Ball GT,-1,0,Normal,Shadow Dragons,Evil,5,1.5,,90,0,,,,156,0,17,0,0,0,,Playable,true,1.5
-10155,Eis Shenron,52,0,0,magic,280,10,100,Il drago del ghiaccio (3 stelle),Dragon Ball GT,-1,0,Normal,Shadow Dragons,Evil,5,1.5,,85,0,,,,156,0,17,0,0,0,,Playable,true,1.5
-10156,Syn Shenron,55,0,0,physical,500,10,100,Il drago malvagio (1 stella),Dragon Ball GT,-1,0,Normal,Shadow Dragons,Evil,5,1.5,,100,0,,,,165,0,18,0,0,0,,Playable,true,1.5
-10157,Omega Shenron,58,0,0,magic,1000,10,100,Il drago supremo (Tutte le sfere),Dragon Ball GT,-1,0,Normal,Shadow Dragons,Evil,5,1.5,,120,0,,,,174,0,19,0,0,0,,Playable,true,1.5
+10149,Buuhan,48,0,0,magic,450,10,100,Buu con Gohan assorbito,Dragon Ball,-1,0,Normal,Buu Saga,Evil,5,1.5,,100,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10150,Haze Shenron,45,0,0,physical,100,10,100,Il drago della nebbia (2 stelle),Dragon Ball GT,-1,0,Normal,Shadow Dragons,Evil,5,1.5,,50,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10151,Rage Shenron,47,0,0,magic,150,10,100,Il drago elettrico (5 stelle),Dragon Ball GT,-1,0,Normal,Shadow Dragons,Evil,5,1.5,,60,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10152,Oceanus Shenron,48,0,0,magic,180,10,100,Il drago del vento (6 stelle),Dragon Ball GT,-1,0,Normal,Shadow Dragons,Evil,5,1.5,,70,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10153,Naturon Shenron,49,0,0,physical,200,10,100,Il drago talpa (7 stelle),Dragon Ball GT,-1,0,Normal,Shadow Dragons,Evil,5,1.5,,60,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10154,Nuova Shenron,52,0,0,magic,300,10,100,Il drago del sole (4 stelle),Dragon Ball GT,-1,0,Normal,Shadow Dragons,Evil,5,1.5,,90,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10155,Eis Shenron,52,0,0,magic,280,10,100,Il drago del ghiaccio (3 stelle),Dragon Ball GT,-1,0,Normal,Shadow Dragons,Evil,5,1.5,,85,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10156,Syn Shenron,55,0,0,physical,500,10,100,Il drago malvagio (1 stella),Dragon Ball GT,-1,0,Normal,Shadow Dragons,Evil,5,1.5,,100,0,,,,0,0,0,0,0,0,,Playable,true,1.5
+10157,Omega Shenron,58,0,0,magic,1000,10,100,Il drago supremo (Tutte le sfere),Dragon Ball GT,-1,0,Normal,Shadow Dragons,Evil,5,1.5,,120,0,,,,0,0,0,0,0,0,,Playable,true,1.5
 20000,Bowser,30,0,0,Physical,50,100,9000,Il re dei Koopa,Mario,1,0,Normal,Mario,Evil,15,2.0,,70,0,,,,0,0,0,0,0,0,,Playable,true,2.0
 20001,Ganondorf,40,0,0,Magic,65,100,16000,Il signore delle tenebre,Zelda,1,0,Normal,Zelda,Evil,15,2.0,,70,0,,,,0,0,0,0,0,0,,Playable,true,2.0
 20002,Ender Dragon,50,0,0,Ranged,80,100,25000,Il drago del End,Minecraft,1,0,Normal,Minecraft,Evil,15,2.0,,70,0,,,,0,0,0,0,0,0,,Playable,true,2.0
