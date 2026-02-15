@@ -2,7 +2,7 @@ from database import Database
 from models.items import Collezionabili
 from models.user import Utente
 from services.user_service import UserService
-import datetime
+from datetime import datetime, timedelta
 import random
 from settings import PointsName
 from services.event_dispatcher import EventDispatcher
@@ -293,7 +293,7 @@ class ItemService:
             # Add new turbo
             effects.append({
                 'id': 'turbo',
-                'expires': (datetime.datetime.now() + datetime.timedelta(minutes=30)).isoformat()
+                'expires': (datetime.now() + timedelta(minutes=30)).isoformat()
             })
             
             self.user_service.update_user(user.id_telegram, {'active_status_effects': json.dumps(effects)})
@@ -301,7 +301,7 @@ class ItemService:
         
         elif item_name == "Aku Aku" or item_name == "Uka Uka":
             # Invincibility
-            until = datetime.datetime.now() + datetime.timedelta(minutes=30) # 30 mins invincibility (rare item!)
+            until = datetime.now() + timedelta(minutes=30) # 30 mins invincibility (rare item!)
             self.user_service.update_user(user.id_telegram, {'invincible_until': until})
             return f"✨ {item_name} attivato! Sei INVINCIBILE per 30 minuti! Non subirai danni da mob o trappole.", None
             

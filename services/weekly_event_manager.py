@@ -2,7 +2,7 @@
 Weekly Event Manager - Manages rotating weekly events with multipliers.
 """
 
-import datetime
+from datetime import datetime, timedelta
 import json
 
 class WeeklyEventManager:
@@ -55,7 +55,7 @@ class WeeklyEventManager:
             return False
         
         cls._active_event = event_key
-        cls._event_end_time = datetime.datetime.now() + datetime.timedelta(days=event_config['duration_days'])
+        cls._event_end_time = datetime.now() + timedelta(days=event_config['duration_days'])
         
         return True
     
@@ -65,7 +65,7 @@ class WeeklyEventManager:
         if not cls._active_event or not cls._event_end_time:
             return None
         
-        if datetime.datetime.now() > cls._event_end_time:
+        if datetime.now() > cls._event_end_time:
             cls._active_event = None
             cls._event_end_time = None
             return None

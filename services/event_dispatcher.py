@@ -4,7 +4,7 @@ Event Dispatcher Service - Centralized event logging and dispatching for achieve
 
 from database import Database
 from models.achievements import GameEvent
-import datetime
+from datetime import datetime, timedelta
 import json
 
 class EventDispatcher:
@@ -38,7 +38,7 @@ class EventDispatcher:
                 user_id=user_id,
                 value=value,
                 context=json.dumps(context) if context else None,
-                timestamp=datetime.datetime.now(),
+                timestamp=datetime.now(),
                 processed=False
             )
             

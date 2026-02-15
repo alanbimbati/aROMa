@@ -4,7 +4,7 @@ from models.achievements import GameEvent
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy import text
 import json
-import datetime
+from datetime import datetime, timedelta
 
 class StatAggregator:
     """
@@ -80,7 +80,7 @@ class StatAggregator:
         for (user_id, stat_key), data in self._batch_cache.items():
             op = data['op']
             value = data['value']
-            now = datetime.datetime.now()
+            now = datetime.now()
             
             stmt = insert(UserStat).values(
                 user_id=user_id,

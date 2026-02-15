@@ -1,6 +1,6 @@
 
 import os
-import datetime
+from datetime import datetime, timedelta
 import subprocess
 import glob
 from services.event_dispatcher import EventDispatcher
@@ -26,7 +26,7 @@ class BackupService:
 
     def create_backup(self):
         """Creates a new database dump."""
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         filename = f"aroma_backup_{timestamp}.sql"
         filepath = os.path.join(self.backup_dir, filename)
         
@@ -73,14 +73,14 @@ class BackupService:
         """Deletes backups older than retention_days."""
         print(f"[Backup] Checking for backups older than {self.retention_days} days...")
         
-        now = datetime.datetime.now()
+        now = datetime.now()
         pattern = os.path.join(self.backup_dir, "aroma_backup_*.sql")
         
         count = 0
         for filepath in glob.glob(pattern):
             try:
                 # Check file modification time
-                file_time = datetime.datetime.fromtimestamp(os.path.getmtime(filepath))
+                file_time = datetime.fromtimestamp(os.path.getmtime(filepath))
                 age = now - file_time
                 
                 if age.days > self.retention_days:

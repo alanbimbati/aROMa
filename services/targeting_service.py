@@ -4,7 +4,7 @@ from models.pve import Mob
 from models.combat import CombatParticipation
 from models.dungeon import DungeonParticipant
 from services.user_service import UserService
-import datetime
+from datetime import datetime, timedelta
 
 
 class TargetingService:
@@ -96,7 +96,7 @@ class TargetingService:
         # Check if account is too old (inactive for 6+ months = auto-deleted)
         if hasattr(user, 'last_activity') and user.last_activity:
             import datetime
-            six_months_ago = datetime.datetime.now() - datetime.timedelta(days=180)
+            six_months_ago = datetime.now() - timedelta(days=180)
             if user.last_activity < six_months_ago:
                 pass # print(f"[DEBUG] User {user_id} inactive for 6+ months, skipping")
 
@@ -150,7 +150,7 @@ class TargetingService:
         
         last_attack = getattr(user, 'last_attack_time', None)
         if last_attack:
-            elapsed = (datetime.datetime.now() - last_attack).total_seconds()
+            elapsed = (datetime.now() - last_attack).total_seconds()
             if elapsed < cooldown_seconds:
                 remaining = int(cooldown_seconds - elapsed)
                 return False, f"⏳ Sei stanco! (CD: {int(cooldown_seconds)}s)\nDevi riposare ancora per {remaining}s."
@@ -175,7 +175,7 @@ class TargetingService:
         
         last_attack = getattr(user, 'last_attack_time', None)
         if last_attack:
-            elapsed = (datetime.datetime.now() - last_attack).total_seconds()
+            elapsed = (datetime.now() - last_attack).total_seconds()
             if elapsed < cooldown_seconds:
                 remaining = int(cooldown_seconds - elapsed)
                 return False, f"⏳ Sei stanco! (CD: {int(cooldown_seconds)}s)\nDevi riposare ancora per {remaining}s."

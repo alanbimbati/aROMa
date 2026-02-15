@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime, timedelta
 import json
 from database import Database
 from models.seasons import Season, SeasonProgress, SeasonReward, SeasonClaimedReward
@@ -24,7 +24,7 @@ class SeasonManager:
             local_session = True
             
         try:
-            now = datetime.datetime.now()
+            now = datetime.now()
             return session.query(Season).filter(
                 Season.is_active == True,
                 Season.start_date <= now,
@@ -58,7 +58,7 @@ class SeasonManager:
                     current_exp=0,
                     current_level=1,
                     has_premium_pass=is_premium, # Auto-grant if premium
-                    last_update=datetime.datetime.now()
+                    last_update=datetime.now()
                 )
                 session.add(progress)
                 if local_session:
@@ -107,14 +107,14 @@ class SeasonManager:
                     season_id=season.id,
                     current_exp=0,
                     current_level=1,
-                    last_update=datetime.datetime.now()
+                    last_update=datetime.now()
                 )
                 session.add(progress)
             
             # Apply season multiplier
             amount = int(amount * season.exp_multiplier)
             progress.current_exp += amount
-            progress.last_update = datetime.datetime.now()
+            progress.last_update = datetime.now()
             
             # Check for level up
             leveled_up = False
@@ -176,7 +176,7 @@ class SeasonManager:
                 
             # 1. Close Season
             season.is_active = False
-            season.end_date = datetime.datetime.now()
+            season.end_date = datetime.now()
             
             # Calculate Duration
             duration = season.end_date - season.start_date

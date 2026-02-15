@@ -715,42 +715,6 @@ class CraftingService:
         finally:
             session.close()
     
-    def roll_resource_drop(self, mob_level, mob_is_boss=False):
-        """
-        Determine if resources should drop and which ones.
-        Returns a list of (resource_id, quantity, image) tuples.
-        """
-        try:
-            mob_level = int(mob_level)
-        except (ValueError, TypeError):
-            mob_level = 1
-
-        # Base drop chance: 80% for normal mobs, 100% for bosses
-        drop_chance = 100 if mob_is_boss else 80
-        
-        if random.random() * 100 > drop_chance:
-            print(f"[DEBUG] CraftingService: Drop roll failed ({drop_chance}%)")
-            return []
-        
-        # Mobs drop 1-2 resources, Bosses drop 3-5
-        num_drops = random.randint(3, 5) if mob_is_boss else random.randint(1, 2)
-        print(f"[DEBUG] CraftingService: Rolling {num_drops} resources")
-        
-        drops = []
-        session = self.db.get_session()
-        try:
-            for _ in range(num_drops):
-                # Standardized system: mostly common resources (IDs 1, 2, 3)
-                resource = session.query(Resource).order_by(func.random()).first()
-                
-                if resource:
-                    # Quantity: 1-3 for normal, 5-15 for boss
-                    qty = random.randint(5, 15) if mob_is_boss else random.randint(1, 3)
-                    drops.append((resource.id, qty, resource.image))
-            
-            return drops
-        finally:
-            session.close()
 
     def roll_chat_drop(self, chance=20):
         """
@@ -963,3 +927,55 @@ class CraftingService:
             
         return new_stats
 
+
+    def roll_resource_drop(self, mob_level, mob_is_boss=False):
+        """
+        Determine if resources should drop and which ones.
+        Returns a list of (resource_id, quantity, image) tuples.
+        OPTIMIZED: Uses in-memory cache and single query.
+        """
+        try:
+            mob_level = int(mob_level)
+        except (ValueError, TypeError):
+            mob_level = 1
+
+        # Base drop chance: 80% for normal mobs, 100% for bosses
+        drop_chance = 100 if mob_is_boss else 80
+        
+        if random.random() * 100 > drop_chance:
+            return []
+        
+        # Mobs drop 1-2 resources, Bosses drop 3-5
+        num_drops = random.randint(3, 5) if mob_is_boss else random.randint(1, 2)
+        
+        # Get resources from cache (much faster than per-drop queries)
+        from datetime import datetime
+        now = datetime.now()
+        
+        # Refresh cache if stale or empty
+        if (CraftingService._resource_cache is None or 
+            CraftingService._resource_cache_timestamp is None or
+            (now - CraftingService._resource_cache_timestamp).total_seconds() > CraftingService._CACHE_DURATION_SECONDS):
+            
+            session = self.db.get_session()
+            try:
+                # Single query to fetch ALL resources
+                resources = session.query(Resource).all()
+                CraftingService._resource_cache = [
+                    {'id': r.id, 'name': r.name, 'rarity': r.rarity, 'image': r.image}
+                    for r in resources
+                ]
+                CraftingService._resource_cache_timestamp = now
+            finally:
+                session.close()
+        
+        # Random selection from cached resources (no DB queries!)
+        drops = []
+        if CraftingService._resource_cache:
+            for _ in range(num_drops):
+                resource = random.choice(CraftingService._resource_cache)
+                # Quantity: 1-3 for normal, 5-15 for boss
+                qty = random.randint(5, 15) if mob_is_boss else random.randint(1, 3)
+                drops.append((resource['id'], qty, resource['image']))
+        
+        return drops

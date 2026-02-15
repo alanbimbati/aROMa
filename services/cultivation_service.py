@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime, timedelta
 import random
 from database import Database
 from models.cultivation import GardenSlot
@@ -90,12 +90,12 @@ class CultivationService:
             user_res.quantity -= 1
             
             # Plant
-            now = datetime.datetime.now()
+            now = datetime.now()
             growth_time = 4 * 3600 # 4 hours in seconds
             
             slot.seed_type = seed_type
             slot.planted_at = now
-            slot.completion_time = now + datetime.timedelta(seconds=growth_time)
+            slot.completion_time = now + timedelta(seconds=growth_time)
             slot.status = 'growing'
             slot.moisture = 100
             slot.last_watered_at = now
@@ -123,7 +123,7 @@ class CultivationService:
         session = self.db.get_session()
         try:
             slots = session.query(GardenSlot).filter_by(user_id=user_id, status='growing').all()
-            now = datetime.datetime.now()
+            now = datetime.now()
             count = 0
             
             for slot in slots:
@@ -136,11 +136,11 @@ class CultivationService:
                     if slot.moisture > 0:
                         slot.status = 'ready'
                         # Set rot_time: 2 hours after ready
-                        slot.rot_time = now + datetime.timedelta(hours=2)
+                        slot.rot_time = now + timedelta(hours=2)
                         count += 1
                     else:
                         # Stalled growth if no moisture
-                        slot.completion_time += datetime.timedelta(minutes=10)
+                        slot.completion_time += timedelta(minutes=10)
             
             if count > 0:
                 session.commit()
@@ -152,7 +152,7 @@ class CultivationService:
         """Find all plants that matured and mark as ready. Return user_ids for notification."""
         session = self.db.get_session()
         try:
-            now = datetime.datetime.now()
+            now = datetime.now()
             matured_info = []
             
             # 1. Update Growing Plants
@@ -167,7 +167,7 @@ class CultivationService:
                 if slot.completion_time <= now:
                     if slot.moisture > 0:
                         slot.status = 'ready'
-                        slot.rot_time = now + datetime.timedelta(hours=2) # Rot in 2 hours
+                        slot.rot_time = now + timedelta(hours=2) # Rot in 2 hours
                         matured_info.append({
                             'user_id': slot.user_id,
                             'seed_type': slot.seed_type,
@@ -175,7 +175,7 @@ class CultivationService:
                         })
                     else:
                         # Penalty: stalled growth
-                        slot.completion_time += datetime.timedelta(minutes=30)
+                        slot.completion_time += timedelta(minutes=30)
 
             # 2. Update Ready Plants (Rotting)
             ready_slots = session.query(GardenSlot).filter(GardenSlot.status == 'ready').all()
@@ -188,7 +188,7 @@ class CultivationService:
 
                 if slot.rot_time and slot.rot_time <= now:
                     slot.status = 'rotting'
-                    slot.rot_time = now + datetime.timedelta(hours=1) # Full rot in another hour
+                    slot.rot_time = now + timedelta(hours=1) # Full rot in another hour
                     matured_info.append({
                         'user_id': slot.user_id,
                         'seed_type': slot.seed_type,
@@ -224,10 +224,10 @@ class CultivationService:
             
             if slot.status == 'growing':
                 # Check directly if time passed (in case job didn't run)
-                if slot.completion_time <= datetime.datetime.now():
+                if slot.completion_time <= datetime.now():
                     slot.status = 'ready'
                 else:
-                    remaining = slot.completion_time - datetime.datetime.now()
+                    remaining = slot.completion_time - datetime.now()
                     minutes = int(remaining.total_seconds() / 60)
                     return False, f"La pianta sta ancora crescendo! Torna tra {minutes} minuti."
                     
@@ -362,7 +362,7 @@ class CultivationService:
                 return False, "La terra è già molto umida!"
                 
             slot.moisture = 100
-            slot.last_watered_at = datetime.datetime.now()
+            slot.last_watered_at = datetime.now()
             
             session.commit()
             return True, "Hai irrigato il terreno! 💦 L'umidità è al 100%."

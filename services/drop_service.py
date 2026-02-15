@@ -9,7 +9,7 @@ from models.seasons import Season
 from sqlalchemy import text
 import os
 import random
-import datetime
+from datetime import datetime, timedelta
 
 # Dynamic path resolution
 SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -70,7 +70,7 @@ class DropService:
             return
 
         # Anti-spam check (time) - Standard 10s cooldown
-        now = datetime.datetime.now()
+        now = datetime.now()
         if user.last_chat_drop_time:
             elapsed = (now - user.last_chat_drop_time).total_seconds()
             if elapsed < 10:
@@ -187,7 +187,7 @@ class DropService:
         bot.reply_to(message, "💣 Ops!... Hai calpestato una Cassa TNT! Scrivi entro 3 secondi per evitarla!")
         
         # Set TNT timer
-        timestamp = datetime.datetime.now()
+        timestamp = datetime.now()
         self.user_service.update_user(user.id_telegram, {
             'start_tnt': timestamp,
             'end_tnt': None
@@ -232,12 +232,12 @@ class DropService:
             return False
         
         # Check if 3 seconds passed
-        elapsed = (datetime.datetime.now() - user.start_tnt).total_seconds()
+        elapsed = (datetime.now() - user.start_tnt).total_seconds()
         
         if elapsed <= 3:
             # User wrote in time!
             self.user_service.update_user(user.id_telegram, {
-                'end_tnt': datetime.datetime.now()
+                'end_tnt': datetime.now()
             })
             bot.reply_to(message, "✅ Sei riuscito ad evitare la TNT! Salvo!")
             return True
@@ -246,7 +246,7 @@ class DropService:
             wumpa_persi = random.randint(5, 15)
             self.user_service.add_points(user, -wumpa_persi)
             self.user_service.update_user(user.id_telegram, {
-                'end_tnt': datetime.datetime.now()
+                'end_tnt': datetime.now()
             })
             bot.reply_to(message,
                 f"💥 BOOM! La TNT è esplosa! Hai perso {wumpa_persi} {PointsName}!\n\n"

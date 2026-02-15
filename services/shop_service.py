@@ -5,7 +5,7 @@ from services.user_service import UserService
 from services.game_service import GameService
 import random
 from settings import PointsName
-import datetime
+from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 
 class ShopService:
@@ -73,7 +73,7 @@ class ShopService:
             'points': user.points - self.COSTO_PREMIUM,
             'premium': 1,
             'abbonamento_attivo': 1,
-            'scadenza_premium': datetime.datetime.now() + relativedelta(months=+1)
+            'scadenza_premium': datetime.now() + relativedelta(months=+1)
         })
         return True, "Abbonamento attivato!"
 
