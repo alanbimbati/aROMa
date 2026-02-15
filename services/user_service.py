@@ -910,6 +910,66 @@ class UserService:
         
         return True, f"Statistiche resettate! {points_to_refund} punti restituiti."
 
+    def apply_stat_preset(self, utente, preset_id, session=None):
+        """Apply a stat preset configuration to user"""
+        import json
+        import os
+        
+        # Load presets
+        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        preset_path = os.path.join(BASE_DIR, 'data', 'stat_presets.json')
+        
+        try:
+            with open(preset_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                presets = data.get('presets', [])
+        except Exception as e:
+            return False, f"Errore caricamento preset: {e}"
+        
+        # Find preset
+        preset = next((p for p in presets if p['id'] == preset_id), None)
+        if not preset:
+            return False, "Preset non trovato!"
+        
+        # Calculate available points
+        level = utente.livello or 1
+        total_allowed = level * 2
+        
+        # Scale preset to user's level
+        preset_total = preset.get('total_points', 20)
+        if total_allowed < preset_total:
+            # Scale down allocations proportionally
+            scale_factor = total_allowed / preset_total
+            allocations = {
+                stat: int(value * scale_factor) 
+                for stat, value in preset['allocations'].items()
+            }
+        else:
+            # Use preset as-is plus distribute remaining points
+            allocations = preset['allocations'].copy()
+            remaining = total_allowed - preset_total
+            if remaining > 0:
+                # Distribute remaining points evenly
+                per_stat = remaining // 6
+                for stat in allocations:
+                    allocations[stat] += per_stat
+        
+        # Apply allocations
+        updates = {
+            'allocated_health': allocations.get('health', 0),
+            'allocated_mana': allocations.get('mana', 0),
+            'allocated_damage': allocations.get('damage', 0),
+            'allocated_resistance': allocations.get('resistance', 0),
+            'allocated_crit': allocations.get('crit', 0),
+            'allocated_speed': allocations.get('speed', 0),
+            'stat_points': 0  # All points allocated
+        }
+        
+        self.update_user(utente.id_telegram, updates, session=session)
+        self.recalculate_stats(utente.id_telegram, session=session)
+        
+        return True, f"{preset['icon']} Preset **{preset['name']}** applicato!"
+
     def validate_and_fix_user_stats(self):
         """Startup check to reset stats for users and sync with current logic/data"""
         print("[STARTUP] Validating and syncing user statistics...")
