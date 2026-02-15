@@ -193,7 +193,7 @@ class PvEService:
         try:
             # Re-fetch user in this session
             db_user = session.merge(user)
-            db_user.last_activity = datetime.datetime.now()
+            db_user.last_activity = datetime.now()
             
             # Check if Resting (Inn)
             if db_user.resting_since:
@@ -221,7 +221,7 @@ class PvEService:
             
             last_attack = getattr(db_user, 'last_attack_time', None)
             if last_attack:
-                elapsed = (datetime.datetime.now() - last_attack).total_seconds()
+                elapsed = (datetime.now() - last_attack).total_seconds()
                 if elapsed < cooldown_seconds:
                     remaining = int(cooldown_seconds - elapsed)
                     session.close()
@@ -254,7 +254,7 @@ class PvEService:
             # Direct Taunt: Set user as primary target for the mob
             if active_mob:
                 active_mob.aggro_target_id = db_user.id_telegram
-                active_mob.aggro_end_time = datetime.datetime.now() + datetime.timedelta(minutes=2)
+                active_mob.aggro_end_time = datetime.now() + datetime.timedelta(minutes=2)
                 session.flush()
                 print(f"[Aggro] {db_user.id_telegram} TAUNTED mob {active_mob.id}")
 
@@ -265,7 +265,7 @@ class PvEService:
                 return False, f"❌ {parry_result['error']}", None
             
             # Update last action time (cooldown starts)
-            self.user_service.update_user(db_user.id_telegram, {'last_attack_time': datetime.datetime.now()}, session=session)
+            self.user_service.update_user(db_user.id_telegram, {'last_attack_time': datetime.now()}, session=session)
             
             session.commit()
             
@@ -598,7 +598,7 @@ class PvEService:
             max_mana=max_mana,
             is_boss=False,  # Normal mobs are not bosses
             chat_id=chat_id,
-            last_attack_time=datetime.datetime.now() - datetime.timedelta(hours=1), # Allow immediate attack
+            last_attack_time=datetime.now() - datetime.timedelta(hours=1), # Allow immediate attack
             last_message_id=None # Will be updated by main.py
         )
         
@@ -737,7 +737,7 @@ class PvEService:
             description=boss_data.get('description', ''),
             is_boss=True,
             chat_id=chat_id,
-            last_attack_time=datetime.datetime.now() - datetime.timedelta(hours=1), # Allow immediate attack
+            last_attack_time=datetime.now() - datetime.timedelta(hours=1), # Allow immediate attack
             # NEW: Advanced mechanics from CSV
             active_abilities=boss_data.get('abilities', '[]'),
             ai_behavior=boss_data.get('ai_behavior', 'aggressive'),
@@ -773,7 +773,7 @@ class PvEService:
             # Set aggro
             mob.aggro_target_id = user.id_telegram
             # Lasts for 5 minutes or until overwritten
-            mob.aggro_end_time = datetime.datetime.now() + datetime.timedelta(minutes=5)
+            mob.aggro_end_time = datetime.now() + datetime.timedelta(minutes=5)
             session.commit()
             return True, f"🛡️ **{user.nome}** sta provocando {mob.name}! Il nemico ora attaccherà solo lui!"
         except Exception as e:
@@ -809,7 +809,7 @@ class PvEService:
             
             next_attack_in = 0
             if mob.last_attack_time:
-                elapsed = (datetime.datetime.now() - mob.last_attack_time).total_seconds()
+                elapsed = (datetime.now() - mob.last_attack_time).total_seconds()
                 next_attack_in = max(0, cooldown_seconds - elapsed)
             
             data = {
@@ -839,8 +839,9 @@ class PvEService:
         rewards_to_distribute = []
         
         # UPDATE ACTIVITY: Ensure user is marked as active to prevent Inn entry during combat
-        from models.user import Utente
-        from datetime import datetime
+        """Apply status effect to a target (user or mob)"""
+        # Import at top level already present
+
         db_user = session.query(Utente).filter_by(id_telegram=user.id_telegram).first()
         if db_user:
             db_user.last_activity = datetime.now()
@@ -913,7 +914,7 @@ class PvEService:
         
         last_attack = getattr(user, 'last_attack_time', None)
         if last_attack:
-            elapsed = (datetime.datetime.now() - last_attack).total_seconds()
+            elapsed = (datetime.now() - last_attack).total_seconds()
             if elapsed < cooldown_seconds:
                 remaining = int(cooldown_seconds - elapsed)
                 minutes = remaining // 60
@@ -932,7 +933,7 @@ class PvEService:
         
         # Update last attack time
         self.user_service.update_user(user.id_telegram, {
-            'last_attack_time': datetime.datetime.now()
+            'last_attack_time': datetime.now()
         }, session=session)
         
         # Track activity for targeting system
@@ -1009,7 +1010,7 @@ class PvEService:
         # Log Parry Counterattack if applied
         if getattr(attacker, 'is_parry_crit', False) and attacker.parry_record:
             combat_result['is_counter'] = True
-            self.parry_service.log_counterattack(user.id_telegram, attacker.parry_record['parry_id'], datetime.datetime.now(), damage)
+            self.parry_service.log_counterattack(user.id_telegram, attacker.parry_record['parry_id'], datetime.now(), damage)
         
         # Apply Mob Resistance
         if hasattr(mob, 'resistance') and mob.resistance > 0:
@@ -1397,7 +1398,7 @@ class PvEService:
         
         last_attack = getattr(user, 'last_attack_time', None)
         if last_attack:
-            elapsed = (datetime.datetime.now() - last_attack).total_seconds()
+            elapsed = (datetime.now() - last_attack).total_seconds()
             if elapsed < cooldown_seconds:
                 remaining = int(cooldown_seconds - elapsed)
                 minutes = remaining // 60
@@ -1408,7 +1409,7 @@ class PvEService:
         
         # Update last attack time
         self.user_service.update_user(user.id_telegram, {
-            'last_attack_time': datetime.datetime.now()
+            'last_attack_time': datetime.now()
         }, session=session)
         
         # Track activity for targeting system
@@ -1700,7 +1701,7 @@ class PvEService:
                     
                     last_attack = mob.last_attack_time
                     if last_attack:
-                        elapsed = (datetime.datetime.now() - last_attack).total_seconds()
+                        elapsed = (datetime.now() - last_attack).total_seconds()
                         if elapsed < cooldown_seconds:
                             continue # This mob is on cooldown
 
@@ -1723,7 +1724,7 @@ class PvEService:
                     # 4. Execute Defense Early if chosen
                     if action == "defend":
                         mob.is_defending = True
-                        mob.last_attack_time = datetime.datetime.now()
+                        mob.last_attack_time = datetime.now()
                         
                         # Add a defense "event" to show in chat
                         msg_def = f"🛡️ **{mob.name}** si mette in posizione difensiva!"
@@ -1850,7 +1851,7 @@ class PvEService:
                             # Standard Aggro Logic (85%)
                             # Check for Taunt first
                             taunt_target = None
-                            if mob.aggro_target_id and mob.aggro_end_time and mob.aggro_end_time > datetime.datetime.now():
+                            if mob.aggro_target_id and mob.aggro_end_time and mob.aggro_end_time > datetime.now():
                                 if mob.aggro_target_id in candidates:
                                     taunt_target = mob.aggro_target_id
                             
@@ -1887,7 +1888,7 @@ class PvEService:
                         if parry_result['success']:
                             damage = parry_result['damage_taken']
                             # Reset cooldown as requested
-                            self.user_service.update_user(target.id_telegram, {'last_attack_time': datetime.datetime.now() - datetime.timedelta(minutes=5)}, session=session)
+                            self.user_service.update_user(target.id_telegram, {'last_attack_time': datetime.now() - datetime.timedelta(minutes=5)}, session=session)
                         
                         new_hp, died = self.user_service.damage_health(target, damage, session=session)
                         
@@ -2002,7 +2003,7 @@ class PvEService:
                     if not image_path and os.path.exists("images/default.png"):
                         image_path = "images/default.png"
                     
-                    mob.last_attack_time = datetime.datetime.now()
+                    mob.last_attack_time = datetime.now()
                     mob_id = mob.id
                     last_msg_id = mob.last_message_id
                     
@@ -2231,7 +2232,7 @@ class PvEService:
             
             next_attack_in = 0
             if mob.last_attack_time:
-                elapsed = (datetime.datetime.now() - mob.last_attack_time).total_seconds()
+                elapsed = (datetime.now() - mob.last_attack_time).total_seconds()
                 next_attack_in = max(0, cooldown_seconds - elapsed)
             
             return {
@@ -2411,7 +2412,7 @@ class PvEService:
                     damage_dealt=0,
                     hits_landed=0,
                     critical_hits=0,
-                    first_hit_time=datetime.datetime.now()
+                    first_hit_time=datetime.now()
                 )
                 session.add(participation)
                 session.commit()
@@ -2440,7 +2441,7 @@ class PvEService:
                     damage_dealt=0,
                     hits_landed=0,
                     critical_hits=0,
-                    first_hit_time=datetime.datetime.now()
+                    first_hit_time=datetime.now()
                 )
                 session.add(participation)
             
@@ -2448,7 +2449,7 @@ class PvEService:
             participation.hits_landed += 1
             if is_crit:
                 participation.critical_hits += 1
-            participation.last_hit_time = datetime.datetime.now()
+            participation.last_hit_time = datetime.now()
             
             if local_session:
                 session.commit()
