@@ -35,3 +35,6 @@ C20,4800,105,magic,Dragon Ball,Il Dr. Gelo in forma androide,1900,480,75,"[156]"
 Goku Black Rose,12000,300,physical,Dragon Ball,La forma divina di Black,5000,1500,90,"[]","aggressive","{""50"": ""phase2"", ""20"": ""phase3""}","Dragon Ball",6
 Fused Zamasu,20000,450,magic,Dragon Ball,La fusione suprema,10000,3000,100,"[]","boss","{""60"": ""phase2"", ""30"": ""phase3""}","Dragon Ball",8
 Corrupted Zamasu,25000,550,physical,Dragon Ball,La forma corrotta finale,15000,5000,95,"[]","berserk","{""50"": ""phase2""}","Dragon Ball",9
+Ginyu (Goku Body),6000,140,physical,Dragon Ball,Ginyu nel corpo di Goku,3000,800,95,"[154]","tactical","{""50"": ""phase2""}","Dragon Ball",5
+Vegeta (Great Ape),8000,180,physical,Dragon Ball,Vegeta trasformato in Scimmione Gigante,3500,900,95,"[148, 149]","berserk","{\"50\": \"phase2\", \"20\": \"phase3\"}","Dragon Ball",5
+Zarbon (Transformed),5500,140,physical,Dragon Ball,La vera forma mostruosa di Zarbon,2200,550,85,"[144]","aggressive","{\"50\": \"phase2\"}","Dragon Ball",4
