@@ -6777,6 +6777,7 @@ def handle_stat_callbacks(call):
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
+    from models.system import CharacterTransformation, UserTransformation
     user_id = call.from_user.id
     chat_id = call.message.chat.id
     
