@@ -9009,7 +9009,7 @@ def callback_query(call):
             return
         
         # Check which ones user owns
-        from models.system import UserCharacter
+        from models.system import UserCharacter, CharacterTransformation
         session = user_service.db.get_session()
         
         msg = f"🔥 **TRASFORMAZIONI per {base_char['nome']}**\n\n"
