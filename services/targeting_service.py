@@ -95,7 +95,6 @@ class TargetingService:
         
         # Check if account is too old (inactive for 6+ months = auto-deleted)
         if hasattr(user, 'last_activity') and user.last_activity:
-            import datetime
             six_months_ago = datetime.now() - timedelta(days=180)
             if user.last_activity < six_months_ago:
                 pass # print(f"[DEBUG] User {user_id} inactive for 6+ months, skipping")

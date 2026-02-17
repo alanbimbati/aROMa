@@ -75,3 +75,5 @@ migrate_sync.py
 aroma_backup_*.sql.gz
 BACKUP_GUIDE.md
 EQUIPMENT_GUIDE.md
+nohup.out
+*.png

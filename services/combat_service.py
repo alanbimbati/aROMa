@@ -111,7 +111,8 @@ class CombatService:
         from services.status_effects import StatusEffect
 
         # Invincibility check
-        import datetime
+        # Invincibility check
+        from datetime import datetime
         if user.invincible_until and datetime.now() < user.invincible_until:
             return 0
 

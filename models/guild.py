@@ -33,10 +33,16 @@ class Guild(Base):
     description = Column(String(512), nullable=True) # Guild Bio
     
     # Menu Images (Customizable)
+    main_image = Column(String(255), nullable=True)
     inn_image = Column(String(255), nullable=True) 
     bordello_image = Column(String(255), nullable=True)
     laboratory_image = Column(String(255), nullable=True)
     garden_image = Column(String(255), nullable=True)
+    temple_image = Column(String(255), nullable=True)
+    library_image = Column(String(255), nullable=True)
+    stables_image = Column(String(255), nullable=True)
+    brewery_image = Column(String(255), nullable=True)
+    armory_image = Column(String(255), nullable=True)
     
     created_at = Column(DateTime, default=datetime.datetime.now)
     
@@ -76,3 +82,18 @@ class GuildItem(Base):
 
 # Add relationship to Guild class
 Guild.items = relationship("GuildItem", back_populates="guild", cascade="all, delete-orphan")
+
+class GuildEgg(Base):
+    __tablename__ = "guild_eggs"
+    id = Column(Integer, primary_key=True)
+    guild_id = Column(Integer, ForeignKey('guilds.id'), nullable=False)
+    egg_type = Column(String(50), nullable=False) # common, rare, epic
+    progress = Column(Integer, default=0)
+    required_progress = Column(Integer, default=100)
+    created_at = Column(DateTime, default=datetime.datetime.now)
+    hatched = Column(Integer, default=0) # 0=False, 1=True
+    reward_mount_id = Column(String(64), nullable=True)
+    
+    guild = relationship("Guild", back_populates="eggs")
+
+Guild.eggs = relationship("GuildEgg", back_populates="guild", cascade="all, delete-orphan")

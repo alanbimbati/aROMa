@@ -31,3 +31,8 @@ id,base_character_name,transformed_character_name,transformation_name,wumpa_cost
 30,Kratos,Kratos Rage,Spartan Rage,120000,3,180,50,160,0,,45
 31,Cloud,Cloud Limit,Limit Break,80000,3,120,60,110,0,,30
 32,Sephiroth,Sephiroth One Wing,One Winged Angel,120000,3,180,100,150,0,,50
+35,Goten,Goten SSJ,Super Saiyan,40000,3,40,20,40,0,,18
+36,Goten,Great Ape,Scimmione,0,1,150,0,100,0,,12
+37,Goku,Great Ape,Scimmione,0,1,150,0,100,0,,20
+38,Vegeta,Great Ape,Scimmione,0,1,150,0,100,0,,20
+39,Gohan,Great Ape,Scimmione,0,1,150,0,100,0,,15

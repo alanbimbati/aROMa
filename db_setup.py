@@ -221,6 +221,52 @@ def migrate_parry_system(db):
     finally:
         session.close()
 
+def migrate_mount_system(db):
+    """Create mount system tables"""
+    session = db.get_session()
+    try:
+        print("Checking mount system tables...")
+        inspector = inspect(db.engine)
+        existing_table_names = inspector.get_table_names()
+        
+        # Create mounts table
+        if 'mounts' not in existing_table_names:
+            print("Creating mounts table...")
+            session.execute(text("""
+                CREATE TABLE mounts (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(100) UNIQUE NOT NULL,
+                    speed_bonus INTEGER DEFAULT 10,
+                    min_level INTEGER DEFAULT 1,
+                    price INTEGER DEFAULT 1000,
+                    image VARCHAR(255),
+                    description VARCHAR(255),
+                    rarity INTEGER DEFAULT 1
+                );
+            """))
+            print("✅ mounts table created")
+            
+        # Create user_mounts table
+        if 'user_mounts' not in existing_table_names:
+            print("Creating user_mounts table...")
+            session.execute(text("""
+                CREATE TABLE user_mounts (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL REFERENCES utente(id_Telegram),
+                    mount_id INTEGER NOT NULL REFERENCES mounts(id),
+                    obtained_at TIMESTAMP DEFAULT NOW()
+                );
+                CREATE INDEX idx_user_mounts ON user_mounts(user_id);
+            """))
+            print("✅ user_mounts table created")
+            
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(f"Error migrating mount system: {e}")
+    finally:
+        session.close()
+
 def migrate_alchemy_system(db):
     """Create alchemy queue table"""
     session = db.get_session()
@@ -287,10 +333,16 @@ def migrate_guild_upgrades_v2(db):
             'dragon_stables_level': 'INTEGER DEFAULT 0',
             'ancient_temple_level': 'INTEGER DEFAULT 0',
             'magic_library_level': 'INTEGER DEFAULT 0',
+            'main_image': 'VARCHAR(255)',
             'inn_image': 'VARCHAR(255)',
             'bordello_image': 'VARCHAR(255)',
             'laboratory_image': 'VARCHAR(255)',
-            'garden_image': 'VARCHAR(255)'
+            'garden_image': 'VARCHAR(255)',
+            'temple_image': 'VARCHAR(255)',
+            'library_image': 'VARCHAR(255)',
+            'stables_image': 'VARCHAR(255)',
+            'brewery_image': 'VARCHAR(255)',
+            'armory_image': 'VARCHAR(255)'
         }
         
         missing = []
@@ -362,6 +414,14 @@ def migrate_user_table(db):
         if 'profumino_until' not in columns:
             print("Adding profumino_until to utente...")
             session.execute(text("ALTER TABLE utente ADD COLUMN profumino_until TIMESTAMP WITHOUT TIME ZONE"))
+            
+        if 'current_mount_id' not in columns:
+            print("Adding current_mount_id to utente...")
+            session.execute(text("ALTER TABLE utente ADD COLUMN current_mount_id INTEGER REFERENCES mounts(id)"))
+            
+        if 'meditating_until' not in columns:
+            print("Adding meditating_until to utente...")
+            session.execute(text("ALTER TABLE utente ADD COLUMN meditating_until TIMESTAMP WITHOUT TIME ZONE"))
             
         session.commit()
     except Exception as e:
@@ -555,6 +615,45 @@ def seed_equipment(db):
     finally:
         session.close()
 
+def seed_mounts(db):
+    import csv
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    csv_path = os.path.join(BASE_DIR, 'data', 'mounts.csv')
+    
+    if not os.path.exists(csv_path):
+        print(f"⚠️ {csv_path} not found, skipping mount seeding.")
+        return
+
+    print("Seeding mounts from CSV...")
+    session = db.get_session()
+    try:
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                session.execute(text("""
+                    INSERT INTO mounts (id, name, speed_bonus, min_level, price, description, rarity)
+                    VALUES (:id, :name, :speed_bonus, :min_level, :price, :description, :rarity)
+                    ON CONFLICT (id) DO UPDATE SET
+                        name = EXCLUDED.name, speed_bonus = EXCLUDED.speed_bonus,
+                        min_level = EXCLUDED.min_level, price = EXCLUDED.price,
+                        description = EXCLUDED.description, rarity = EXCLUDED.rarity
+                """), {
+                    'id': int(row['id']),
+                    'name': row['name'],
+                    'speed_bonus': int(row['speed_bonus']),
+                    'min_level': int(row['min_level']),
+                    'price': int(row['price']),
+                    'description': row.get('description', ''),
+                    'rarity': int(row.get('rarity', 1))
+                })
+        session.commit()
+        print("✅ Mounts seeded!")
+    except Exception as e:
+        session.rollback()
+        print(f"Error seeding mounts: {e}")
+    finally:
+        session.close()
+
 import time
 
 def init_database():
@@ -617,6 +716,7 @@ def init_database():
     migrate_guild_upgrades_v2(db)
     migrate_cultivation_system(db)
     migrate_user_table(db)
+    migrate_mount_system(db)
     migrate_mob_tactical(db)
     migrate_recalculate_stats(db)
     
@@ -625,6 +725,7 @@ def init_database():
     seed_refined_materials(db)
     seed_resources(db)
     seed_equipment(db)
+    seed_mounts(db)
     
     print("\n✨ Database setup complete and verified! ✨")
 

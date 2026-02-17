@@ -51,7 +51,7 @@ class GameEvent(Base):
     __tablename__ = "game_event"
     
     id = Column(Integer, primary_key=True)
-    user_id = Column(BigInteger, nullable=False)
+    user_id = Column(BigInteger, ForeignKey('utente.id_Telegram'), nullable=False)
     event_type = Column(String(50), nullable=False)  # mob_kill, damage_dealt, etc.
     
     value = Column(Float, default=0.0)            # The primary metric

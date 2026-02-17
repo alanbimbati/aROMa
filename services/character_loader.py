@@ -85,6 +85,7 @@ class CharacterLoader:
                         'bonus_resistance': safe_int(row.get('bonus_resistance'), 0),
                         'bonus_crit': safe_int(row.get('bonus_crit'), 0),
                         'bonus_speed': safe_int(row.get('bonus_speed'), 0),
+                        'subgroup': row.get('subgroup', ''),
                     }
                     characters.append(char)
                     
@@ -190,10 +191,18 @@ class CharacterLoader:
             self.load_characters_from_csv()
         return [c for c in self._cache if c.get('base_character_id') == base_char_id]
     
-    def get_transformation_chain(self, char_id: int) -> List[Dict[str, Any]]:
-        """Get the full transformation chain starting from this character"""
+    def get_transformation_chain(self, base_char_id: int) -> List[Dict[str, Any]]:
+        """
+        Get all transformations for a base character.
+        Includes both CSV-defined (linear) and DB-defined (multiple) transformations.
+        """
+        if not self._cache:
+            self.load_characters_from_csv()
+
         chain = []
-        current_id = char_id
+        
+        # 1. Existing CSV Linear Logic
+        current_id = base_char_id
         visited = set()
         
         while current_id and current_id not in visited:
@@ -206,6 +215,37 @@ class CharacterLoader:
             else:
                 break
         
+        # 2. Add DB Transformations (Parallel)
+        try:
+            from database import Database
+            from models.system import CharacterTransformation
+            
+            db = Database()
+            session = db.get_session()
+            
+            db_trans = session.query(CharacterTransformation).filter_by(base_character_id=base_char_id).all()
+            
+            for dt in db_trans:
+                target_char = self.get_character_by_id(dt.transformed_character_id)
+                if target_char:
+                    # Create copy
+                    merged = target_char.copy()
+                    merged['transformation_mana_cost'] = dt.wumpa_cost or 0
+                    merged['transformation_duration_days'] = dt.duration_days
+                    merged['price'] = dt.wumpa_cost or 0
+                    merged['is_db_transformation'] = True
+                    merged['db_transformation_id'] = dt.id
+                    
+                    # Avoid duplicates
+                    if not any(str(x['id']) == str(merged['id']) for x in chain):
+                        chain.append(merged)
+            
+            session.close()
+            
+        except Exception as e:
+            print(f"Error loading DB transformations: {e}")
+            pass
+            
         return chain
     
     def get_character_family_ids(self, char_id: int) -> List[int]:
@@ -296,8 +336,8 @@ def get_character_loader() -> CharacterLoader:
         """
         Update the special_attack_gif for a character in the CSV and cache.
         """
-        input_file = 'data/characters.csv'
-        temp_file = 'data/characters_temp.csv'
+        input_file = os.path.join(BASE_DIR, 'data', 'characters.csv')
+        temp_file = os.path.join(BASE_DIR, 'data', 'characters_temp.csv')
         updated = False
         
         try:
@@ -322,7 +362,8 @@ def get_character_loader() -> CharacterLoader:
                                 if char['id'] == char_id:
                                     char['special_attack_gif'] = filename
                                     break
-                            self._cache_by_id[char_id]['special_attack_gif'] = filename
+                            if char_id in self._cache_by_id:
+                                self._cache_by_id[char_id]['special_attack_gif'] = filename
                             
                     writer.writerow(row)
             
@@ -386,7 +427,5 @@ def get_character_image(character: Dict[str, Any], is_locked: bool = False):
             except Exception as e:
                 print(f"Error opening image {path}: {e}")
                 return None
-                
-    return None
                 
     return None

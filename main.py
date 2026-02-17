@@ -68,7 +68,7 @@ def get_combat_link():
     group_id = str(GRUPPO_AROMA)
     if group_id.startswith("-100"):
         group_id = group_id[4:]
-    link = f"https://t.me/c/{group_id}/1"
+    link = f"https://t.me/c/{group_id}/999999999"
     print(f"[DEBUG] Combat Link Generated: {link}")
     return link
 
@@ -1502,7 +1502,29 @@ def show_inn_view(call_or_message, edit=False):
                  msg += f"🔞 Bordello (Lv. {bordello_level}): Buff Vigore disponibile.\n"
 
         msg += "\n"
-        markup = types.InlineKeyboardMarkup()
+    
+    # Combat Cooldown Check for Welcome Message
+    utente = user_service.get_user(user_id)
+    last_attack = getattr(utente, 'last_attack_time', None)
+    in_combat = False
+    cooldown_msg = ""
+    if last_attack:
+        import datetime
+        elapsed = (datetime.datetime.now() - last_attack).total_seconds()
+        if elapsed < 600:
+            in_combat = True
+            remaining = int(600 - elapsed)
+            cooldown_msg = f"⚔️ Hai combattuto di recente!\nPotrai riposare tra: **{remaining//60}m {remaining%60}s**\n\n"
+
+    if not status:
+        if in_combat:
+            msg += cooldown_msg
+        else:
+            msg += "Benvenuto viandante! Desideri riposare per recuperare le forze?\n\n"
+    
+    # Combined Markup logic
+    markup = types.InlineKeyboardMarkup()
+    if status:
         markup.add(types.InlineKeyboardButton("🛌 Svegliati", callback_data="inn_rest_stop"))
     else:
         if guild:
@@ -1519,7 +1541,6 @@ def show_inn_view(call_or_message, edit=False):
         else:
             msg += "Qui chiunque può riposare gratuitamente. Recupererai **1 HP e 1 Mana al minuto**, ma non guadagnerai EXP.\n\n"
             
-        markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("🛌 Riposa", callback_data="inn_rest_start"))
         if guild:
             markup.add(types.InlineKeyboardButton(f"🍺 Bevi Birra", callback_data="guild_buy_beer"))
@@ -1528,6 +1549,13 @@ def show_inn_view(call_or_message, edit=False):
             
             if guild_service.is_guild_leader(user_id):
                  markup.add(types.InlineKeyboardButton("⚙️ Gestisci Gilda", callback_data="guild_manage_menu"))
+
+    # Always add Back button
+    if guild:
+        markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guild_tour|0"))
+    else:
+        # For public inn, back to menu
+        markup.add(types.InlineKeyboardButton("🔙 Menu", callback_data="back_to_menu"))
 
     # Image selection
     image_path = "images/locanda.png"
@@ -2841,8 +2869,10 @@ def handle_potion_buy_profile(call):
 def handle_profile_rest_start(call):
     """Start resting from profile"""
     user_id = call.from_user.id
-    user_service.start_resting(user_id)
-    safe_answer_callback(call.id, "🛌 Hai iniziato a riposare in Locanda!")
+    success, msg = user_service.start_resting(user_id)
+    safe_answer_callback(call.id, msg, show_alert=True)
+    if success:
+        show_inn_view(call, edit=True)
     
     # Refresh profile
     cmd = BotCommands(call.message, bot, user_id=user_id)
@@ -7407,12 +7437,12 @@ def callback_query(call):
         if last_attack:
             import datetime
             elapsed = (datetime.datetime.now() - last_attack).total_seconds()
-            if elapsed < 120: # 2 minutes
+            if elapsed < 600: # 10 minutes
                 in_combat = True
-                remaining = int(120 - elapsed)
+                remaining = int(600 - elapsed)
         
         if in_combat:
-            safe_answer_callback(call.id, f"⚔️ Sei in combattimento! Devi aspettare {remaining}s prima di riposare.", show_alert=True)
+            safe_answer_callback(call.id, f"⚔️ Sei in combattimento! Devi aspettare {remaining//60}m {remaining%60}s prima di riposare.", show_alert=True)
             return
 
         success, msg = user_service.start_resting(call.from_user.id)
@@ -7441,12 +7471,12 @@ def callback_query(call):
 
         if last_attack:
             elapsed = (datetime.datetime.now() - last_attack).total_seconds()
-            if elapsed < 120: # 2 minutes
+            if elapsed < 600: # 10 minutes
                 in_combat = True
-                remaining = int(120 - elapsed)
+                remaining = int(600 - elapsed)
         
         if in_combat:
-            safe_answer_callback(call.id, f"⚔️ Sei in combattimento! Devi aspettare {remaining}s prima di riposare.", show_alert=True)
+            safe_answer_callback(call.id, f"⚔️ Sei in combattimento! Devi aspettare {remaining//60}m {remaining%60}s prima di riposare.", show_alert=True)
             return
 
         success, msg = user_service.start_resting(call.from_user.id)
@@ -8992,9 +9022,16 @@ def callback_query(call):
             owned = session.query(UserCharacter).filter_by(user_id=utente.id_telegram, character_id=t['id']).first()
             is_free = t.get('lv_premium', 0) == 0
             
+            # Fetch rule from DB if available
+            rule = session.query(CharacterTransformation).filter_by(transformed_character_id=t['id']).first()
+            
             mana_cost = t.get('transformation_mana_cost', 50)
             duration = t.get('transformation_duration_days', 0)
-            duration_str = f"{duration}g" if duration > 0 else "♾️"
+            
+            if rule and rule.is_time_restricted:
+                duration_str = f"🌙 Solo di notte ({rule.allowed_start_hour}-{rule.allowed_end_hour})"
+            else:
+                duration_str = f"{duration}g" if duration > 0 else "♾️"
             
             # Add info to message text
             status_icon = "✅" if owned or is_free else "🔒"
