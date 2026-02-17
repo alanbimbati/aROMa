@@ -220,8 +220,18 @@ class MarketService:
             
             listing.status = 'cancelled'
             
-            # Return items
-            self.item_service.add_item(user_id, listing.item_name, listing.quantity, session=session)
+            # Return items - check if it's a resource first
+            from sqlalchemy import text
+            resource_id = session.execute(text("SELECT id FROM resources WHERE name = :name"), {"name": listing.item_name}).scalar()
+            
+            if resource_id:
+                # Return as resource
+                from services.crafting_service import CraftingService
+                crafting_serv = CraftingService()
+                crafting_serv.add_resource_drop(user_id, resource_id, listing.quantity, source="market_cancel", session=session)
+            else:
+                # Return as regular item
+                self.item_service.add_item(user_id, listing.item_name, listing.quantity, session=session)
             
             session.commit()
             return True, "Annuncio cancellato e oggetti restituiti."
