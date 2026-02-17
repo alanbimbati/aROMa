@@ -4172,7 +4172,7 @@ class BotCommands:
         exp_bar = "▰" * exp_percent + "▱" * (10 - exp_percent)
         msg += f"\n📈 **Exp**: `{utente.exp}/{exp_req}`\n`[{exp_bar}]`\n"
         
-        # Profession Level
+        # Profession Levels
         from services.crafting_service import CraftingService
         crafting_service = CraftingService()
         prof_info = crafting_service.get_profession_info(utente.id_telegram)
@@ -4182,6 +4182,26 @@ class BotCommands:
         prof_percent = int((prof_xp / prof_xp_needed) * 10) if prof_xp_needed > 0 else 0
         prof_bar = "▰" * prof_percent + "▱" * (10 - prof_percent)
         msg += f"🔨 **Armaiolo**: Lv. `{prof_level}/50` | `{prof_xp}/{prof_xp_needed}` XP\n`[{prof_bar}]`\n"
+        
+        # Alchemy Level
+        alchemy_info = alchemy_service.get_alchemy_info(utente.id_telegram)
+        alch_level = alchemy_info['level']
+        alch_xp = alchemy_info['xp']
+        alch_xp_needed = 100 * (alch_level * (alch_level + 1) // 2)
+        alch_percent = int((alch_xp / alch_xp_needed) * 10) if alch_xp_needed > 0 else 0
+        alch_bar = "▰" * alch_percent + "▱" * (10 - alch_percent)
+        msg += f"⚗️ **Alchimista**: Lv. `{alch_level}/50` | `{alch_xp}/{alch_xp_needed}` XP\n`[{alch_bar}]`\n"
+        
+        # Garden Level
+        from services.garden_service import GardenService
+        garden_service = GardenService()
+        garden_info = garden_service.get_garden_info(utente.id_telegram)
+        garden_level = garden_info['level']
+        garden_xp = garden_info['xp']
+        garden_xp_needed = 100 * (garden_level * (garden_level + 1) // 2)
+        garden_percent = int((garden_xp / garden_xp_needed) * 10) if garden_xp_needed > 0 else 0
+        garden_bar = "▰" * garden_percent + "▱" * (10 - garden_percent)
+        msg += f"🌱 **Giardiniere**: Lv. `{garden_level}/50` | `{garden_xp}/{garden_xp_needed}` XP\n`[{garden_bar}]`\n"
         
         msg += f"\n🍑 **{PointsName}**: `{utente.points}`"
         if utente.stat_points > 0:
@@ -10802,6 +10822,10 @@ if __name__ == '__main__':
     
     # NEW: Validate user stats on startup
     user_service.validate_and_fix_user_stats()
+    
+    # NEW: Cleanup ghost users (only in production mode)
+    from utils.ghost_cleanup import cleanup_ghost_users
+    cleanup_ghost_users(bot)
     
     # Schedule jobs
     schedule.every().day.at("04:00").do(BackupService().create_backup)
