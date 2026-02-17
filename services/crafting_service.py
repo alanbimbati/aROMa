@@ -19,6 +19,10 @@ from models.equipment import Equipment, UserEquipment
 class CraftingService:
     """Manages equipment crafting and resources"""
     
+    _resource_cache = None
+    _resource_cache_timestamp = None
+    _CACHE_DURATION_SECONDS = 300
+
     def __init__(self):
         self.db = Database()
         from services.event_dispatcher import EventDispatcher

@@ -98,7 +98,13 @@ class GuildService:
             'inn_image': guild.inn_image,
             'bordello_image': guild.bordello_image,
             'laboratory_image': guild.laboratory_image,
-            'garden_image': guild.garden_image
+            'garden_image': guild.garden_image,
+            'temple_image': guild.temple_image,
+            'library_image': guild.library_image,
+            'stables_image': guild.stables_image,
+            'brewery_image': guild.brewery_image,
+            'armory_image': guild.armory_image,
+            'main_image': guild.main_image
         }
         session.close()
         return guild_data
@@ -791,15 +797,23 @@ class GuildService:
             'inn': 'inn_image',
             'bordello': 'bordello_image',
             'laboratory': 'laboratory_image',
-            'garden': 'garden_image'
+            'garden': 'garden_image',
+            'temple': 'temple_image',
+            'library': 'library_image',
+            'stables': 'stables_image',
+            'brewery': 'brewery_image',
+            'armory': 'armory_image',
+            'village': 'main_image',
+            'main': 'main_image'
         }
         
         if menu_type not in field_map:
             session.close()
-            return False, "Tipo di menu non valido."
+            return False, f"Tipo di menu '{menu_type}' non valido."
             
         setattr(guild, field_map[menu_type], image_url)
         guild.wumpa_bank -= cost
+        
         session.commit()
         session.close()
         return True, f"✨ Menu '{menu_type}' personalizzato con successo! (Costo: {cost} Wumpa)"
@@ -1009,3 +1023,109 @@ class GuildService:
             return guild is not None
         finally:
             session.close()
+
+    # ---------------- EGG SYSTEM ----------------
+    def get_active_egg(self, guild_id):
+        """Get the current active egg for the guild"""
+        session = self.db.get_session()
+        from models.guild import GuildEgg
+        egg = session.query(GuildEgg).filter_by(guild_id=guild_id, hatched=0).first()
+        result = None
+        if egg:
+            result = {
+                'id': egg.id,
+                'guild_id': egg.guild_id,
+                'egg_type': egg.egg_type,
+                'progress': egg.progress,
+                'required_progress': egg.required_progress,
+                'created_at': egg.created_at
+            }
+        session.close()
+        return result
+
+    def buy_egg(self, user_id, egg_type):
+        """Buy a new egg for the guild"""
+        COSTS = {
+            'common': 5000,
+            'rare': 15000,
+            'epic': 50000
+        }
+        cost = COSTS.get(egg_type)
+        if not cost: return False, "Tipo di uovo non valido!"
+
+        session = self.db.get_session()
+        member = session.query(GuildMember).filter_by(user_id=user_id, role="Leader").first()
+        if not member:
+            session.close()
+            return False, "Solo il capogilda può acquistare le uova!"
+
+        guild = session.query(Guild).filter_by(id=member.guild_id).first()
+        from models.guild import GuildEgg
+        active_egg = session.query(GuildEgg).filter_by(guild_id=guild.id, hatched=0).first()
+        if active_egg:
+            session.close()
+            return False, "Avete già un uovo da accudire!"
+
+        if guild.wumpa_bank < cost:
+            session.close()
+            return False, f"Servono {cost} Wumpa in banca per questo uovo!"
+
+        guild.wumpa_bank -= cost
+        
+        # Required progress based on type
+        # Common: 50, Rare: 200, Epic: 500
+        REQS = {'common': 50, 'rare': 200, 'epic': 500}
+        
+        new_egg = GuildEgg(
+            guild_id=guild.id,
+            egg_type=egg_type,
+            required_progress=REQS.get(egg_type, 100)
+        )
+        session.add(new_egg)
+        session.commit()
+        session.close()
+        return True, f"🥚 Hai acquistato un **Uovo {egg_type.capitalize()}**! Ora tutti i membri devono accudirlo per farlo schiudere!"
+
+    def nurture_egg(self, user_id):
+        """Nurture the active egg"""
+        session = self.db.get_session()
+        member = session.query(GuildMember).filter_by(user_id=user_id).first()
+        if not member:
+            session.close()
+            return False, "Non fai parte di nessuna gilda!"
+        
+        from models.guild import GuildEgg
+        egg = session.query(GuildEgg).filter_by(guild_id=member.guild_id, hatched=0).first()
+        if not egg:
+            session.close()
+            return False, "Non c'è nessun uovo da accudire al momento!"
+            
+        user = session.query(Utente).filter_by(id_telegram=user_id).first()
+        now = datetime.now()
+        
+        if user.last_egg_nurture and (now - user.last_egg_nurture).total_seconds() < 3600:
+             session.close()
+             mins = int((3600 - (now - user.last_egg_nurture).total_seconds()) / 60)
+             if mins == 0: mins = 1
+             return False, f"Hai già accudito l'uovo di recente! Riprova tra {mins} minuti."
+
+        user.last_egg_nurture = now
+        egg.progress += 1
+        
+        hatched = False
+        msg = "Hai accarezzato l'uovo! Sembra felice. 💓"
+        
+        if egg.progress >= egg.required_progress:
+            egg.hatched = 1
+            hatched = True
+            # Award logic
+            reward_msg = self._hatch_egg_logic(egg)
+            msg = f"🎉 **L'UOVO SI È SCHIUSO!** 🎉\n\n{reward_msg}"
+            
+        session.commit()
+        session.close()
+        return True, msg
+
+    def _hatch_egg_logic(self, egg):
+        # Determine reward
+        return f"È nato un magnifico **Drago {egg.egg_type.capitalize()}**! (Presto disponibile nelle Scuderie)"

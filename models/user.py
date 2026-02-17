@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Boolean
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Boolean, ForeignKey
 from database import Base
 import datetime
 from dateutil.relativedelta import relativedelta
@@ -97,6 +97,22 @@ class Utente(Base):
     # Transformation Tracking
     transformation_expires_at = Column(DateTime, nullable=True)  # When current transformation expires
     current_transformation = Column(String(100), nullable=True)  # Name of current transformation
+
+    # Mounts and Meditation
+    current_mount_id = Column(Integer, ForeignKey('mounts.id'), nullable=True)
+    meditating_until = Column(DateTime, nullable=True)
+    
+    # Guild Egg
+    last_egg_nurture = Column(DateTime, nullable=True)
+
+    @property
+    def attack_power(self):
+        return self.base_damage
+
+    @property
+    def defense(self):
+        return self.resistance
+
 
 
 

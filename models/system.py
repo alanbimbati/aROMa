@@ -60,13 +60,15 @@ class CharacterTransformation(Base):
     base_character_id = Column(Integer, nullable=False)  # Livello.id of base character
     transformed_character_id = Column(Integer, nullable=False)  # Livello.id of transformed state
     transformation_name = Column(String, nullable=False)  # e.g., "Super Saiyan"
-    wumpa_cost = Column(Integer, nullable=False)  # Cost to activate
+    wumpa_cost = Column(Integer, nullable=False)  # Cost to activate (Wumpa Fruits)
+    mana_cost = Column(Integer, default=0) # Mana cost to activate (User mana)
     duration_days = Column(Float, nullable=False, default=2.0)  # Duration in days
     
     # Stat bonuses when transformed
     health_bonus = Column(Integer, default=0)
     mana_bonus = Column(Integer, default=0)
     damage_bonus = Column(Integer, default=0)
+    resistance_bonus = Column(Integer, default=0)
     
     # Progressive transformation (requires previous transformation)
     is_progressive = Column(Boolean, default=False)
@@ -74,6 +76,11 @@ class CharacterTransformation(Base):
     
     # Level requirement for this transformation
     required_level = Column(Integer, nullable=True)  # Minimum user level required
+
+    # Time restriction (e.g. Great Ape only at night)
+    is_time_restricted = Column(Boolean, default=False)
+    allowed_start_hour = Column(Integer, nullable=True)
+    allowed_end_hour = Column(Integer, nullable=True)
 
 class UserTransformation(Base):
     """Tracks active transformations for users"""

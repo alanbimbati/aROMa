@@ -1,5 +1,6 @@
 
 from services.user_service import UserService
+from telebot import types
 
 class StatBuildService:
     def __init__(self):
@@ -80,8 +81,10 @@ class StatBuildService:
         return {
             'Ladro': {'desc': '🗡️ Ladro (Danno/Vel)', 'ratios': {'damage': 0.4, 'speed': 0.4, 'crit': 0.2}},
             'Tank': {'desc': '🛡️ Tank (Vita/Res)', 'ratios': {'health': 0.5, 'resistance': 0.3, 'mana': 0.2}},
+            'Paladino': {'desc': '⚔️ Paladino (Danno/Res)', 'ratios': {'damage': 0.5, 'resistance': 0.5}},
             'Stregone': {'desc': '🔮 Stregone (Mana/Danno)', 'ratios': {'mana': 0.5, 'damage': 0.5}},
             'Mago': {'desc': '⚡ Mago (Mana/Vel)', 'ratios': {'mana': 0.5, 'speed': 0.5}},
+            'Arcimago': {'desc': '🧙 Arcimago (Mana/Crit)', 'ratios': {'mana': 0.5, 'crit': 0.5}},
             'Bilanciato': {'desc': '⚖️ Bilanciato', 'ratios': {'health': 0.2, 'mana': 0.2, 'damage': 0.2, 'resistance': 0.2, 'speed': 0.2}},
         }
 
@@ -176,3 +179,60 @@ class StatBuildService:
             stats[s] = 0
         stats['spent_points'] = 0
         return True, "Statistiche resettate!"
+
+def get_stat_editor_ui(stats):
+    """Generate the UI for stat editing"""
+    spent = stats.get('spent_points', 0)
+    total = stats.get('total_points', 0)
+    # Remaining points logic might need adjustment if total includes allocated
+    # In start_editing: total_points = free + allocated. 
+    # spent_points = sum(allocated).
+    # So remaining = total - spent. Correct.
+    remaining = total - spent
+    
+    msg = f"📊 **EDITOR STATISTICHE**\n\n"
+    msg += f"Punti totali: {total}\n"
+    msg += f"Utilizzati: {spent}\n"
+    msg += f"Rimanenti: **{remaining}**\n\n"
+    
+    markup = types.InlineKeyboardMarkup()
+    
+    def row(key, label):
+        val = stats.get(key, 0)
+        markup.row(
+            types.InlineKeyboardButton(f"➖", callback_data=f"stat_change|{key}|-1"),
+            types.InlineKeyboardButton(f"➖10", callback_data=f"stat_change|{key}|-10"),
+            types.InlineKeyboardButton(f"{label}: {val}", callback_data="ignore"),
+            types.InlineKeyboardButton(f"➕10", callback_data=f"stat_change|{key}|10"),
+            types.InlineKeyboardButton(f"➕", callback_data=f"stat_change|{key}|1")
+        )
+
+    # Order: Health, Mana, Damage, Defense(Res?), Speed, Crit
+    # In service keys are: 'health', 'mana', 'damage', 'resistance', 'crit', 'speed'
+    row('health', '❤️ HP')
+    row('mana', '💙 MP')
+    row('damage', '⚔️ ATK')
+    row('resistance', '🛡️ RES')
+    row('speed', '⚡ SPD')
+    row('crit', '🔮 CRT')
+    
+    markup.add(types.InlineKeyboardButton("💾 SALVA MODIFICHE", callback_data="stat_save"))
+    markup.add(types.InlineKeyboardButton("🔄 RESETTA", callback_data="stat_reset"))
+    
+    presets_row1 = [
+        types.InlineKeyboardButton("🗡️ Ladro", callback_data="stat_preset|Ladro"),
+        types.InlineKeyboardButton("🛡️ Tank", callback_data="stat_preset|Tank"),
+        types.InlineKeyboardButton("⚔️ Paladino", callback_data="stat_preset|Paladino")
+    ]
+    presets_row2 = [
+        types.InlineKeyboardButton("🔮 Stregone", callback_data="stat_preset|Stregone"),
+        types.InlineKeyboardButton("⚡ Mago", callback_data="stat_preset|Mago"),
+        types.InlineKeyboardButton("🧙 Arcimago", callback_data="stat_preset|Arcimago")
+    ]
+    markup.row(*presets_row1)
+    markup.row(*presets_row2)
+    
+    markup.add(types.InlineKeyboardButton("🔙 Menu Profilo", callback_data="back_to_profile"))
+    
+    return msg, markup
+

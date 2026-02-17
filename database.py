@@ -43,6 +43,7 @@ class Database:
             if is_test and db_name == 'aroma_bot':
                 db_name = 'aroma_bot_test'
                 
+            self.is_test_mode = is_test
             print(f"[DATABASE] Config: Host={db_host}, DB={db_name}, TestMode={is_test}")
             db_user = os.getenv('DB_USER', 'aroma_user')
             db_password = os.getenv('DB_PASSWORD', '')
@@ -61,6 +62,7 @@ class Database:
         else:
             # SQLite fallback (for testing)
             test_mode = os.getenv('TEST_DB') == '1'
+            self.is_test_mode = test_mode
             db_name = 'test_points.db' if test_mode else 'points.db'
             
             connection_string = f'sqlite:///{db_name}'

@@ -102,7 +102,7 @@ class DungeonService:
             # Allow up to 5 dungeons per day (8, 11, 14, 17, 20)
             today_count = session.query(Dungeon).filter(
                 Dungeon.chat_id == chat_id,
-                Dungeon.created_at >= datetime.datetime.combine(today_date, datetime.time.min)
+                Dungeon.created_at >= datetime.combine(today_date, datetime.min.time())
             ).count()
             
             if today_count < 40 and 8 <= now.hour < 23:

@@ -1,0 +1,6 @@
+id,name,speed_bonus,min_level,price,description,rarity
+1,Cavallo Addestrato,15,10,2000,Un cavallo robusto e affidabile per i primi viaggi.,1
+2,Raptor del Deserto,25,25,5000,Una creatura agile che corre veloce sulle sabbie.,2
+3,Drago Minore,40,40,15000,Un giovane drago capace di coprire grandi distanze in poco tempo.,3
+4,Fenice di Fuoco,60,60,50000,Una cavalcatura leggendaria che risplende di luce propria.,4
+5,Nuvola Kinton,50,30,25000,Una nuvola magica che può essere cavalcata solo da chi ha il cuore puro.,3

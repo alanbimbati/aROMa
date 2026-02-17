@@ -97,7 +97,7 @@ class CharacterService:
             session.close()
             return False, "Possiedi già questo personaggio!"
         
-        if character['lv_premium'] != 2:
+        if character['lv_premium'] != 2 and character.get('price', 0) <= 0:
             session.close()
             return False, "Questo personaggio non è acquistabile!"
             
@@ -159,7 +159,7 @@ class CharacterService:
         new_ownership = UserCharacter(
             user_id=user.id_telegram,
             character_id=char_id,
-            obtained_at=datetime.date.today()
+            obtained_at=datetime.now().date()
         )
         session.add(new_ownership)
         session.commit()
@@ -167,6 +167,12 @@ class CharacterService:
         # Extract data before closing session
         char_name = character['nome']
         char_price = character['price']
+        
+        premium_msg = ""
+        if character.get('lv_premium', 0) == 1:
+            premium_msg = "\n🌟 Personaggio PREMIUM!"
+            
+        session.close()
         
         # Log character unlock event
         self.event_dispatcher.log_event(
@@ -473,7 +479,10 @@ class CharacterService:
                 return False
         
         # If it's a standard level-unlocked character (lv_premium == 0)
-        if character['lv_premium'] == 0:
+        # USER REQUEST: "Others must never be free". 
+        # So even if lv_premium == 0, we require UserCharacter record (purchase/unlock).
+        # We REMOVE the early return True here.
+        if character.get('lv_premium') == 0:
             session.close()
             return True
             
@@ -536,12 +545,16 @@ class CharacterService:
                 
         return closest
     
-    def get_all_characters_paginated(self, user, page=0, per_page=1, level_filter=None, max_level_visible=None):
-        """Get all characters (locked and unlocked) with pagination and optional level filter"""
-        all_chars = self.get_all_characters()
+    def get_all_characters_paginated(self, user, page=0, per_page=1, level_filter=None, max_level_visible=None, only_owned=False):
+        """Get all characters (locked and unlocked) with pagination and optional filters"""
+        
+        if only_owned:
+            all_chars = self.get_available_characters(user)
+        else:
+            all_chars = self.get_all_characters()
         
         # Apply max level restriction (unless admin)
-        if max_level_visible is not None:
+        if max_level_visible is not None and not only_owned:
             all_chars = [c for c in all_chars if c['livello'] <= max_level_visible]
         
         # Apply level filter

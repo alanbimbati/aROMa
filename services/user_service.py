@@ -118,9 +118,9 @@ class UserService:
                 print(f"Errore nel recupero del livello: {e}")
             return None
 
-    def track_activity(self, user_id, chat_id=None):
+    def track_activity(self, user_id, chat_id=None, session=None):
         """Track user activity for mob targeting with timestamp"""
-        import datetime
+
         try:
             user_id = int(user_id)
             if chat_id is not None:
@@ -128,7 +128,7 @@ class UserService:
         except (ValueError, TypeError):
             pass
             
-        now = datetime.datetime.now()
+        now = datetime.now()
         key = (user_id, chat_id)
         self.recent_activities[key] = now
         
@@ -136,7 +136,7 @@ class UserService:
             # Throttled DB update (once per hour per user)
             last_db_upd = self.last_db_updates.get(user_id)
             if not last_db_upd or (now - last_db_upd).total_seconds() > 3600:
-                self._update_last_activity_db(user_id, now)
+                self._update_last_activity_db(user_id, now, session=session)
                 self.last_db_updates[user_id] = now
                 
             print(f"[DEBUG] track_activity: user_id={user_id}, chat_id={chat_id}")
@@ -144,33 +144,54 @@ class UserService:
             # PERIODIC MEMBERSHIP CHECK (1% chance to check on activity)
             import random
             if random.random() < 0.01:
+                # Skip in test mode
+                if getattr(self.db, 'is_test_mode', False):
+                    return
+                # Only check if not in session context to avoid side effects?
+                # Actually check_group_membership uses API not DB, so safe.
                 if not self.check_group_membership(user_id):
                     self.delete_user_data(user_id)
                     
         except Exception as e:
             print(f"[ERROR] track_activity fallback failed: {e}")
 
-    def _update_last_activity_db(self, user_id, timestamp):
+    def check_group_membership(self, user_id):
+        """
+        Stub for group membership check. 
+        In production, this would use the bot instance to verify if user 
+        is still in the official/required Telegram groups.
+        """
+        # For now, return True to avoid accidental deletions
+        return True
+
+    def _update_last_activity_db(self, user_id, timestamp, session=None):
         """Update last_activity in database"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
         try:
             from models.user import Utente
             session.query(Utente).filter_by(id_telegram=user_id).update(
                 {'last_activity': timestamp}
             )
-            session.commit()
+            if local_session:
+                session.commit()
         except Exception as e:
             print(f"[ERROR] Failed to update last_activity for {user_id}: {e}")
-            session.rollback()
+            if local_session:
+                session.rollback()
         finally:
-            session.close()
+            if local_session:
+                session.close()
     
     def is_in_combat(self, user_id, session=None):
         """
         Check if user is currently in combat (within 10 minutes of last activity).
         Returns True if in combat, False otherwise.
         """
-        import datetime
+
         
         local_session = False
         if not session:
@@ -184,12 +205,19 @@ class UserService:
             if not user or not user.last_activity:
                 return False
                 
-            # Check if last activity was within 10 minutes
+            # Check if last attack or activity was within 10 minutes
             ten_minutes_ago = datetime.now() - timedelta(minutes=10)
-            is_active = user.last_activity > ten_minutes_ago
             
-            print(f"[DEBUG] is_in_combat for {user_id}: last_activity={user.last_activity}, in_combat={is_active}")
-            return is_active
+            # Check last_attack_time (most accurate for combat)
+            last_attack = getattr(user, 'last_attack_time', None)
+            in_combat = False
+            if last_attack and last_attack > ten_minutes_ago:
+                in_combat = True
+            
+            # Fallback to last_activity if needed, but last_attack is primary
+            is_active = user.last_activity > ten_minutes_ago if user.last_activity else False
+                
+            return in_combat or is_active
             
         except Exception as e:
             print(f"[ERROR] is_in_combat check failed for {user_id}: {e}")
@@ -204,6 +232,11 @@ class UserService:
         """
         import main
         from settings import AROMA_GRUPPO, TEST_GRUPPO
+        
+        
+        # Skip in test mode
+        if getattr(self.db, 'is_test_mode', False):
+            return True
         
         if not hasattr(main, 'bot'):
             return True # Cannot check, assume OK to avoid accidental deletion
@@ -232,7 +265,7 @@ class UserService:
         Permanently delete ALL data associated with a user ID across all tables.
         This is used for cleaning up users who are no longer in the required groups.
         """
-        import datetime
+
         from dateutil.relativedelta import relativedelta
         
         session = self.db.get_session()
@@ -330,7 +363,7 @@ class UserService:
         
     def get_recent_users(self, chat_id=None, minutes=30):
         """Get users active within the last N minutes, sorted by recency (most recent first)"""
-        import datetime
+        # import datetime - REMOVED: Conflicts with global 'from datetime import datetime'
         cutoff = datetime.now() - timedelta(minutes=minutes)
         
         try:

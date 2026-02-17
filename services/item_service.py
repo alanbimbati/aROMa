@@ -69,7 +69,7 @@ class ItemService:
                  c = Collezionabili()
                  c.id_telegram = str(id_telegram)
                  c.oggetto = item
-                 c.data_acquisizione = datetime.datetime.today()
+                 c.data_acquisizione = datetime.today()
                  c.quantita = 1
                  c.data_utilizzo = None
                  session.add(c)
@@ -139,7 +139,7 @@ class ItemService:
         
         collezionabile = session.query(Collezionabili).filter_by(id_telegram=str(id_telegram), oggetto=oggetto, data_utilizzo=None).first()
         if collezionabile:
-            collezionabile.data_utilizzo = datetime.datetime.today()
+            collezionabile.data_utilizzo = datetime.today()
             session.commit()
             
             # Apply effect
