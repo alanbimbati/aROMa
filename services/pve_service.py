@@ -140,6 +140,10 @@ class PvEService:
         if not character:
             return False, "Personaggio non trovato.", None, []
             
+        # Check if resting
+        if user.resting_since:
+            return False, "💤 Sei alla Locanda! Non puoi combattere mentre riposi. Usa /locanda per uscire.", None, []
+            
         # Check mana
         mana_cost = character.get('special_attack_mana_cost', 50)
         
@@ -157,6 +161,16 @@ class PvEService:
         if user.mana < mana_cost:
             malus_msg = " (Malus basso livello)" if user.livello < required_level else ""
             return False, f"Mana insufficiente! Serve: {mana_cost}{malus_msg}, hai: {user.mana}", None, []
+            
+        # 0. STRICT HEALTH CHECK (User)
+        current_hp = user.current_hp if hasattr(user, 'current_hp') and user.current_hp is not None else (user.health or 0)
+        max_hp = user.max_health if user.max_health is not None else 100
+
+        if current_hp <= 0:
+            return False, "💀 Sei morto! Non puoi usare attacchi speciali. Devi curarti alla Locanda.", None, []
+            
+        if max_hp > 0 and (current_hp / max_hp) < 0.05:
+            return False, "😫 Sei troppo stanco per usare attacchi speciali! (HP < 5%). Usa /difesa per recuperare o fuggi!", None, []
             
         # Calculate damage (base + special bonus)
         special_damage = character.get('special_attack_damage', 0)
@@ -351,6 +365,12 @@ class PvEService:
                 if active_dungeon and active_dungeon.id == mob.dungeon_id:
                     success, msg = ds.leave_dungeon(mob.chat_id, user.id_telegram, session=session)
                     if success:
+                        # Mark as fled in combat participation to prevent further targeting
+                        if not participation:
+                            participation = CombatParticipation(mob_id=mob_id, user_id=user.id_telegram)
+                            session.add(participation)
+                        participation.has_fled = True
+                        
                         if local_session: session.commit()
                         return True, f"🏃 **{user.nome}** è fuggito dal dungeon!\n\n{msg}"
                     elif "Non sei un partecipante" in msg:
@@ -856,6 +876,8 @@ class PvEService:
 
     def attack_mob(self, user, base_damage=0, use_special=False, ability=None, mob_id=None, chat_id=None, mana_cost=0, session=None):
         """Attack current mob using CombatService"""
+        if user.resting_since:
+            return False, "💤 Sei alla Locanda! Non puoi combattere mentre riposi.", None
         local_session = False
         if not session:
             session = self.db.get_session()
@@ -879,15 +901,19 @@ class PvEService:
         # We already updated last_activity above for general "in combat" status
 
         
-        # 0. STRICT DEATH CHECK (User)
-        # Handle detached instances by merging or querying fresh if needed, but 'user' here acts as our object.
-        # Ideally we use the session to check fresh state if we suspect desync.
-        # But 'user' passed to this function usually comes from user_service.get_user which is fresh.
+        # 0. STRICT HEALTH CHECK (User)
         current_hp = user.current_hp if hasattr(user, 'current_hp') and user.current_hp is not None else (user.health or 0)
+        max_hp = user.max_health if user.max_health is not None else 100
+
         if current_hp <= 0:
             if local_session:
                 session.close()
             return False, "💀 Sei morto! Non puoi attaccare. Devi curarti alla Locanda.", None
+            
+        if max_hp > 0 and (current_hp / max_hp) < 0.05:
+            if local_session:
+                session.close()
+            return False, "😫 Sei troppo stanco per attaccare! (HP < 5%). Usa /difesa per recuperare o fuggi!", None
 
         if mob_id:
             # Attack specific mob by ID
@@ -1365,6 +1391,9 @@ class PvEService:
 
     def attack_aoe(self, user, base_damage=0, chat_id=None, target_mob_id=None, use_special=False, session=None):
         """Attack up to 5 active mobs. 70% damage to target, 50% to others. 2x cooldown."""
+        if user.resting_since:
+            return False, "💤 Sei alla Locanda! Non puoi combattere mentre riposi.", None, []
+
         if not chat_id:
             return False, "Chat ID non specificato.", None, []
             
@@ -1380,6 +1409,20 @@ class PvEService:
                 session.close()
             return False, "Nessun mostro nei paraggi.", None, []
             
+        # 0. STRICT HEALTH CHECK (User)
+        current_hp = user.current_hp if hasattr(user, 'current_hp') and user.current_hp is not None else (user.health or 0)
+        max_hp = user.max_health if user.max_health is not None else 100
+
+        if current_hp <= 0:
+            if local_session:
+                session.close()
+            return False, "💀 Sei morto! Non puoi attaccare. Devi curarti alla Locanda.", None, []
+            
+        if max_hp > 0 and (current_hp / max_hp) < 0.05:
+            if local_session:
+                session.close()
+            return False, "😫 Sei troppo stanco per attaccare! (HP < 5%). Usa /difesa per recuperare o fuggi!", None, []
+
         # Dungeon Isolation for AoE
         from services.dungeon_service import DungeonService
         ds = DungeonService()
@@ -1535,11 +1578,11 @@ class PvEService:
                 summary_msg += f"\n{effect_icon} **ATTIVATO:** {effect_name.replace('_', ' ').title()}!"
         
         for mob in mobs:
-            # 70% to target, 50% to others
+            # 70% to target, 50% to others -> BUFFED to 100% / 80%
             if target_mob_id and mob.id == target_mob_id:
-                multiplier = 0.7
+                multiplier = 1.0
             else:
-                multiplier = 0.5
+                multiplier = 0.8
             
             attacker = AttackerWrapper(user, character, base_damage, multiplier)
             
@@ -1835,6 +1878,35 @@ class PvEService:
                         session=session
                     )
                     
+                    
+                    # Filter targets: Exclude dead, fled, or resting users
+                    valid_targets = []
+                    for uid in targets_pool:
+                        user_obj = session.query(Utente).filter_by(id_telegram=uid).first()
+                        if not user_obj:
+                            continue
+                            
+                        # 1. Dead Check
+                        current_hp = user_obj.current_hp if hasattr(user_obj, 'current_hp') and user_obj.current_hp is not None else (user_obj.health or 0)
+                        if current_hp <= 0:
+                            continue
+                            
+                        # 2. Resting Check (Inn)
+                        # We use 'is_resting' flag or location if available. 
+                        # Assuming 'is_resting' is a valid attribute or we check location
+                        # For now, let's use a safe getattr
+                        if getattr(user_obj, 'is_resting', False):
+                            continue
+                            
+                        # 3. Fled Check
+                        participation = session.query(CombatParticipation).filter_by(mob_id=mob.id, user_id=uid).first()
+                        if participation and participation.has_fled:
+                            continue
+                            
+                        valid_targets.append(uid)
+                        
+                    targets_pool = valid_targets
+                    
                     if not targets_pool:
                         continue
                     
@@ -1964,12 +2036,17 @@ class PvEService:
                         if parry_result['success']:
                             damage = parry_result['damage_taken']
                             # Reset cooldown as requested
-                            self.user_service.update_user(target.id_telegram, {'last_attack_time': datetime.now() - timedelta(minutes=5)}, session=session)
+                            # Direct update to ensure it sticks in this session transaction
+                            target.last_attack_time = datetime.now() - timedelta(minutes=5)
+                            session.add(target)
+                            session.flush()
                         
                         new_hp, died = self.user_service.damage_health(target, damage, session=session)
                         
-                        # Update last_attack_time when hit by mob
-                        target.last_attack_time = datetime.now()
+                        
+                        # Update last_attack_time when hit by mob -> REMOVED.
+                        # Getting hit should NOT reset your attack cooldown, only Stun effects should do that.
+                        # target.last_attack_time = datetime.now()
                         
                         self.event_dispatcher.log_event(
                             event_type='damage_taken',

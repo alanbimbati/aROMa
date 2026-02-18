@@ -31,6 +31,8 @@ class TestAggroSystem(unittest.TestCase):
         self.service.damage_calculator = MagicMock()
         self.service.achievement_tracker = MagicMock()
         self.service.mob_ai = MagicMock()
+        self.service.parry_service = MagicMock()
+        self.service.user_service.damage_health.return_value = (50, False)
 
     @patch('random.choices')
     def test_aggro_logic_execution(self, mock_choices):
@@ -125,9 +127,9 @@ class TestAggroSystem(unittest.TestCase):
             idx1 = population.index(101)
             idx2 = population.index(102)
             
-            # Current logic: max(dmg, 1.0) and x5 Defense
+            # Current logic: max(dmg, 1.0) and x15 Defense (Tank Meta)
             self.assertEqual(weights[idx1], 1000.0)
-            self.assertEqual(weights[idx2], 5.0)
+            self.assertEqual(weights[idx2], 15.0)
 
 if __name__ == '__main__':
     unittest.main()

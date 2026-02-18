@@ -15,6 +15,7 @@ class TestActivityTracking(unittest.TestCase):
         user_id = 67890
         
         # Simulate tracking activity (which is what the 'any' handler now does for text)
+        user_service.check_group_membership = MagicMock(return_value=True) # Mock this!
         user_service.track_activity(user_id, chat_id)
         
         recent = user_service.get_recent_users(chat_id)
@@ -28,6 +29,7 @@ class TestActivityTracking(unittest.TestCase):
         chat_id = 555
         
         # Track 10 users
+        pve_service.user_service.check_group_membership = MagicMock(return_value=True) # Mock this!
         for i in range(1, 11):
             pve_service.user_service.track_activity(i, chat_id)
             

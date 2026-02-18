@@ -128,13 +128,9 @@ def handle_profile_view(bot, message, target_user=None, is_callback=False, call_
         
         # Progression
         next_lv_num = target.livello + 1
-        next_lv_row = char_loader.get_characters_by_level(next_lv_num)
-        next_lv_row = next_lv_row[0] if next_lv_row else None
         
-        if next_lv_row:
-            exp_req = next_lv_row.get('exp_required', 100)
-        else:
-            exp_req = 100 * (next_lv_num ** 2)
+        # Consistent XP Formula usage
+        exp_req = user_service.get_xp_requirement(next_lv_num)
             
         exp_percent = int((target.exp / exp_req) * 10) if exp_req > 0 else 0
         exp_bar = "▰" * exp_percent + "▱" * (10 - exp_percent)

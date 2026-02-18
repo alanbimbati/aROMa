@@ -22,7 +22,7 @@ IDENTITY_MAPPING = {
 }
 
 WUMPA_COST = 3000
-MANA_COST = 50
+MANA_COST = 150
 DURATION_DAYS = 0.5  # 12 hours
 
 def main():

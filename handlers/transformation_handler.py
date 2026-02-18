@@ -58,17 +58,17 @@ def handle_transformation_callbacks(bot, call, utente, user_service, transformat
             duration_str = f"{duration}g" if duration > 0 else "♾️"
             
             # Time-based restriction (Great Ape)
+            is_ape = 'Great Ape' in t['nome'] or 'Scimmione' in t['nome'] or t['id'] == 500
             current_hour = datetime.datetime.now().hour
             is_night = current_hour >= 18 or current_hour < 6
             
-            if t['id'] == 500: # Great Ape
-                if not is_night:
-                    msg += f"🌑 **{t['nome']}** (Solo Notte: 18:00-06:00)\n"
-                    msg += f"   └ Disponibile al calare del sole\n\n"
-                    continue
-
-            status_icon = "✅" if owned else "🔒"
-            msg += f"{status_icon} **{t['nome']}**\n"
+            if is_ape and not is_night:
+                status_icon = "🌙"
+                msg += f"{status_icon} **{t['nome']}** (Solo Notte: 18:00-06:00)\n"
+                msg += f"   └ Disponibile al calare del sole\n"
+            else:
+                status_icon = "✅" if owned else "🔒"
+                msg += f"{status_icon} **{t['nome']}**\n"
             msg += f"   ├ Costo Mana: {mana_cost} 💙\n"
             msg += f"   └ Durata: {duration_str}\n"
             
@@ -76,9 +76,11 @@ def handle_transformation_callbacks(bot, call, utente, user_service, transformat
                 msg += f"   └ Prezzo: {price} 🍑\n"
                 markup.add(types.InlineKeyboardButton(f"🛒 Compra {t['nome']} ({price} 🍑)", callback_data=f"buy_transform|{t['id']}"))
             elif owned:
-                can_afford = utente.mana >= mana_cost
-                if can_afford:
-                    markup.add(types.InlineKeyboardButton(f"🔥 Trasformati in {t['nome']}", callback_data=f"activate_transform|{t['id']}"))
+                if can_afford or (is_ape and not is_night):
+                    btn_text = f"🔥 Trasformati in {t['nome']}"
+                    if is_ape and not is_night:
+                        btn_text = f"🌙 {t['nome']} (Notte)"
+                    markup.add(types.InlineKeyboardButton(btn_text, callback_data=f"activate_transform|{t['id']}"))
                 else:
                     markup.add(types.InlineKeyboardButton(f"❌ {t['nome']} (No Mana)", callback_data="no_mana"))
             

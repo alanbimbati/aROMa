@@ -62,22 +62,38 @@ def main():
         new_id = start_id + i
         ape_name = f"Scimmione ({identity})"
         
+        # Determine level: max(30, max_level_of_variants)
+        max_variant_lv = 0
+        for s_id in saiyan_ids:
+            variant = cmap.get(s_id)
+            if variant:
+                max_variant_lv = max(max_variant_lv, int(variant.get('livello', 1)))
+        
+        final_level = max(30, max_variant_lv)
+        
+        # Scaling factor: if level > 30, scale stats
+        scale = 1.0
+        if final_level > 30:
+            scale = final_level / 30.0
+            
         # Create consolidated Great Ape
         new_ape = generic_ape.copy()
         new_ape['id'] = str(new_id)
         new_ape['nome'] = ape_name
-        new_ape['livello'] = "30"  # All Apes are level 30
+        new_ape['livello'] = str(final_level)
         new_ape['base_character_id'] = str(saiyan_ids[0]) # Use first variant as base for metadata
         new_ape['description'] = f"La trasformazione in Oozaru di {identity}"
-        new_ape['bonus_health'] = "150"
-        new_ape['bonus_resistance'] = "15"
+        
+        # Base stats around level 30 were: HP 150, Res 15
+        new_ape['bonus_health'] = str(int(150 * scale))
+        new_ape['bonus_resistance'] = str(int(15 * scale))
         new_ape['transformation_mana_cost'] = "50"
         new_ape['price'] = "3000"
         new_ape['is_transformation'] = "1"
         
         # Add to list
         new_apes.append(new_ape)
-        print(f"Prepared: {ape_name} (ID: {new_id}) for Identity: {identity}")
+        print(f"Prepared: {ape_name} (ID: {new_id}, Level: {final_level}, Scale: {scale:.2f})")
 
     # Read existing characters
     with open(CSV_PATH, 'r', encoding='utf-8') as f:

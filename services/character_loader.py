@@ -230,7 +230,7 @@ class CharacterLoader:
                 if target_char:
                     # Create copy
                     merged = target_char.copy()
-                    merged['transformation_mana_cost'] = dt.wumpa_cost or 0
+                    merged['transformation_mana_cost'] = dt.mana_cost or 0
                     merged['transformation_duration_days'] = dt.duration_days
                     merged['price'] = dt.wumpa_cost or 0
                     merged['is_db_transformation'] = True

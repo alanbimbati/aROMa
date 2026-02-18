@@ -17,7 +17,7 @@ class TestMobStats(unittest.TestCase):
         
         # Run multiple trials to see distribution
         for i in range(5):
-            speed, resistance, hp_bonus, dmg_bonus = pve_service._allocate_mob_stats(level, difficulty)
+            speed, resistance, hp_bonus, dmg_bonus, mana_bonus = pve_service._allocate_mob_stats(level, difficulty)
             print(f"Trial {i+1}: Speed={speed}, Res={resistance}%, HP Bonus={hp_bonus}, DMG Bonus={dmg_bonus}")
             
             # Verify total points
@@ -37,7 +37,7 @@ class TestMobStats(unittest.TestCase):
         level = 10
         difficulty = 1
         for i in range(3):
-            speed, resistance, hp_bonus, dmg_bonus = pve_service._allocate_mob_stats(level, difficulty, is_boss=True)
+            speed, resistance, hp_bonus, dmg_bonus, mana_bonus = pve_service._allocate_mob_stats(level, difficulty, is_boss=True)
             print(f"Boss Trial {i+1}: Speed={speed}, Res={resistance}%, HP Bonus={hp_bonus}, DMG Bonus={dmg_bonus}")
             
             hp_pts = hp_bonus / 10

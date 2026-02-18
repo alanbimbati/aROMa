@@ -9,10 +9,10 @@ from models.user import Utente
 import random
 
 def test_wishes():
-    print("🧪 Testing Dragon Ball Wishes")
     os.environ['TEST_DB'] = '1'
     
     db = Database()
+    db.create_all_tables()
     user_service = UserService()
     wish_service = WishService()
     
