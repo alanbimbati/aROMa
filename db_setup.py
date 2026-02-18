@@ -423,6 +423,18 @@ def migrate_user_table(db):
             print("Adding meditating_until to utente...")
             session.execute(text("ALTER TABLE utente ADD COLUMN meditating_until TIMESTAMP WITHOUT TIME ZONE"))
             
+        if 'transformation_expires_at' not in columns:
+            print("Adding transformation_expires_at to utente...")
+            session.execute(text("ALTER TABLE utente ADD COLUMN transformation_expires_at TIMESTAMP WITHOUT TIME ZONE"))
+
+        if 'current_transformation' not in columns:
+            print("Adding current_transformation to utente...")
+            session.execute(text("ALTER TABLE utente ADD COLUMN current_transformation VARCHAR(100)"))
+
+        if 'last_egg_nurture' not in columns:
+            print("Adding last_egg_nurture to utente...")
+            session.execute(text("ALTER TABLE utente ADD COLUMN last_egg_nurture TIMESTAMP WITHOUT TIME ZONE"))
+            
         session.commit()
     except Exception as e:
         session.rollback()
