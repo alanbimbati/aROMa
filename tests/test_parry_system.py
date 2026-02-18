@@ -230,10 +230,12 @@ class TestCounterattackDamage(unittest.TestCase):
         attacker = Mock()
         attacker.damage_total = 100
         attacker.crit_chance = 0  # No crit for clearer test
+        attacker.active_status_effects = "[]" # Mock JSON string
         
         defender = Mock()
         defender.defense_total = 0
         defender.elemental_type = "Normal"
+        defender.active_status_effects = "[]" # Mock JSON string
         
         result = self.combat_service.calculate_counterattack_damage(
             attacker=attacker,
@@ -250,10 +252,12 @@ class TestCounterattackDamage(unittest.TestCase):
         attacker = Mock()
         attacker.damage_total = 100
         attacker.crit_multiplier = 1.5
+        attacker.active_status_effects = "[]" # Mock JSON string
         
         defender = Mock()
         defender.defense_total = 0
         defender.elemental_type = "Normal"
+        defender.active_status_effects = "[]" # Mock JSON string
         
         result = self.combat_service.calculate_counterattack_damage(
             attacker=attacker,

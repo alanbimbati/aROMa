@@ -177,6 +177,15 @@ class TestAllItemsVerified(unittest.TestCase):
         self.assertEqual(self.mock_item_service.get_item_by_user.call_count, 14) # 7 Shenron + 7 Porunga
 
     def test_shenron_wish_wumpa(self):
+        # Setup mock to return 1 for Shenron spheres
+        def get_item_side_effect(user_id, item_name):
+            if "Sfera del Drago Shenron" in item_name:
+                return 1
+            return 0
+            
+        self.mock_item_service.get_item_by_user.side_effect = get_item_side_effect
+        self.mock_item_service.use_item.return_value = (True, "Used")
+
         # Grant wish
         msg = self.wish_service.grant_wish(self.user, "wumpa", dragon_type="Shenron")
         

@@ -16,16 +16,19 @@ class TestAoELogic(unittest.TestCase):
         self.service.user_service = MagicMock()
         self.service.combat_service = MagicMock()
         self.service.event_dispatcher = MagicMock()
+        self.service.parry_service = MagicMock()
+        self.service.targeting_service = MagicMock()
         self.service.combat_service.calculate_damage.return_value = {'damage': 100, 'is_crit': False, 'type': 'physical'}
+        self.service.user_service.damage_health.return_value = (50, False)
 
     def test_aoe_priority(self):
         """Test that AoE prioritizes Dungeon mobs when user is in Dungeon"""
         session = MagicMock()
         
         # Mobs
-        m1 = MagicMock(id=1, dungeon_id=99, is_dead=False, resistance=0, attack_type='physical', health=1000, max_health=1000) # Dungeon 99
-        m2 = MagicMock(id=2, dungeon_id=None, is_dead=False, resistance=0, attack_type='physical', health=1000, max_health=1000) # World
-        m3 = MagicMock(id=3, dungeon_id=88, is_dead=False, resistance=0, attack_type='physical', health=1000, max_health=1000) # Other dungeon
+        m1 = MagicMock(id=1, dungeon_id=99, is_dead=False, resistance=0, attack_type='physical', health=1000, max_health=1000, aggro_end_time=None) # Dungeon 99
+        m2 = MagicMock(id=2, dungeon_id=None, is_dead=False, resistance=0, attack_type='physical', health=1000, max_health=1000, aggro_end_time=None) # World
+        m3 = MagicMock(id=3, dungeon_id=88, is_dead=False, resistance=0, attack_type='physical', health=1000, max_health=1000, aggro_end_time=None) # Other dungeon
         
         # Mock get_living_mobs
         self.service.get_living_mobs = MagicMock(return_value=[m1, m2, m3])
@@ -42,6 +45,10 @@ class TestAoELogic(unittest.TestCase):
             user.last_attack_time = None
             user.allocated_speed = 0
             user.mana = 100
+            user.meditating_until = None  # Fix datetime comparison issue
+            user.current_mount_id = None
+
+
             
             # Mock fatigue check
             self.service.user_service.check_fatigue.return_value = False

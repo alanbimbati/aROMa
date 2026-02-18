@@ -5,14 +5,14 @@ Only runs in production mode (test=0).
 """
 from database import Database
 from models.user import Utente
-from settings import TEST_MODE, GRUPPO_AROMA
+from settings import TEST, GRUPPO_AROMA
 
 def cleanup_ghost_users(bot):
     """
     Remove users who are not members of the official group.
     Only runs if TEST_MODE = 0 (production).
     """
-    if TEST_MODE == 1:
+    if TEST == 1:
         print("[GHOST_CLEANUP] Skipping cleanup - Test mode enabled")
         return
     

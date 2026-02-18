@@ -646,6 +646,35 @@ class UserService:
         session.close()
         return new_total
 
+    def get_xp_requirement(self, level):
+        """
+        Calculate EXP required for a specific level using a global formula.
+        Check implementation_plan.md for details.
+        """
+        # Global Formula - Decoupled from Character Data
+        
+        # Levels 50+ (High Level Curve)
+        if level >= 50:
+            exp_at_50 = 100 * (50 ** 2) # 250,000
+            if level == 50:
+                return exp_at_50
+            elif 50 < level <= 55:
+                # 5k gap per level
+                return exp_at_50 + (level - 50) * 5000
+            elif level > 55:
+                exp_at_55 = exp_at_50 + (5 * 5000) # 275,000
+                # Smoother curve: starting at 5k gap, adding 2000 per level
+                n = level - 55
+                return exp_at_55 + (n * 5000) + (n * (n - 1) // 2) * 2000
+        
+        # Levels 1-49 (Standardized Smoother Curve)
+        # We use 85 * level^2 instead of 100 * level^2 to essentially nerf the requirement
+        # for the 1-50 bracket, ensuring Lv 47 is ~187k (User Request from Mardok) 
+        # and Lv 44 (164k) < Lv 45 (172k), preventing regression.
+        # Lv 49 = ~204k -> Lv 50 = 250k (Tier Jump)
+        return int(85 * (level ** 2))
+
+
     def add_exp_by_id(self, user_id, exp, session=None):
         """Add experience to a user by their Telegram ID and check for level-up"""
         local_session = False
@@ -661,40 +690,13 @@ class UserService:
             current_exp = utente.exp if utente.exp is not None else 0
             utente.exp = int(current_exp) + int(exp)
             
+
+            
             if utente.livello is None:
                 utente.livello = 1
             
-            # Helper to get exp required from CharacterLoader (source of truth)
-            def get_exp_required_for_level(level):
-                """
-                Calculate EXP required for a specific level using a global formula.
-                Check implementation_plan.md for details.
-                """
-                # Global Formula - Decoupled from Character Data
-                
-                # Levels 50+ (High Level Curve)
-                if level >= 50:
-                    exp_at_50 = 100 * (50 ** 2) # 250,000
-                    if level == 50:
-                        return exp_at_50
-                    elif 50 < level <= 55:
-                        # 5k gap per level
-                        return exp_at_50 + (level - 50) * 5000
-                    elif level > 55:
-                        exp_at_55 = exp_at_50 + (5 * 5000) # 275,000
-                        # Smoother curve: starting at 5k gap, adding 2000 per level
-                        n = level - 55
-                        return exp_at_55 + (n * 5000) + (n * (n - 1) // 2) * 2000
-                
-                # Levels 1-49 (Standardized Smoother Curve)
-                # We use 85 * level^2 instead of 100 * level^2 to essentially nerf the requirement
-                # for the 1-50 bracket, ensuring Lv 47 is ~187k (User Request from Mardok) 
-                # and Lv 44 (164k) < Lv 45 (172k), preventing regression.
-                # Lv 49 = ~204k -> Lv 50 = 250k (Tier Jump)
-                return int(85 * (level ** 2))
-
             # Check for level-up
-            next_exp_req = get_exp_required_for_level(utente.livello + 1)
+            next_exp_req = self.get_xp_requirement(utente.livello + 1)
             
             # Loop to handle multiple level-ups
             loop_guard = 0
@@ -1272,7 +1274,6 @@ class UserService:
     def check_transformation_expiration(self, user_id, session):
         """Check if current active transformation has expired and revert character if so"""
         from models.system import UserTransformation, CharacterTransformation
-        import datetime
         
         try:
             # Find active transformation for this user
@@ -1281,22 +1282,67 @@ class UserService:
                 is_active=True
             ).order_by(UserTransformation.expires_at.desc()).first()
             
-            if active_trans and active_trans.expires_at and datetime.now() > active_trans.expires_at:
-                # Expired!
-                active_trans.is_active = False
+            should_revert = False
+            reason = ""
+            
+            if active_trans:
+                # 1. Check Duration Expiry
+                if active_trans.expires_at and datetime.now() > active_trans.expires_at:
+                    should_revert = True
+                    reason = "scadenza durata"
+                
+                # 2. Check Great Ape Time Restriction (Nightly 18-06)
+                if not should_revert:
+                    # We need to know if it's a Great Ape transformation
+                    # Optimization: only check if name suggests it or ID is generic 500
+                    trans_rule = session.query(CharacterTransformation).filter_by(id=active_trans.transformation_id).first()
+                    if trans_rule and ("Scimmione" in trans_rule.transformation_name or "Great Ape" in trans_rule.transformation_name or trans_rule.transformed_character_id == 500):
+                        current_hour = datetime.now().hour
+                        if not (current_hour >= 18 or current_hour < 6):
+                            should_revert = True
+                            reason = "ritorno del sole"
+            
+            # ORPHANED APE CHECK: If they are an Ape ID but NO active transformation record exists
+            if not should_revert:
+                utente = session.query(Utente).filter_by(id_telegram=user_id).first()
+                if utente:
+                    is_ape_id = (500 <= (utente.livello_selezionato or 0) <= 500) or (600 <= (utente.livello_selezionato or 0) <= 610)
+                    if is_ape_id:
+                        current_hour = datetime.now().hour
+                        if not (current_hour >= 18 or current_hour < 6):
+                            should_revert = True
+                            reason = "ritorno del sole (orphaned state)"
+                            # We need to find where to revert to. 
+                            # If no active_trans, we'll try to find any rule for this transformed ID
+                            if not active_trans:
+                                trans_rule = session.query(CharacterTransformation).filter_by(transformed_character_id=utente.livello_selezionato).first()
+            
+            if should_revert:
+                # Expired or Time Restricted!
+                if active_trans:
+                    active_trans.is_active = False
                 
                 # Find the character to revert to (base_character_id)
-                trans_rule = session.query(CharacterTransformation).filter_by(id=active_trans.transformation_id).first()
+                # If we don't have a trans_rule yet, try to find one
+                if 'trans_rule' not in locals() or not trans_rule:
+                    utente = session.query(Utente).filter_by(id_telegram=user_id).first()
+                    if utente:
+                        trans_rule = session.query(CharacterTransformation).filter_by(transformed_character_id=utente.livello_selezionato).first()
+                
                 if trans_rule:
                     utente = session.query(Utente).filter_by(id_telegram=user_id).first()
                     if utente:
                         # Only revert if the user is STILL using the transformed character
                         if utente.livello_selezionato == trans_rule.transformed_character_id:
                             utente.livello_selezionato = trans_rule.base_character_id
-                            print(f"[TRANS] Transformation {trans_rule.transformation_name} expired for {user_id}. Reverted to base character {trans_rule.base_character_id}")
+                            utente.current_transformation = None
+                            utente.transformation_expires_at = None
+                            print(f"[TRANS] Transformation {getattr(trans_rule, 'transformation_name', 'Unknown')} ended for {user_id}. Reason: {reason}. Reverted to base character {trans_rule.base_character_id}")
                 return True
         except Exception as e:
             print(f"[ERROR] Error in check_transformation_expiration: {e}")
+            import traceback
+            traceback.print_exc()
             
         return False
 

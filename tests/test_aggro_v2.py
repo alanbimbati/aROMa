@@ -31,6 +31,8 @@ class TestAggroSystemV2(unittest.TestCase):
         self.service.damage_calculator = MagicMock()
         self.service.achievement_tracker = MagicMock()
         self.service.mob_ai = MagicMock()
+        self.service.parry_service = MagicMock()
+        self.service.user_service.damage_health.return_value = (50, False)
 
     @patch('random.choices')
     def test_aggro_weights_new_logic(self, mock_choices):
@@ -107,12 +109,12 @@ class TestAggroSystemV2(unittest.TestCase):
             idx2 = population.index(102)
             idx3 = population.index(103)
             
-            # Current Logic: weight = max(dmg, 1.0) if dmg > 0 else 1.0; if defense_up: weight *= 5.0
+            # Current Logic: weight = max(dmg, 1.0) if dmg > 0 else 1.0; if defense_up: weight *= 15.0
             # DPS: 2000 Dmg.
             self.assertEqual(weights[idx1], 2000.0)
             
-            # Tank: 200 Dmg * 5.0 = 1000.
-            self.assertEqual(weights[idx2], 1000.0)
+            # Tank: 200 Dmg * 15.0 = 3000.
+            self.assertEqual(weights[idx2], 3000.0)
             
             # Newbie: 1.0 (No damage, no defense)
             self.assertEqual(weights[idx3], 1.0)

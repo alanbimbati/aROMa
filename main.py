@@ -10833,10 +10833,10 @@ if __name__ == '__main__':
     from utils.ghost_cleanup import cleanup_ghost_users
     cleanup_ghost_users(bot)
     
-    # Schedule jobs
-    schedule.every().day.at("04:00").do(BackupService().create_backup)
-    # Dungeon Checks (Every minute)
-    schedule.every(1).minutes.do(lambda: dungeon_service.check_daily_dungeon_trigger(bot=bot))
+    # Job ricorrenti
+    schedule.every(1).minutes.do(lambda: TransformationService().check_expired_transformations())
+    schedule.every(5).minutes.do(lambda: DungeonService().check_daily_dungeon_trigger(bot=bot))
+    schedule.every(1).hours.do(lambda: StockMarketService().update_market_prices())
 
     threading.Thread(target=schedule_checker, daemon=True).start()
     

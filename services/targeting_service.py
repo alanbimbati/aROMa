@@ -47,28 +47,22 @@ class TargetingService:
             if recent_users is None:
                 recent_users = self.user_service.get_recent_users(chat_id=chat_id, minutes=2880) # 48 hours
             
-            # Candidates are ONLY those active in the current chat
-            all_candidates = set(recent_users) if recent_users else set()
-            # print(f"[DEBUG] Targeting: chat_id={chat_id}, candidates_in_chat={len(all_candidates)}")
-
-            
-            # REMOVED: Dungeon participant injection. Mobs MUST only target people active in the chat.
-            # Even if in a dungeon, we only care about who is present in the current chat "instance".
-            
-            # print(f"[DEBUG] Targeting: Total candidates to check: {len(all_candidates)}")
-
-            
-            # FALLBACK: If it's a dungeon mob, also include all registered participants
+            # Determine candidates based on mob type
             if mob.dungeon_id:
+                # STRICT: Dungeon mobs only target dungeon participants
                 try:
                     participants = session.query(DungeonParticipant).filter_by(dungeon_id=mob.dungeon_id).all()
-                    for p in participants:
-                        if p.user_id not in all_candidates:
-                            all_candidates.add(p.user_id)
-                    pass # print(f"[DEBUG] Targeting: Added dungeon participants. Total candidates: {len(all_candidates)}")
-
+                    all_candidates = set(p.user_id for p in participants)
+                    # print(f"[DEBUG] Targeting: Dungeon mob {mob.id} restricted to {len(all_candidates)} participants")
                 except Exception as e:
                     pass # print(f"[DEBUG] Error fetching dungeon participants for targeting: {e}")
+                    all_candidates = set()
+            else:
+                # Candidates are ONLY those active in the current chat
+                all_candidates = set(recent_users) if recent_users else set()
+                # print(f"[DEBUG] Targeting: chat_id={chat_id}, candidates_in_chat={len(all_candidates)}")
+
+
 
             
             # Filter users based on eligibility

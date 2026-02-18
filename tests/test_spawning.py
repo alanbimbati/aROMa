@@ -50,7 +50,7 @@ def test_spawning():
     # Test stat scaling for a specific level
     level = 10
     difficulty = 2
-    speed, resistance, hp_bonus, dmg_bonus = pve_service._allocate_mob_stats(level, difficulty)
+    speed, resistance, hp_bonus, dmg_bonus, mana_bonus = pve_service._allocate_mob_stats(level, difficulty)
     print(f"\nTesting stats for Level {level} (Difficulty {difficulty}):")
     print(f"Speed: {speed}, Resistance: {resistance}%")
     print(f"HP Bonus: {hp_bonus}, DMG Bonus: {dmg_bonus}")

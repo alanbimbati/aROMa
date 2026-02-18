@@ -136,10 +136,15 @@ class CombatService:
         # Initial Damage Calculation
         # The formula in PveService was: (base * 0.5 * multiplier) / level_factor
         # Let's stick to that but allow multiplier injection.
+        # REDUCED FACTOR from 0.5 to 0.25 to prevent one-shots
         
-        adjusted_damage = int((base_damage * 0.5) / level_factor)
+        adjusted_damage = int((base_damage * 0.25) / level_factor)
         damage = int(adjusted_damage * random.uniform(0.8, 1.2))
         
+        # DEBUG LOGGING for excessive damage
+        if damage > 200:
+            print(f"[COMBAT_DEBUG] Mob {mob.name} (Atk: {base_damage}) vs User (Lvl: {user_level}, Factor: {level_factor:.2f}). BaseDmg: {base_damage} -> Adj: {adjusted_damage} -> Final: {damage}")
+
         if is_aoe:
             # Default AoE reduction if not specific
             damage = int(damage * 0.5)

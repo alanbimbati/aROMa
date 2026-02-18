@@ -338,8 +338,27 @@ class CultivationService:
                     context={"herb_name": drop_name}
                 )
 
+            # Grant Garden XP
+            from services.garden_service import GardenService
+            gs = GardenService()
+            
+            # Base XP for harvest
+            xp_amount = 5 
+            if special_drops:
+                xp_amount += 10 # Bonus for herbs
+            
+            leveled_up = gs.add_garden_xp(user_id, xp_amount, session=session)
+            
             main_msg = f"Hai raccolto {wumpa_gain} Frutti Wumpa! 🥭" if wumpa_gain > 0 else "Raccolto completato!"
-            return True, f"{main_msg}{drop_msg}"
+            xp_msg = f"\n(+{xp_amount} XP Giardinaggio)"
+            
+            lvl_msg = ""
+            if leveled_up:
+                # Get new level
+                new_info = gs.get_garden_info(user_id)
+                lvl_msg = f"\n🎉 **LEVEL UP!** Sei ora Giardiniere Livello {new_info['level']}!"
+            
+            return True, f"{main_msg}{drop_msg}{xp_msg}{lvl_msg}"
             
         except Exception as e:
             session.rollback()
