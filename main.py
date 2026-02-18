@@ -6599,7 +6599,7 @@ def send_combat_message(chat_id, text, image_path, markup, mob_id, old_message_i
             print(f"[ERROR] send_combat_message failed for chat_id {chat_id}: {e}")
             
             # If it's a critical Telegram error (Chat not found, etc), re-raise to allow caller cleanup
-            if any(x in err_msg for x in ["chat not found", "chat_id_invalid", "bot was blocked"]):
+            if any(x in err_msg for x in ["chat not found", "chat_id_invalid", "bot was blocked", "forbidden"]):
                 raise e
 
             try:
@@ -6612,7 +6612,7 @@ def send_combat_message(chat_id, text, image_path, markup, mob_id, old_message_i
             except Exception as e2:
                 print(f"[ERROR] Critical failure in send_combat_message fallback for chat_id {chat_id}: {e2}")
                 # Re-raise critical errors even from fallback
-                if any(x in str(e2).lower() for x in ["chat not found", "chat_id_invalid", "bot was blocked"]):
+                if any(x in str(e2).lower() for x in ["chat not found", "chat_id_invalid", "bot was blocked", "forbidden"]):
                     raise e2
                 pass
         return sent_msg
@@ -7091,6 +7091,12 @@ def callback_query(call):
                 msg += "\n".join(stats_rows) + "\n"
             else:
                 msg += f"║ _Nessun bonus attivo_\n"
+            
+            # Fix: Define these variables!
+            inventory_items = eq_service.get_user_inventory(user_id, session=session)
+            inventory_count = len(inventory_items) if inventory_items else 0
+            equipped_items = eq_service.get_equipped_items(user_id, session=session)
+            equipped_count = len(equipped_items) if equipped_items else 0
             
             msg += f"╠═══════════════════════════════════════\n"
             msg += f"║ 📦 Inv: {inventory_count} item   ⚔️ Equip: {equipped_count} / 12\n"
