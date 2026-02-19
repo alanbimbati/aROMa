@@ -194,10 +194,52 @@ class TransformationService:
             is_active=True
         ).all()
         
-        for trans in active_trans:
-            trans.is_active = False
-        
         # Activate this transformation
+        # --- UNIQUENESS CHECK START ---
+        from models.character_ownership import CharacterOwnership
+        
+        char_id = transformation_id
+        char_data = loader.get_character_by_id(char_id)
+        if char_data:
+            max_owners = char_data.get('max_concurrent_owners', -1)
+            if max_owners != -1:
+                family_ids = loader.get_character_family_ids(char_id)
+                
+                # Check current owners (excluding this user)
+                current_owners = session.query(CharacterOwnership).filter(
+                    CharacterOwnership.character_id.in_(family_ids),
+                    CharacterOwnership.user_id != user.id_telegram
+                ).count()
+                
+                if current_owners >= max_owners:
+                    # Get owner name for feedback
+                    owner_ownership = session.query(CharacterOwnership).filter(
+                        CharacterOwnership.character_id.in_(family_ids),
+                        CharacterOwnership.user_id != user.id_telegram
+                    ).first()
+                    owner_name = "Qualcuno"
+                    if owner_ownership:
+                        owner_utente = session.query(Utente).filter_by(id_telegram=owner_ownership.user_id).first()
+                        if owner_utente:
+                            owner_name = owner_utente.nome or owner_utente.username or "Qualcuno"
+                    
+                    if local_session:
+                        session.close()
+                    return False, f"❌ {char_data['nome']} (o una sua forma) è già in uso da {owner_name}!"
+        
+        # Update CharacterOwnership table if successful
+        if char_data and char_data.get('max_concurrent_owners', -1) != -1:
+            # Clear user's previous ownership
+            session.query(CharacterOwnership).filter_by(user_id=user.id_telegram).delete()
+            # Add new ownership for the transformation
+            new_ownership = CharacterOwnership(
+                character_id=char_id,
+                user_id=user.id_telegram,
+                equipped_at=datetime.now()
+            )
+            session.add(new_ownership)
+        # --- UNIQUENESS CHECK END ---
+
         user_trans.is_active = True
         user_trans.activated_at = datetime.now()
         user_trans.expires_at = datetime.now() + timedelta(days=transformation.duration_days)
@@ -229,6 +271,15 @@ class TransformationService:
                     db_user = session.query(Utente).filter_by(id_telegram=user.id_telegram).first()
                     if db_user:
                         db_user.transformation_expires_at = expiry
+                        db_user.current_transformation = transformation_name
+                        db_user.livello_selezionato = transformation_id
+                
+                # Great Ape (Scimmione) - NO EXPIRY (Handled by 6 AM check)
+                elif 'Great Ape' in transformation_name or 'Scimmione' in transformation_name:
+                     db_user = session.query(Utente).filter_by(id_telegram=user.id_telegram).first()
+                     if db_user:
+                        # Clear expiry to ensure it doesn't expire by time
+                        db_user.transformation_expires_at = None
                         db_user.current_transformation = transformation_name
                         db_user.livello_selezionato = transformation_id
         
@@ -300,6 +351,22 @@ class TransformationService:
                     db_user.current_transformation = None
                     db_user.transformation_expires_at = None
                     db_user.livello_selezionato = base_id
+                    
+                    # --- UNIQUENESS SYNC START ---
+                    from models.character_ownership import CharacterOwnership
+                    # Clear user's previous ownership
+                    session.query(CharacterOwnership).filter_by(user_id=user.id_telegram).delete()
+                    # Add new ownership for the base character
+                    char_data = loader.get_character_by_id(base_id)
+                    if char_data and char_data.get('max_concurrent_owners', -1) != -1:
+                        new_ownership = CharacterOwnership(
+                            character_id=base_id,
+                            user_id=user.id_telegram,
+                            equipped_at=datetime.now()
+                        )
+                        session.add(new_ownership)
+                    # --- UNIQUENESS SYNC END ---
+
                     session.commit()
                     
                     base_char_name = loader.get_character_by_id(base_id)['nome']
@@ -323,10 +390,25 @@ class TransformationService:
             # We need to re-fetch user in this session to ensure update
             db_user = session.query(Utente).filter_by(id_telegram=user.id_telegram).first()
             if db_user:
-                db_user.current_transformation = None
                 db_user.transformation_expires_at = None
                 # Revert level selected to base char
                 db_user.livello_selezionato = trans_def.base_character_id
+                
+                # --- UNIQUENESS SYNC START ---
+                from models.character_ownership import CharacterOwnership
+                # Clear user's previous ownership
+                session.query(CharacterOwnership).filter_by(user_id=user.id_telegram).delete()
+                # Add new ownership for the base character
+                base_id = trans_def.base_character_id
+                char_data = loader.get_character_by_id(base_id)
+                if char_data and char_data.get('max_concurrent_owners', -1) != -1:
+                    new_ownership = CharacterOwnership(
+                        character_id=base_id,
+                        user_id=user.id_telegram,
+                        equipped_at=datetime.now()
+                    )
+                    session.add(new_ownership)
+                # --- UNIQUENESS SYNC END ---
             
             session.commit()
             
@@ -505,13 +587,15 @@ class TransformationService:
         try:
             # Dynamic Great Ape Detection (requested by user to cover all cases)
             # We scan all loaded characters for "Scimmione" or "Great Ape" in their name.
-            char_service = self.CharacterService()
-            all_chars = char_service.char_loader.characters # Direct access to loaded dict
+            from services.character_loader import get_character_loader
+            loader = get_character_loader()
+            all_chars = loader.get_all_characters()
             
             ape_ids = []
-            for cid, cdata in all_chars.items():
+            for cdata in all_chars:
+                cid = cdata.get('id')
                 cname = cdata.get('nome', '')
-                if "Scimmione" in cname or "Great Ape" in cname or cid == 500:
+                if cid and ("Scimmione" in cname or "Great Ape" in cname or cid == 500):
                     ape_ids.append(cid)
             
             # Ensure we catch ANY of these IDs, even if current_transformation is NULL
@@ -572,9 +656,9 @@ class TransformationService:
                     
                     # 2. Fallback: Deduce from character data (CSV)
                     if not trans_def:
-                        char_data = all_chars.get(user.livello_selezionato)
-                        if char_data and char_data.get('is_transformation'):
-                            base_id = char_data.get('base_character_id', base_id)
+                        char_data = loader.get_character_by_id(user.livello_selezionato)
+                        if char_data and char_data.get('base_character_id'):
+                            base_id = int(char_data.get('base_character_id', base_id))
                     
                     # 3. If still no active record and it's generic Great Ape (ID 500)
                     if not trans_def and user.livello_selezionato == 500:
@@ -600,6 +684,21 @@ class TransformationService:
                     user.livello_selezionato = base_id
                     user.current_transformation = None
                     user.transformation_expires_at = None
+                    
+                    # --- UNIQUENESS SYNC START ---
+                    from models.character_ownership import CharacterOwnership
+                    # Clear user's previous ownership
+                    session.query(CharacterOwnership).filter_by(user_id=user.id_telegram).delete()
+                    # Add new ownership for the base character
+                    char_data = loader.get_character_by_id(base_id)
+                    if char_data and char_data.get('max_concurrent_owners', -1) != -1:
+                        new_ownership = CharacterOwnership(
+                            character_id=base_id,
+                            user_id=user.id_telegram,
+                            equipped_at=datetime.now()
+                        )
+                        session.add(new_ownership)
+                    # --- UNIQUENESS SYNC END ---
                     
                     # Deactivate in UserTransformation table too
                     if active_user_trans:
