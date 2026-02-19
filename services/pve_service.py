@@ -2394,19 +2394,43 @@ class PvEService:
                 elapsed = (datetime.now() - mob.last_attack_time).total_seconds()
                 next_attack_in = max(0, cooldown_seconds - elapsed)
             
+            # Reward Estimation (Estimated pool if killed by 1 person)
+            mob_level = mob.mob_level if hasattr(mob, 'mob_level') and mob.mob_level else 1
+            difficulty = mob.difficulty_tier if hasattr(mob, 'difficulty_tier') and mob.difficulty_tier else 1
+            
+            if mob.is_boss:
+                # For bosses, we'd ideally load from CSV, but for a quick scan estimate:
+                est_xp = 10000 
+                est_wumpa = 1000
+                # Try to refine if we have boss_data loaded
+                boss_info = next((b for b in self.boss_data if b['nome'] == mob.name), None)
+                if boss_info:
+                    est_xp = int(boss_info.get('loot_exp', 10000))
+                    est_wumpa = int(boss_info.get('loot_wumpa', 1000))
+            else:
+                difficulty_multiplier = difficulty ** 1.8
+                est_xp = int((mob_level * 5) * difficulty_multiplier)
+                if est_xp < 10: est_xp = 10
+                
+                # Wumpa estimate (0.05 * health * difficulty)
+                est_wumpa = int(mob.max_health * 0.05 * difficulty)
+                if est_wumpa < 1: est_wumpa = 1
+
             return {
                 'name': mob.name,
                 'health': mob.health,
                 'max_health': mob.max_health,
                 'attack': mob.attack_damage,
                 'type': mob.attack_type,
-                'level': mob.mob_level if hasattr(mob, 'mob_level') and mob.mob_level else 1,
+                'level': mob_level,
                 'speed': mob_speed,
                 'resistance': mob.resistance if hasattr(mob, 'resistance') else 0,
                 'image': self.get_enemy_image_path(mob),
                 'is_boss': mob.is_boss,
                 'cooldown_total': round(cooldown_seconds, 1),
-                'next_attack_in': round(next_attack_in, 1)
+                'next_attack_in': round(next_attack_in, 1),
+                'est_exp': est_xp,
+                'est_wumpa': est_wumpa
             }
         finally:
             session.close()

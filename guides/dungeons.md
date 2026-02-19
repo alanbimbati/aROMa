@@ -1,43 +1,73 @@
-# 🏰 Dungeon
+🏰 GUIDA SEMPLICE AI DUNGEON
 
-I Dungeon sono sfide avanzate dove puoi affrontare ondate di nemici per ottenere ricompense rare.
+I Dungeon sono battaglie di gruppo contro ondate di nemici e boss.  
+Richiedono coordinazione, un po’ di tempo e ricompensano tutti i partecipanti.
 
-## 🔑 Come Accedere
+------------------------------------------------
+COME FUNZIONA UN DUNGEON
 
-I Dungeon appaiono **randomicamente** nel gruppo di gioco!
-• Non servono chiavi.
-• Basta unirti alla battaglia quando appare un Dungeon.
-• Segui la chat per non perderti l'evento!
+- Appare un messaggio nel gruppo che annuncia il dungeon.  
+- Ci si iscrive e/o si entra usando i comandi indicati nel messaggio (es. /join, pulsanti).  
+- Una volta iniziato:
+  - i partecipanti vengono curati a vita/mana pieni per partire in pari  
+  - si affrontano vari “stage” (stanze) uno dopo l’altro  
+  - alla fine c’è il boss, più resistente e pericoloso.
 
-## ⚙️ Meccaniche del Dungeon (Raid)
+Ogni nemico che uccidete dentro il dungeon contribuisce alle ricompense finali.
 
-I Dungeon funzionano come **Raid Cooperativi**:
+------------------------------------------------
+RICOMPENSE
 
-### 🏥 Preparazione Automatica
-All'inizio del Dungeon, tutti i partecipanti vengono **curati completamente** (HP e Mana al 100%). Non è necessario sprecare pozioni prima di entrare!
+Alla fine del dungeon, se completato:
+- ricevi Wumpa (soldi)  
+- ricevi EXP  
+- puoi contribuire a obiettivi/achievement legati ai dungeon.
 
-### 📈 Difficoltà Progressiva
-Il livello dei nemici e dei Boss cresce con l'avanzare del dungeon. Ogni stage (stanza) è più difficile del precedente.
-- **Boss Finale**: Ha molta più salute e difesa di un mob normale.
+Le ricompense base del dungeon (Wumpa + EXP) sono uguali per tutti i partecipanti che hanno preso parte,  
+ma il **danno totale che fai** può contare per classifiche/achievement.
 
-### 💰 Distribuzione Ricompense
-Le ricompense indicate nella descrizione del dungeon sono il **pool totale**.
-- **Esperienza (EXP)**: Divisa in base al danno inflitto ad ogni nemico (Contributo).
-- **Wumpa**: Divisi proporzionalmente al contributo totale nel dungeon.
-- **Oggetti**: Alcuni nemici hanno drop fissi, altri casuali.
-- **Achievements**: Completare i dungeon sblocca obiettivi speciali che garantiscono EXP extra!
+------------------------------------------------
+FALLIMENTO E LIMITI DI TEMPO
 
----
+Un dungeon può fallire in vari modi:
+- se tutti i partecipanti muoiono in combattimento  
+- se tutti escono/abbandonano  
+- se passa troppo tempo senza concluderlo (dopo alcune ore i nemici “si stufano” e fuggono).
 
-## ⚠️ Regole e Prerequisiti
+In caso di fallimento:
+- non ricevi le ricompense finali del dungeon  
+- i nemici vengono comunque rimossi dal campo.
 
-1. **Partecipazione Libera**: Chiunque può unirsi al combattimento.
-2. **Tempo Limite**: Se il dungeon non viene completato entro **3 ore**, i nemici fuggono e il dungeon fallisce.
-3. **Morte**: Se muori durante un combattimento, non riceverai EXP per quel nemico specifico, ma resterai nel dungeon per le stanze successive (se i tuoi compagni vincono).
+------------------------------------------------
+CONSIGLI DI GIOCO NEI DUNGEON
 
----
+- Entra preparato:
+  - pozioni di HP/Mana  
+  - equip decente  
+  - abbastanza tempo libero per seguire più fight di fila.
 
-## 🎯 Strategie per Pro
-- **Coordina i Tank**: Chi attiva la difesa attira gli attacchi del Boss (15x Aggro), permettendo ai DPS (Danni) di colpire indisturbati.
-- **Risparmio Mana**: Usa l'attacco base nelle prime stanze per conservare il mana per le skill devastanti da usare sul Boss finale.
-- **Equilibrio**: Un gruppo bilanciato con almeno un Tank, un Healer e dei DPS ha probabilità di successo molto più alte nei dungeon di Tier 3+.
+- All’inizio degli stage:
+  - usa spesso attacchi base per non bruciare tutto il mana subito  
+  - riserva gli speciali più pesanti per:
+    - boss  
+    - ondate pericolose.
+
+- Se sei Tank:
+  - investi in vita + resistenza  
+  - usa le azioni che aumentano l’aggro per tenere i mob su di te.
+
+- Se sei DPS:
+  - punta su danno, critico e velocità  
+  - lascia che siano i più robusti a prendersi le prime botte.
+
+------------------------------------------------
+COSA RICORDARE
+
+- I dungeon sono pensati per il gioco di gruppo:  
+  più siete attivi, più è facile chiuderli.  
+- Non è un dramma fallire un dungeon: puoi sempre riprovare quello successivo.  
+- Se non hai tempo, evita di entrare poco prima di dover andare via.
+
+Buon raid! 🏰⚔️
+
+

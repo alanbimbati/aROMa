@@ -279,14 +279,36 @@ class CharacterLoader:
         family_ids = {root_char['id']}
         queue = [root_char['id']]
         
+        # We need DB access for transformations
+        try:
+            from database import Database
+            from models.system import CharacterTransformation
+            db = Database()
+            session = db.get_session()
+        except:
+            session = None
+
         while queue:
             current_id = queue.pop(0)
-            # Find direct children (transformations)
+            
+            # A. Find direct children in CSV
             children = [c for c in self._cache if c.get('base_character_id') == current_id]
             for child in children:
                 if child['id'] not in family_ids:
                     family_ids.add(child['id'])
                     queue.append(child['id'])
+            
+            # B. Find direct children in DB
+            if session:
+                db_children = session.query(CharacterTransformation).filter_by(base_character_id=current_id).all()
+                for db_child in db_children:
+                    target_id = db_child.transformed_character_id
+                    if target_id not in family_ids:
+                        family_ids.add(target_id)
+                        queue.append(target_id)
+        
+        if session:
+            session.close()
                     
         return list(family_ids)
     
@@ -321,17 +343,6 @@ class CharacterLoader:
         self._cache = None
         self._cache_by_id = {}
         self._cache_by_name = {}
-
-# Singleton instance
-_character_loader = None
-
-def get_character_loader() -> CharacterLoader:
-    """Get singleton instance of CharacterLoader"""
-    global _character_loader
-    if _character_loader is None:
-        _character_loader = CharacterLoader()
-    return _character_loader
-
     def update_character_gif(self, char_id: int, filename: str) -> bool:
         """
         Update the special_attack_gif for a character in the CSV and cache.
@@ -378,7 +389,16 @@ def get_character_loader() -> CharacterLoader:
             print(f"Error updating character GIF: {e}")
             if os.path.exists(temp_file):
                 os.remove(temp_file)
-            return False
+
+# Singleton instance
+_character_loader = None
+
+def get_character_loader() -> CharacterLoader:
+    """Get singleton instance of CharacterLoader"""
+    global _character_loader
+    if _character_loader is None:
+        _character_loader = CharacterLoader()
+    return _character_loader
 
 import io
 try:

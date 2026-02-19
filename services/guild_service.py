@@ -4,6 +4,7 @@ from database import Database
 from models.guild import Guild, GuildMember, GuildUpgrade, GuildItem
 from models.user import Utente
 from sqlalchemy import func
+from settings import PointsName
 
 class GuildService:
     def __init__(self):
@@ -289,7 +290,7 @@ class GuildService:
         
         session.commit()
         session.close()
-        return True, f"Locanda potenziata al livello {new_level}!"
+        return True, f"Locanda potenziata al livello {new_level}! Recupero: +{int((new_level-1)*50)}% -> +{int(new_level*50)}%"
 
     def expand_village(self, leader_id):
         """Expand the village to accept more members"""
@@ -380,38 +381,8 @@ class GuildService:
         return True, f"Birrificio potenziato al livello {new_level}!"
 
     def upgrade_brothel(self, leader_id):
-        """Build or Upgrade the brothel"""
-        session = self.db.get_session()
-        member = session.query(GuildMember).filter_by(user_id=leader_id, role="Leader").first()
-        if not member:
-            session.close()
-            return False, "Solo il capogilda può gestire gli upgrade!"
-            
-        guild = session.query(Guild).filter_by(id=member.guild_id).first()
-        
-        if guild.bordello_level >= 5:
-            session.close()
-            return False, "Il Bordello delle Elfe è già al livello massimo (Lv. 5)!"
-            
-        # Cost: 2000 to build (Lv 0->1), then scaling
-        if guild.bordello_level == 0:
-            cost = 2000
-        else:
-            cost = (guild.bordello_level + 1) * 1000
-        
-        if guild.wumpa_bank < cost:
-            session.close()
-            return False, f"Servono {cost} Wumpa nella banca della gilda per questo upgrade!"
-            
-        guild.wumpa_bank -= cost
-        guild.bordello_level += 1
-        new_level = guild.bordello_level
-        
-        session.commit()
-        session.close()
-        if new_level == 1:
-            return True, "👙 Hai costruito il **Bordello delle Elfe**! I tuoi membri ora possono ottenere il buff Vigore!"
-        return True, f"Bordello potenziato al livello {new_level}!"
+        """Build or Upgrade the brothel (Alias for consistency)"""
+        return self.upgrade_bordello(leader_id)
 
     def get_potion_bonus(self, user_id):
         """Get potion effectiveness bonus based on inn level (Active for 30 mins after beer)"""
@@ -438,45 +409,74 @@ class GuildService:
         session.close()
         return 1.0 + (bonus_pct / 100.0)
 
-    def buy_craft_beer(self, user_id):
-        """Buy a craft beer for a fun bonus (and healing)"""
+    def buy_guild_drink(self, user_id, drink_type='beer'):
+        """Buy a drink from the guild brewery"""
         session = self.db.get_session()
         user = session.query(Utente).filter_by(id_telegram=user_id).first()
-        guild = self.get_user_guild(user_id)
+        member = session.query(GuildMember).filter_by(user_id=user_id).first()
         
-        if not guild:
+        if not member:
             session.close()
             return False, "Non fai parte di nessuna gilda!"
             
+        guild = session.query(Guild).filter_by(id=member.guild_id).first()
+        
         # Daily limit check (reset at midnight)
         now = datetime.now()
         if user.last_beer_usage and user.last_beer_usage.date() == now.date():
              session.close()
-             return False, "🍺 Hai già bevuto la tua birra giornaliera! Torna domani."
+             return False, "🍺 Hai già bevuto la tua dose giornaliera! Torna domani."
 
-        # No cost
-        # user.points -= 50
+        # Costs and Level Requirements
+        DRINK_CONFIG = {
+            'beer': {'cost': 0, 'lvl': 1, 'heal': 0.1, 'name': "Birra Chiara"},
+            'whiskey': {'cost': 50, 'lvl': 3, 'heal': 0.2, 'name': "Whiskey Nanico"},
+            'ambrosia': {'cost': 500, 'lvl': 5, 'heal': 0.4, 'name': "Ambrosia di Wumpa"},
+            'mead': {'cost': 1000, 'lvl': 7, 'heal': 0.6, 'name': "Idromele dei Titani"},
+            'dragon_blood': {'cost': 5000, 'lvl': 9, 'heal': 0.8, 'name': "Sangue di Drago"},
+            'yggdrasil': {'cost': 10000, 'lvl': 10, 'heal': 1.0, 'name': "Lacrima di Yggdrasil"}
+        }
+        
+        drink = DRINK_CONFIG.get(drink_type)
+        if not drink:
+            session.close()
+            return False, "Bevanda non valida."
+            
+        if (guild.brewery_level or 0) < drink['lvl']:
+            session.close()
+            return False, f"Il Birrificio deve essere al livello {drink['lvl']} per servire questa bevanda!"
+        
+        if user.points < drink['cost']:
+            session.close()
+            return False, f"Non hai abbastanza Wumpa! Serve {drink['cost']} Wumpa."
+
+        user.points -= drink['cost']
         user.last_beer_usage = now
         
-        # Heal 10% HP
-        heal_amount = int(user.max_health * 0.1)
+        # Heal Logic
+        heal_amount = int(user.max_health * drink['heal'])
         user.current_hp = min((user.current_hp or 0) + heal_amount, user.max_health)
         
-        # Brewery bonus logic
-        # Lv 1: 20%
-        # Lv 5: 40%
-        # Formula: 15 + (brewery_level * 5)
-        brew_level = guild['brewery_level'] if guild['brewery_level'] else 1
-        potion_bonus_pct = 15 + (brew_level * 5)
+        # Potion Bonus Logic
+        brew_level = guild.brewery_level if guild.brewery_level else 1
+        base_bonus = 15 + (brew_level * 5)
+        
+        # Multiplier based on drink
+        drink_mults = {
+            'beer': 1.0, 'whiskey': 1.1, 'ambrosia': 1.25, 
+            'mead': 1.5, 'dragon_blood': 2.0, 'yggdrasil': 3.0
+        }
+        drink_mult = drink_mults.get(drink_type, 1.0)
+        final_bonus = int(base_bonus * drink_mult)
         
         session.commit()
         session.close()
-        return True, f"🍺 Hai bevuto una Birra Artigianale di {guild['name']}! Ti senti rinvigorito (+{heal_amount} HP).\n\n✨ Le tue pozioni saranno più efficaci del **{potion_bonus_pct}%** per 30 minuti!"
+        
+        return True, f"🍺 Hai bevuto **{drink['name']}**! Ti senti rinvigorito (+{heal_amount} HP).\n\n✨ Le tue pozioni saranno più efficaci del **{final_bonus}%** per 30 minuti!"
 
     def get_inn_image(self, inn_level):
         """Get the image path for the inn based on its level"""
-        # We found images/locanda.png in the project!
-        return "images/locanda.png"
+        return "assets/guild/inn.png"
 
     def get_guilds_list(self):
         """Get all guilds sorted by level and member ratio"""
@@ -544,37 +544,136 @@ class GuildService:
         session.close()
         return True, f"Bordello delle Elfe potenziato al livello {new_level}!"
 
-    def apply_vigore_bonus(self, user_id):
-        """Apply the Vigore bonus (50% mana cost) for 30 minutes"""
+    def apply_vigore_bonus(self, user_id, tier='fairy'):
+        """Apply the Vigore bonus (Man cost reduction) for varying duration"""
         session = self.db.get_session()
-        user = session.query(Utente).filter_by(id_telegram=user_id).first()
-        member = session.query(GuildMember).filter_by(user_id=user_id).first()
         
-        if not member:
-            session.close()
-            return False, "Devi far parte di una gilda per accedere al Bordello delle Elfe!"
+        try:
+            member = session.query(GuildMember).filter_by(user_id=user_id).first()
+            if not member:
+                return False, "Devi far parte di una gilda!"
+                
+            guild = session.query(Guild).filter_by(id=member.guild_id).first()
+            if guild.bordello_level < 1:
+                return False, "Il Bordello non è ancora stato costruito!"
+                
+            # Tier Configuration (Consolidated)
+            TIERS = {
+                'fairy':    {'lvl': 1, 'cost': 100,  'dur': 30,  'dmg': 5,  'crit': 2,  'mana': 20,  'flavor': "🧚 La Fatina delle Luci ha danzato intorno a te... ti senti protetto!"},
+                'elf':      {'lvl': 3, 'cost': 500,  'dur': 60,  'dmg': 10, 'crit': 5,  'mana': 50,  'flavor': "🧝‍♀️ L'Elfa dei Boschi ti ha stretto in un abbraccio fatato."},
+                'nymph':    {'lvl': 5, 'cost': 1500, 'dur': 120, 'dmg': 25, 'crit': 10, 'mana': 100, 'flavor': "💧 La Ninfa delle Acque ti ha sussurrato segreti di giovinezza."},
+                'succubus': {'lvl': 7, 'cost': 5000, 'dur': 240, 'dmg': 60, 'crit': 20, 'mana': 250, 'flavor': "😈 La Succube Reale ti ha prosciugato... ma ora il tuo potere è immenso!"}
+            }
             
-        guild = session.query(Guild).filter_by(id=member.guild_id).first()
-        if guild.bordello_level == 0:
-            session.close()
-            return False, "La tua gilda non ha ancora un Bordello delle Elfe!"
+            config = TIERS.get(tier)
+            if not config:
+                return False, "Tipo di compagnia non valido!"
+
+            if guild.bordello_level < config['lvl']:
+                return False, f"Questa compagnia richiede un Bordello di Livello {config['lvl']}!"
+
+            user = session.query(Utente).filter_by(id_telegram=user_id).first()
+            now = datetime.now()
             
-        # Daily limit
-        now = datetime.now()
-        if user.last_brothel_usage and user.last_brothel_usage.date() == now.date():
+            # Use 'last_brothel_free_usage' if we want to separate it?
+            # User said "first time free", let's check if they used it today.
+            # If last_brothel_usage is NOT today, it's FREE.
+            is_free = False
+            if not user.last_brothel_usage or user.last_brothel_usage.date() < now.date():
+                is_free = True
+            
+            cost = 0 if is_free else config['cost']
+                 
+            current_points = user.points or 0
+            if current_points < cost:
+                return False, f"Non hai abbastanza {PointsName}! Servono {cost} {PointsName}."
+    
+            user.points = current_points - cost
+            user.last_brothel_usage = now
+            user.vigore_until = datetime.now() + timedelta(minutes=config['dur'])
+            
+            # Apply Persistent Status Effects (Dmg, Crit, etc.)
+            import json
+            effects = json.loads(user.active_status_effects or '[]')
+            
+            # Remove old bordello effects
+            effects = [e for e in effects if not e.get('effect', '').startswith('bordello_')]
+            
+            expires_at = (datetime.now() + timedelta(minutes=config['dur'])).timestamp()
+            
+            if config.get('dmg'):
+                effects.append({'effect': 'bordello_dmg', 'value': config['dmg'], 'expires_at': expires_at})
+            if config.get('crit'):
+                effects.append({'effect': 'bordello_crit', 'value': config['crit'], 'expires_at': expires_at})
+            if config.get('mana'):
+                effects.append({'effect': 'bordello_mana', 'value': config['mana'], 'expires_at': expires_at})
+                
+            user.active_status_effects = json.dumps(effects)
+            
+            session.commit()
+            free_msg = "🎁 **PRIMA VISITA GRATUITA!**\n" if is_free else ""
+            stats_msg = f"\n✨ +{config['dmg']} Danno, +{config['crit']}% Critico, +{config['mana']} Mana"
+            return True, f"{free_msg}{config['flavor']}\n\n💪 **Vigore Attivo**: Costo Mana dimezzato per {config['dur']} minuti!{stats_msg}"
+        except Exception as e:
+            session.rollback()
+            return False, f"Errore: {e}"
+        finally:
+            session.close()
+
+    def buy_drink(self, user_id, drink_key):
+        """Buy a drink at the brewery"""
+        # drink_key: 'beer', 'whiskey', 'ambrosia', 'mead', 'dragon_blood', 'yggdrasil'
+        session = self.db.get_session()
+        try:
+            member = session.query(GuildMember).filter_by(user_id=user_id).first()
+            if not member:
+                return False, "Non fai parte di nessuna gilda!"
+            
+            guild = session.query(Guild).filter_by(id=member.guild_id).first()
+            if guild.brewery_level < 1:
+                return False, "Il Birrificio non è ancora stato costruito o è di livello troppo basso!"
+                
+            # Configuration
+            DRINKS = {
+                'beer': {'name': 'Birra Chiara', 'lvl': 1, 'cost': 10, 'hp': 20, 'mana': 10, 'flavor': "Una birra fresca e leggera."},
+                'whiskey': {'name': 'Whiskey Nanico', 'lvl': 3, 'cost': 50, 'hp': 50, 'mana': 30, 'flavor': "Brucia la gola, ma scalda il cuore."},
+                'mead': {'name': 'Idromele dei Titani', 'lvl': 5, 'cost': 150, 'hp': 150, 'mana': 100, 'flavor': "Il nettare degli antichi guerrieri."},
+                'ambrosia': {'name': 'Ambrosia di Wumpa', 'lvl': 7, 'cost': 500, 'hp': 500, 'mana': 300, 'flavor': "Un gusto divino che ripristina le forze."},
+                'dragon_blood': {'name': 'Sangue di Drago', 'lvl': 9, 'cost': 1000, 'hp': 1000, 'mana': 500, 'flavor': "PICCANTE! Ti senti invincibile."},
+                'yggdrasil': {'name': 'Lacrima di Yggdrasil', 'lvl': 10, 'cost': 2500, 'hp': 9999, 'mana': 9999, 'flavor': "Una goccia di pura energia vitale."}
+            }
+            
+            drink = DRINKS.get(drink_key)
+            if not drink:
+                return False, "Bevanda non trovata!"
+                
+            if guild.brewery_level < drink['lvl']:
+                return False, f"Il Birrificio deve essere al livello {drink['lvl']} per servire questa bevanda!"
+                
+            user = session.query(Utente).filter_by(id_telegram=user_id).first()
+            if user.points < drink['cost']:
+                return False, f"Non hai abbastanza Wumpa! Costa {drink['cost']}."
+                
+            user.points -= drink['cost']
+            
+            # Helper to execute restore logic reuse?
+            # Just do it manually here
+            old_hp = user.current_hp if user.current_hp is not None else user.max_health
+            old_mana = user.current_mana if user.current_mana is not None else user.max_mana
+            
+            user.current_hp = min(user.max_health, old_hp + drink['hp'])
+            user.current_mana = min(user.max_mana, old_mana + drink['mana'])
+            
+            restored_hp = user.current_hp - old_hp
+            restored_mana = user.current_mana - old_mana
+            
+            session.commit()
+            return True, f"🍺 Hai bevuto **{drink['name']}**!\n\n_{drink['flavor']}_\n\n❤️ +{restored_hp} HP\n💙 +{restored_mana} Mana"
+        except Exception as e:
+            session.rollback()
+            return False, f"Errore: {e}"
+        finally:
              session.close()
-             return False, "🔞 Hai già visitato il Bordello oggi! Torna domani."
-            
-        # Limit 1 per day
-        user.last_brothel_usage = now
-        
-        # FIXED Duration: 30 minutes
-        duration_minutes = 30
-        user.vigore_until = datetime.now() + timedelta(minutes=duration_minutes)
-        
-        session.commit()
-        session.close()
-        return True, f"✨ Hai passato del tempo con le Elfe del Piacere. Ti senti pieno di Vigore! Per {duration_minutes} minuti, il costo in Mana delle tue abilità sarà ridotto del 50%."
 
     def get_mana_cost_multiplier(self, user_id):
         """Get mana cost multiplier (0.5 if Vigore is active)"""
@@ -1129,3 +1228,216 @@ class GuildService:
     def _hatch_egg_logic(self, egg):
         # Determine reward
         return f"È nato un magnifico **Drago {egg.egg_type.capitalize()}**! (Presto disponibile nelle Scuderie)"
+
+    def pray_at_temple(self, user_id):
+        """Pray at the temple for a temporary Crit Buff"""
+        session = self.db.get_session()
+        try:
+            member = session.query(GuildMember).filter_by(user_id=user_id).first()
+            if not member:
+                return False, "Non fai parte di nessuna gilda!"
+                
+            guild = session.query(Guild).filter_by(id=member.guild_id).first()
+            if guild.ancient_temple_level < 1:
+                return False, "Il tempio non è ancora stato costruito!"
+                
+            user = session.query(Utente).filter_by(id_telegram=user_id).first()
+            now = datetime.now()
+            
+            # Cooldown: 1 hour
+            # We use a custom field stored in json? No, let's use a simpler way.
+            # We can check active_status_effects for the buff. If present, deny?
+            # Or use last_prayer field if we add it?
+            # User doesn't have last_prayer.
+            # Use JSON to track cooldown? "last_temple_usage": timestamp
+            
+            import json
+            effects = json.loads(user.active_status_effects or '[]')
+            
+            # Check for existing buff
+            existing = next((e for e in effects if e.get('effect') == 'temple_buff_crit'), None)
+            if existing:
+                # Check if expired
+                if existing.get('expires_at', 0) > now.timestamp():
+                    remaining = int((existing['expires_at'] - now.timestamp()) / 60)
+                    return False, f"Sei già benedetto dal Tempio! La benedizione dura ancora {remaining} minuti."
+            
+            # Apply Buff
+            duration = 30 # minutes
+            expires_at = (now + timedelta(minutes=duration)).timestamp()
+            
+            # Remove old
+            effects = [e for e in effects if e.get('effect') != 'temple_buff_crit']
+            
+            effects.append({
+                'effect': 'temple_buff_crit',
+                'expires_at': expires_at,
+                'value': 15, # 15% Crit
+                'source': 'temple'
+            })
+            
+            user.active_status_effects = json.dumps(effects)
+            session.commit()
+            
+            return True, f"🙏 Hai pregato al Tempio.\n\n✨ **Benedizione Ricevuta**: +15% Critico per {duration} minuti!"
+        except Exception as e:
+            session.rollback()
+            return False, f"Errore: {e}"
+        finally:
+            session.close()
+
+    def study_at_library(self, user_id):
+        """Study at the library for Mana Restore + Max Mana Buff"""
+        session = self.db.get_session()
+        try:
+            member = session.query(GuildMember).filter_by(user_id=user_id).first()
+            if not member:
+                return False, "Non fai parte di nessuna gilda!"
+                
+            guild = session.query(Guild).filter_by(id=member.guild_id).first()
+            if guild.magic_library_level < 1:
+                return False, "La biblioteca non è ancora stata costruita!"
+                
+            user = session.query(Utente).filter_by(id_telegram=user_id).first()
+            now = datetime.now()
+            
+            import json
+            effects = json.loads(user.active_status_effects or '[]')
+            
+            # Check for existing buff
+            existing = next((e for e in effects if e.get('effect') == 'library_buff_mana'), None)
+            if existing and existing.get('expires_at', 0) > now.timestamp():
+                remaining = int((existing['expires_at'] - now.timestamp()) / 60)
+                return False, f"Hai già studiato di recente! Il buff dura ancora {remaining} minuti."
+            
+            # Restore Mana
+            # Amount based on Library Level?
+            # Lv 1: 50, Lv 5: 250?
+            restore = guild.magic_library_level * 50
+            user.current_mana = min(user.max_mana, user.current_mana + restore)
+            
+            # Apply Buff
+            duration = 60 # minutes
+            expires_at = (now + timedelta(minutes=duration)).timestamp()
+            
+            # Remove old
+            effects = [e for e in effects if e.get('effect') != 'library_buff_mana']
+            
+            buff_amount = guild.magic_library_level * 20 # +20 Max Mana per level
+            
+            effects.append({
+                'effect': 'library_buff_mana',
+                'expires_at': expires_at,
+                'value': buff_amount,
+                'source': 'library'
+            })
+            
+            user.active_status_effects = json.dumps(effects)
+            session.commit()
+            
+            return True, f"📖 Hai studiato antichi tomi.\n\n💧 **Mana Recuperato**: {restore}\n✨ **Buff Conoscenza**: +{buff_amount} Mana Max per {duration} minuti!"
+        except Exception as e:
+            session.rollback()
+            return False, f"Errore: {e}"
+        finally:
+            session.close()
+
+    def use_relax_corner(self, user_id, gadget_type):
+        """Use the Relax Corner (Smoking gadgets)"""
+        session = self.db.get_session()
+        try:
+            member = session.query(GuildMember).filter_by(user_id=user_id).first()
+            if not member:
+                return False, "Non fai parte di nessuna gilda!"
+                
+            guild = session.query(Guild).filter_by(id=member.guild_id).first()
+            garden_lvl = getattr(guild, 'garden_level', 1) or 1
+            
+            # Gadget Config
+            GADGETS = {
+                'papers': {'lvl': 1, 'name': 'Cartine', 'res': 5, 'speed': -5, 'cost_erba': 1},
+                'chilum': {'lvl': 3, 'name': 'Chilum', 'res': 10, 'speed': -10, 'cost_erba': 2},
+                'bong': {'lvl': 5, 'name': 'Bong', 'res': 15, 'speed': -15, 'cost_erba': 3},
+                'hookah': {'lvl': 7, 'name': 'Narghilè', 'res': 20, 'speed': -20, 'cost_erba': 5}
+            }
+            
+            gadget = GADGETS.get(gadget_type)
+            if not gadget:
+                return False, "Gadget non valido!"
+                
+            if garden_lvl < gadget['lvl']:
+                 return False, f"Serve il Giardino al livello {gadget['lvl']}!"
+            
+            user = session.query(Utente).filter_by(id_telegram=user_id).first()
+            
+            # Check Daily Limit (Reset at midnight)
+            import json
+            effects = json.loads(user.active_status_effects or '[]')
+            
+            limit_id = f"relax_limit_{gadget_type}"
+            for effect in effects:
+                if effect.get('id') == limit_id:
+                    # Check expiry
+                    expires = datetime.fromisoformat(effect.get('expires'))
+                    if datetime.now() < expires:
+                        return False, f"Hai già usato {gadget['name']} oggi! Torna domani."
+            
+            # Check Usage Cost (Erba Verde)
+            from services.item_service import ItemService
+            item_service = ItemService()
+            erba_count = item_service.get_item_by_user(user_id, "Erba Verde")
+            
+            if erba_count < gadget['cost_erba']:
+                return False, f"Non hai abbastanza Erba Verde! Te ne servono {gadget['cost_erba']}."
+            
+            # Consume Items
+            if not item_service.remove_item(user_id, "Erba Verde", gadget['cost_erba']):
+                 return False, "Errore nel consumo dell'erba."
+            
+            # Apply Buffs
+            # Duration: Until end of day? Or fixed time? 
+            # Prompt implies "Daily Limit" for usage, but effect duration usually temporary. 
+            # Let's say 2 hours for now, as usually buffs are temporary.
+            # "Ogni cosa si può usare 1 volta al giorno" -> Limit usage frequency.
+            # Effect duration: Let's stick to 60-120 mins like others.
+            duration_minutes = 120
+            
+            now = datetime.now()
+            expires_at = (now + timedelta(minutes=duration_minutes)).timestamp()
+            limit_expires = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+            
+            # Remove old buffs of same type to prevent stacking of SAME gadget? 
+            # Or allow multiple DIFFERENT gadgets? "1 use per gadget type".
+            # Assume different gadgets stack.
+            
+            # Add Limit Tracker
+            effects.append({
+                'id': limit_id,
+                'expires': limit_expires,
+                'type': 'limit'
+            })
+            
+            # Add Stat Buff
+            effects.append({
+                'effect': f"relax_{gadget_type}",
+                'expires_at': expires_at,
+                'value_res': gadget['res'],
+                'value_speed': gadget['speed'],
+                'source': 'relax_corner',
+                'name': gadget['name']
+            })
+            
+            user.active_status_effects = json.dumps(effects)
+            session.commit()
+            
+            return True, f"🌿 Hai usato: **{gadget['name']}**.\n\n💨 Ti senti molto rilassato...\n🛡️ Resistenza +{gadget['res']}%\n🐌 Velocità {gadget['speed']}"
+            
+        except Exception as e:
+            print(f"Error use_relax_corner: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, f"Errore: {e}"
+        finally:
+            session.close()
+
+        

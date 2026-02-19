@@ -231,7 +231,7 @@ class CultivationService:
                     minutes = int(remaining.total_seconds() / 60)
                     return False, f"La pianta sta ancora crescendo! Torna tra {minutes} minuti."
                     
-            if slot.status != 'ready':
+            if slot.status not in ['ready', 'rotting', 'rotten']:
                 return False, "Non c'è nulla da raccogliere qui."
                 
             # Rewards based on seed type and moisture

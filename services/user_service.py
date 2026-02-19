@@ -362,8 +362,8 @@ class UserService:
             session.close()
         
     def get_recent_users(self, chat_id=None, minutes=30):
-        """Get users active within the last N minutes, sorted by recency (most recent first)"""
-        # import datetime - REMOVED: Conflicts with global 'from datetime import datetime'
+        """Get users active within the last N minutes, sorted by recency (most recent first).
+        Falls back to DB query when the in-memory dict is empty (e.g. after a bot restart)."""
         cutoff = datetime.now() - timedelta(minutes=minutes)
         
         try:
@@ -376,18 +376,35 @@ class UserService:
         recent = []
         for (uid, cid), timestamp in self.recent_activities.items():
             if timestamp >= cutoff:
-                # Ensure cid is int for comparison if chat_id is int
                 try:
                     if cid is not None: cid = int(cid)
                 except: pass
                 
                 if chat_id is None or cid == chat_id:
                     recent.append((uid, timestamp))
-        
-        print(f"[DEBUG] get_recent_users: found {len(recent)} users")
-        # Sort by timestamp descending (most recent first)
-        recent.sort(key=lambda x: x[1], reverse=True)
-        return [uid for uid, _ in recent]
+
+        if recent:
+            # Sort by timestamp descending (most recent first)
+            recent.sort(key=lambda x: x[1], reverse=True)
+            result = [uid for uid, _ in recent]
+            print(f"[DEBUG] get_recent_users (memory): found {len(result)} users")
+            return result
+
+        # === DB FALLBACK ===
+        # In-memory dict is empty (e.g. after bot restart). Query last_activity from DB.
+        try:
+            session = self.db.get_session()
+            try:
+                query = session.query(Utente).filter(Utente.last_activity >= cutoff)
+                users_db = query.order_by(Utente.last_activity.desc()).all()
+                db_result = [u.id_telegram for u in users_db]
+                print(f"[DEBUG] get_recent_users (DB fallback): found {len(db_result)} users")
+                return db_result
+            finally:
+                session.close()
+        except Exception as e:
+            print(f"[ERROR] get_recent_users DB fallback failed: {e}")
+            return []
 
     def get_user(self, target, session=None):
         local_session = False
@@ -648,31 +665,72 @@ class UserService:
 
     def get_xp_requirement(self, level):
         """
-        Calculate EXP required for a specific level using a global formula.
-        Check implementation_plan.md for details.
+        Get EXP required to reach a specific level.
+        Reads from characters.csv exp_required column (original game data).
+        Handles missing levels by interpolating or extrapolating.
+        Ensures monotonicity (next level >= current level).
         """
-        # Global Formula - Decoupled from Character Data
-        
-        # Levels 50+ (High Level Curve)
-        if level >= 50:
-            exp_at_50 = 100 * (50 ** 2) # 250,000
-            if level == 50:
-                return exp_at_50
-            elif 50 < level <= 55:
-                # 5k gap per level
-                return exp_at_50 + (level - 50) * 5000
-            elif level > 55:
-                exp_at_55 = exp_at_50 + (5 * 5000) # 275,000
-                # Smoother curve: starting at 5k gap, adding 2000 per level
-                n = level - 55
-                return exp_at_55 + (n * 5000) + (n * (n - 1) // 2) * 2000
-        
-        # Levels 1-49 (Standardized Smoother Curve)
-        # We use 85 * level^2 instead of 100 * level^2 to essentially nerf the requirement
-        # for the 1-50 bracket, ensuring Lv 47 is ~187k (User Request from Mardok) 
-        # and Lv 44 (164k) < Lv 45 (172k), preventing regression.
-        # Lv 49 = ~204k -> Lv 50 = 250k (Tier Jump)
+        # Lazy-load the EXP table from characters.csv
+        if not hasattr(self, '_exp_table_cache') or not self._exp_table_cache:
+            import csv, os
+            self._exp_table_cache = {}
+            try:
+                base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                csv_path = os.path.join(base_dir, 'data', 'characters.csv')
+                with open(csv_path, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        lv = int(row.get('livello', 0))
+                        exp_req = row.get('exp_required', '0').strip()
+                        if lv > 0 and exp_req:
+                            # Only store the first (lowest) exp_required per level if not present
+                            if lv not in self._exp_table_cache:
+                                self._exp_table_cache[lv] = int(exp_req)
+            except Exception as e:
+                print(f"[ERROR] Failed to load EXP table from CSV: {e}")
+
+        if self._exp_table_cache:
+            # If level is explicitly defined
+            if level in self._exp_table_cache:
+                req = self._exp_table_cache[level]
+                # Consistency check: ensure it's not less than previous level
+                if level > 1:
+                    prev_req = self.get_xp_requirement(level - 1)
+                    if req < prev_req:
+                        return prev_req # Enforce monotonicity
+                return req
+
+            sorted_levels = sorted(self._exp_table_cache.keys())
+            
+            # Case 1: Level is below minimum (1)
+            if level < sorted_levels[0]:
+                return 100
+
+            # Case 2: Level is above maximum -> Extrapolate
+            max_lv = sorted_levels[-1]
+            if level > max_lv:
+                max_exp = self._exp_table_cache[max_lv]
+                # Extrapolate: add ~5000 per level past the last known level
+                return max_exp + (level - max_lv) * 5000
+            
+            # Case 3: Level is in a gap -> Interpolate
+            # Find lower and upper bounds
+            lower_lv = max([l for l in sorted_levels if l < level])
+            upper_lv = min([l for l in sorted_levels if l > level])
+            
+            lower_exp = self._exp_table_cache[lower_lv]
+            upper_exp = self._exp_table_cache[upper_lv]
+            
+            # Linear interpolation
+            ratio = (level - lower_lv) / (upper_lv - lower_lv)
+            interpolated_exp = int(lower_exp + (upper_exp - lower_exp) * ratio)
+            
+            return interpolated_exp
+
+        # Hard fallback if CSV fails to load completely
         return int(85 * (level ** 2))
+
+
 
 
     def add_exp_by_id(self, user_id, exp, session=None):
@@ -700,7 +758,8 @@ class UserService:
             
             # Loop to handle multiple level-ups
             loop_guard = 0
-            while next_exp_req is not None and utente.exp >= next_exp_req and loop_guard < 100:
+            # Increased loop guard to 500 to handle massive EXP dumps
+            while next_exp_req is not None and utente.exp >= int(next_exp_req) and loop_guard < 500:
                 loop_guard += 1
                 # Level up!
                 utente.livello += 1
@@ -755,7 +814,7 @@ class UserService:
                 )
                 
                 # Check for NEXT level
-                next_exp_req = get_exp_required_for_level(utente.livello + 1)
+                next_exp_req = self.get_xp_requirement(utente.livello + 1)
             
             # Get next level exp requirement for display
             next_level_exp = next_exp_req
@@ -1150,7 +1209,41 @@ class UserService:
         except Exception as e:
             print(f"Error applying transformation bonuses in get_projected_stats: {e}")
             
-        # 6. Caps
+        # 6. Active Status Effects (Temple/Library/Relax/Bordello Buffs)
+        try:
+            import json
+            effects = json.loads(utente.active_status_effects or '[]')
+            from datetime import datetime
+            now_ts = datetime.now().timestamp()
+            
+            for effect in effects:
+                if effect.get('expires_at', 0) > now_ts:
+                    # Temple
+                    if effect.get('effect') == 'temple_buff_crit':
+                        total_crit += effect.get('value', 0)
+                    # Library
+                    elif effect.get('effect') == 'library_buff_mana':
+                        total_mana += effect.get('value', 0)
+                    # Relax Corner (Resistance / Speed Malus)
+                    elif effect.get('effect', '').startswith('relax_'):
+                        total_res += effect.get('value_res', 0)
+                        total_speed += effect.get('value_speed', 0)
+                    # Bordello (Dmg / Crit / HP Malus)
+                    elif effect.get('effect', '').startswith('bordello_'):
+                        total_dmg += effect.get('value_dmg', 0)
+                        total_crit += effect.get('value_crit', 0)
+                        
+                        # Handle Percentage Max HP Malus
+                        hp_malus_percent = effect.get('value_max_hp_percent', 0)
+                        if hp_malus_percent != 0:
+                            # Apply to base + alloc + equip (current total_hp)
+                            # Malus is negative, so adding a negative value
+                            total_hp += (total_hp * (hp_malus_percent / 100))
+                            
+        except Exception as e:
+            print(f"Error applying status effect buffs: {e}")
+
+        # 7. Caps
         total_res = min(total_res, 75)
         
         return {
