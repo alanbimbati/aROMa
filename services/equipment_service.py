@@ -9,16 +9,20 @@ class EquipmentService:
     def __init__(self):
         self.db = Database()
         
-    def get_user_inventory(self, user_id):
+    def get_user_inventory(self, user_id, session=None):
         """Get all items owned by user"""
-        session = self.db.get_session()
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
         try:
             # Join UserEquipment and Equipment
             items = session.query(UserEquipment, Equipment).join(Equipment, UserEquipment.equipment_id == Equipment.id)\
                 .filter(UserEquipment.user_id == user_id).all()
             return items # Returns list of (UserEquipment, Equipment) tuples
         finally:
-            session.close()
+            if local_session:
+                session.close()
             
     def get_equipped_items(self, user_id, session=None):
         """Get currently equipped items"""

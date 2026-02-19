@@ -1,104 +1,99 @@
-# ⚔️ Sistema di Combattimento
+⚔️ GUIDA SEMPLICE AL COMBATTIMENTO
 
-Benvenuto nel sistema di combattimento di aROMa RPG! Qui troverai tutto ciò che devi sapere per affrontare i nemici e sopravvivere.
+Nel combattimento affronti mostri e boss a turni, usando attacchi base, speciali e ad area.  
+Le tue statistiche (vita, mana, danno, velocità, resistenza, critico) determinano quanto colpisci e quanto sopravvivi.
 
-## 📊 Statistiche Base
+------------------------------------------------
+STATISTICHE CHE CONTANO IN FIGHT
 
-Ogni personaggio parte con dei valori minimi di sistema:
+- ❤️ Vita (HP)  
+  Più HP hai, più colpi puoi incassare prima di morire.
 
-1. **❤️ Salute (HP)**: Base sistema: **100 HP**
-2. **💙 Mana (MP)**: Base sistema: **50 MP**
-3. **⚔️ Danno Base**: Base sistema: **10**
+- 💙 Mana (MP)  
+  Serve per usare gli attacchi speciali del personaggio.
 
-**SUGGERIMENTO**: Puoi aumentare queste statistiche equipaggiando personaggi più forti, assegnando i punti guadagnati livellando o indossando equipaggiamento potente.
+- ⚔️ Danno  
+  Somma di:
+  - danno base del tuo profilo  
+  - bonus del personaggio equipaggiato  
+  - bonus dell’equipaggiamento  
+  - punti statistica messi in Danno.
 
-**Statistiche Avanzate (Allocabili)**
-4. **🛡️ Resistenza**: Riduce i danni subiti (1% per punto allocato, MAX 75%).
-5. **💥 Critico**: Probabilità di infliggere danno critico (1% per punto allocato).
-6. **⚡ Velocità**: Riduce il tempo di ricarica (Cooldown) tra un attacco e l'altro.
-   • **Base**: 0 punti velocità = 60 secondi di cooldown.
-   • **Scaling**: Ogni punto di velocità riduce il cooldown del **5%**.
-   • **Formula**: 60 / (1 + Velocità x 0.05) secondi.
-   • **Esempio**: Con 20 punti velocità, il cooldown si dimezza a **30 secondi**.
+- 🛡️ Resistenza  
+  Ogni punto riduce i danni subiti (fino a un massimo del 75% dai punti allocati).  
+  Utile per tankare boss e dungeon.
 
-## 🥊 Come Combattere
+- 💥 Critico  
+  Aumenta la probabilità che un attacco faccia danno critico (più del normale).
 
-Quando appare un nemico (Mob o Boss), hai tre opzioni:
+- ⚡ Velocità  
+  Riduce il tempo di ricarica tra un attacco e l’altro.  
+  In pratica: più velocità = attacchi più spesso.
 
-1. **Attacco Normale**: Infligge danni basati sul tuo Danno Base + un valore casuale (10-30). Non costa nulla.
+------------------------------------------------
+TIPI DI ATTACCO
 
-2. **Attacco Speciale**: Infligge molti più danni ma consuma Mana. Il danno e il costo dipendono dal personaggio selezionato.
+🗡️ ATTACCO BASE  
+- Non consuma mana.  
+- Danno basato sul tuo danno totale + una piccola parte casuale.  
+- Ideale per risparmiare mana quando i nemici non sono pericolosi.
 
-3. **Attacco AoE (Area of Effect)**: Colpisce **tutti** i nemici attivi nel gruppo contemporaneamente.
-   • **Danno**: 70% al bersaglio principale, 50% agli altri (fino a 5 nemici totali).
-   • **Costo**: 0 Mana (Gratis).
-   • **Cooldown**: Il tempo di ricarica è raddoppiato rispetto a un attacco normale.
-   • **Utilità**: Ideale quando ci sono molti nemici deboli. Disponibile solo con almeno 2 nemici.
+✨ ATTACCO SPECIALE  
+- Consuma mana (costo diverso per ogni personaggio).  
+- Danno molto più alto, spesso con effetti extra (status, elementi, ecc.).  
+- Usalo per:
+  - chiudere un fight velocemente  
+  - fare grossi danni ai boss  
+  - sfruttare un momento in cui il nemico è vulnerabile.
 
-## 🥊 Formule di Combattimento
+💥 ATTACCO AD AREA (AoE)  
+- Colpisce più nemici contemporaneamente.  
+- Danno leggermente ridotto al bersaglio principale e ancora meno agli altri, ma su tutto il gruppo.  
+- Utile quando:
+  - ci sono molti mob vivi  
+  - vuoi “pulire” il campo velocemente.
 
-Per i giocatori più tecnici, ecco come il sistema calcola i risultati delle tue azioni:
+------------------------------------------------
+COOLDOWN (TEMPO TRA UN COLPO E L’ALTRO)
 
-### ⚔️ Danno Finale
-Il danno non è mai fisso, ma oscilla per rendere ogni turno unico:
-- **Attacco Base**: `(Danno Base + Random(10, 30)) × Moltiplicatore Critico`
-- **Attacco Speciale**: `(Danno Base + Potenza Skill) × Moltiplicatore Critico`
-- **Attacco AoE**: `(Danno Base × 0.70) × Moltiplicatore Critico` (70% al main, 50% agli altri)
+Ogni attacco fa partire un cooldown: finché non scade non puoi riattaccare.  
+La velocità riduce quel tempo.
 
-### ⚡ Cooldown (Tempo di Ricarica)
-La velocità riduce il tempo che devi aspettare tra un attacco e l'altro:
-- **Formula**: `60 / (1 + Velocità × 0.05)` secondi.
-- **Esempio**: Con 20 punti velocità, il tempo scende da 60 a 30 secondi.
+In pratica:
+- con poca velocità: circa 60 secondi tra un attacco e l’altro  
+- con molta velocità: il tempo si accorcia sensibilmente.
 
-### 🔥 Aggro & Taunt (Minaccia)
-I nemici decidono chi attaccare in base alla "Minaccia" generata:
-- **Attacco**: Genera minaccia pari al danno inflitto (`1:1`).
-- **Difesa (Tank)**: Attivare la difesa moltiplica la tua minaccia attuale per **15x** e imposta un "Taunt" diretto sul mostro per 2 minuti.
+Indicazioni pratiche:
+- se vuoi essere un **DPS veloce**, metti parecchi punti in velocità  
+- se giochi più “tank”, puoi tenerla più bassa.
 
----
+------------------------------------------------
+AGGRO, DIFESA E TAUNT
 
-## 🛡️ Sistema Anti-Farming & Affaticamento
+🔥 AGGRO (MINACCIA)  
+- Più danno fai, più sei “alto in lista” per i bersagli dei mob.  
+- Il sistema tiene traccia di quanto hai fatto arrabbiare ogni nemico.
 
-Per mantenere l'equilibrio del mondo di Aura, esistono meccanismi che impediscono lo sfruttamento di nemici troppo deboli.
+🛡️ DIFESA / TAUNT (per i Tank)  
+- Alcuni comandi permettono di “difendere” e generare tantissima aggro in una volta sola.  
+- Questo fa sì che il boss si concentri su di te invece che sui compagni più fragili.
 
-### 🚫 Penalità di Livello (Anti-Farming)
-Affrontare nemici molto più deboli di te riduce drasticamente i guadagni:
-- **Condizione**: Se il tuo livello supera quello del mostro di oltre **10 livelli**.
-- **Effetto**: 
-    - **EXP**: Ridotta del **50%**.
-    - **Wumpa**: Ridotti del **75%**.
+Idea semplice:
+- se vuoi fare il **Tank**, investi in:
+  - vita  
+  - resistenza  
+  - un po’ di danno per tenere alta l’aggro.  
+- se vuoi fare il **DPS**, pensa più a danno/velocità/critico.
 
-### 🥱 Affaticamento (Fatigue)
-L'uso intensivo delle proprie energie porta a un calo dell'efficienza giornaliera:
-- **Soglia**: Dopo aver guadagnato **300 Wumpa** in un singolo giorno.
-- **Effetto**: Tutte le ricompense (EXP e Wumpa) subiscono una riduzione del **10%**.
-- **Reset**: Il contatore si azzera ogni giorno a mezzanotte.
+------------------------------------------------
+CONSIGLI VELOCI
 
----
+- Contro mob deboli: attacco base, conserva mana.  
+- Contro boss o dungeon duri: prepara pozioni, usa gli speciali nei momenti giusti.  
+- Se muori spesso: aumenta vita e resistenza, e valuta di prendere un ruolo più difensivo.  
+- Se “non fai in tempo” ad attaccare: investi qualche punto in velocità.  
+- Coordinati con il gruppo: un Tank che difende + DPS che esplodono i nemici funzionano molto meglio di tutti “misti”.
 
-## 🌟 Crescita e Scaling
+Buon combattimento! ⚔️🔥
 
-L'ascesa verso il potere diventa più ardua man mano che ci si avvicina alle vette del mondo:
 
-- **EXP Necessaria**: La quantità di esperienza richiesta per salire segue una curva quadratica (`100 × Livello^2`). 
-- **Scaling Alto Livello**: Oltre il livello 50, la curva diventa più ripida per riflettere la rarità dei guerrieri leggendari.
-- **Consiglio**: Per livellare in modo efficiente, cerca sempre di affrontare nemici vicini al tuo livello (entro il range di +/- 5 livelli) per massimizzare il bonus di Tier e contributo.
-
----
-
-## 💰 Ricompense e Drop
-
-Ogni vittoria garantisce ricompense calcolate con precisione:
-
-### 🌟 Esperienza (EXP)
-**Formula Base:**
-```
-EXP = (Livello Nemico × 5) × (Tier Difficoltà ^ 1.8) × Contributo
-```
-- **Fattore Tier**: I Boss (Tier 7-8) forniscono un moltiplicatore massiccio (fino a 50x) rispetto ai mob comuni.
-- **Contributo**: L'EXP totale viene divisa proporzionalmente al danno che hai inflitto al nemico.
-
-### 💎 Punti (Wumpa)
-I Frutti Wumpa 🍑 sono calcolati in base all'efficacia del tuo combattimento:
-- **Formula**: `Danno inflitto × 0.05 × Tier Difficoltà`.
-- **Esempio**: Fare 100 danni a un Boss Tier 8 ti darà molti più Wumpa che farli a un mob Tier 1.

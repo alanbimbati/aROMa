@@ -163,8 +163,41 @@ class AchievementTracker:
             
             # 3. Check Achievements for affected users
             affected_user_ids = set(e.user_id for e in events)
+            
+            # Batch notification collection
+            batch_notifications = []
+            
             for user_id in affected_user_ids:
-                self.check_achievements(user_id, session=session)
+                self.check_achievements(user_id, session=session, collected_notifications=batch_notifications)
+            
+            # 4. Handle Notifications for specific events (Level Up, Resources)
+            import main
+            for event in events:
+                if event.event_type == 'level_up':
+                    lvl = int(event.value)
+                    msg = f"🆙 **LEVEL UP!**\n\nHai raggiunto il livello **{lvl}**! 🎉"
+                    main.notify_achievement(event.user_id, msg, group=True)
+                
+                elif event.event_type == 'item_gain':
+                    try:
+                        ctx = json.loads(event.context) if event.context else {}
+                        item_name = ctx.get('item_name')
+                        qty = int(event.value)
+                        
+                        important_items = ["Erba Verde", "Legno", "Pietra"]
+                        if item_name in important_items:
+                            msg = f"🎒 **Risorsa Ottenuta!**\n\nHai trovato **{qty}x {item_name}**!"
+                            main.notify_achievement(event.user_id, msg, group=True) # User requested group notifications for resources too
+                        
+                        elif "Sfera del Drago" in item_name:
+                             msg = f"🔮 **SFERA DEL DRAGO TROVATA!**\n\nHai trovato la **{item_name}**!"
+                             main.notify_achievement(event.user_id, msg, group=True)
+                    except:
+                        pass
+
+            # Send batched notifications if any
+            if batch_notifications:
+                self.send_batch_public_notifications(batch_notifications)
             
             # If we fetched fewer than limit, we are done
             if len(events) < limit:
@@ -205,9 +238,10 @@ class AchievementTracker:
         finally:
             session.close()
 
-    def check_achievements(self, user_id, session=None):
+    def check_achievements(self, user_id, session=None, collected_notifications=None):
         """
         Check all achievements for a user against their current stats.
+        If collected_notifications list is provided, public messages are appended to it instead of sent immediately.
         """
         local_session = False
         if not session:
@@ -253,7 +287,7 @@ class AchievementTracker:
         # Note: If local_session was False, the session is still open but flushed.
         # We should pass it along if it's still alive.
         for reward_data in rewards_to_award:
-            self._apply_reward(user_id, reward_data, session=session if not local_session else None)
+            self._apply_reward(user_id, reward_data, session=session if not local_session else None, collected_notifications=collected_notifications)
 
     def _check_single_achievement(self, session, user_id, achievement, stats_map, rewards_to_award, user_ach_map=None):
         """
@@ -349,9 +383,10 @@ class AchievementTracker:
         except ValueError:
             return False
 
-    def _apply_reward(self, user_id, reward_data, session=None):
+    def _apply_reward(self, user_id, reward_data, session=None, collected_notifications=None):
         """
         Grant rewards and notify user.
+        If collected_notifications is list, public message data is appended.
         """
         # Ensure user_service is initialized
         from services.user_service import UserService
@@ -403,20 +438,25 @@ class AchievementTracker:
                 # Private notification
                 main.bot.send_message(user_id, msg, parse_mode='markdown')
                 
-                # Public announcement in official group
-                # Get user name
-                from services.user_service import UserService
-                user_service = UserService()
-                user = user_service.get_user(user_id)
-                username = user.username if user and user.username else (user.nome if user else "Un utente")
-                
-                public_msg = f"🏆 **ACHIEVEMENT SBLOCCATO!** 🏆\n\n"
-                public_msg += f"👤 **{username}** ha sbloccato:\n"
-                public_msg += f"✨ **{achievement_name}** ({tier_name.capitalize()})\n"
-                public_msg += f"_{achievement_description}_"
-                
                 from settings import GRUPPO_AROMA
-                main.bot.send_message(GRUPPO_AROMA, public_msg, parse_mode='markdown')
+                
+                if collected_notifications is not None:
+                    # Add to batch
+                    collected_notifications.append({
+                        'user_id': user_id,
+                        'username': username,
+                        'achievement_name': achievement_name,
+                        'tier_name': tier_name,
+                        'description': achievement_description
+                    })
+                else:
+                    # Send immediately
+                    public_msg = f"🏆 **ACHIEVEMENT SBLOCCATO!** 🏆\n\n"
+                    public_msg += f"👤 **{username}** ha sbloccato:\n"
+                    public_msg += f"✨ **{achievement_name}** ({tier_name.capitalize()})\n"
+                    public_msg += f"_{achievement_description}_"
+                    
+                    main.bot.send_message(GRUPPO_AROMA, public_msg, parse_mode='markdown')
         except Exception as e:
             err_msg = str(e).lower()
             if any(x in err_msg for x in ["chat not found", "bot was blocked", "user is deactivated", "bot can't initiate"]):
@@ -424,6 +464,43 @@ class AchievementTracker:
                 pass
             else:
                 print(f"[WARNING] Could not send notification to {user_id}: {e}")
+
+    def send_batch_public_notifications(self, processed_notifications):
+        """
+        Send a grouped message for multiple collected notifications.
+        """
+        if not processed_notifications:
+            return
+            
+        try:
+            import main
+            from settings import GRUPPO_AROMA
+            if not hasattr(main, 'bot'):
+                return
+
+            # Group by user to make it cleaner
+            # { "username": [ {ach_name, tier, desc}, ... ] }
+            grouped_by_user = {}
+            for note in processed_notifications:
+                uname = note['username']
+                if uname not in grouped_by_user:
+                    grouped_by_user[uname] = []
+                grouped_by_user[uname].append(note)
+            
+            # Construct message
+            msg = "🏆 **ACHIEVEMENT SBLOCCATI!** 🏆\n\n"
+            
+            for uname, unlocks in grouped_by_user.items():
+                msg += f"👤 **{uname}** ha sbloccato:\n"
+                for u in unlocks:
+                    msg += f"✨ **{u['achievement_name']}** ({u['tier_name'].capitalize()})\n"
+                    msg += f"_{u['description']}_\n"
+                msg += "\n"
+            
+            main.bot.send_message(GRUPPO_AROMA, msg, parse_mode='markdown')
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to send batch public notification: {e}")
 
     def on_chat_exp(self, user_id: int, total_chat_exp: int, increment: int = 0):
         value = increment if increment > 0 else total_chat_exp

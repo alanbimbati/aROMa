@@ -89,7 +89,9 @@ class GuideService:
                                 "🍻 **Birrificio**: Migliora la qualità della Birra. Al Lv.5, la Birra potenzia le pozioni del 40%!\n"
                                 "🔞 **Bordello delle Elfe**: Fornisce il buff 'Vigore' (Mana cost -50%). Più alto è il livello, più dura l'effetto (fino a 2 ore).\n"
                                 "🏘️ **Villaggio**: Determina quanti membri può ospitare la gilda. (Max Lv. 5).\n"
-                                "⚒️ **Armeria**: Sblocca il crafting di rarità superiori."
+                                "⚒️ **Armeria**: Sblocca il crafting di rarità superiori.\n"
+                                "🌻 **Giardino**: Coltiva erbe per l'alchimia e ingredienti rari.\n"
+                                "♻️ **Compostiera**: Trasforma gli scarti in fertilizzante per accelerare la crescita delle piante."
                     },
                     "roles": {
                         "title": "👥 Ruoli",

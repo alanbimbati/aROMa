@@ -312,3 +312,5 @@ id,nome,livello,lv_premium,exp_required,special_attack_name,special_attack_damag
 313,Goku Black (SSR),45,2,250000,Black Kamehameha,500,220,4500,Il Saiyan oscuro dal futuro,Dragon Ball,1,0,Normal,Saiyan,Evil,5,1.5,,95,0,,,,,,,,,,
 314,Zamasu,40,2,70000,Heavenly Arrow,450,200,4000,L'apprendista Kaiohshin,Dragon Ball,1,0,Normal,God,Evil,5,1.5,,90,0,,,,,,,,,,
 315,Fused Zamasu,55,2,150000,Lightning of Absolution,650,300,5500,La fusione suprema e immortale,Dragon Ball,1,0,Normal,Fusion,Evil,8,1.8,,105,0,,,,,,,,,,
+500,Great Ape,30,0,30000,Mouth Beam,300,100,3000,La forma scimmione gigante dei Saiyan,Dragon Ball,-1,0,Normal,Saiyan,Neutral,5,1.5,,50,1,0,50,0,150,0,0,15,0,0,
+501,Goten SSJ,20,1,40000,Super Kamehameha,150,70,3600,Goten Super Saiyan,Dragon Ball,1,0,Normal,Saiyan,Good,5,1.5,,65,1,298,50,2,50,20,15,3,3,3,
