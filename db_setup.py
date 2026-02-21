@@ -487,6 +487,67 @@ def migrate_user_table(db):
     finally:
         session.close()
 
+def migrate_other_tables(db):
+    """Add missing columns to character_transformation, guilds, and dungeon tables"""
+    session = db.get_session()
+    try:
+        inspector = inspect(db.engine)
+        
+        # Helper to add column if missing
+        def add_col(table_name, col_name, col_type):
+            columns = [col['name'] for col in inspector.get_columns(table_name)]
+            if col_name not in columns:
+                print(f"Adding {col_name} to {table_name}...")
+                try:
+                    session.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type}"))
+                    session.commit()
+                except Exception as e:
+                    print(f"⚠️ Error adding {col_name} to {table_name}: {e}")
+                    session.rollback()
+
+        # 1. character_transformation
+        print("Checking character_transformation table...")
+        add_col('character_transformation', 'mana_cost', 'INTEGER DEFAULT 0')
+        add_col('character_transformation', 'health_bonus', 'INTEGER DEFAULT 0')
+        add_col('character_transformation', 'mana_bonus', 'INTEGER DEFAULT 0')
+        add_col('character_transformation', 'damage_bonus', 'INTEGER DEFAULT 0')
+        add_col('character_transformation', 'resistance_bonus', 'INTEGER DEFAULT 0')
+        add_col('character_transformation', 'is_progressive', 'BOOLEAN DEFAULT FALSE')
+        add_col('character_transformation', 'previous_transformation_id', 'INTEGER')
+        add_col('character_transformation', 'required_level', 'INTEGER')
+        add_col('character_transformation', 'is_time_restricted', 'BOOLEAN DEFAULT FALSE')
+        add_col('character_transformation', 'allowed_start_hour', 'INTEGER')
+        add_col('character_transformation', 'allowed_end_hour', 'INTEGER')
+
+        # 2. guilds
+        print("Checking guilds table...")
+        add_col('guilds', 'brewery_level', 'INTEGER DEFAULT 1')
+        add_col('guilds', 'map_x', 'INTEGER')
+        add_col('guilds', 'map_y', 'INTEGER')
+        add_col('guilds', 'emblem', 'VARCHAR(255)')
+        add_col('guilds', 'skin_id', 'VARCHAR(64)')
+        add_col('guilds', 'description', 'VARCHAR(512)')
+        # Already handled by migrate_guild_upgrades_v2 but let's be safe if that one failed
+        add_col('guilds', 'dragon_stables_level', 'INTEGER DEFAULT 0')
+        add_col('guilds', 'ancient_temple_level', 'INTEGER DEFAULT 0')
+        add_col('guilds', 'magic_library_level', 'INTEGER DEFAULT 0')
+
+        # 3. dungeon
+        print("Checking dungeon table...")
+        add_col('dungeon', 'hype_start_time', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('dungeon', 'is_hype_active', 'BOOLEAN DEFAULT FALSE')
+        add_col('dungeon', 'scheduled_for', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('dungeon', 'dungeon_def_id', 'INTEGER')
+        add_col('dungeon', 'stats', 'TEXT DEFAULT \'{}\'')
+        add_col('dungeon', 'start_time', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('dungeon', 'score', 'VARCHAR(10)')
+
+        print("✅ Other tables migration check completed!")
+    except Exception as e:
+        print(f"❌ Critical error during migrate_other_tables: {e}")
+    finally:
+        session.close()
+
 def migrate_mob_tactical(db):
     """Add mana and defense columns to mob table"""
     session = db.get_session()
@@ -773,6 +834,7 @@ def init_database():
     migrate_guild_upgrades_v2(db)
     migrate_cultivation_system(db)
     migrate_user_table(db)
+    migrate_other_tables(db)
     migrate_mount_system(db)
     migrate_mob_tactical(db)
     migrate_recalculate_stats(db)

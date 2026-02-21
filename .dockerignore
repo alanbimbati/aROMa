@@ -21,10 +21,8 @@ venv/
 ENV/
 
 # Documentation
-*.md
 !README.md
 docs/
-guides/
 
 # Development files
 .vscode

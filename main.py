@@ -1428,9 +1428,10 @@ def handle_guild_view(call):
 # /bordello command removed in favor of buttons in Inn view
 
 @bot.message_handler(commands=['guild', 'gilda'])
-def handle_guild_cmd(message):
+def handle_guild_cmd(message, user_id=None):
     """Show guild status or creation menu"""
-    user_id = message.from_user.id
+    if user_id is None:
+        user_id = message.from_user.id
     guild = guild_service.get_user_guild(user_id)
     
     if not guild:
@@ -7969,12 +7970,20 @@ def callback_query(call):
         return
 
     if call.data.startswith("guild_create_final|"):
-        _, name, x, y = call.data.split("|")
+        parts = call.data.split("|")
+        if len(parts) < 4:
+            safe_answer_callback(call.id, "❌ Dati gilda non validi.", show_alert=True)
+            return
+
+        y = parts[-1]
+        x = parts[-2]
+        name = "|".join(parts[1:-2])
+        
         success, msg, guild_id = guild_service.create_guild(call.from_user.id, name, int(x), int(y))
         if success:
             safe_answer_callback(call.id, "Gilda creata con successo!")
             # Show the guild menu
-            handle_guild_cmd(call.message)
+            handle_guild_cmd(call.message, user_id=call.from_user.id)
         else:
             safe_answer_callback(call.id, msg, show_alert=True)
         return
@@ -8137,7 +8146,7 @@ def callback_query(call):
         safe_answer_callback(call.id, msg, show_alert=True)
         if success:
             # Go back to main guild menu (which will show "Found" or "Join")
-            handle_guild_cmd(call.message)
+            handle_guild_cmd(call.message, user_id=call.from_user.id)
         return
 
         bot.edit_message_text(f"⚙️ **Gestione Gilda: {guild['name']}**\n\nBanca: {guild['wumpa_bank']} Wumpa", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
@@ -8385,7 +8394,7 @@ def callback_query(call):
         safe_answer_callback(call.id, msg, show_alert=True)
         if success:
             # Refresh guild view
-            handle_guild_cmd(call.message)
+            handle_guild_cmd(call.message, user_id=call.from_user.id)
         return
 
     elif call.data.startswith("guild_withdraw|"):
@@ -8731,7 +8740,7 @@ def callback_query(call):
             bot.delete_message(call.message.chat.id, call.message.message_id)
             bot.send_message(call.message.chat.id, msg)
         else:
-            handle_guild_cmd(call.message)
+            handle_guild_cmd(call.message, user_id=call.from_user.id)
         return
 
     elif call.data == "guild_back_main":
@@ -10604,7 +10613,8 @@ def callback_query(call):
                 os.path.join(BASE_DIR, "Guides", f"{guide_name}.md"),
                 os.path.join(BASE_DIR, "docs", "guides", f"{guide_name}.md"),
                 os.path.join(os.getcwd(), "guides", f"{guide_name}.md"),
-                os.path.join("/home/alan/Documenti/Coding/aroma", "guides", f"{guide_name}.md") # Explicit fallback for some environments
+                os.path.join("/app", "guides", f"{guide_name}.md"), # Explicit Docker path
+                os.path.join(os.path.dirname(__file__), "guides", f"{guide_name}.md") # Fallback to script location
             ]
             
             file_path = None

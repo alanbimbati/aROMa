@@ -1862,8 +1862,9 @@ class PvEService:
 
                     # 5. AoE Logic (Part of decision or separate?)
                     # If special attack used, it has higher chance of being AoE
-                    is_aoe = False
-                    if mob.is_boss:
+                    if mob.dungeon_id:
+                        is_aoe = True # Dungeon mobs ALWAYS target all participants as AoE
+                    elif mob.is_boss:
                         if random.random() < 0.85:
                             is_aoe = True
                     elif is_special or (difficulty >= 3 and random.random() < 0.20):
@@ -1961,28 +1962,32 @@ class PvEService:
                     target_id = None
                     
                     if is_aoe:
-                        max_targets = min(5, len(candidates))
-                        # Weighted selection for multiple targets is tricky with replacement
-                        # Use random.sample for unique if weights are uniform, but here they aren't.
-                        # Simple approach: Pick primary weighted, then neighbors or randoms.
-                        # For now, let's just pick random weighted samples (allowing duplicates? No)
-                        
-                        # Workaround: Pick primary target weighted, then neighbors or randoms.
-                        if candidates:
-                             primary_target_id = random.choices(candidates, weights=weights, k=1)[0]
-                             targets_set = {primary_target_id}
-                             
-                             # Fill absolute randoms for the rest (Splash damage)
-                             remaining = [c for c in candidates if c != primary_target_id]
-                             if remaining:
-                                 needed = max_targets - 1
-                                 active_count = len(remaining)
-                                 fillers = random.sample(remaining, min(needed, active_count))
-                                 targets_set.update(fillers)
-                                 
-                             target_ids = list(targets_set)
+                        if mob.dungeon_id:
+                            # Dungeon mobs hit everyone who is valid
+                            target_ids = candidates
                         else:
-                            target_ids = []
+                            max_targets = min(5, len(candidates))
+                            # Weighted selection for multiple targets is tricky with replacement
+                            # Use random.sample for unique if weights are uniform, but here they aren't.
+                            # Simple approach: Pick primary weighted, then neighbors or randoms.
+                            # For now, let's just pick random weighted samples (allowing duplicates? No)
+                            
+                            # Workaround: Pick primary target weighted, then neighbors or randoms.
+                            if candidates:
+                                 primary_target_id = random.choices(candidates, weights=weights, k=1)[0]
+                                 targets_set = {primary_target_id}
+                                 
+                                 # Fill absolute randoms for the rest (Splash damage)
+                                 remaining = [c for c in candidates if c != primary_target_id]
+                                 if remaining:
+                                     needed = max_targets - 1
+                                     active_count = len(remaining)
+                                     fillers = random.sample(remaining, min(needed, active_count))
+                                     targets_set.update(fillers)
+                                     
+                                 target_ids = list(targets_set)
+                            else:
+                                target_ids = []
                             
                         for tid in target_ids:
                             t = session.query(Utente).filter_by(id_telegram=tid).first()

@@ -784,18 +784,16 @@ def handle_user_callbacks(bot, call):
 
     elif data.startswith("char_select|"):
         char_id = int(data.split("|")[1])
-        user_service.update_user(user_id, {'livello_selezionato': char_id})
-        safe_answer_callback(bot, call.id, "Personaggio selezionato!")
-        
-        # Admin check for tracking
         u = user_service.get_user(user_id)
-        if u and user_service.is_admin(u):
-            # We don't have access to the global admin_last_viewed_character dict directly here efficiently
-            # We can skip it or reimplement it if crucial.
-            # For now, simplistic approach: just confirm.
-            pass
+        if not u:
+            safe_answer_callback(bot, call.id, "Utente non trovato!", show_alert=True)
+            return True
             
-        handle_profile_view(bot, message, is_callback=True)
+        success, res_msg = character_service.equip_character(u, char_id)
+        safe_answer_callback(bot, call.id, res_msg, show_alert=not success)
+        
+        if success:
+            handle_profile_view(bot, message, is_callback=True)
         return True
         
     elif data == "ach_menu" or data.startswith("ach_cat|"):

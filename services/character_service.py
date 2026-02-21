@@ -233,7 +233,7 @@ class CharacterService:
             character_id=char_id,
             user_id=user.id_telegram,
             equipped_at=datetime.now(),
-            last_change_date=datetime.date.today()
+            last_change_date=datetime.now().date()
         )
         session.add(ownership)
         
