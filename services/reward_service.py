@@ -68,8 +68,22 @@ class RewardService:
                 base_xp_pool = 10000
                 fixed_wumpa_pool = 1000
         else:
+            # Rebalanced EXP Formula (2026-02-21): 
+            # Include HP in the calculation to ensure high-HP mobs give proportional rewards.
+            # Base Factor: (level * 5) 
+            # HP Factor: log10(max_health / 100) or similar. 
+            # Let's use: (level * 2) * (max_health / 500)^0.5 * difficulty^1.5
+            # This makes HP a significant factor but not purely linear to avoid insane numbers.
+            
+            mob_hp = getattr(mob, 'max_health', 100)
             difficulty_multiplier = difficulty ** 1.8
-            base_xp_pool = int((mob_level * 5) * difficulty_multiplier)
+            
+            # Base reward based on level and HP
+            # Example: Lv 50, 10000 HP, Tier 5 -> (50*5) * (10000/500)^0.5 * 5^1.8 ≈ 250 * 4.47 * 18.1 ≈ 20,226 EXP
+            # Compared to old: 4,525 EXP.
+            # Large HP pool bosses/mobs now give much more.
+            hp_scaling = (mob_hp / 500) ** 0.5
+            base_xp_pool = int((mob_level * 5) * hp_scaling * difficulty_multiplier)
             fixed_wumpa_pool = None
         
         # Add a small random variation (+/- 10%)
@@ -143,6 +157,7 @@ class RewardService:
             is_stunned = StatusEffect.has_effect(user, 'stun')
             has_fled = reward.get('has_fled', False)
             
+            
             if has_fled:
                 # Fled players receive NO rewards
                 xp = 0
@@ -177,7 +192,7 @@ class RewardService:
             
             # Format Message
             mention = get_mention_markdown(user_id, user.username if user.username else (user.game_name or user.nome))
-            line = f"👤 {mention}: {damage} dmg -> {xp} Exp, {wumpa} {PointsName}"
+            line = f"👤 {mention}: {damage} dmg -> {xp} Exp, {wumpa} Wumpa"
             
             if has_fled:
                 line += " 🏃 (Fuggito)"
@@ -245,7 +260,7 @@ class RewardService:
                     drop_msgs.append(f"{resource_name} x{qty}")
             
             if drop_msgs:
-                return f"🔩 Risorse: **" + ", ".join(drop_msgs) + "**"
+                return "🔩 " + ", ".join(drop_msgs)
             
             return None
         except Exception as e:
@@ -264,22 +279,22 @@ class RewardService:
                     weights = [1/float(item['rarita']) for item in standard_items]
                     reward_item = random.choices(standard_items, weights=weights, k=1)[0]
                     self.item_service.add_item(user_id, reward_item['nome'], session=session)
-                    return f"✨ Oggetto: **{reward_item['nome']}**"
+                    return f"✨ {reward_item['nome']}"
 
-        # 2. Seasonal Dragon Ball Drop (15% Bonus Chance if Theme is Dragon Ball)
+        # 2. Dragon Ball Drop (5% if Theme is Dragon Ball, 1% otherwise)
         try:
             active_season = self.season_manager.get_active_season(session=session)
-            if active_season and active_season.theme == 'Dragon Ball':
-                if random.random() < 0.15: # 15% bonus chance
-                    items_data = self.item_service.load_items_from_csv()
-                    dragon_balls = [i for i in items_data if "Sfera del Drago" in i['nome']]
-                    if dragon_balls:
-                        # Even weights for specific balls during season
-                        reward_item = random.choice(dragon_balls)
-                        self.item_service.add_item(user_id, reward_item['nome'], session=session)
-                        return f"🐉 Sfera: **{reward_item['nome']}**"
+            db_chance = 0.05 if active_season and active_season.theme == 'Dragon Ball' else 0.01
+            
+            if random.random() < db_chance:
+                items_data = self.item_service.load_items_from_csv()
+                dragon_balls = [i for i in items_data if "Sfera del Drago" in i['nome']]
+                if dragon_balls:
+                    reward_item = random.choice(dragon_balls)
+                    self.item_service.add_item(user_id, reward_item['nome'], session=session)
+                    return f"🐉 {reward_item['nome']}"
         except Exception as e:
-            print(f"[ERROR] Seasonal drop failed: {e}")
+            print(f"[ERROR] Dragon ball drop failed: {e}")
             
         return None
 
@@ -298,6 +313,10 @@ class RewardService:
                 user_id = reward['user_id']
                 xp = reward['base_xp']
                 wumpa = reward['base_wumpa']
+                
+                # Dungeon Check: Dungeons don't give EXP rewards
+                if getattr(mob, 'dungeon_id', None) is not None:
+                    xp = 0
                 
                 if user_id not in aggregated_users:
                     aggregated_users[user_id] = {'xp': 0, 'wumpa': 0, 'items': [], 'name': "", 'has_fled': False}
@@ -367,7 +386,7 @@ class RewardService:
             
             # Format
             mention = get_mention_markdown(user_id, user.username if user.username else (user.game_name or user.nome))
-            line = f"👤 {mention}: +{amount_xp} Exp, +{amount_wumpa} {PointsName}"
+            line = f"👤 {mention}: +{amount_xp} Exp, +{amount_wumpa} Wumpa"
             
             if has_fled: line += " 🏃"
             elif is_dead: line += " 💀"

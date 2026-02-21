@@ -134,6 +134,19 @@ REGOLE SEMPLICI DA RICORDARE
 - Irriga ogni tanto se vedi che l’umidità scende troppo.  
 - Raccogli le piante appena sono pronte, o comunque entro 1–2 ore.  
 - Se è tutto marcio, ripulisci e ripianta, non lasciare gli slot bloccati.  
-- Potenziare il Giardino di Gilda aiuta tutta la gilda (più slot per tutti).
+- Potenziare il Giardino di Gilda aiuta tutta la gilda (più slot per tutti.
+
+------------------------------------------------
+♻️ LA COMPOSTIERA (NOVITÁ)
+
+La Compostiera è un nuovo strumento per riciclare le piante morte e ottenere semi gratuiti!
+
+1) Se la tua pianta è nello stato **"ROTTEN"** (marcia 💀), invece di "Ripulire" lo slot, puoi usare il pulsante **"♻️ Composta"**.
+2) Buttando piante marce nella compostiera farai salire la sua capienza (es. 2/10).
+3) Quando la compostiera è piena (10/10), otterrai in automatico:  
+   - 1x **Seme di Wumpa**  
+   - 50 Punti Esperienza Giardino!
+
+Usala sempre! Meglio recuperare un seme gratis che non ottenere nulla da un raccolto rovinato!
 
 Buona coltivazione! 🌻

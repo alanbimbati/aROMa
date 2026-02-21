@@ -19,12 +19,14 @@ Ogni nemico che uccidete dentro il dungeon contribuisce alle ricompense finali.
 RICOMPENSE
 
 Alla fine del dungeon, se completato:
-- ricevi Wumpa (soldi)  
-- ricevi EXP  
-- puoi contribuire a obiettivi/achievement legati ai dungeon.
+- ricevi un riepilogo del punteggio ottenuto (Rank)
+- sblocchi l'accesso a canali o obiettivi legati alla prosecuzione della storia.
 
-Le ricompense base del dungeon (Wumpa + EXP) sono uguali per tutti i partecipanti che hanno preso parte,  
-ma il **danno totale che fai** può contare per classifiche/achievement.
+> [!NOTE]
+> I nemici all'interno del dungeon **danno EXP e Wumpa direttamente** durante il combattimento, in base al danno che infliggi.
+> **Non esiste una ricompensa finale automatica**: guadagna solo chi partecipa attivamente alla battaglia! Questo evita che chi non combatte ottenga premi immeritati.
+
+Il **danno totale che fai** conta per il Rank finale e per scalare le classifiche.
 
 ------------------------------------------------
 FALLIMENTO E LIMITI DI TEMPO

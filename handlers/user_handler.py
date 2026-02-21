@@ -214,6 +214,13 @@ def handle_profile_view(bot, message, target_user=None, is_callback=False, call_
             
             # Potion Shortcut
             markup.add(types.InlineKeyboardButton("🧪 Pozioni Rapide", callback_data="profile_potions"))
+
+            # Notification Toggle
+            notify_status = "✅" if getattr(target, 'notify_on_attack', True) else "❌"
+            markup.add(types.InlineKeyboardButton(f"🔔 Notifiche Mob: {notify_status}", callback_data="profile_toggle_notify"))
+
+        # Close button (for everyone)
+        markup.add(types.InlineKeyboardButton("❌ Chiudi", callback_data="profile_close"))
         
         # Send
         if is_callback:
@@ -643,6 +650,21 @@ def handle_user_callbacks(bot, call):
         handle_profile_view(bot, message, is_callback=True, call_id=call.id)
         return True
         
+    elif data == "profile_close":
+        try:
+            bot.delete_message(message.chat.id, message.message_id)
+        except:
+            pass
+        return True
+        
+    elif data == "profile_toggle_notify":
+        u = user_service.get_user(user_id)
+        current = getattr(u, 'notify_on_attack', True)
+        user_service.update_user(user_id, {'notify_on_attack': not current})
+        safe_answer_callback(bot, call.id, f"Notifiche mob: {'ON' if not current else 'OFF'}")
+        handle_profile_view(bot, message, is_callback=True)
+        return True
+
     elif data == "inventory_view":
         handle_inventory_view(bot, message, user_id)
         return True

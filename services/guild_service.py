@@ -1382,16 +1382,16 @@ class GuildService:
                     if datetime.now() < expires:
                         return False, f"Hai già usato {gadget['name']} oggi! Torna domani."
             
-            # Check Usage Cost (Erba Verde)
-            from services.item_service import ItemService
-            item_service = ItemService()
-            erba_count = item_service.get_item_by_user(user_id, "Erba Verde")
+            # Check Usage Cost (Erba Verde - now as Resource)
+            from services.crafting_service import CraftingService
+            crafting_service = CraftingService()
+            erba_count = crafting_service.get_resource_quantity(user_id, "Erba Verde")
             
             if erba_count < gadget['cost_erba']:
                 return False, f"Non hai abbastanza Erba Verde! Te ne servono {gadget['cost_erba']}."
             
-            # Consume Items
-            if not item_service.remove_item(user_id, "Erba Verde", gadget['cost_erba']):
+            # Consume Resources
+            if not crafting_service.remove_resource(user_id, "Erba Verde", gadget['cost_erba'], session=session):
                  return False, "Errore nel consumo dell'erba."
             
             # Apply Buffs
@@ -1400,7 +1400,7 @@ class GuildService:
             # Let's say 2 hours for now, as usually buffs are temporary.
             # "Ogni cosa si può usare 1 volta al giorno" -> Limit usage frequency.
             # Effect duration: Let's stick to 60-120 mins like others.
-            duration_minutes = 120
+            duration_minutes = 30
             
             now = datetime.now()
             expires_at = (now + timedelta(minutes=duration_minutes)).timestamp()

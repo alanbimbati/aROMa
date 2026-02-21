@@ -105,6 +105,9 @@ class Utente(Base):
     # Guild Egg
     last_egg_nurture = Column(DateTime, nullable=True)
 
+    # Notifications
+    notify_on_attack = Column(Boolean, default=True, server_default="true")
+
     @property
     def attack_power(self):
         return self.base_damage

@@ -70,7 +70,56 @@ class CraftingService:
         except Exception as e:
             if local_session:
                 session.rollback()
-            print(f"Error adding resource drop: {e}")
+            return False
+        finally:
+            if local_session:
+                session.close()
+
+    def get_resource_quantity(self, user_id, resource_name):
+        """Get the quantity of a specific resource by name for a user"""
+        session = self.db.get_session()
+        try:
+            res = session.query(Resource).filter_by(name=resource_name).first()
+            if not res:
+                return 0
+            
+            user_res = session.query(UserResource).filter_by(
+                user_id=user_id, 
+                resource_id=res.id
+            ).first()
+            return user_res.quantity if user_res else 0
+        finally:
+            session.close()
+
+    def remove_resource(self, user_id, resource_name, quantity=1, session=None):
+        """Remove a resource from user's inventory by name"""
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+            
+        try:
+            res = session.query(Resource).filter_by(name=resource_name).first()
+            if not res:
+                return False
+            
+            user_res = session.query(UserResource).filter_by(
+                user_id=user_id, 
+                resource_id=res.id
+            ).first()
+            
+            if not user_res or user_res.quantity < quantity:
+                return False
+                
+            user_res.quantity -= quantity
+            
+            if local_session:
+                session.commit()
+            return True
+        except Exception as e:
+            if local_session:
+                session.rollback()
+            print(f"Error removing resource: {e}")
             return False
         finally:
             if local_session:

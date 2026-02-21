@@ -666,45 +666,55 @@ class UserService:
     def get_xp_requirement(self, level):
         """
         Get EXP required to reach a specific level.
-        Reads from characters.csv exp_required column (original game data).
-        Handles missing levels by interpolating or extrapolating.
-        Ensures monotonicity (next level >= current level).
+        Reads from CharacterLoader and ensures monotonicity based on minimum requirements.
         """
-        # Lazy-load the EXP table from characters.csv
+        # Lazy-load the EXP table from characters.csv via CharacterLoader
         if not hasattr(self, '_exp_table_cache') or not self._exp_table_cache:
-            import csv, os
-            self._exp_table_cache = {}
-            try:
-                base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                csv_path = os.path.join(base_dir, 'data', 'characters.csv')
-                with open(csv_path, 'r', encoding='utf-8') as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        lv = int(row.get('livello', 0))
-                        exp_req = row.get('exp_required', '0').strip()
-                        if lv > 0 and exp_req:
-                            # Only store the first (lowest) exp_required per level if not present
-                            if lv not in self._exp_table_cache:
-                                self._exp_table_cache[lv] = int(exp_req)
-            except Exception as e:
-                print(f"[ERROR] Failed to load EXP table from CSV: {e}")
+            from services.character_loader import get_character_loader
+            char_loader = get_character_loader()
+            all_chars = char_loader.get_all_characters()
+            
+            # Map of level -> minimum exp_required
+            temp_map = {}
+            for char in all_chars:
+                lv = char.get('livello', 0)
+                exp_req = char.get('exp_required', 0)
+                
+                if lv > 0 and exp_req > 0:
+                    # We take the MINIMUM exp_required for each level to avoid 
+                    # being blocked by "Special" high-requirement characters like Jiren.
+                    if lv not in temp_map or exp_req < temp_map[lv]:
+                        temp_map[lv] = exp_req
+            
+            if not temp_map:
+                # Total fallback if loader fails
+                return int(85 * (level ** 2))
 
+            # Build final monotonic cache
+            sorted_levels = sorted(temp_map.keys())
+            self._exp_table_cache = {}
+            last_valid_exp = 0
+            
+            for lv in sorted_levels:
+                current_min_exp = temp_map[lv]
+                # Enforce monotonicity: next level must require AT LEAST as much as previous
+                if current_min_exp < last_valid_exp:
+                    current_min_exp = last_valid_exp
+                
+                self._exp_table_cache[lv] = current_min_exp
+                last_valid_exp = current_min_exp
+
+        # Logic to handle specific level, interpolation, or extrapolation
         if self._exp_table_cache:
             # If level is explicitly defined
             if level in self._exp_table_cache:
-                req = self._exp_table_cache[level]
-                # Consistency check: ensure it's not less than previous level
-                if level > 1:
-                    prev_req = self.get_xp_requirement(level - 1)
-                    if req < prev_req:
-                        return prev_req # Enforce monotonicity
-                return req
+                return self._exp_table_cache[level]
 
             sorted_levels = sorted(self._exp_table_cache.keys())
             
             # Case 1: Level is below minimum (1)
             if level < sorted_levels[0]:
-                return 100
+                return self._exp_table_cache[sorted_levels[0]]
 
             # Case 2: Level is above maximum -> Extrapolate
             max_lv = sorted_levels[-1]
@@ -714,7 +724,6 @@ class UserService:
                 return max_exp + (level - max_lv) * 5000
             
             # Case 3: Level is in a gap -> Interpolate
-            # Find lower and upper bounds
             lower_lv = max([l for l in sorted_levels if l < level])
             upper_lv = min([l for l in sorted_levels if l > level])
             
@@ -723,9 +732,7 @@ class UserService:
             
             # Linear interpolation
             ratio = (level - lower_lv) / (upper_lv - lower_lv)
-            interpolated_exp = int(lower_exp + (upper_exp - lower_exp) * ratio)
-            
-            return interpolated_exp
+            return int(lower_exp + (upper_exp - lower_exp) * ratio)
 
         # Hard fallback if CSV fails to load completely
         return int(85 * (level ** 2))
@@ -1228,10 +1235,11 @@ class UserService:
                     elif effect.get('effect', '').startswith('relax_'):
                         total_res += effect.get('value_res', 0)
                         total_speed += effect.get('value_speed', 0)
-                    # Bordello (Dmg / Crit / HP Malus)
+                    # Bordello (Dmg / Crit / Mana / HP Malus)
                     elif effect.get('effect', '').startswith('bordello_'):
                         total_dmg += effect.get('value_dmg', 0)
                         total_crit += effect.get('value_crit', 0)
+                        total_mana += effect.get('value_mana', 0)
                         
                         # Handle Percentage Max HP Malus
                         hp_malus_percent = effect.get('value_max_hp_percent', 0)
