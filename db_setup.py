@@ -438,6 +438,38 @@ def migrate_user_table(db):
         if 'notify_on_attack' not in columns:
             print("Adding notify_on_attack to utente...")
             session.execute(text("ALTER TABLE utente ADD COLUMN notify_on_attack BOOLEAN DEFAULT TRUE"))
+
+        if 'cristalli_aroma' not in columns:
+            print("Adding cristalli_aroma to utente...")
+            session.execute(text("ALTER TABLE utente ADD COLUMN cristalli_aroma INTEGER DEFAULT 0"))
+
+        if 'last_activity' not in columns:
+            print("Adding last_activity to utente...")
+            session.execute(text("ALTER TABLE utente ADD COLUMN last_activity TIMESTAMP WITHOUT TIME ZONE"))
+
+        if 'chat_exp' not in columns:
+            print("Adding chat_exp to utente...")
+            session.execute(text("ALTER TABLE utente ADD COLUMN chat_exp INTEGER DEFAULT 0"))
+
+        if 'daily_wumpa_earned' not in columns:
+            print("Adding daily_wumpa_earned to utente...")
+            session.execute(text("ALTER TABLE utente ADD COLUMN daily_wumpa_earned INTEGER DEFAULT 0"))
+
+        if 'last_wumpa_reset' not in columns:
+            print("Adding last_wumpa_reset to utente...")
+            session.execute(text("ALTER TABLE utente ADD COLUMN last_wumpa_reset TIMESTAMP WITHOUT TIME ZONE"))
+
+        if 'last_chat_drop_time' not in columns:
+            print("Adding last_chat_drop_time to utente...")
+            session.execute(text("ALTER TABLE utente ADD COLUMN last_chat_drop_time TIMESTAMP WITHOUT TIME ZONE"))
+
+        if 'platform' not in columns:
+            print("Adding platform to utente...")
+            session.execute(text("ALTER TABLE utente ADD COLUMN platform VARCHAR(50)"))
+
+        if 'game_name' not in columns:
+            print("Adding game_name to utente...")
+            session.execute(text("ALTER TABLE utente ADD COLUMN game_name VARCHAR(100)"))
             
         session.commit()
     except Exception as e:
