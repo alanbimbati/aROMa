@@ -314,9 +314,6 @@ class RewardService:
                 xp = reward['base_xp']
                 wumpa = reward['base_wumpa']
                 
-                # Dungeon Check: Dungeons don't give EXP rewards
-                if getattr(mob, 'dungeon_id', None) is not None:
-                    xp = 0
                 
                 if user_id not in aggregated_users:
                     aggregated_users[user_id] = {'xp': 0, 'wumpa': 0, 'items': [], 'name': "", 'has_fled': False}

@@ -403,6 +403,7 @@ class AchievementTracker:
         tier_name = reward_data['tier_name']
         tier_data = reward_data['tier_data']
         rewards = tier_data.get('rewards', {})
+        username = user.nome if user.nome else (user.username if user.username else f"User {user_id}")
         
         # Notification message
         msg = f"🏆 **Achievement Sbloccato!**\n\n"
@@ -482,7 +483,11 @@ class AchievementTracker:
             # { "username": [ {ach_name, tier, desc}, ... ] }
             grouped_by_user = {}
             for note in processed_notifications:
-                uname = note['username']
+                uname = note.get('username')
+                if not uname:
+                    uid = note.get('user_id')
+                    uname = f"User {uid}"
+                    
                 if uname not in grouped_by_user:
                     grouped_by_user[uname] = []
                 grouped_by_user[uname].append(note)
