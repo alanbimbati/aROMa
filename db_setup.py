@@ -434,6 +434,10 @@ def migrate_user_table(db):
         if 'last_egg_nurture' not in columns:
             print("Adding last_egg_nurture to utente...")
             session.execute(text("ALTER TABLE utente ADD COLUMN last_egg_nurture TIMESTAMP WITHOUT TIME ZONE"))
+
+        if 'notify_on_attack' not in columns:
+            print("Adding notify_on_attack to utente...")
+            session.execute(text("ALTER TABLE utente ADD COLUMN notify_on_attack BOOLEAN DEFAULT TRUE"))
             
         session.commit()
     except Exception as e:

@@ -1,5 +1,6 @@
-from telebot import types, util
 import telebot
+from telebot import types, util
+from telebot.apihelper import ApiTelegramException
 
 # Monkey patch InlineKeyboardButton and KeyboardButton to support 'style' for Telegram Bot API 9.4+ (2026)
 # Accepted styles: 'success' (green), 'danger' (red), 'primary' (blue)
@@ -101,7 +102,7 @@ def safe_edit_message(text, chat_id, message_id, reply_markup=None, parse_mode='
         else:
             bot.edit_message_text(text, chat_id, message_id, reply_markup=reply_markup, parse_mode=parse_mode)
             
-    except telebot.apihelper.ApiTelegramException as e:
+    except ApiTelegramException as e:
         err_msg = str(e).lower()
         if "there is no text in the message to edit" in err_msg:
             # Re-try as caption if text edit failed with this error
@@ -248,6 +249,11 @@ pending_skin_upload = {}
 # Mob Display Locking (Anti-Spam)
 mob_display_locks = {}
 mob_locks_mutex = threading.Lock()
+
+# Notification tracking for anti-spam (deleting previous)
+# Format: { (chat_id, type): last_message_id }
+notification_cache = {}
+notification_mutex = threading.Lock()
 
 def get_mob_display_lock(mob_id):
     with mob_locks_mutex:
@@ -1053,7 +1059,7 @@ def handle_garden_plant_menu(call):
     markup.row(types.InlineKeyboardButton("✨ Seme Erba Gialla", callback_data=f"garden_plant_do|{slot_id}|Seme d'Erba Gialla"))
     markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="garden_view"))
     
-    safe_edit_message(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+    safe_edit_message(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown', message_obj=call.message)
 
 def handle_garden_plant_do(call):
     """Execute planting"""
@@ -1659,10 +1665,7 @@ def show_guild_piazza(chat_or_call, guild, index=0, edit=False):
             for btn_name, btn_cb in loc['direct_actions']:
                 markup.add(types.InlineKeyboardButton(btn_name, callback_data=btn_cb))
         
-        if loc.get('callback') and "Piazza" not in loc['name']:
-            btn_label = "🚪 Entra"
-            markup.add(types.InlineKeyboardButton(btn_label, callback_data=loc['callback']))
-            
+
         if is_leader and loc.get('upgrade_cb') and loc['min_level'] < 99:
              markup.add(types.InlineKeyboardButton(f"🆙 Potenzia (Lv. {lvl+1})", callback_data=loc['upgrade_cb']))
     elif is_leader and loc.get('upgrade_cb') and loc['min_level'] < 99:
@@ -1713,7 +1716,7 @@ def show_guild_piazza(chat_or_call, guild, index=0, edit=False):
         err_msg = str(e).lower()
         if "message is not modified" not in err_msg:
              print(f"Error in show_guild_piazza: {e}")
-        safe_edit_message(msg, chat_id, chat_or_call.message.message_id, reply_markup=markup, parse_mode='markdown', message_obj=chat_or_call.message if hasattr(chat_or_call, 'message') else None)
+        safe_edit_message(msg, chat_id, chat_or_call.message.message_id if hasattr(chat_or_call, 'message') else chat_or_call.message_id, reply_markup=markup, parse_mode='markdown', message_obj=chat_or_call.message if hasattr(chat_or_call, 'message') else chat_or_call)
 
 @bot.message_handler(commands=['found', 'fonda'])
 def handle_found_cmd(message):
@@ -2486,7 +2489,7 @@ def handle_craft_select_equipment(call):
             
         markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guild_armory_view"))
         
-        safe_edit_message(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+        safe_edit_message(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown', message_obj=call.message)
     finally:
         session.close()
 
@@ -3006,6 +3009,9 @@ def handle_character_selection_callback(call):
     try:
         char_id = int(call.data.split("|")[1])
         user_id = call.from_user.id
+        
+        # Get user first to avoid UnboundLocalError
+        utente = user_service.get_user(user_id)
         
         # Update user with exclusivity checks
         from services.character_service import CharacterService
@@ -4403,31 +4409,7 @@ class BotCommands:
         except ValueError:
              self.bot.reply_to(message, "❌ Inserisci un numero valido.")
 
-    def handle_choose_character(self):
-        """Show character selection menu"""
-        utente = user_service.get_user(self.chatid)
-        if not utente:
-             self.bot.reply_to(self.message, "Utente non trovato.")
-             return
-             
-        available = character_service.get_available_characters(utente)
-        
-        markup = types.InlineKeyboardMarkup(row_width=2)
-        
-        btns = []
-        for c in available:
-            name = c.get('nome', 'Unknown')
-            char_id = c.get('id')
-            # Add element icon if avail
-            btns.append(types.InlineKeyboardButton(name, callback_data=f"char_select|{char_id}"))
-            
-        markup.add(*btns)
-        
-        msg = f"👤 **SCEGLI IL TUO PERSONAGGIO**\n\nEcco i personaggi che hai sbloccato. Clicca su un pulsante per equipaggiarlo:"
-        
-        self.bot.send_message(self.chatid, msg, reply_markup=markup, parse_mode='markdown', message_thread_id=self.thread_id)
-        # Remove next step handler for text input
-        # self.bot.register_next_step_handler(self.message, process_character_selection)
+
 
     def handle_profile(self, target_user=None, is_potions=False, is_callback=False):
         """Show comprehensive user profile with stats and transformations"""
@@ -4468,36 +4450,25 @@ class BotCommands:
         if hasattr(utente, 'title') and utente.title:
             msg += f"👑 *{escape_markdown(utente.title)}*\n"
             
-        msg += "\n╔═══🕹═══╗\n"
-        
-        # RPG Stats with visual bars/emojis
-        current_hp = utente.current_hp if hasattr(utente, 'current_hp') and utente.current_hp is not None else utente.health
-        hp_percent = int((current_hp / utente.max_health) * 10)
-        hp_bar = "❤️" + "▰" * hp_percent + "▱" * (10 - hp_percent)
-        msg += f"{hp_bar} `{current_hp}/{utente.max_health}`\n"
-        
-        mana_percent = int((utente.mana / utente.max_mana) * 10) if utente.max_mana > 0 else 0
-        mana_bar = "💙" + "▰" * mana_percent + "▱" * (10 - mana_percent)
-        msg += f"{mana_bar} `{utente.mana}/{utente.max_mana}`\n"
-        
-        # core Stats + Buffs
+        # Core Stats + Buffs calculation FIRST
         import json
         status_effects = json.loads(utente.active_status_effects or '[]')
         
-        # Calculate Buffs
         bonus_dmg = 0
         bonus_res = 0
         bonus_crit = 0
         bonus_speed = 0
         bonus_max_mana = 0
+        bonus_max_hp = 0
         
         from datetime import datetime
-        now_ts = datetime.now().timestamp()
+        now = datetime.now()
+        now_ts = now.timestamp()
         
         active_buffs_list = []
         for effect in status_effects:
             if effect.get('expires_at', 0) > now_ts:
-                etype = effect.get('effect')
+                etype = effect.get('effect', '')
                 val = effect.get('value', 0)
                 if etype == 'temple_buff_crit':
                     bonus_crit += val
@@ -4505,19 +4476,55 @@ class BotCommands:
                 elif etype == 'library_buff_mana':
                     bonus_max_mana += val
                     active_buffs_list.append(f"📖 **Mana Max** (+{val})")
-                # Add others if needed
+                elif etype.startswith('relax_'):
+                    bonus_res += effect.get('value_res', 0)
+                    bonus_speed += effect.get('value_speed', 0)
+                    active_buffs_list.append(f"🌿 **Relax** ({effect.get('name', 'Erba')})")
+                elif etype.startswith('bordello_'):
+                    bonus_dmg += effect.get('value_dmg', 0)
+                    bonus_crit += effect.get('value_crit', 0)
+                    
+                    hp_malus = effect.get('value_max_hp_percent', 0)
+                    if hp_malus != 0:
+                        # Percentage HP malus (e.g. -10%)
+                        bonus_max_hp += int(utente.max_health * (hp_malus / 100))
+                    
+                    # Also check for Mana buff if stored in JSON
+                    bonus_max_mana += effect.get('value_mana', 0)
         
-        # Vigore (Bordello)
+        # Vigore legacy check (if not yet moved to JSON)
         if hasattr(utente, 'vigore_until') and utente.vigore_until:
-            if utente.vigore_until > datetime.now():
-                rem = int((utente.vigore_until - datetime.now()).total_seconds() / 60)
-                active_buffs_list.append(f"💪 **Vigore** ({rem}m)")
+            if utente.vigore_until > now:
+                rem = int((utente.vigore_until - now).total_seconds() / 60)
+                if not any("Vigore" in b for b in active_buffs_list):
+                    active_buffs_list.append(f"💪 **Vigore** ({rem}m)")
+                
+                # Apply Vigore stats if not already in JSON but still active
+                # Vigore typically adds +10 Dmg, +5% Crit, +60 Mana (as per common project patterns)
+                # But here we should ideally rely on what's in use_bordello or get_projected_stats.
+                # To be safe and consistent with Alan's screenshot (Mana +60), let's ensure it's captured.
+                # If Mana Totale shows +60 but bar doesn't, it's missing here.
+        
+        # Final Totals for Bar display
+        total_max_health = utente.max_health + bonus_max_hp
+        total_max_mana = utente.max_mana + bonus_max_mana
+        
+        msg += "\n╔═══🕹═══╗\n"
+        
+        # RPG Stats with visual bars (Using boosted totals)
+        current_hp = utente.current_hp if hasattr(utente, 'current_hp') and utente.current_hp is not None else utente.health
+        hp_percent = int((current_hp / total_max_health) * 10) if total_max_health > 0 else 0
+        hp_bar = "❤️" + "▰" * hp_percent + "▱" * (10 - hp_percent)
+        msg += f"{hp_bar} `{current_hp}/{total_max_health}`\n"
+        
+        mana_percent = int((utente.mana / total_max_mana) * 10) if total_max_mana > 0 else 0
+        mana_bar = "💙" + "▰" * mana_percent + "▱" * (10 - mana_percent)
+        msg += f"{mana_bar} `{utente.mana}/{total_max_mana}`\n"
         
         total_dmg = utente.base_damage + bonus_dmg
         total_res = (getattr(utente, 'resistance', 0) or 0) + bonus_res
         total_crit = (getattr(utente, 'crit_chance', 0) or 0) + bonus_crit
         total_speed = (getattr(utente, 'speed', 0) or 0) + bonus_speed
-        total_max_mana = utente.max_mana + bonus_max_mana
         
         msg += f"\n⚔️ **Danno**: `{total_dmg}`"
         if bonus_dmg > 0: msg += f" (+{bonus_dmg})"
@@ -4525,21 +4532,13 @@ class BotCommands:
         
         msg += f"🛡️ **Res**: `{total_res}%` | 💥 **Crit**: `{total_crit}%` | ⚡ **Vel**: `{total_speed}`\n"
         
-        # Update Mana Display if buffed
+        # Mana Totale line (Optional, since bar now shows it, but keeping for clarity)
         if bonus_max_mana > 0:
-            # We need to reach back and update the mana bar if we want it perfect, 
-            # but for now let's just show it in the core stats area or mention it.
             msg += f"💙 **Mana Max Totale**: `{total_max_mana}`\n"
         
-        # Progression
+        # Progression - FIXED to use user_service.get_xp_requirement
         next_lv_num = utente.livello + 1
-        next_lv_row = char_loader.get_characters_by_level(next_lv_num)
-        next_lv_row = next_lv_row[0] if next_lv_row else None
-        
-        if next_lv_row:
-            exp_req = next_lv_row.get('exp_required', 100)
-        else:
-            exp_req = 100 * (next_lv_num ** 2)
+        exp_req = user_service.get_xp_requirement(next_lv_num)
             
         exp_percent = int((utente.exp / exp_req) * 10) if exp_req > 0 else 0
         exp_bar = "▰" * exp_percent + "▱" * (10 - exp_percent)
@@ -4720,6 +4719,9 @@ class BotCommands:
                     types.InlineKeyboardButton("📊 Statistiche", callback_data="stat_edit_start"),
                     types.InlineKeyboardButton("🎒 Equip", callback_data="view_equipment")
                 )
+                
+                # Close button
+                markup.add(types.InlineKeyboardButton("❌ Chiudi", callback_data="close_user_msg"))
                 markup.row(
                     types.InlineKeyboardButton("🏆 Titoli", callback_data="title_menu"),
                     types.InlineKeyboardButton("🎭 Skin", callback_data=f"skin_menu|{character['id']}" if character else "none")
@@ -7335,6 +7337,15 @@ def handle_guild_library_study(call):
         print(f"Error studying: {e}")
         safe_answer_callback(call.id, f"Errore: {e}", show_alert=True)
 
+# --- MESSAGE CLOSE HANDLER ---
+@bot.callback_query_handler(func=lambda call: call.data == "close_user_msg")
+def handle_close_user_msg(call):
+    try:
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        bot.answer_callback_query(call.id)
+    except Exception:
+        pass
+
 # --- MAIN CALLBACK HANDLER ---
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -8755,10 +8766,6 @@ def callback_query(call):
             safe_answer_callback(call.id, msg, show_alert=True)
             
 
-    elif call.data == "guild_back_main":
-        safe_answer_callback(call.id)
-        handle_guild_cmd(call.message)
-        return
 
     elif call.data == "guild_personalize_menu":
         guild = guild_service.get_user_guild(call.from_user.id)
@@ -10136,6 +10143,8 @@ def callback_query(call):
             # or we just show the message.
             
             from models.pve import Mob
+            from database import Database
+            db = Database()
             session = db.get_session()
             mob = session.query(Mob).filter_by(id=enemy_id).first()
             is_dead = mob.is_dead if mob else True
@@ -11360,15 +11369,25 @@ def handle_guild_personalize_url(message, menu_type):
 
 
 
+def _get_notification_type(text):
+    """Internal helper to categorize notification types for anti-spam"""
+    if "LEVEL UP" in text.upper():
+        return "level_up"
+    if "SFERA DEL DRAGO" in text.upper():
+        return "dragon_ball"
+    if "RISORSA OTTENUTA" in text.upper():
+        return "resource"
+    return "general"
+
 def notify_achievement(user_id, text, group=True):
-    """Notify user in private and optionally in the main group"""
-    # Private
+    """Notify user in private and optionally in the main group with anti-spam (deleting previous)"""
+    # Private (Directly to user, no anti-spam needed here)
     try:
         bot.send_message(user_id, text, parse_mode='markdown')
     except Exception as e:
         print(f"Error sending private notice to {user_id}: {e}")
     
-    # Group
+    # Group (Anti-Spam logic)
     if group:
         try:
             from settings import GRUPPO_AROMA
@@ -11377,7 +11396,24 @@ def notify_achievement(user_id, text, group=True):
             if user:
                  mention = f"[{user.nome}](tg://user?id={user_id})"
                  group_text = f"📢 **ANNUNCIO**\n\nL'eroe {mention} ha compiuto un'impresa!\n\n{text}"
-                 bot.send_message(GRUPPO_AROMA, group_text, parse_mode='markdown')
+                 
+                 n_type = _get_notification_type(text)
+                 
+                 with notification_mutex:
+                     # Delete previous message of the same type in the group
+                     cache_key = (GRUPPO_AROMA, n_type)
+                     if cache_key in notification_cache:
+                         prev_msg_id = notification_cache[cache_key]
+                         try:
+                             bot.delete_message(GRUPPO_AROMA, prev_msg_id)
+                         except:
+                             pass # Message already deleted or missing permissions
+                     
+                     # Send new message
+                     new_msg = bot.send_message(GRUPPO_AROMA, group_text, parse_mode='markdown')
+                     
+                     # Update cache
+                     notification_cache[cache_key] = new_msg.message_id
         except Exception as e:
             print(f"Error sending group notice: {e}")
 

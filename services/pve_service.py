@@ -2056,7 +2056,14 @@ class PvEService:
                             session=session
                         )
                         
-                        tag = get_mention_markdown(target.id_telegram, target.username if target.username else target.nome)
+                        # Check if user wants notifications (mentions)
+                        notify = getattr(target, 'notify_on_attack', True)
+                        if notify:
+                            tag = get_mention_markdown(target.id_telegram, target.username if target.username else target.nome)
+                        else:
+                            # Use plain name without mention to avoid notification
+                            display_name = target.game_name or target.username or target.nome or f"Eroe {target.id_telegram}"
+                            tag = f"**{self.escape_markdown(display_name)}**"
                         
                         # Add HP info to tag
                         current_hp = target.current_hp if hasattr(target, 'current_hp') and target.current_hp is not None else target.health
@@ -2580,7 +2587,7 @@ class PvEService:
 
     # NEW: Combat Participation Tracking
     def get_or_create_participation(self, mob_id, user_id):
-        """Get or create combat participation record"""
+        """Get or create combat participation record with concurrency handling"""
         session = self.db.get_session()
         try:
             participation = session.query(CombatParticipation).filter_by(
@@ -2589,50 +2596,72 @@ class PvEService:
             ).first()
             
             if not participation:
-                participation = CombatParticipation(
-                    mob_id=mob_id,
-                    user_id=user_id,
-                    damage_dealt=0,
-                    hits_landed=0,
-                    critical_hits=0,
-                    first_hit_time=datetime.now()
-                )
-                session.add(participation)
-                session.commit()
+                try:
+                    # Use a nested transaction (savepoint) to handle potential race conditions
+                    with session.begin_nested():
+                        participation = CombatParticipation(
+                            mob_id=mob_id,
+                            user_id=user_id,
+                            damage_dealt=0,
+                            hits_landed=0,
+                            critical_hits=0,
+                            first_hit_time=datetime.now()
+                        )
+                        session.add(participation)
+                        session.flush()
+                    session.commit()
+                except Exception:
+                    # Concurrent insert happened, just fetch the existing record
+                    participation = session.query(CombatParticipation).filter_by(
+                        mob_id=mob_id,
+                        user_id=user_id
+                    ).first()
             
             return participation
         finally:
             session.close()
     
     def update_participation(self, mob_id, user_id, damage, is_crit=False, session=None):
-        """Update combat participation with damage dealt (creates if missing)"""
+        """Update combat participation with damage dealt (creates if missing) with concurrency handling"""
         local_session = False
         if not session:
             session = self.db.get_session()
             local_session = True
             
         try:
+            # Query with lock if possible
             participation = session.query(CombatParticipation).filter_by(
                 mob_id=mob_id,
                 user_id=user_id
-            ).first()
+            ).with_for_update().first()
             
             if not participation:
-                participation = CombatParticipation(
-                    mob_id=mob_id,
-                    user_id=user_id,
-                    damage_dealt=0,
-                    hits_landed=0,
-                    critical_hits=0,
-                    first_hit_time=datetime.now()
-                )
-                session.add(participation)
+                try:
+                    # Use a nested transaction (savepoint) to handle potential race conditions
+                    with session.begin_nested():
+                        participation = CombatParticipation(
+                            mob_id=mob_id,
+                            user_id=user_id,
+                            damage_dealt=0,
+                            hits_landed=0,
+                            critical_hits=0,
+                            first_hit_time=datetime.now()
+                        )
+                        session.add(participation)
+                        session.flush() # Force insert to catch UniqueViolation
+                except Exception:
+                    # In case of concurrent creation, get the existing one with lock
+                    participation = session.query(CombatParticipation).filter_by(
+                        mob_id=mob_id,
+                        user_id=user_id
+                    ).with_for_update().first()
             
-            participation.damage_dealt += damage
-            participation.hits_landed += 1
-            if is_crit:
-                participation.critical_hits += 1
-            participation.last_hit_time = datetime.now()
+            if participation:
+                participation.damage_dealt += damage
+                participation.hits_landed += 1
+                if is_crit:
+                    participation.critical_hits += 1
+                participation.last_hit_time = datetime.now()
             
             if local_session:
                 session.commit()

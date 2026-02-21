@@ -255,44 +255,21 @@ class DungeonService:
             print(f"[DUNGEON] Starting Auto-Join for dungeon {dungeon.id} ({dungeon.name})")
             
             # Auto-Join Logic
-            # Strategy: Join all users who have a record in Utente table.
-            # Ideally we filter by those who are present in the chat, but we lack a strict mapping.
-            # If we assume the bot is mono-group or primarily for this group:
-            all_users = session.query(Utente).all()
+            # REMOVED: Joining all users from Utente table was causing unintended leveling for inactive users.
+            # Now we only proceed with users who explicitly /join-ed during registration.
+            participants = session.query(DungeonParticipant).filter_by(dungeon_id=dungeon.id).all()
+            count = len(participants)
             
-            count = 0
-            for user in all_users:
-                # Check if already joined (shouldn't be, but safety first)
-                exists = session.query(DungeonParticipant).filter_by(
-                    dungeon_id=dungeon.id,
-                    user_id=user.id_telegram
-                ).first()
-                
-                if not exists:
-                    dp = DungeonParticipant(
-                        dungeon_id=dungeon.id, 
-                        user_id=user.id_telegram
-                    )
-                    session.add(dp)
-                    count += 1
-            
-            session.flush()
-            print(f"[DUNGEON] Auto-joined {count} users.")
+            print(f"[DUNGEON] Starting dungeon {dungeon.id} with {count} participants.")
             
             # Heal all participants for the new dungeon
             print(f"[DUNGEON] Healing participants...")
-            for user in all_users:
-                 if user.id_telegram in [p.user_id for p in session.query(DungeonParticipant).filter_by(dungeon_id=dungeon.id).all()]:
-                     # Calculate Max HP
-                     # We might need a helper method if available, or manual calc
-                     # Quick manual calc or use user_service if available (but user_service uses session)
-                     # Let's assume user.health is base/max or we can recalibrate.
-                     # Better: use a simple heal to max logic.
-                     # If user has 'health' column as max (legacy) or stats JSON.
-                     # Let's trust user.health as max for now or 100 default.
-                     max_hp = user.max_health or 100
-                     user.current_hp = max_hp
-                     user.is_dead = False # If there is such a flag
+            for p in participants:
+                user = session.query(Utente).filter_by(id_telegram=p.user_id).first()
+                if user:
+                    max_hp = user.max_health or 100
+                    user.current_hp = max_hp
+                    user.is_dead = False
             
             session.flush()
             
@@ -843,18 +820,18 @@ class DungeonService:
             m.is_dead = True
             m.health = 0
 
-        # Distribute Rewards
-        d_def = self.get_dungeon_def(dungeon.dungeon_def_id)
-        rewards = d_def.get('rewards', {}) if d_def else {}
-        wumpa = rewards.get('wumpa', 0)
-        exp = rewards.get('exp', 0)
+        # Distribute Rewards - REMOVED: Mobs now give rewards directly during combat to avoid "leeching"
+        # d_def = self.get_dungeon_def(dungeon.dungeon_def_id)
+        # rewards = d_def.get('rewards', {}) if d_def else {}
+        # wumpa = rewards.get('wumpa', 0)
+        # exp = rewards.get('exp', 0)
         
-        from services.user_service import UserService
-        us = UserService()
+        # from services.user_service import UserService
+        # us = UserService()
         
-        for p in participants:
-            us.add_points_by_id(p.user_id, wumpa, session=session)
-            us.add_exp_by_id(p.user_id, exp, session=session)
+        # for p in participants:
+        #     us.add_points_by_id(p.user_id, wumpa, session=session)
+        #     us.add_exp_by_id(p.user_id, exp, session=session)
             
         if local_session:
             session.commit()

@@ -77,11 +77,6 @@ def handle_guild_cmd(bot, message):
         # Main Entry Point: Visit Village (starts the tour)
         markup.add(types.InlineKeyboardButton("🏰 Visita Villaggio", callback_data="guild_tour|0"))
         
-        markup.add(types.InlineKeyboardButton("💰 Deposita Wumpa", callback_data="guild_deposit_start"))
-        
-        if guild['role'] not in ["Leader", "Officer"]:
-            markup.add(types.InlineKeyboardButton("🚪 Abbandona Gilda", callback_data="guild_leave_ask"))
-        
         # Using main_image for the guild overview
         image = guild.get('main_image') or "https://i.imgur.com/placeholder_village.png"
         
@@ -216,7 +211,7 @@ def handle_inn_cmd(bot, message):
         return
 
     # Check if user is in combat (only if trying to ENTER)
-    if user_service.is_in_combat(user_id):
+    if user_service.is_true_in_combat(user_id):
         utente = user_service.get_user(user_id)
         last_attack = getattr(utente, 'last_attack_time', None)
         remaining = 600
@@ -225,7 +220,7 @@ def handle_inn_cmd(bot, message):
             elapsed = (datetime.datetime.now() - last_attack).total_seconds()
             remaining = int(600 - elapsed)
         
-        bot.send_message(message.chat.id, f"⚔️ Sei ancora in combattimento! Devi aspettare {remaining//60}m {remaining%60}s prima di entrare in Locanda.")
+        bot.send_message(message.chat.id, f"⚔️ Sei ancora in combattimento! Devi terminare la battaglia o aspettare {remaining//60}m {remaining%60}s.")
         return
     
     markup = types.InlineKeyboardMarkup()
@@ -237,7 +232,7 @@ def handle_guild_inn_view(bot, call):
     user_id = call.from_user.id
     
     # Check if user is in combat
-    if user_service.is_in_combat(user_id):
+    if user_service.is_true_in_combat(user_id):
         utente = user_service.get_user(user_id)
         last_attack = getattr(utente, 'last_attack_time', None)
         remaining = 600
@@ -246,7 +241,7 @@ def handle_guild_inn_view(bot, call):
             elapsed = (datetime.datetime.now() - last_attack).total_seconds()
             remaining = int(600 - elapsed)
             
-        safe_answer_callback(bot, call.id, f"⚔️ Sei in combattimento! Aspetta {remaining//60}m {remaining%60}s.", show_alert=True)
+        safe_answer_callback(bot, call.id, f"⚔️ Sei in combattimento! Termina la battaglia o aspetta {remaining//60}m {remaining%60}s.", show_alert=True)
         return
     
     safe_answer_callback(bot, call.id)
@@ -320,7 +315,7 @@ def handle_facility_view(bot, call, facility_type):
 
 def handle_buy_beer(bot, call):
     user_id = call.from_user.id
-    success, msg = guild_service.buy_craft_beer(user_id)
+    success, msg = guild_service.buy_guild_drink(user_id, drink_type='beer')
     safe_answer_callback(bot, call.id, msg, show_alert=not success)
     if success:
         handle_facility_view(bot, call, "brewery")
