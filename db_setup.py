@@ -411,70 +411,79 @@ def migrate_user_table(db):
         inspector = inspect(db.engine)
         columns = [col['name'] for col in inspector.get_columns('utente')]
         
-        if 'profumino_until' not in columns:
-            print("Adding profumino_until to utente...")
-            session.execute(text("ALTER TABLE utente ADD COLUMN profumino_until TIMESTAMP WITHOUT TIME ZONE"))
-            
-        if 'current_mount_id' not in columns:
-            print("Adding current_mount_id to utente...")
-            session.execute(text("ALTER TABLE utente ADD COLUMN current_mount_id INTEGER REFERENCES mounts(id)"))
-            
-        if 'meditating_until' not in columns:
-            print("Adding meditating_until to utente...")
-            session.execute(text("ALTER TABLE utente ADD COLUMN meditating_until TIMESTAMP WITHOUT TIME ZONE"))
-            
-        if 'transformation_expires_at' not in columns:
-            print("Adding transformation_expires_at to utente...")
-            session.execute(text("ALTER TABLE utente ADD COLUMN transformation_expires_at TIMESTAMP WITHOUT TIME ZONE"))
+        # Helper to add column if missing
+        def add_col(col_name, col_type):
+            if col_name not in columns:
+                print(f"Adding {col_name} to utente...")
+                try:
+                    session.execute(text(f"ALTER TABLE utente ADD COLUMN {col_name} {col_type}"))
+                    session.commit() # Commit each to avoid locking issues on large tables
+                except Exception as e:
+                    print(f"⚠️ Error adding {col_name}: {e}")
+                    session.rollback()
 
-        if 'current_transformation' not in columns:
-            print("Adding current_transformation to utente...")
-            session.execute(text("ALTER TABLE utente ADD COLUMN current_transformation VARCHAR(100)"))
+        # Existing/Basic RPG Stats
+        add_col('profumino_until', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('current_mount_id', 'INTEGER') # Foreign key constraint might be tricky if table doesn't exist, keep it simple
+        add_col('meditating_until', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('transformation_expires_at', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('current_transformation', 'VARCHAR(100)')
+        add_col('last_egg_nurture', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('notify_on_attack', 'BOOLEAN DEFAULT TRUE')
+        add_col('cristalli_aroma', 'INTEGER DEFAULT 0')
+        add_col('last_activity', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('chat_exp', 'INTEGER DEFAULT 0')
+        add_col('daily_wumpa_earned', 'INTEGER DEFAULT 0')
+        add_col('last_wumpa_reset', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('last_chat_drop_time', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('platform', 'VARCHAR(50)')
+        add_col('game_name', 'VARCHAR(100)')
 
-        if 'last_egg_nurture' not in columns:
-            print("Adding last_egg_nurture to utente...")
-            session.execute(text("ALTER TABLE utente ADD COLUMN last_egg_nurture TIMESTAMP WITHOUT TIME ZONE"))
+        # Missing RPG Metrics
+        add_col('health', 'INTEGER DEFAULT 100')
+        add_col('max_health', 'INTEGER DEFAULT 100')
+        add_col('current_hp', 'INTEGER DEFAULT 100')
+        add_col('mana', 'INTEGER DEFAULT 50')
+        add_col('max_mana', 'INTEGER DEFAULT 50')
+        add_col('current_mana', 'INTEGER DEFAULT 50')
+        add_col('base_damage', 'INTEGER DEFAULT 10')
+        add_col('stat_points', 'INTEGER DEFAULT 0')
+        add_col('last_health_restore', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('resistance', 'INTEGER DEFAULT 0')
+        add_col('crit_chance', 'INTEGER DEFAULT 0')
+        add_col('speed', 'INTEGER DEFAULT 0')
 
-        if 'notify_on_attack' not in columns:
-            print("Adding notify_on_attack to utente...")
-            session.execute(text("ALTER TABLE utente ADD COLUMN notify_on_attack BOOLEAN DEFAULT TRUE"))
+        # Missing Stat Allocations
+        add_col('allocated_health', 'INTEGER DEFAULT 0')
+        add_col('allocated_mana', 'INTEGER DEFAULT 0')
+        add_col('allocated_damage', 'INTEGER DEFAULT 0')
+        add_col('allocated_speed', 'INTEGER DEFAULT 0')
+        add_col('allocated_resistance', 'INTEGER DEFAULT 0')
+        add_col('allocated_crit', 'INTEGER DEFAULT 0')
+        add_col('last_stat_reset', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('last_attack_time', 'TIMESTAMP WITHOUT TIME ZONE')
 
-        if 'cristalli_aroma' not in columns:
-            print("Adding cristalli_aroma to utente...")
-            session.execute(text("ALTER TABLE utente ADD COLUMN cristalli_aroma INTEGER DEFAULT 0"))
+        # Missing Shield & Effects
+        add_col('shield_hp', 'INTEGER DEFAULT 0')
+        add_col('shield_max_hp', 'INTEGER DEFAULT 0')
+        add_col('shield_end_time', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('last_shield_cast', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('active_status_effects', 'TEXT')
 
-        if 'last_activity' not in columns:
-            print("Adding last_activity to utente...")
-            session.execute(text("ALTER TABLE utente ADD COLUMN last_activity TIMESTAMP WITHOUT TIME ZONE"))
-
-        if 'chat_exp' not in columns:
-            print("Adding chat_exp to utente...")
-            session.execute(text("ALTER TABLE utente ADD COLUMN chat_exp INTEGER DEFAULT 0"))
-
-        if 'daily_wumpa_earned' not in columns:
-            print("Adding daily_wumpa_earned to utente...")
-            session.execute(text("ALTER TABLE utente ADD COLUMN daily_wumpa_earned INTEGER DEFAULT 0"))
-
-        if 'last_wumpa_reset' not in columns:
-            print("Adding last_wumpa_reset to utente...")
-            session.execute(text("ALTER TABLE utente ADD COLUMN last_wumpa_reset TIMESTAMP WITHOUT TIME ZONE"))
-
-        if 'last_chat_drop_time' not in columns:
-            print("Adding last_chat_drop_time to utente...")
-            session.execute(text("ALTER TABLE utente ADD COLUMN last_chat_drop_time TIMESTAMP WITHOUT TIME ZONE"))
-
-        if 'platform' not in columns:
-            print("Adding platform to utente...")
-            session.execute(text("ALTER TABLE utente ADD COLUMN platform VARCHAR(50)"))
-
-        if 'game_name' not in columns:
-            print("Adding game_name to utente...")
-            session.execute(text("ALTER TABLE utente ADD COLUMN game_name VARCHAR(100)"))
-            
-        session.commit()
+        # Missing Titles & Resting
+        add_col('title', 'VARCHAR(255)')
+        add_col('titles', 'TEXT')
+        add_col('last_character_change', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('resting_since', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('vigore_until', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('last_beer_usage', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('last_brothel_usage', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('invincible_until', 'TIMESTAMP WITHOUT TIME ZONE')
+        add_col('luck_boost', 'INTEGER DEFAULT 0')
+        
+        print("✅ User table migration check completed!")
     except Exception as e:
-        session.rollback()
-        print(f"Error migrating utente table: {e}")
+        print(f"❌ Critical error during migrate_user_table: {e}")
     finally:
         session.close()
 
