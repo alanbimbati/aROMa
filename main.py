@@ -1,6 +1,64 @@
 import telebot
 from telebot import types, util
 from telebot.apihelper import ApiTelegramException
+from db_setup import init_database
+import threading
+import schedule
+
+from settings import *
+import schedule
+import time
+import datetime
+import threading
+import os
+import random
+import socket
+from io import BytesIO
+from database import Database
+from models.user import Utente
+
+from db_setup import init_database
+try:
+    from PIL import Image, ImageOps
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    print("⚠️ PIL/Pillow not available, grayscale images will not work")
+
+# Services
+from services.trap_service import TrapService
+from services.backup_service import BackupService
+trap_service = TrapService()
+from services.user_service import UserService
+from services.item_service import ItemService
+from services.game_service import GameService
+from services.shop_service import ShopService
+from services.wish_service import WishService
+from services.pve_service import PvEService
+from services.guild_service import GuildService
+from services.skin_service import SkinService
+skin_service = SkinService()
+from services.character_service import CharacterService
+from services.transformation_service import TransformationService
+from services.stats_service import StatsService
+from services.drop_service import DropService
+from services.dungeon_service import DungeonService
+from services.alchemy_service import AlchemyService
+from services.achievement_tracker import AchievementTracker
+from services.crafting_service import CraftingService
+from services.user_service import UserService
+from services.transformation_service import TransformationService
+from services.dungeon_service import DungeonService
+from services.equipment_service import EquipmentService
+from services.guide_service import GuideService
+from services.stat_build_service import StatBuildService
+from services.character_loader import get_character_loader
+from services.cultivation_service import CultivationService
+
+stat_service = StatBuildService()
+
+from utils.markup_utils import get_combat_markup
+from utils.ghost_cleanup import cleanup_ghost_users
 
 # Monkey patch InlineKeyboardButton and KeyboardButton to support 'style' for Telegram Bot API 9.4+ (2026)
 # Accepted styles: 'success' (green), 'danger' (red), 'primary' (blue)
@@ -31,17 +89,6 @@ def _patched_kb_to_dict(self):
         res['style'] = self.style
     return res
 types.KeyboardButton.to_dict = _patched_kb_to_dict
-from settings import *
-import schedule
-import time
-import datetime
-import threading
-import os
-import random
-import socket
-from io import BytesIO
-from database import Database
-from models.user import Utente
 
 # Dynamic path resolution to handle different environments (Local vs DietPi)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -118,13 +165,6 @@ def safe_edit_message(text, chat_id, message_id, reply_markup=None, parse_mode='
             print(f"[ERROR] safe_edit_message failed: {e}")
     except Exception as e:
         print(f"[ERROR] safe_edit_message general failure: {e}")
-
-try:
-    from PIL import Image, ImageOps
-    PIL_AVAILABLE = True
-except ImportError:
-    PIL_AVAILABLE = False
-    print("⚠️ PIL/Pillow not available, grayscale images will not work")
 
 def get_grayscale_asset(original_path):
     """Convert an image to grayscale and return the path to the cached version"""
@@ -218,29 +258,6 @@ def nitro_timeout(chat_id):
     except Exception as e:
         print(f"[ERROR] Nitro Timeout send failed: {e}")
 
-# Trap Service
-from services.trap_service import TrapService
-from services.backup_service import BackupService
-trap_service = TrapService()
-
-# Services
-from services.user_service import UserService
-from services.item_service import ItemService
-from services.game_service import GameService
-from services.shop_service import ShopService
-from services.wish_service import WishService
-from services.pve_service import PvEService
-from services.guild_service import GuildService
-from services.skin_service import SkinService
-skin_service = SkinService()
-from services.character_service import CharacterService
-from services.transformation_service import TransformationService
-from services.stats_service import StatsService
-from services.drop_service import DropService
-from services.dungeon_service import DungeonService
-from services.alchemy_service import AlchemyService
-from services.achievement_tracker import AchievementTracker
-from services.crafting_service import CraftingService
 
 # Global state for uploads
 pending_attack_upload = {}
@@ -267,10 +284,6 @@ def get_mob_display_lock(mob_id):
         return mob_display_locks[mob_id]
 
 
-
-from services.equipment_service import EquipmentService
-from services.guide_service import GuideService
-from utils.markup_utils import get_combat_markup
 
 # Initialize Services
 user_service = UserService()
@@ -302,10 +315,7 @@ guide_service = GuideService()
 crafting_service = CraftingService()
 achievement_tracker = AchievementTracker()
 
-from services.stat_build_service import StatBuildService
-stat_service = StatBuildService()
 
-from db_setup import init_database
 
 # Track last viewed character for admins (for image upload feature)
 admin_last_viewed_character = {}
@@ -486,7 +496,6 @@ def handle_missing_attack(message):
     if not user_service.is_admin(utente):
         return
         
-    from services.character_loader import get_character_loader
     char_loader = get_character_loader()
     all_chars = char_loader.get_all_characters()
     
@@ -525,7 +534,6 @@ def handle_missing_skins(message):
     if not user_service.is_admin(utente):
         return
 
-    from services.character_loader import get_character_loader
     char_loader = get_character_loader()
     all_chars = char_loader.get_all_characters()
     
@@ -572,7 +580,6 @@ def handle_add_skin_cmd(message):
         bot.reply_to(message, "❌ ID non valido.")
         return
 
-    from services.character_loader import get_character_loader
     char = get_character_loader().get_character_by_id(char_id)
     if not char:
         bot.reply_to(message, "❌ Personaggio non trovato.")
@@ -967,7 +974,6 @@ def handle_guild_garden_info(call):
 def handle_garden_view(call):
     """Show user's garden"""
     user_id = call.from_user.id
-    from services.cultivation_service import CultivationService
     cultivation_service = CultivationService()
     
     # Auto-check growth
@@ -11427,55 +11433,33 @@ def notify_achievement(user_id, text, group=True):
         except Exception as e:
             print(f"Error sending group notice: {e}")
 
+
 if __name__ == '__main__':
     print("Starting aROMa Bot...")
-    
-    # Initialize DB (Schema migrations + Seeding)
+
+    # 1️⃣ Inizializza DB (Schema + Seed)
     init_database()
-    
-    # Reload achievements from CSV
+
+    # 2️⃣ Carica achievements
     achievement_tracker.load_from_csv()
     achievement_tracker.load_from_json()
-    
-    # NEW: Validate user stats on startup
-    user_service.validate_and_fix_user_stats()
-    
-    # NEW: Force level-up check for users with excess EXP
-    try:
-        from database import Database
-        _db = Database()
-        _session = _db.get_session()
-        try:
-            from models.user import Utente
-            all_users = _session.query(Utente).all()
-            leveled_up_count = 0
-            for u in all_users:
-                next_req = user_service.get_xp_requirement(u.livello + 1)
-                if next_req is not None and u.exp >= int(next_req):
-                    user_service.check_level_up(u.id_telegram)
-                    leveled_up_count += 1
-            if leveled_up_count:
-                print(f"[STARTUP] Forced level-up check: {leveled_up_count} users had excess EXP.")
-        finally:
-            _session.close()
-    except Exception as e:
-        print(f"[STARTUP] Level-up batch check failed (non-blocking): {e}")
-    
-    # NEW: Cleanup ghost users
-    from utils.ghost_cleanup import cleanup_ghost_users
+
+    # 3️⃣ Startup & clean utenti
+    user_service = UserService()
+    user_service.startup_and_clean()  # <-- qui ricalcola livelli, stats, HP/Mana e punti
+
+    # 4️⃣ Rimuove ghost users
     cleanup_ghost_users(bot)
-    
-    # Job ricorrenti
+
+    # 5️⃣ Job ricorrenti
     schedule.every(1).minutes.do(lambda: TransformationService().check_expired_transformations())
     schedule.every(5).minutes.do(lambda: DungeonService().check_daily_dungeon_trigger(bot=bot))
-    schedule.every(30).seconds.do(process_achievements_job) # Added job to schedule
+    schedule.every(30).seconds.do(lambda: achievement_tracker.process_achievements_job())
 
-    threading.Thread(target=schedule_checker, daemon=True).start()
-    
-    # Start Bot Polling (Main Thread)
+    threading.Thread(target=lambda: schedule_checker(), daemon=True).start()
+
+    # 6️⃣ Avvia il bot
     try:
         bot.infinity_polling(timeout=10, long_polling_timeout=5)
     except Exception as e:
         print(f"Bot polling crash: {e}")
-
-
