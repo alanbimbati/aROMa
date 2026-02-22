@@ -663,79 +663,22 @@ class UserService:
         session.close()
         return new_total
 
-    def get_xp_requirement(self, level):
+    def get_xp_requirement(self, level: int) -> int:
         """
-        Get EXP required to reach a specific level.
-        Reads from CharacterLoader and ensures monotonicity based on minimum requirements.
+        EXP totale cumulativa richiesta per raggiungere 'level'.
+        
+        Curva:
+        - Early game veloce
+        - 100k EXP ≈ livello 40
+        - Livelli alti sempre più lenti
         """
-        # Lazy-load the EXP table from characters.csv via CharacterLoader
-        if not hasattr(self, '_exp_table_cache') or not self._exp_table_cache:
-            from services.character_loader import get_character_loader
-            char_loader = get_character_loader()
-            all_chars = char_loader.get_all_characters()
-            
-            # Map of level -> minimum exp_required
-            temp_map = {}
-            for char in all_chars:
-                lv = char.get('livello', 0)
-                exp_req = char.get('exp_required', 0)
-                
-                if lv > 0 and exp_req > 0:
-                    # We take the MINIMUM exp_required for each level to avoid 
-                    # being blocked by "Special" high-requirement characters like Jiren.
-                    if lv not in temp_map or exp_req < temp_map[lv]:
-                        temp_map[lv] = exp_req
-            
-            if not temp_map:
-                # Total fallback if loader fails
-                return int(85 * (level ** 2))
+        if level <= 1:
+            return 0
 
-            # Build final monotonic cache
-            sorted_levels = sorted(temp_map.keys())
-            self._exp_table_cache = {}
-            last_valid_exp = 0
-            
-            for lv in sorted_levels:
-                current_min_exp = temp_map[lv]
-                # Enforce monotonicity: next level must require AT LEAST as much as previous
-                if current_min_exp < last_valid_exp:
-                    current_min_exp = last_valid_exp
-                
-                self._exp_table_cache[lv] = current_min_exp
-                last_valid_exp = current_min_exp
+        A = 10
+        p = 2.5
 
-        # Logic to handle specific level, interpolation, or extrapolation
-        if self._exp_table_cache:
-            # If level is explicitly defined
-            if level in self._exp_table_cache:
-                return self._exp_table_cache[level]
-
-            sorted_levels = sorted(self._exp_table_cache.keys())
-            
-            # Case 1: Level is below minimum (1)
-            if level < sorted_levels[0]:
-                return self._exp_table_cache[sorted_levels[0]]
-
-            # Case 2: Level is above maximum -> Extrapolate
-            max_lv = sorted_levels[-1]
-            if level > max_lv:
-                max_exp = self._exp_table_cache[max_lv]
-                # Extrapolate: add ~5000 per level past the last known level
-                return max_exp + (level - max_lv) * 5000
-            
-            # Case 3: Level is in a gap -> Interpolate
-            lower_lv = max([l for l in sorted_levels if l < level])
-            upper_lv = min([l for l in sorted_levels if l > level])
-            
-            lower_exp = self._exp_table_cache[lower_lv]
-            upper_exp = self._exp_table_cache[upper_lv]
-            
-            # Linear interpolation
-            ratio = (level - lower_lv) / (upper_lv - lower_lv)
-            return int(lower_exp + (upper_exp - lower_exp) * ratio)
-
-        # Hard fallback if CSV fails to load completely
-        return int(85 * (level ** 2))
+        return int(A * (level ** p))
 
 
 
@@ -792,8 +735,8 @@ class UserService:
                     session.flush()
                     
                 # Recalculate stats
+                self.recalculate_level(user_id, session=session)
                 self.recalculate_stats(user_id, session=session)
-                
                 # Refresh user object
                 if local_session:
                     try:
@@ -1071,65 +1014,29 @@ class UserService:
         
         return True, f"{preset['icon']} Preset **{preset['name']}** applicato!"
 
-    def validate_and_fix_user_stats(self):
-        """Startup check to reset stats for users and sync with current logic/data"""
-        print("[STARTUP] Validating and syncing user statistics...")
-        session = self.db.get_session()
-        try:
-            users = session.query(Utente).all()
-            print(f"[STARTUP] Processing {len(users)} users...")
-            
-            for user in users:
-                if not user.livello:
-                    continue
-                
-                # 1. Total allowed points: Level * 2
-                allowed_total = user.livello * 2
-                
-                # Current allocated points
-                allocated = (
-                    (user.allocated_health or 0) +
-                    (user.allocated_mana or 0) +
-                    (user.allocated_damage or 0) +
-                    (user.allocated_resistance or 0) +
-                    (user.allocated_crit or 0) +
-                    (user.allocated_speed or 0)
-                )
-                
-                # Current available points
-                available = user.stat_points or 0
-                
-                # Total they actually HAVE
-                actual_total = allocated + available
-                
-                # If they have too many points, reset them
-                if actual_total > allowed_total:
-                    print(f"[FIX] User {user.id_telegram} ({user.nome}) has {actual_total} pts, but level {user.livello} only allows {allowed_total}. Resetting allocations...")
-                    user.allocated_health = 0
-                    user.allocated_mana = 0
-                    user.allocated_damage = 0
-                    user.allocated_resistance = 0
-                    user.allocated_crit = 0
-                    user.allocated_speed = 0
-                    user.stat_points = allowed_total
-                    session.flush()
+    def validate_and_fix_user_stats(self, user, session=None):
+        """
+        Controlla che gli utenti abbiano:
+        - Punti stat coerenti con il livello
+        - Allocazioni non negative
+        Restituisce True se ha fatto modifiche
+        """
+        fixed = False
+        spent_points = sum([
+            user.allocated_health or 0,
+            user.allocated_mana or 0,
+            user.allocated_damage or 0,
+            user.allocated_resistance or 0,
+            user.allocated_crit or 0,
+            user.allocated_speed or 0
+        ])
+        expected_stat_points = max(user.livello * 2 - spent_points, 0)
+        if user.stat_points != expected_stat_points:
+            user.stat_points = expected_stat_points
+            fixed = True
 
-                # 2. Mandatory synchronization with current logic/CSV data
-                # This ensures that if we changed a character bonus or speed formula, 
-                # all users are updated immediately on startup.
-                try:
-                    self.recalculate_stats(user.id_telegram, session=session)
-                except Exception as e:
-                    print(f"[ERROR] Recalculate failed for user {user.id_telegram}: {e}")
-            
-            session.commit()
-            print("[STARTUP] Stat validation and sync complete.")
-                
-        except Exception as e:
-            print(f"[ERROR] validate_and_fix_user_stats: {e}")
-            session.rollback()
-        finally:
-            session.close()
+        # eventuali altre validazioni tipo valori min/max
+        return fixed
 
     def get_projected_stats(self, utente, override_character_id=None, session=None):
         """
@@ -1319,6 +1226,99 @@ class UserService:
         finally:
             if local_session:
                 session.close()
+
+    def recalculate_level(self, user_id, session=None):
+        """Ricalcola il livello corretto a partire dall'exp totale"""
+        local_session = False
+        if not session:
+            session = self.db.get_session()
+            local_session = True
+
+        try:
+            from models.user import Utente
+            u = session.query(Utente).filter_by(id_telegram=user_id).first()
+            if not u or u.exp is None:
+                return
+
+            exp_total = int(u.exp)
+            livello = 1
+
+            # Trova il livello corretto dalla nuova curva
+            while True:
+                next_req = self.get_xp_requirement(livello + 1)
+                if next_req is None or exp_total < next_req:
+                    break
+                livello += 1
+
+            u.livello = livello
+
+            # Ricalcolo punti stat disponibili
+            spent_points = (
+                (u.allocated_health or 0) + 
+                (u.allocated_mana or 0) + 
+                (u.allocated_damage or 0) +
+                (u.allocated_resistance or 0) +
+                (u.allocated_crit or 0) +
+                (u.allocated_speed or 0)
+            )
+            u.stat_points = (u.livello * 2) - spent_points
+
+            if local_session:
+                session.commit()
+            else:
+                session.flush()
+
+            print(f"Recalculated level for {user_id}: Livello {u.livello}, Exp {u.exp}/{self.get_xp_requirement(u.livello + 1)}")
+        except Exception as e:
+            print(f"Error in recalculate_level for {user_id}: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            if local_session:
+                session.close()
+
+    def recalc_all_users_levels(self):
+        with self.db.get_session() as session:
+            users = session.query(Utente).all()
+            for u in users:
+                self.recalculate_level(u.id_telegram, session=session)
+    
+    def startup_and_clean(self):
+        """Ricalcola stats e livelli per tutti gli utenti all'avvio"""
+        session = self.db.get_session()
+        try:
+            from models.user import Utente
+            all_users = session.query(Utente).all()
+            fixed_count = 0
+
+            for u in all_users:
+                # Fallback valori None a 0
+                if u.exp is None:
+                    u.exp = 0
+                if u.livello is None:
+                    u.livello = 1
+
+                # Alloca punti Null-safe
+                for attr in ['allocated_health', 'allocated_mana', 'allocated_damage',
+                            'allocated_resistance', 'allocated_crit', 'allocated_speed']:
+                    if getattr(u, attr) is None:
+                        setattr(u, attr, 0)
+
+                # Ricalcolo livello
+                self.recalculate_level(u.id_telegram, session=session)
+
+                # Ricalcolo stats
+                self.recalculate_stats(u.id_telegram, session=session)
+
+                fixed_count += 1
+
+            session.commit()
+            print(f"[STARTUP] Cleaned stats and levels for {fixed_count} users.")
+        except Exception as e:
+            session.rollback()
+            print(f"[STARTUP] Error in startup_and_clean: {e}")
+        finally:
+            session.close()
 
     def equip_item(self, user_id, user_item_id):
         """Equip item and update stats"""
