@@ -1,3 +1,6 @@
+import os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 CANALE_LOG          =    '-1001469821841'
 TEST                =    1
 
