@@ -59,6 +59,8 @@ stat_service = StatBuildService()
 
 from utils.markup_utils import get_combat_markup
 from utils.ghost_cleanup import cleanup_ghost_users
+from services.leveling_service import LevelingService
+from services.boot_service import BootService
 
 # Monkey patch InlineKeyboardButton and KeyboardButton to support 'style' for Telegram Bot API 9.4+ (2026)
 # Accepted styles: 'success' (green), 'danger' (red), 'primary' (blue)
@@ -1726,61 +1728,14 @@ def show_guild_piazza(chat_or_call, guild, index=0, edit=False):
         safe_edit_message(msg, chat_id, chat_or_call.message.message_id if hasattr(chat_or_call, 'message') else chat_or_call.message_id, reply_markup=markup, parse_mode='markdown', message_obj=chat_or_call.message if hasattr(chat_or_call, 'message') else chat_or_call)
 
 @bot.message_handler(commands=['found', 'fonda'])
-def handle_found_cmd(message):
-    """Start guild creation flow"""
-    user_id = message.from_user.id
-    utente = user_service.get_user(user_id)
-    
-    if utente.livello < 10:
-        bot.reply_to(message, "❌ Devi essere almeno al livello 10 per fondare una gilda!")
-        return
-        
-    if utente.points < 1000:
-        bot.reply_to(message, "❌ Ti servono 1000 Wumpa per fondare una gilda!")
-        return
-        
-    msg = bot.reply_to(message, "🏰 **Fondazione Gilda**\n\nInserisci il nome della tua gilda (max 32 caratteri):")
-    bot.register_next_step_handler(msg, process_guild_name)
+def handle_found_cmd_msg(message):
+    from handlers.guild_handler import handle_found_cmd
+    handle_found_cmd(bot, message)
 
-def process_guild_name(message):
-    name = message.text
-    if not name or len(name) > 32:
-        bot.reply_to(message, "❌ Nome non valido. Riprova con /found.")
-        return
-        
-    # Show map selection (simulated for now)
-    markup = types.InlineKeyboardMarkup()
-    for i in range(3):
-        row = []
-        for j in range(3):
-            x, y = i*30 + 10, j*30 + 10
-            row.append(types.InlineKeyboardButton(f"📍 {x},{y}", callback_data=f"guild_create_final|{name}|{x}|{y}"))
-        markup.row(*row)
-    
-    # Send the map selection message
-    try:
-        with open("/home/alan/.gemini/antigravity/brain/6760c513-3c30-43b9-a17f-21b2ff8f07a5/aroma_land_map_1768764144665.png", 'rb') as photo:
-            bot.send_photo(message.chat.id, photo, caption=f"🗺️ **Scegli la posizione per {name}**\n\nSeleziona una coordinata sulla mappa:", reply_markup=markup, parse_mode='markdown')
-    except Exception:
-        bot.send_message(message.chat.id, f"🗺️ **Scegli la posizione per {name}**\n\nSeleziona una coordinata sulla mappa:", reply_markup=markup, parse_mode='markdown')
+# Guild foundation logic moved to handlers/guild_handler.py
+from handlers.guild_handler import handle_found_cmd, process_guild_name, process_guild_rename, process_guild_deposit
 
-def process_guild_rename(message):
-    new_name = message.text
-    if not new_name or len(new_name) > 32:
-        bot.reply_to(message, "❌ Nome non valido (max 32 caratteri).")
-        return
-        
-    user_id = message.from_user.id
-    success, msg = guild_service.rename_guild(user_id, new_name)
-    bot.reply_to(message, msg)
-        
-def process_guild_deposit(message):
-    try:
-        amount = int(message.text)
-        success, msg = guild_service.deposit_wumpa(message.from_user.id, amount)
-        bot.reply_to(message, msg)
-    except ValueError:
-        bot.reply_to(message, "❌ Inserisci un numero valido.")
+
 
 def show_inn_view(call_or_message, edit=False):
     """
@@ -4425,7 +4380,7 @@ class BotCommands:
         else:
             # Self-healing: Ensure level is correct before showing profile
             try:
-                user_service.check_level_up(self.chatid)
+                LevelingService().check_level_up(self.chatid)
             except Exception as e:
                 print(f"[ERROR] Failed to check level up for {self.chatid}: {e}")
                 
@@ -4543,9 +4498,9 @@ class BotCommands:
         if bonus_max_mana > 0:
             msg += f"💙 **Mana Max Totale**: `{total_max_mana}`\n"
         
-        # Progression - FIXED to use user_service.get_xp_requirement
+        # Progression - FIXED to use LevelingService().get_xp_requirement
         next_lv_num = utente.livello + 1
-        exp_req = user_service.get_xp_requirement(next_lv_num)
+        exp_req = LevelingService().get_xp_requirement(next_lv_num)
             
         exp_percent = int((utente.exp / exp_req) * 10) if exp_req > 0 else 0
         exp_bar = "▰" * exp_percent + "▱" * (10 - exp_percent)
@@ -6506,14 +6461,14 @@ def handle_any_message(message):
             
             if can_receive_reward:
                 passive_exp = random.randint(1, 10)
-                level_up_info = user_service.add_exp_by_id(message.from_user.id, passive_exp)
+                level_up_info = LevelingService().add_exp_by_id(message.from_user.id, passive_exp)
                 
                 if level_up_info['leveled_up']:
                     mention = get_mention_markdown(message.from_user.id, message.from_user.username if message.from_user.username else message.from_user.first_name)
                     bot.send_message(message.chat.id, f"🎉 **LEVEL UP!** {mention} è salito al livello **{level_up_info['new_level']}**! 🚀", parse_mode='markdown')
                 
                 # Track chat EXP for achievements
-                new_chat_exp_total = user_service.add_chat_exp(message.from_user.id, passive_exp)
+                new_chat_exp_total = LevelingService().add_chat_exp(message.from_user.id, passive_exp)
                 
                 achievement_tracker = AchievementTracker()
                 achievement_tracker.on_chat_exp(
@@ -6558,7 +6513,7 @@ def handle_any_message(message):
     
     # Random exp
     if message.chat.type in ['group', 'supergroup']:
-        user_service.add_exp(utente, 1)
+        LevelingService().add_exp(utente, 1)
         
         # Check TNT timer first (if user is avoiding TNT)
         drop_service.check_tnt_timer(utente, bot, message)
@@ -7996,24 +7951,8 @@ def callback_query(call):
 
     elif call.data == "guild_found_start":
         safe_answer_callback(call.id)
-        # Fix: use call.from_user.id instead of call.message.from_user.id
-        user_id = call.from_user.id
-        utente = user_service.get_user(user_id)
-        
-        if not utente:
-            bot.send_message(call.message.chat.id, "❌ Errore: utente non trovato. Usa /start per registrarti.")
-            return
-        
-        if utente.livello < 10:
-            safe_answer_callback(call.id, "❌ Devi essere almeno al livello 10 per fondare una gilda!", show_alert=True)
-            return
-            
-        if utente.points < 1000:
-            safe_answer_callback(call.id, "❌ Ti servono 1000 Wumpa per fondare una gilda!", show_alert=True)
-            return
-            
-        msg = bot.send_message(call.message.chat.id, "🏰 **Fondazione Gilda**\n\nInserisci il nome della tua gilda (max 32 caratteri):")
-        bot.register_next_step_handler(msg, process_guild_name)
+        from handlers.guild_handler import handle_found_cmd
+        handle_found_cmd(bot, call.message)
         return
 
     elif call.data == "guild_deposit_start":
@@ -11446,7 +11385,7 @@ if __name__ == '__main__':
 
     # 3️⃣ Startup & clean utenti
     user_service = UserService()
-    user_service.startup_and_clean()  # <-- qui ricalcola livelli, stats, HP/Mana e punti
+    BootService().run_startup_sequence(bot)  # <-- qui ricalcola livelli, stats, HP/Mana e punti
 
     # 4️⃣ Rimuove ghost users
     cleanup_ghost_users(bot)

@@ -10,6 +10,7 @@ from services.stat_aggregator import StatAggregator
 import json
 import os
 from datetime import datetime
+from services.leveling_service import LevelingService
 
 # Dynamic path resolution
 SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -202,6 +203,10 @@ class AchievementTracker:
             # If we fetched fewer than limit, we are done
             if len(events) < limit:
                 break
+
+    def process_achievements_job(self):
+        """Wrapper for scheduler to process pending events."""
+        self.process_pending_events()
 
     def sync_live_stats(self, user_id):
         """
@@ -416,7 +421,7 @@ class AchievementTracker:
             try:
                 from services.user_service import UserService
                 user_service = UserService()
-                user_service.add_exp_by_id(user_id, exp_amount, session=session)
+                LevelingService().add_exp_by_id(user_id, exp_amount, session=session)
             except Exception as e:
                 print(f"[ERROR] Failed to award achievement EXP: {e}")
             

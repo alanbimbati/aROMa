@@ -3,7 +3,6 @@ from telebot import types
 import datetime
 import os
 from settings import BASE_DIR
-from settings import BASE_DIR
 from services.user_service import UserService
 from services.guild_service import GuildService
 from services.guild_activity_service import GuildActivityService
@@ -113,9 +112,10 @@ def handle_found_cmd(bot, message):
     # But functions should be self-contained if possible. 
     # For next step, we might need to define process_guild_name here or importing it?
     # Simpler: define it here.
-    bot.register_next_step_handler(msg, lambda m: process_guild_name(bot, m))
+    bot.register_next_step_handler(msg, process_guild_name)
 
-def process_guild_name(bot, message):
+def process_guild_name(message):
+    from main import bot
     name = message.text
     if not name or len(name) > 32:
         bot.reply_to(message, "❌ Nome non valido. Riprova con /found.")
@@ -131,7 +131,7 @@ def process_guild_name(bot, message):
         markup.row(*row)
     
     # Send the map selection message
-    map_path = "/home/alan/.gemini/antigravity/brain/6760c513-3c30-43b9-a17f-21b2ff8f07a5/aroma_land_map_1768764144665.png"
+    map_path = "assets/aroma_land_map.png"
     try:
         if os.path.exists(map_path):
             with open(map_path, 'rb') as photo:
@@ -144,12 +144,30 @@ def process_guild_name(bot, message):
 
 
 
-def process_guild_deposit(bot, message):
+def process_guild_rename(message):
+    new_name = message.text
+    if not new_name or len(new_name) > 32:
+        # We need bot here. I'll import it from main or pass it. 
+        # Actually, the convention in this project seems to be passing bot or using it globally.
+        # Since I can't easily import bot from main (circular), I'll use a trick or pass it.
+        # Let's check how other handlers do it.
+        from main import bot
+        bot.reply_to(message, "❌ Nome non valido (max 32 caratteri).")
+        return
+        
+    user_id = message.from_user.id
+    success, msg = guild_service.rename_guild(user_id, new_name)
+    from main import bot
+    bot.reply_to(message, msg)
+
+def process_guild_deposit(message):
     try:
         amount = int(message.text)
         success, msg = guild_service.deposit_wumpa(message.from_user.id, amount)
+        from main import bot
         bot.reply_to(message, msg)
     except ValueError:
+        from main import bot
         bot.reply_to(message, "❌ Inserisci un numero valido.")
 
 def handle_guild_view(bot, call):
