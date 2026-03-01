@@ -176,6 +176,18 @@ class LevelingService:
                 (u.allocated_crit or 0) +
                 (u.allocated_speed or 0)
             )
+            
+            # Reset se i punti spesi superano quelli consentiti dal nuovo livello
+            if spent_points > (u.livello * 2):
+                print(f"[RECALC] Utente {user_id} ha troppi punti assegnati ({spent_points} > {u.livello * 2}). Resetting stats.")
+                u.allocated_health = 0
+                u.allocated_mana = 0
+                u.allocated_damage = 0
+                u.allocated_resistance = 0
+                u.allocated_crit = 0
+                u.allocated_speed = 0
+                spent_points = 0
+                
             u.stat_points = (u.livello * 2) - spent_points
 
             if local_session:

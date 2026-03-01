@@ -94,6 +94,8 @@ types.KeyboardButton.to_dict = _patched_kb_to_dict
 
 # Dynamic path resolution to handle different environments (Local vs DietPi)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+print(f"[BOOT] CWD: {os.getcwd()}")
+print(f"[BOOT] BASE_DIR: {BASE_DIR}")
 
 def escape_markdown(text):
     """Helper to escape markdown characters for Telegram"""
@@ -1700,17 +1702,26 @@ def show_guild_piazza(chat_or_call, guild, index=0, edit=False):
     markup.row(*nav_row)
 
     # Image logic (grayscale if not built)
-    img_path = loc['img']
+    # Use absolute paths to be safe in Docker/Production
+    img_path = os.path.join(BASE_DIR, loc['img'].lstrip('./'))
     if not os.path.exists(img_path):
-        img_path = guild.get(loc['level_key'].replace('_level', '_image')) or "assets/guild/main.png"
+        # Fallback to DB-stored path or default
+        db_img = guild.get(loc['level_key'].replace('_level', '_image'))
+        if db_img:
+            img_path = os.path.join(BASE_DIR, db_img.lstrip('./'))
+            
         if not os.path.exists(img_path):
-             img_path = "assets/guild/main.png"
+             img_path = os.path.join(BASE_DIR, "assets", "guild", "main.png")
              
     if not is_built:
         img_path = get_grayscale_asset(img_path)
         
     try:
-        if edit:
+        is_photo_msg = False
+        if hasattr(chat_or_call, 'message') and chat_or_call.message.content_type == 'photo':
+            is_photo_msg = True
+
+        if edit and is_photo_msg:
             with open(img_path, 'rb') as photo:
                 bot.edit_message_media(
                     media=types.InputMediaPhoto(photo, caption=msg, parse_mode='markdown'),
@@ -1718,14 +1729,26 @@ def show_guild_piazza(chat_or_call, guild, index=0, edit=False):
                     message_id=chat_or_call.message.message_id,
                     reply_markup=markup
                 )
+        elif edit and not is_photo_msg:
+             # Can't edit text to photo, delete and send new or just send new
+             try:
+                 bot.delete_message(chat_id, chat_or_call.message.message_id)
+             except: pass
+             with open(img_path, 'rb') as photo:
+                bot.send_photo(chat_id, photo, caption=msg, reply_markup=markup, parse_mode='markdown', message_thread_id=getattr(chat_or_call, 'message_thread_id', None if not hasattr(chat_or_call, 'message') else getattr(chat_or_call.message, 'message_thread_id', None)))
         else:
             with open(img_path, 'rb') as photo:
-                bot.send_photo(chat_id, photo, caption=msg, reply_markup=markup, parse_mode='markdown', message_thread_id=getattr(chat_or_call, 'message_thread_id', None))
+                bot.send_photo(chat_id, photo, caption=msg, reply_markup=markup, parse_mode='markdown', message_thread_id=getattr(chat_or_call, 'message_thread_id', None if not hasattr(chat_or_call, 'message') else getattr(chat_or_call.message, 'message_thread_id', None)))
     except Exception as e:
         err_msg = str(e).lower()
         if "message is not modified" not in err_msg:
-             print(f"Error in show_guild_piazza: {e}")
-        safe_edit_message(msg, chat_id, chat_or_call.message.message_id if hasattr(chat_or_call, 'message') else chat_or_call.message_id, reply_markup=markup, parse_mode='markdown', message_obj=chat_or_call.message if hasattr(chat_or_call, 'message') else chat_or_call)
+             print(f"[ERROR] show_guild_piazza failed: {e}")
+             
+        # Fallback to Text (Safely)
+        if edit and hasattr(chat_or_call, 'message'):
+             safe_edit_message(msg, chat_id, chat_or_call.message.message_id, reply_markup=markup, parse_mode='markdown', message_obj=chat_or_call.message)
+        else:
+             bot.send_message(chat_id, msg, reply_markup=markup, parse_mode='markdown', message_thread_id=getattr(chat_or_call, 'message_thread_id', None if not hasattr(chat_or_call, 'message') else getattr(chat_or_call.message, 'message_thread_id', None)))
 
 @bot.message_handler(commands=['found', 'fonda'])
 def handle_found_cmd_msg(message):
@@ -4412,6 +4435,11 @@ class BotCommands:
         if hasattr(utente, 'title') and utente.title:
             msg += f"👑 *{escape_markdown(utente.title)}*\n"
             
+        # Guild Info
+        guild = guild_service.get_user_guild(utente.id_telegram)
+        if guild:
+            msg += f"🏰 **Gilda**: {guild['name']} ({guild['role']})\n"
+            
         # Core Stats + Buffs calculation FIRST
         import json
         status_effects = json.loads(utente.active_status_effects or '[]')
@@ -6048,23 +6076,43 @@ def handle_forwarded_content(message):
                     start_msg_id = message.forward_from_message_id
                     current_msg_id = start_msg_id
                     count = 0
-                    max_messages = 30
+                    max_messages = 50 # Increased to 50 for safety
+                    has_sent_file = False
                     
                     while count < max_messages:
                         try:
                             fwd_msg = bot.forward_message(message.chat.id, source_chat_id, current_msg_id)
+                            
+                            # Log content type for debugging if needed
+                            # print(f"[DEBUG] Forwarding message {current_msg_id}, type: {fwd_msg.content_type}")
+
+                            # 1. Stop at sticker
                             if fwd_msg.content_type == 'sticker':
+                                # print(f"[DEBUG] Found sticker at {current_msg_id}, stopping.")
                                 break
+                                
+                            # 2. Stop at photo IF we already sent some files (prevents accidental next game forward)
+                            if fwd_msg.content_type == 'photo' and has_sent_file:
+                                # print(f"[DEBUG] Found new photo at {current_msg_id} after files, stopping.")
+                                break
+                            
+                            # Track if we have sent any "game files"
+                            if fwd_msg.content_type in ['document', 'animation', 'video']:
+                                has_sent_file = True
+                                
                             current_msg_id += 1
                             count += 1
                             time.sleep(0.3)
                         except Exception as e:
                             current_msg_id += 1
                             count += 1
-                            if "message to forward not found" in str(e).lower():
+                            msg_err = str(e).lower()
+                            if "message to forward not found" in msg_err or "bad request: message to forward not found" in msg_err:
+                                # Sometimes there are gaps in message IDs
                                 continue
                             break
                 except Exception as e:
+
                     print(f"Error in forwarding loop: {e}")
                 return
         except Exception as e:
