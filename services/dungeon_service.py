@@ -863,7 +863,7 @@ class DungeonService:
         else:
             session.flush()
         
-        return f"🏆 **DUNGEON COMPLETATO!** 🏆\n\n**Rango: {score}**\n{details}\n\n**Ricompense:**\n+{wumpa} Wumpa, +{exp} EXP\n\n**Partecipanti:** {participants_str}"
+        return f"🏆 **DUNGEON COMPLETATO!** 🏆\n\n**Rango: {score}**\n{details}\n\n**Partecipanti:** {participants_str}"
 
     def _advance_global_index(self, session):
         """Helper to advance the global dungeon index safely"""

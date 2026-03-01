@@ -3,6 +3,7 @@ from services.user_service import UserService
 from services.item_service import ItemService
 from settings import PointsName
 import random
+from services.leveling_service import LevelingService
 
 class WishService:
     def __init__(self):
@@ -77,7 +78,7 @@ class WishService:
                     return f"🐉 SHENRON HA ESAUDITO IL TUO DESIDERIO!\n\n💰 HAI OTTENUTO {amount} {PointsName}!"
                 elif wish_type == "exp":
                     amount = random.randint(1000, 2000)
-                    self.user_service.add_exp_by_id(user.id_telegram, amount, session=session)
+                    LevelingService().add_exp_by_id(user.id_telegram, amount, session=session)
                     session.commit()
                     return f"🐉 SHENRON HA ESAUDITO IL TUO DESIDERIO!\n\n⭐ HAI OTTENUTO {amount} EXP!"
                     

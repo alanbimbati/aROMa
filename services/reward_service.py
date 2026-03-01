@@ -3,6 +3,7 @@ from settings import PointsName
 from services.status_effects import StatusEffect
 from models.user import Utente
 from utils.bot_utils import get_mention_markdown, escape_markdown
+from services.leveling_service import LevelingService
 
 class RewardService:
     def __init__(self, db, user_service, item_service, season_manager):
@@ -175,7 +176,7 @@ class RewardService:
                  xp = int(xp * 1.2)
                  
             # Apply XP
-            level_up_info = self.user_service.add_exp_by_id(user_id, xp, session=session)
+            level_up_info = LevelingService().add_exp_by_id(user_id, xp, session=session)
             
             # Apply Points
             self.user_service.add_points_by_id(user_id, wumpa, is_drop=True, session=session)
@@ -374,7 +375,7 @@ class RewardService:
                  amount_xp = int(amount_xp * 1.2)
             
             # Application
-            level_up_info = self.user_service.add_exp_by_id(user_id, amount_xp, session=session)
+            level_up_info = LevelingService().add_exp_by_id(user_id, amount_xp, session=session)
             self.user_service.add_points_by_id(user_id, amount_wumpa, is_drop=True, session=session)
             self.season_manager.add_seasonal_exp(user_id, amount_xp, session=session)
             

@@ -19,6 +19,7 @@ import os
 import json
 from settings import PointsName, GRUPPO_AROMA
 from services.equipment_service import EquipmentService
+from services.leveling_service import LevelingService
 
 # Dynamic path resolution
 SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -2333,7 +2334,7 @@ class PvEService:
                 # Note: We don't add to actual_total_wumpa/xp again because it was already counted (just redirected)
             
             # Add rewards and check for level-up
-            level_up_info = self.user_service.add_exp_by_id(p.user_id, p_xp, session=session)
+            level_up_info = LevelingService().add_exp_by_id(p.user_id, p_xp, session=session)
             self.user_service.add_points_by_id(p.user_id, p_wumpa, is_drop=True, session=session)
             # Handle seasonal exp
             season_result = self.season_manager.add_seasonal_exp(p.user_id, p_xp)
