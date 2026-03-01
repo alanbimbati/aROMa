@@ -22,6 +22,7 @@ from services.skill_service import SkillService
 from services.transformation_service import TransformationService
 from services.crafting_service import CraftingService
 from utils.markup_utils import safe_answer_callback, safe_edit_message, get_mention_markdown, escape_markdown
+from services.leveling_service import LevelingService
 
 # Initialize services
 user_service = UserService()
@@ -61,7 +62,7 @@ def handle_profile_view(bot, message, target_user=None, is_callback=False, call_
         else:
             # Self-healing: Ensure level is correct before showing profile
             try:
-                user_service.check_level_up(user_id)
+                LevelingService().check_level_up(user_id)
             except Exception as e:
                 print(f"[ERROR] Failed to check level up for {user_id}: {e}")
                 
@@ -130,7 +131,7 @@ def handle_profile_view(bot, message, target_user=None, is_callback=False, call_
         next_lv_num = target.livello + 1
         
         # Consistent XP Formula usage
-        exp_req = user_service.get_xp_requirement(next_lv_num)
+        exp_req = LevelingService().get_xp_requirement(next_lv_num)
             
         exp_percent = int((target.exp / exp_req) * 10) if exp_req > 0 else 0
         exp_bar = "▰" * exp_percent + "▱" * (10 - exp_percent)
