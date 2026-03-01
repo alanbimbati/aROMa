@@ -1861,8 +1861,8 @@ class PvEService:
                         })
                         continue
 
-                    # 5. AoE Logic (Part of decision or separate?)
-                    # If special attack used, it has higher chance of being AoE
+                    # 5. AoE Logic
+                    is_aoe = False
                     if mob.dungeon_id:
                         is_aoe = True # Dungeon mobs ALWAYS target all participants as AoE
                     elif mob.is_boss:
