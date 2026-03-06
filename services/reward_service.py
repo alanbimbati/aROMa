@@ -58,18 +58,26 @@ class RewardService:
             List of dictionaries containing reward info for each participant
         """
         self._refresh_boss_data_if_needed()
-        total_damage = sum(p.damage_dealt for p in participants)
+        total_damage = sum((getattr(p, 'damage_dealt', 0) or 0) for p in participants)
         if total_damage <= 0:
             return []
 
         rewards = []
-        difficulty = mob.difficulty_tier if mob.difficulty_tier else 1
+        difficulty = getattr(mob, 'difficulty_tier', 1) or 1
+        try:
+            difficulty = int(difficulty)
+        except Exception:
+            difficulty = 1
         
         # Balanced EXP Formula: Scales with mob level and non-linearly with difficulty
         # Reduced from 15 to 5 to slow progression (2026-02-07)
         # Example: Lv 1, Tier 1 -> (1*5) * 1 ≈ 5 EXP
         # Example: Lv 50, Tier 5 -> (50*5) * (5^1.8) ≈ 250 * 18.1 ≈ 4,525 EXP
         mob_level = getattr(mob, 'mob_level', 1)
+        try:
+            mob_level = int(mob_level)
+        except Exception:
+            mob_level = 1
         
         # Check if this is a boss and get its special pool
         is_boss = getattr(mob, 'is_boss', False)
@@ -86,6 +94,10 @@ class RewardService:
             # Rebalanced EXP Formula (2026-03-04)
             # Cap HP scaling to prevent exponential blowouts for endgame mobs
             mob_hp = getattr(mob, 'max_health', 100)
+            try:
+                mob_hp = float(mob_hp)
+            except Exception:
+                mob_hp = 100.0
             difficulty_multiplier = difficulty ** 1.8
             
             # Gentle HP bonus, max 3x
@@ -111,7 +123,8 @@ class RewardService:
         lvl_service = LevelingService()
 
         for p in participants:
-            share = p.damage_dealt / total_damage
+            dmg = (getattr(p, 'damage_dealt', 0) or 0)
+            share = dmg / total_damage
             user_level = user_levels.get(p.user_id, 1) or 1
             
             # 1. Challenge Multiplier (Leecher Protection)
@@ -126,7 +139,7 @@ class RewardService:
             if is_boss and fixed_wumpa_pool:
                 wumpa = int(fixed_wumpa_pool * share)
             else:
-                wumpa = int(p.damage_dealt * 0.05 * difficulty)
+                wumpa = int(dmg * 0.05 * difficulty)
             
             if user_level > mob_level + 10:
                 wumpa = int(wumpa * 0.25)
@@ -151,7 +164,7 @@ class RewardService:
                 'user_id': p.user_id,
                 'base_xp': xp,
                 'base_wumpa': wumpa,
-                'damage_dealt': p.damage_dealt,
+                'damage_dealt': dmg,
                 'share': share,
                 'has_fled': getattr(p, 'has_fled', False)
             })
@@ -187,6 +200,10 @@ class RewardService:
             # Check status (e.g. Dead users get nothing? Or just reduced?)
             # Use current_hp if available, otherwise fallback to health
             user_hp = user.current_hp if user.current_hp is not None else user.health
+            try:
+                user_hp = int(user_hp)
+            except Exception:
+                user_hp = 1
             
             is_dead = (user_hp <= 0)
             is_stunned = StatusEffect.has_effect(user, 'stun')
@@ -204,7 +221,7 @@ class RewardService:
                 # Stunned players receive NO rewards
                 xp = 0
                 wumpa = 0
-            
+
             # Turbo Bonus
             if getattr(user, 'has_turbo', False):
                  xp = int(xp * 1.2)
@@ -248,8 +265,11 @@ class RewardService:
             summary_lines.append(line)
             
             # Recalculate stats if needed
-            if user.health > user.max_health:
-                 self.user_service.recalculate_stats(user_id, session=session)
+            try:
+                if (getattr(user, 'health', 0) or 0) > (getattr(user, 'max_health', 0) or 0):
+                    self.user_service.recalculate_stats(user_id, session=session)
+            except Exception:
+                pass
 
         if getattr(mob, 'is_boss', False):
             header = f"🏆 **BOSS SCONFITTO!** 🏆\n"

@@ -25,11 +25,17 @@ class SeasonManager:
             
         try:
             now = datetime.now()
-            return session.query(Season).filter(
+            season = session.query(Season).filter(
                 Season.is_active == True,
                 Season.start_date <= now,
                 Season.end_date >= now
-            ).first()
+            ).order_by(Season.id.desc()).first()
+            # Fallback: keep season usable if date bounds are stale but flag is active
+            if not season:
+                season = session.query(Season).filter(
+                    Season.is_active == True
+                ).order_by(Season.id.desc()).first()
+            return season
         finally:
             if local_session:
                 session.close()

@@ -81,6 +81,30 @@ class SeasonContentService:
             out.append(cc)
         return out
 
+    def get_all_seasonal_achievement_categories(self):
+        """Categories introduced by seasonal packs (not base categories)."""
+        manifest = self._load_manifest()
+        packs = manifest.get("packs", {})
+        cats = []
+        for _, pack_cfg in packs.items():
+            cats.extend(pack_cfg.get("achievement_categories_add", []))
+        return sorted({(c or "").strip().lower() for c in cats if (c or "").strip()})
+
+    def get_inactive_seasonal_achievement_categories(self, session=None):
+        """
+        Seasonal categories that belong to packs not currently active.
+        Achievements in these categories should be hidden.
+        """
+        manifest = self._load_manifest()
+        active_pack = self.get_active_pack_key(session=session)
+        packs = manifest.get("packs", {})
+        inactive = []
+        for pack_key, pack_cfg in packs.items():
+            if pack_key == active_pack:
+                continue
+            inactive.extend(pack_cfg.get("achievement_categories_add", []))
+        return sorted({(c or "").strip().lower() for c in inactive if (c or "").strip()})
+
     def get_active_ui_config(self, session=None):
         manifest = self._load_manifest()
         pack_key = self.get_active_pack_key(session=session)

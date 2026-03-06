@@ -247,8 +247,18 @@ class StatusEffect:
     @staticmethod
     def get_active_effects(target):
         """Get list of active effects on target"""
-        effects = json.loads(getattr(target, 'active_status_effects', None) or '[]')
-        return effects
+        raw = getattr(target, 'active_status_effects', None)
+        if raw is None:
+            return []
+        if isinstance(raw, list):
+            return raw
+        if not isinstance(raw, (str, bytes, bytearray)):
+            return []
+        try:
+            effects = json.loads(raw or '[]')
+            return effects if isinstance(effects, list) else []
+        except Exception:
+            return []
     
     @staticmethod
     def has_effect(target, effect_name):
@@ -259,7 +269,7 @@ class StatusEffect:
     @staticmethod
     def remove_effect(target, effect_name):
         """Remove specific effect from target"""
-        effects = json.loads(getattr(target, 'active_status_effects', None) or '[]')
+        effects = StatusEffect.get_active_effects(target)
         effects = [e for e in effects if e.get('effect') != effect_name and e.get('id') != effect_name]
         target.active_status_effects = json.dumps(effects)
         return True

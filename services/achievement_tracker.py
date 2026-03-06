@@ -29,10 +29,10 @@ class AchievementTracker:
         self.content_service = get_season_content_service()
         self._last_content_signature = None
 
-    def _is_achievement_available(self, achievement, enabled_categories) -> bool:
-        """Gate achievements by enabled categories from active season content."""
+    def _is_achievement_available(self, achievement, inactive_seasonal_categories) -> bool:
+        """Hide only achievements from seasonal categories that are currently inactive."""
         category = (achievement.category or "").strip().lower()
-        return category in enabled_categories if enabled_categories else True
+        return category not in inactive_seasonal_categories
 
     def _ensure_active_achievement_definitions(self):
         """Reload CSV achievement definitions if active season pack changed."""
@@ -40,6 +40,33 @@ class AchievementTracker:
         if content_signature != self._last_content_signature:
             self._last_content_signature = content_signature
             self.load_from_csv()
+
+    def get_available_categories(self, session=None):
+        """Return categories that currently have visible achievements."""
+        self._ensure_active_achievement_definitions()
+        local_session = False
+        if session is None:
+            session = self.db.get_session()
+            local_session = True
+        try:
+            inactive_seasonal_categories = set(
+                self.content_service.get_inactive_seasonal_achievement_categories(session=session)
+            )
+            cats = []
+            for ach in session.query(Achievement).all():
+                if not self._is_achievement_available(ach, inactive_seasonal_categories):
+                    continue
+                c = (ach.category or "").strip().lower()
+                if c:
+                    cats.append(c)
+            unique = sorted(set(cats))
+            preferred = ["dragon_ball", "classici", "marvel", "mercato", "crafting"]
+            ordered = [c for c in preferred if c in unique]
+            ordered.extend([c for c in unique if c not in ordered])
+            return ordered
+        finally:
+            if local_session:
+                session.close()
         
     def load_from_csv(self, csv_path=None):
         """Load achievements from a CSV file, updating the database."""
@@ -281,14 +308,13 @@ class AchievementTracker:
                 return
             
             self._ensure_active_achievement_definitions()
-            enabled_categories = {
-                c.strip().lower()
-                for c in self.content_service.get_enabled_achievement_categories(session=session)
-            }
+            inactive_seasonal_categories = set(
+                self.content_service.get_inactive_seasonal_achievement_categories(session=session)
+            )
             # Get all achievements
             all_achievements = [
                 a for a in session.query(Achievement).all()
-                if self._is_achievement_available(a, enabled_categories)
+                if self._is_achievement_available(a, inactive_seasonal_categories)
             ]
             
             # Get user stats (cache in dict for performance)
@@ -607,14 +633,13 @@ class AchievementTracker:
         self._ensure_active_achievement_definitions()
         session = self.db.get_session()
         try:
-            enabled_categories = {
-                c.strip().lower()
-                for c in self.content_service.get_enabled_achievement_categories(session=session)
-            }
+            inactive_seasonal_categories = set(
+                self.content_service.get_inactive_seasonal_achievement_categories(session=session)
+            )
             all_achievements = session.query(Achievement).all()
             available_keys = {
                 a.achievement_key for a in all_achievements
-                if self._is_achievement_available(a, enabled_categories)
+                if self._is_achievement_available(a, inactive_seasonal_categories)
             }
             total_achievements = len(available_keys)
             
@@ -667,14 +692,13 @@ class AchievementTracker:
         self._ensure_active_achievement_definitions()
         session = self.db.get_session()
         try:
-            enabled_categories = {
-                c.strip().lower()
-                for c in self.content_service.get_enabled_achievement_categories(session=session)
-            }
+            inactive_seasonal_categories = set(
+                self.content_service.get_inactive_seasonal_achievement_categories(session=session)
+            )
             query = session.query(Achievement)
             if category:
                 query = query.filter_by(category=category)
-            all_ach = [a for a in query.all() if self._is_achievement_available(a, enabled_categories)]
+            all_ach = [a for a in query.all() if self._is_achievement_available(a, inactive_seasonal_categories)]
             user_ach_map = {ua.achievement_key: ua for ua in session.query(UserAchievement).filter_by(user_id=user_id).all()}
             
             result = []
