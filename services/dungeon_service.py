@@ -868,18 +868,22 @@ class DungeonService:
             m.is_dead = True
             m.health = 0
 
-        # Distribute Rewards - REMOVED: Mobs now give rewards directly during combat to avoid "leeching"
-        # d_def = self.get_dungeon_def(dungeon.dungeon_def_id)
-        # rewards = d_def.get('rewards', {}) if d_def else {}
-        # wumpa = rewards.get('wumpa', 0)
-        # exp = rewards.get('exp', 0)
-        
-        # from services.user_service import UserService
-        # us = UserService()
-        
-        # for p in participants:
-        #     us.add_points_by_id(p.user_id, wumpa, session=session)
-        #     us.add_exp_by_id(p.user_id, exp, session=session)
+        # Final completion bonus (separate from per-mob rewards)
+        d_def = self.get_dungeon_def(dungeon.dungeon_def_id)
+        rewards = d_def.get('rewards', {}) if d_def else {}
+        wumpa = int(rewards.get('wumpa', 0) or 0)
+        exp = int(rewards.get('exp', 0) or 0)
+
+        from services.user_service import UserService
+        from services.leveling_service import LevelingService
+        us = UserService()
+        lvl = LevelingService()
+
+        for p in participants:
+            if wumpa > 0:
+                us.add_points_by_id(p.user_id, wumpa, is_drop=True, session=session)
+            if exp > 0:
+                lvl.add_exp_by_id(p.user_id, exp, session=session)
             
         if local_session:
             session.commit()

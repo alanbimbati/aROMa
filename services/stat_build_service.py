@@ -70,11 +70,62 @@ class StatBuildService:
         # Let's trust the user or check cap during apply.
         if stat == 'resistance' and new_val > 75:
              return False, "Limite resistenza raggiunto (75%)"
+        if stat == 'crit' and new_val > 100:
+             return False, "Limite critico raggiunto (100%)"
 
         # Apply
         stats[stat] = new_val
         stats['spent_points'] = used
         return True, "OK"
+
+    def set_temp_stat(self, user_id, stat, value):
+        """Set a stat to an absolute value in the temporary editor."""
+        stats = self.get_temp_stats(user_id)
+        if not stats:
+            return False, "Utente non trovato"
+        if stat not in ['health', 'mana', 'damage', 'resistance', 'crit', 'speed']:
+            return False, "Stat non valida."
+        if value < 0:
+            return False, "Non puoi scendere sotto 0."
+
+        if stat == 'resistance' and value > 75:
+            return False, "Limite resistenza raggiunto (75%)"
+        if stat == 'crit' and value > 100:
+            return False, "Limite critico raggiunto (100%)"
+
+        used = 0
+        for s in ['health', 'mana', 'damage', 'resistance', 'crit', 'speed']:
+            used += value if s == stat else stats.get(s, 0)
+
+        if used > stats['total_points']:
+            return False, "Punti insufficienti!"
+
+        stats[stat] = value
+        stats['spent_points'] = used
+        return True, "OK"
+
+    def max_temp_stat(self, user_id, stat):
+        """Assign all currently available points to one stat (respecting caps)."""
+        stats = self.get_temp_stats(user_id)
+        if not stats:
+            return False, "Utente non trovato"
+        if stat not in ['health', 'mana', 'damage', 'resistance', 'crit', 'speed']:
+            return False, "Stat non valida."
+
+        others_used = 0
+        for s in ['health', 'mana', 'damage', 'resistance', 'crit', 'speed']:
+            if s != stat:
+                others_used += stats.get(s, 0)
+
+        max_by_points = max(0, stats['total_points'] - others_used)
+        if stat == 'resistance':
+            target_value = min(75, max_by_points)
+        elif stat == 'crit':
+            target_value = min(100, max_by_points)
+        else:
+            target_value = max_by_points
+
+        return self.set_temp_stat(user_id, stat, target_value)
 
     def get_presets(self):
         """Return available presets definition"""
@@ -116,6 +167,8 @@ class StatBuildService:
             # Cap check helper
             if key == 'resistance' and points > 75:
                 points = 75
+            if key == 'crit' and points > 100:
+                points = 100
                 
             if points > remaining:
                 points = remaining
@@ -134,6 +187,14 @@ class StatBuildService:
                 stats['resistance'] += to_add
                 remaining -= to_add
                 # If still remaining, dump to second best or just health/damage
+                if remaining > 0:
+                    fallback = 'damage' if 'damage' in ratio else 'health'
+                    stats[fallback] = stats.get(fallback, 0) + remaining
+            elif primary == 'crit':
+                space = 100 - stats['crit']
+                to_add = min(remaining, space)
+                stats['crit'] += to_add
+                remaining -= to_add
                 if remaining > 0:
                     fallback = 'damage' if 'damage' in ratio else 'health'
                     stats[fallback] = stats.get(fallback, 0) + remaining
@@ -235,4 +296,3 @@ def get_stat_editor_ui(stats):
     markup.add(types.InlineKeyboardButton("🔙 Menu Profilo", callback_data="back_to_profile"))
     
     return msg, markup
-

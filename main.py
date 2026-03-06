@@ -1281,9 +1281,11 @@ def handle_achievements_cmd(message, page=0, user_id=None, category=None):
     
     if category is None or category == "menu":
         from services.season_content_service import get_season_content_service
+        from services.achievement_tracker import AchievementTracker
         markup = types.InlineKeyboardMarkup()
         content_service = get_season_content_service()
-        categories = content_service.get_enabled_achievement_categories()
+        tracker = AchievementTracker()
+        categories = tracker.get_available_categories()
         ui_cfg = content_service.get_active_ui_config()
         label_map = {
             "dragon_ball": "🐉 Dragon Ball",
@@ -6976,20 +6978,30 @@ def get_stat_editor_ui(stats):
         'speed': '⚡ Velocità'
     }
     
+    # Recap completo stats nel messaggio
+    for key, label in stat_map.items():
+        val = stats.get(key, 0)
+        text += f"{label}: **{val}**\n"
+    text += "\n"
+
     markup = types.InlineKeyboardMarkup()
     
     for key, label in stat_map.items():
         val = stats.get(key, 0)
         # text += f"{label}: **{val}**\n"
         
-        # Row with - and + buttons
+        # Row with quick actions in requested order: 0, -, +, Max
         btn_minus = types.InlineKeyboardButton("➖", callback_data=f"stat_change|{key}|-1")
         btn_plus = types.InlineKeyboardButton("➕", callback_data=f"stat_change|{key}|1")
+        btn_zero = types.InlineKeyboardButton("0", callback_data=f"stat_set|{key}|0")
+        btn_max = types.InlineKeyboardButton("Max", callback_data=f"stat_max|{key}")
         
         markup.row(
             types.InlineKeyboardButton(f"{label}: {val}", callback_data="noop"),
+            btn_zero,
             btn_minus,
-            btn_plus
+            btn_plus,
+            btn_max
         )
         
     text += "\nModifica i valori e conferma."
@@ -7062,6 +7074,37 @@ def handle_stat_callbacks(call):
             # This is already in the editor, so it should be text
             bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
             # Ensure callback is answered to stop loading state
+            safe_answer_callback(call.id)
+
+        # 2b. Set Stat (direct value, used by "0" quick action)
+        elif data.startswith("stat_set|"):
+            parts = data.split("|")
+            stat = parts[1]
+            target_value = int(parts[2])
+
+            success, msg = stat_service.set_temp_stat(user_id, stat, target_value)
+            if not success:
+                safe_answer_callback(call.id, msg)
+                return
+
+            stats = stat_service.get_temp_stats(user_id)
+            text, markup = get_stat_editor_ui(stats)
+            bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
+            safe_answer_callback(call.id)
+
+        # 2c. Max Stat (allocate all remaining points to selected stat)
+        elif data.startswith("stat_max|"):
+            parts = data.split("|")
+            stat = parts[1]
+
+            success, msg = stat_service.max_temp_stat(user_id, stat)
+            if not success:
+                safe_answer_callback(call.id, msg)
+                return
+
+            stats = stat_service.get_temp_stats(user_id)
+            text, markup = get_stat_editor_ui(stats)
+            bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown')
             safe_answer_callback(call.id)
             
         # 3. Confirm Changes

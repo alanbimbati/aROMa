@@ -13,6 +13,13 @@ load_dotenv()
 
 Base = declarative_base()
 
+# Ensure all tables referenced by foreign keys are registered in metadata.
+# This avoids lazy mapper failures in test contexts importing only partial models.
+try:
+    import models.mount  # noqa: F401
+except Exception:
+    pass
+
 class Database:
     _instance = None
     

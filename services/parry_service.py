@@ -58,12 +58,13 @@ class ParryService:
         
         try:
             # Check for existing active parry
+            now = datetime.now()
             check_query = text("""
                 SELECT id, expires_at FROM parry_states
-                WHERE user_id = :uid AND status = 'active' AND expires_at > NOW()
+                WHERE user_id = :uid AND status = 'active' AND expires_at > :now
             """)
             
-            existing = session.execute(check_query, {"uid": user_id}).fetchone()
+            existing = session.execute(check_query, {"uid": user_id, "now": now}).fetchone()
             
             if existing:
                 if local_session:
@@ -76,7 +77,6 @@ class ParryService:
                 }
             
             # Create new parry state
-            now = datetime.now()
             expires_at = now + timedelta(milliseconds=self.PARRY_WINDOW_MS)
             
             insert_query = text("""
@@ -140,15 +140,16 @@ class ParryService:
             local_session = True
         
         try:
+            now = datetime.now()
             query = text("""
                 SELECT id, mob_id, activated_at, expires_at
                 FROM parry_states
-                WHERE user_id = :uid AND status = 'active' AND expires_at > NOW()
+                WHERE user_id = :uid AND status = 'active' AND expires_at > :now
                 ORDER BY created_at DESC
                 LIMIT 1
             """)
             
-            result = session.execute(query, {"uid": user_id}).fetchone()
+            result = session.execute(query, {"uid": user_id, "now": now}).fetchone()
             
             if local_session:
                 session.close()
@@ -173,16 +174,17 @@ class ParryService:
         session = self.db.get_session()
         try:
             # Look for success/perfect parries that haven't been used for a counter yet
+            min_activated = datetime.now() - timedelta(seconds=10)
             query = text("""
                 SELECT id, activated_at, status
                 FROM parry_states
                 WHERE user_id = :uid AND status IN ('success', 'perfect')
                 AND counterattack_at IS NULL
-                AND activated_at > NOW() - INTERVAL '10 seconds'
+                AND activated_at > :min_activated
                 ORDER BY created_at DESC
                 LIMIT 1
             """)
-            result = session.execute(query, {"uid": user_id}).fetchone()
+            result = session.execute(query, {"uid": user_id, "min_activated": min_activated}).fetchone()
             session.close()
             if result:
                 return {
@@ -435,14 +437,15 @@ class ParryService:
         session = self.db.get_session()
         
         try:
+            now = datetime.now()
             query = text("""
                 UPDATE parry_states
                 SET status = 'failed'
-                WHERE user_id = :uid AND status = 'active' AND expires_at <= NOW()
+                WHERE user_id = :uid AND status = 'active' AND expires_at <= :now
                 RETURNING id
             """)
             
-            result = session.execute(query, {"uid": user_id})
+            result = session.execute(query, {"uid": user_id, "now": now})
             expired_ids = [row[0] for row in result.fetchall()]
             session.commit()
             
@@ -514,6 +517,7 @@ class ParryService:
             local_session = True
         
         try:
+            now = datetime.now()
             query = text("""
                 INSERT INTO combat_telemetry (
                     user_id, event_type, mob_id, reaction_time_ms,
@@ -522,7 +526,7 @@ class ParryService:
                 )
                 VALUES (
                     :uid, :event, :mob, :reaction, :counter_time,
-                    :damage_dealt, :damage_avoided, :metadata, NOW()
+                    :damage_dealt, :damage_avoided, :metadata, :timestamp
                 )
             """)
             
@@ -534,7 +538,8 @@ class ParryService:
                 "counter_time": data.get('counter_time_ms'),
                 "damage_dealt": data.get('damage_dealt', 0),
                 "damage_avoided": data.get('damage_avoided', 0),
-                "metadata": json.dumps(data)
+                "metadata": json.dumps(data),
+                "timestamp": now
             })
             
             if local_session:
@@ -583,12 +588,13 @@ class ParryService:
         try:
             self._initialize_stats(user_id, session=session)
             
+            now = datetime.now()
             query = text(f"""
                 UPDATE parry_stats
-                SET {stat_name} = {stat_name} + :count, updated_at = NOW()
+                SET {stat_name} = {stat_name} + :count, updated_at = :updated_at
                 WHERE user_id = :uid
             """)
-            session.execute(query, {"uid": user_id, "count": count})
+            session.execute(query, {"uid": user_id, "count": count, "updated_at": now})
             
             if local_session:
                 session.commit()
@@ -620,27 +626,29 @@ class ParryService:
             self._add_to_stat(user_id, 'total_damage_avoided', damage_avoided, session=session)
             
             # Update streaks
+            now = datetime.now()
             query = text("""
                 UPDATE parry_stats
                 SET 
                     current_parry_streak = current_parry_streak + 1,
-                    max_parry_streak = GREATEST(max_parry_streak, current_parry_streak + 1),
+                    max_parry_streak = MAX(max_parry_streak, current_parry_streak + 1),
                     current_perfect_streak = CASE WHEN :perfect THEN current_perfect_streak + 1 ELSE 0 END,
-                    max_perfect_streak = CASE WHEN :perfect THEN GREATEST(max_perfect_streak, current_perfect_streak + 1) ELSE max_perfect_streak END,
+                    max_perfect_streak = CASE WHEN :perfect THEN MAX(max_perfect_streak, current_perfect_streak + 1) ELSE max_perfect_streak END,
                     best_reaction_time_ms = CASE 
                         WHEN best_reaction_time_ms IS NULL OR :reaction < best_reaction_time_ms 
                         THEN :reaction 
                         ELSE best_reaction_time_ms 
                     END,
-                    last_parry_at = NOW(),
-                    updated_at = NOW()
+                    last_parry_at = :updated_at,
+                    updated_at = :updated_at
                 WHERE user_id = :uid
             """)
             
             session.execute(query, {
                 "uid": user_id,
                 "perfect": is_perfect,
-                "reaction": reaction_ms
+                "reaction": reaction_ms,
+                "updated_at": now
             })
             
             if local_session:
@@ -685,12 +693,13 @@ class ParryService:
             local_session = True
         
         try:
+            now = datetime.now()
             query = text("""
                 UPDATE parry_stats
-                SET current_parry_streak = 0, current_perfect_streak = 0, updated_at = NOW()
+                SET current_parry_streak = 0, current_perfect_streak = 0, updated_at = :updated_at
                 WHERE user_id = :uid
             """)
-            session.execute(query, {"uid": user_id})
+            session.execute(query, {"uid": user_id, "updated_at": now})
             
             if local_session:
                 session.commit()
