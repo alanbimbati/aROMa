@@ -278,7 +278,10 @@ class GuildService:
             return False, "Solo il capogilda può gestire gli upgrade!"
             
         guild = session.query(Guild).filter_by(id=member.guild_id).first()
-        cost = guild.inn_level * 500
+        # Costi locanda: lv1→2=5k, lv2→3=15k, lv3→4=35k, lv4→5=75k, ...
+        INN_COSTS = {1: 5000, 2: 15000, 3: 35000, 4: 75000, 5: 150000,
+                     6: 250000, 7: 400000, 8: 600000, 9: 800000}
+        cost = INN_COSTS.get(guild.inn_level, guild.inn_level * 100000)
         
         if guild.wumpa_bank < cost:
             session.close()
@@ -306,7 +309,9 @@ class GuildService:
             session.close()
             return False, "Il Villaggio è già al livello massimo (Lv. 5)!"
             
-        cost = guild.village_level * 1000
+        # Costi villaggio: lv1→2=20k, lv2→3=60k, lv3→4=150k, lv4→5=350k
+        VILLAGE_COSTS = {1: 20000, 2: 60000, 3: 150000, 4: 350000}
+        cost = VILLAGE_COSTS.get(guild.village_level, 350000)
         
         if guild.wumpa_bank < cost:
             session.close()
@@ -335,7 +340,9 @@ class GuildService:
             session.close()
             return False, "L'Armeria è già al livello massimo (Lv. 5)!"
             
-        cost = (guild.armory_level + 1) * 750
+        # Costi armeria: lv0→1=10k, lv1→2=30k, lv2→3=70k, lv3→4=150k, lv4→5=300k
+        ARMORY_COSTS = {0: 10000, 1: 30000, 2: 70000, 3: 150000, 4: 300000}
+        cost = ARMORY_COSTS.get(guild.armory_level, 300000)
         
         if guild.wumpa_bank < cost:
             session.close()
@@ -366,7 +373,9 @@ class GuildService:
             session.close()
             return False, "Il Birrificio è già al livello massimo (Lv. 5)!"
             
-        cost = (guild.brewery_level + 1) * 600
+        # Costi birrificio: lv1→2=8k, lv2→3=25k, lv3→4=60k, lv4→5=120k
+        BREWERY_COSTS = {1: 8000, 2: 25000, 3: 60000, 4: 120000}
+        cost = BREWERY_COSTS.get(guild.brewery_level, 120000)
         
         if guild.wumpa_bank < cost:
             session.close()
@@ -530,7 +539,9 @@ class GuildService:
             return False, "Solo il capogilda può gestire gli upgrade!"
             
         guild = session.query(Guild).filter_by(id=member.guild_id).first()
-        cost = (guild.bordello_level + 1) * 1500
+        # Costi bordello: lv0→1=15k, lv1→2=40k, lv2→3=90k, lv3→4=180k, lv4→5=350k
+        BORDELLO_COSTS = {0: 15000, 1: 40000, 2: 90000, 3: 180000, 4: 350000}
+        cost = BORDELLO_COSTS.get(guild.bordello_level, 350000)
         
         if guild.wumpa_bank < cost:
             session.close()
@@ -735,18 +746,19 @@ class GuildService:
         # Lv 9->10: 100,000
         # Curve: Base * (Multiplier ^ (Level - 1))?
         # Let's use specific values similar to user request
+        # Costi laboratorio: lv1→10, totale ~1.5M
         COSTS = {
-            1: 2500,
-            2: 5000,
-            3: 10000,
-            4: 20000,
-            5: 35000,
-            6: 50000,
-            7: 65000,
-            8: 80000,
-            9: 100000
+            1: 10000,
+            2: 25000,
+            3: 50000,
+            4: 80000,
+            5: 120000,
+            6: 175000,
+            7: 220000,
+            8: 280000,
+            9: 350000
         }
-        cost = COSTS.get(guild.laboratory_level, 100000)
+        cost = COSTS.get(guild.laboratory_level, 350000)
         
         if guild.wumpa_bank < cost:
             session.close()
@@ -778,18 +790,19 @@ class GuildService:
             return False, "Il Giardino è già al livello massimo (Lv. 10)!"
             
         # Same cost structure as Lab
+        # Costi giardino: identici al laboratorio
         COSTS = {
-            1: 2500,
-            2: 5000,
-            3: 10000,
-            4: 20000,
-            5: 35000,
-            6: 50000,
-            7: 65000,
-            8: 80000,
-            9: 100000
+            1: 10000,
+            2: 25000,
+            3: 50000,
+            4: 80000,
+            5: 120000,
+            6: 175000,
+            7: 220000,
+            8: 280000,
+            9: 350000
         }
-        cost = COSTS.get(guild.garden_level, 100000)
+        cost = COSTS.get(guild.garden_level, 350000)
         
         if guild.wumpa_bank < cost:
             session.close()
@@ -816,7 +829,9 @@ class GuildService:
             session.close()
             return False, "Le Scuderie dei Draghi sono già al livello massimo (Lv. 5)!"
             
-        cost = (guild.dragon_stables_level + 1) * 2000
+        # Costi scuderie: lv0→1=25k, lv1→2=75k, lv2→3=175k, lv3→4=350k, lv4→5=600k
+        STABLES_COSTS = {0: 25000, 1: 75000, 2: 175000, 3: 350000, 4: 600000}
+        cost = STABLES_COSTS.get(guild.dragon_stables_level, 600000)
         if guild.wumpa_bank < cost:
             session.close()
             return False, f"Servono {cost} Wumpa in banca per questo upgrade!"
@@ -841,7 +856,9 @@ class GuildService:
             session.close()
             return False, "L'Antico Tempio è già al livello massimo (Lv. 5)!"
             
-        cost = (guild.ancient_temple_level + 1) * 2500
+        # Costi tempio: lv0→1=30k, lv1→2=90k, lv2→3=200k, lv3→4=400k, lv4→5=700k
+        TEMPLE_COSTS = {0: 30000, 1: 90000, 2: 200000, 3: 400000, 4: 700000}
+        cost = TEMPLE_COSTS.get(guild.ancient_temple_level, 700000)
         if guild.wumpa_bank < cost:
             session.close()
             return False, f"Servono {cost} Wumpa in banca per questo upgrade!"
@@ -866,7 +883,9 @@ class GuildService:
             session.close()
             return False, "La Biblioteca Magica è già al livello massimo (Lv. 5)!"
             
-        cost = (guild.magic_library_level + 1) * 3000
+        # Costi biblioteca: lv0→1=35k, lv1→2=100k, lv2→3=225k, lv3→4=450k, lv4→5=800k
+        LIBRARY_COSTS = {0: 35000, 1: 100000, 2: 225000, 3: 450000, 4: 800000}
+        cost = LIBRARY_COSTS.get(guild.magic_library_level, 800000)
         if guild.wumpa_bank < cost:
             session.close()
             return False, f"Servono {cost} Wumpa in banca per questo upgrade!"

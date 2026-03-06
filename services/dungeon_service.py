@@ -10,6 +10,7 @@ import random
 import csv
 import json
 import os
+from services.season_content_service import get_season_content_service
 
 # Dynamic path resolution
 SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -18,8 +19,17 @@ BASE_DIR = os.path.dirname(SERVICE_DIR)
 class DungeonService:
     def __init__(self):
         self.db = Database()
+        self.content_service = get_season_content_service()
+        self._last_content_signature = self.content_service.get_runtime_signature()
         self.dungeons_cache = self.load_dungeons()
         self.event_dispatcher = EventDispatcher()
+
+    def refresh_cache_if_needed(self):
+        """Reload dungeon definitions if season theme gate changed."""
+        content_signature = self.content_service.get_runtime_signature()
+        if content_signature != self._last_content_signature:
+            self._last_content_signature = content_signature
+            self.dungeons_cache = self.load_dungeons()
 
     def check_daily_dungeon_trigger(self, chat_id=None, bot=None):
         """Checks if a dungeon should start or if hype phase is due. Run periodically."""
@@ -33,9 +43,9 @@ class DungeonService:
             today_date = now.date()
             
             # 0. AUTO-CLEANUP: Clear extremely stale dungeons (e.g. older than 3 hours)
+            # GLOBAL CLEANUP: We check ALL chats, not just GRUPPO_AROMA
             stale_cutoff = now - timedelta(hours=3)
             stale_dungeons = session.query(Dungeon).filter(
-                Dungeon.chat_id == chat_id,
                 Dungeon.status.in_(["registration", "active"]),
                 Dungeon.created_at < stale_cutoff
             ).all()
@@ -310,47 +320,53 @@ class DungeonService:
         """Load dungeons from CSV"""
         dungeons = {}
         try:
-            csv_path = os.path.join(BASE_DIR, 'data', 'dungeons.csv')
-            with open(csv_path, 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f, skipinitialspace=True)
-                for row in reader:
-                    # Strip whitespace from all string values
-                    row = {k: v.strip() if isinstance(v, str) else v for k, v in row.items()}
-                    
-                    row['id'] = int(row['id'])
-                    row['difficulty'] = int(row['difficulty'])
-                    # Parse rewards JSON
-                    try:
-                        raw_rewards = row['rewards'].strip()
-                        # If it's wrapped in literal double quotes from CSV export, strip them
-                        while raw_rewards.startswith('"') and raw_rewards.endswith('"'):
-                            raw_rewards = raw_rewards[1:-1].strip()
-                        # Handle escaped double quotes
-                        raw_rewards = raw_rewards.replace('""', '"')
+            csv_files = self.content_service.get_files("dungeons")
+
+            for csv_path in csv_files:
+                if not os.path.isabs(csv_path):
+                    csv_path = os.path.join(BASE_DIR, csv_path)
+                if not os.path.exists(csv_path):
+                    continue
+                with open(csv_path, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f, skipinitialspace=True)
+                    for row in reader:
+                        # Strip whitespace from all string values
+                        row = {k: v.strip() if isinstance(v, str) else v for k, v in row.items()}
                         
-                        if not raw_rewards or raw_rewards == '{}':
+                        row['id'] = int(row['id'])
+                        row['difficulty'] = int(row['difficulty'])
+                        # Parse rewards JSON
+                        try:
+                            raw_rewards = row['rewards'].strip()
+                            # If it's wrapped in literal double quotes from CSV export, strip them
+                            while raw_rewards.startswith('"') and raw_rewards.endswith('"'):
+                                raw_rewards = raw_rewards[1:-1].strip()
+                            # Handle escaped double quotes
+                            raw_rewards = raw_rewards.replace('""', '"')
+                            
+                            if not raw_rewards or raw_rewards == '{}':
+                                row['rewards'] = {}
+                            else:
+                                row['rewards'] = json.loads(raw_rewards)
+                        except Exception as e:
+                            print(f"[ERROR] Failed to parse rewards for dungeon {row['id']}: {e}. Raw: {row['rewards']}")
                             row['rewards'] = {}
-                        else:
-                            row['rewards'] = json.loads(raw_rewards)
-                    except Exception as e:
-                        print(f"[ERROR] Failed to parse rewards for dungeon {row['id']}: {e}. Raw: {row['rewards']}")
-                        row['rewards'] = {}
-                    # Parse steps JSON
-                    try:
-                        raw_steps = row['steps'].strip()
-                        while raw_steps.startswith('"') and raw_steps.endswith('"'):
-                            raw_steps = raw_steps[1:-1].strip()
-                        raw_steps = raw_steps.replace('""', '"')
-                        row['steps'] = json.loads(raw_steps)
-                    except Exception as e:
-                        # print(f"[ERROR] Failed to parse steps for dungeon {row['id']}: {e}. Raw: {row['steps']}")
-                        row['steps'] = []
-                    dungeons[row['id']] = row
+                        # Parse steps JSON
+                        try:
+                            raw_steps = row['steps'].strip()
+                            while raw_steps.startswith('"') and raw_steps.endswith('"'):
+                                raw_steps = raw_steps[1:-1].strip()
+                            raw_steps = raw_steps.replace('""', '"')
+                            row['steps'] = json.loads(raw_steps)
+                        except Exception:
+                            row['steps'] = []
+                        dungeons[row['id']] = row
         except Exception as e:
             print(f"Error loading dungeons: {e}")
         return dungeons
 
     def get_dungeon_def(self, dungeon_def_id):
+        self.refresh_cache_if_needed()
         return self.dungeons_cache.get(dungeon_def_id)
 
     def get_user_progress(self, user_id, session=None):
@@ -384,16 +400,12 @@ class DungeonService:
         
         return completed is not None
 
-    def create_dungeon(self, chat_id, dungeon_def_id, creator_id, session=None):
-        """Starts dungeon registration for a specific dungeon definition"""
+    def create_dungeon(self, chat_id, dungeon_def_id, creator_id, session=None, is_solo=False):
+        """Starts dungeon registration for a specific dungeon definition."""
         dungeon_def = self.get_dungeon_def(dungeon_def_id)
         if not dungeon_def:
             return None, "Dungeon non trovato."
 
-        # Check access for creator
-        # We need session for can_access_dungeon if we want to be safe, but it handles its own session if None
-        # However, if we are in a transaction, we should pass it.
-        
         local_session = False
         if not session:
             session = self.db.get_session()
@@ -404,6 +416,24 @@ class DungeonService:
             if local_session:
                 session.close()
             return None, "Non hai ancora sbloccato questo dungeon! Completa prima i precedenti."
+        
+        # --- DAILY SOLO LIMIT CHECK ---
+        if is_solo:
+            today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            already_done_today = session.query(Dungeon).filter(
+                Dungeon.is_solo == True,
+                Dungeon.dungeon_def_id == dungeon_def_id,
+                Dungeon.status.in_(["completed", "active", "registration"]),
+                # Find dungeon where this user is a participant
+                Dungeon.id.in_(
+                    session.query(DungeonParticipant.dungeon_id).filter_by(user_id=creator_id)
+                ),
+                Dungeon.created_at >= today_start
+            ).first()
+
+            if already_done_today:
+                if local_session: session.close()
+                return None, f"⏰ Hai già completato **{dungeon_def['name']}** in solo oggi! Ritorna domani."
         
         # Cleanup ghost dungeons first
         self._cleanup_ghost_dungeons(chat_id, session)
@@ -427,7 +457,8 @@ class DungeonService:
             status="registration",
             dungeon_def_id=dungeon_def_id,
             stats=json.dumps({'damage_taken': 0, 'deaths': 0, 'items_used': 0}),
-            score=None
+            score=None,
+            is_solo=is_solo
         )
         session.add(new_dungeon)
         if local_session:
@@ -562,12 +593,28 @@ class DungeonService:
                 session.close()
             return False, "Non c'è nessun dungeon in fase di iscrizione.", []
             
-        # ALLOW START WITHOUT PARTICIPANTS (Join on Attack)
-        # participants = session.query(DungeonParticipant).filter_by(dungeon_id=dungeon.id).all()
-        # if not participants:
-        #     if local_session:
-        #         session.close()
-        #     return False, "Nessun partecipante iscritto! Almeno una persona deve partecipare.", []
+        # Auto-mark as solo if only 1 participant at start time
+        participants = session.query(DungeonParticipant).filter_by(dungeon_id=dungeon.id).all()
+        if len(participants) == 1:
+            dungeon.is_solo = True
+            solo_user_id = participants[0].user_id
+            
+            # --- DAILY SOLO LIMIT CHECK ---
+            today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            already_done_today = session.query(Dungeon).filter(
+                Dungeon.is_solo == True,
+                Dungeon.dungeon_def_id == dungeon.dungeon_def_id,
+                Dungeon.status == "completed",
+                Dungeon.id.in_(
+                    session.query(DungeonParticipant.dungeon_id).filter_by(user_id=solo_user_id)
+                ),
+                Dungeon.created_at >= today_start
+            ).first()
+
+            if already_done_today:
+                if local_session: session.close()
+                dungeon_name = dungeon.name
+                return False, f"⏰ Hai già completato **{dungeon_name}** in solo oggi! Ritorna domani.", []
             
         dungeon.status = "active"
         dungeon.current_stage = 1
@@ -575,15 +622,7 @@ class DungeonService:
         d_id = dungeon.id
         d_def_id = dungeon.dungeon_def_id
         
-        if local_session:
-            session.flush()
-        else:
-            session.flush()
-        
-        # Spawn first step
-        # Note: spawn_step creates its own session if not passed, but we should pass it if we are in a transaction
-        # However, spawn_step calls pve.spawn_specific_mob which might commit.
-        # Let's check spawn_step.
+        session.flush()
         
         events, mob_ids = self.spawn_step(d_id, 1, session=session)
         
@@ -673,6 +712,15 @@ class DungeonService:
             boss_name = step_data['boss']
             success, m, mob_id = pve.spawn_boss(boss_name=boss_name, chat_id=dungeon.chat_id, ignore_limit=True, session=session)
             print(f"[DEBUG] spawn_boss result: success={success}, mob_id={mob_id}, name={boss_name}, chat_id={dungeon.chat_id}")
+            
+            if not success:
+                # FALLBACK: If specific boss fails, try random boss or elite mob
+                print(f"[WARNING] Boss '{boss_name}' failed to spawn. Trying fallback...")
+                success, m, mob_id = pve.spawn_boss(chat_id=dungeon.chat_id, ignore_limit=True, session=session)
+                if not success:
+                    # DRACONIC FALLBACK: Spawn a powerful elite mob
+                    success, m, mob_id = pve.spawn_specific_mob(mob_name="Saibaman Elite", chat_id=dungeon.chat_id, ignore_limit=True, session=session)
+            
             if success:
                 self._assign_mob_to_dungeon(mob_id, dungeon_id, session=session)
                 final_msgs.append(m)
@@ -1166,5 +1214,3 @@ class DungeonService:
             return True, f"Dungeon '{dungeon.name}' terminato forzatamente."
         finally:
             session.close()
-
-

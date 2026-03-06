@@ -51,7 +51,7 @@ class TestGuildSystem(unittest.TestCase):
         # Mock leader member
         member = GuildMember(guild_id=1, user_id=111, role="Leader")
         
-        # Mock guild with funds
+        # Mock guild with funds (locanda lv1→2 costa 5000)
         guild = Guild(id=1, name="TestGuild", inn_level=1, wumpa_bank=10000)
         
         def query_side_effect(*args, **kwargs):
@@ -65,11 +65,11 @@ class TestGuildSystem(unittest.TestCase):
             
         session.query.side_effect = query_side_effect
         
-        # Test upgrade inn
+        # Test upgrade inn (lv1→2 = 5000 wumpa)
         success, msg = self.guild_service.upgrade_inn(leader_id=111)
         self.assertTrue(success, f"Upgrade failed with message: {msg}")
         self.assertEqual(guild.inn_level, 2)
-        self.assertEqual(guild.wumpa_bank, 9500) # 10000 - 500
+        self.assertEqual(guild.wumpa_bank, 5000) # 10000 - 5000
 
     def test_upgrade_armory(self):
         # Mock session
@@ -81,7 +81,7 @@ class TestGuildSystem(unittest.TestCase):
         # Mock leader member
         member = GuildMember(guild_id=1, user_id=111, role="Leader")
         
-        # Mock guild with funds
+        # Mock guild with funds (armeria lv0→1 costa 10000)
         guild = Guild(id=1, name="TestGuild", armory_level=0, wumpa_bank=10000)
         
         def query_side_effect(*args, **kwargs):
@@ -95,12 +95,11 @@ class TestGuildSystem(unittest.TestCase):
             
         session.query.side_effect = query_side_effect
         
-        # Test upgrade armory
-        # Cost: (0+1) * 750 = 750
+        # Test upgrade armory (lv0→1 = 10000 wumpa)
         success, msg = self.guild_service.upgrade_armory(leader_id=111)
         self.assertTrue(success, f"Upgrade failed with message: {msg}")
         self.assertEqual(guild.armory_level, 1)
-        self.assertEqual(guild.wumpa_bank, 9250) # 10000 - 750
+        self.assertEqual(guild.wumpa_bank, 0) # 10000 - 10000
 
     def test_expand_village(self):
         # Mock session
@@ -112,8 +111,8 @@ class TestGuildSystem(unittest.TestCase):
         # Mock leader member
         member = GuildMember(guild_id=1, user_id=111, role="Leader")
         
-        # Mock guild with funds
-        guild = Guild(id=1, name="TestGuild", village_level=1, member_limit=5, wumpa_bank=10000)
+        # Mock guild with funds (villaggio lv1→2 costa 20000)
+        guild = Guild(id=1, name="TestGuild", village_level=1, member_limit=5, wumpa_bank=50000)
         
         def query_side_effect(*args, **kwargs):
             model = args[0] if args else None
@@ -126,13 +125,12 @@ class TestGuildSystem(unittest.TestCase):
             
         session.query.side_effect = query_side_effect
         
-        # Test expand village
-        # Cost: 1 * 1000 = 1000
+        # Test expand village (lv1→2 = 20000 wumpa)
         success, msg = self.guild_service.expand_village(leader_id=111)
         self.assertTrue(success, f"Upgrade failed with message: {msg}")
         self.assertEqual(guild.village_level, 2)
         self.assertEqual(guild.member_limit, 10) # 5 + 5
-        self.assertEqual(guild.wumpa_bank, 9000) # 10000 - 1000
+        self.assertEqual(guild.wumpa_bank, 30000) # 50000 - 20000
 
 if __name__ == '__main__':
     unittest.main()

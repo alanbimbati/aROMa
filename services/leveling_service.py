@@ -89,22 +89,23 @@ class LevelingService:
                 self.recalculate_level(user_id, session=session)
                 user_service.recalculate_stats(user_id, session=session)
                 
-                # Refresh user object
-                if local_session:
-                    try:
-                        session.refresh(utente)
-                    except:
-                        # Re-query if refresh fails (detached)
-                        utente = session.query(Utente).filter_by(id_telegram=user_id).first()
-                else:
-                    # Just expire to force reload on access
-                    session.expire(utente)
+                # Refresh user object to pick up updated max_health/max_mana
+                # from recalculate_stats (which uses its own internal session)
+                try:
+                    session.refresh(utente)
+                except Exception:
+                    utente = session.query(Utente).filter_by(id_telegram=user_id).first()
 
-                # Full Heal logic
-                utente.health = utente.max_health
-                utente.mana = utente.max_mana
-                utente.current_hp = utente.max_health
-                utente.current_mana = utente.max_mana
+                # Full Heal on level-up (must happen AFTER refresh so max values are current)
+                if utente:
+                    utente.health = utente.max_health
+                    utente.mana = utente.max_mana
+                    utente.current_hp = utente.max_health
+                    utente.current_mana = utente.max_mana
+                    if local_session:
+                        session.commit()
+                    else:
+                        session.flush()
                 
                 # Log level up event
                 self.event_dispatcher.log_event(

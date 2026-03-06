@@ -11,6 +11,7 @@ import json
 import os
 from datetime import datetime
 from services.leveling_service import LevelingService
+from services.season_content_service import get_season_content_service
 
 # Dynamic path resolution
 SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -25,61 +26,78 @@ class AchievementTracker:
         self.db = Database()
         self.event_dispatcher = EventDispatcher()
         self.stat_aggregator = StatAggregator()
+        self.content_service = get_season_content_service()
+        self._last_content_signature = None
+
+    def _is_achievement_available(self, achievement, enabled_categories) -> bool:
+        """Gate achievements by enabled categories from active season content."""
+        category = (achievement.category or "").strip().lower()
+        return category in enabled_categories if enabled_categories else True
+
+    def _ensure_active_achievement_definitions(self):
+        """Reload CSV achievement definitions if active season pack changed."""
+        content_signature = self.content_service.get_runtime_signature()
+        if content_signature != self._last_content_signature:
+            self._last_content_signature = content_signature
+            self.load_from_csv()
         
     def load_from_csv(self, csv_path=None):
         """Load achievements from a CSV file, updating the database."""
         import csv
+        self._last_content_signature = self.content_service.get_runtime_signature()
         
         if csv_path is None:
-            csv_path = os.path.join(BASE_DIR, "data", "achievements.csv")
-        
-        if not os.path.exists(csv_path):
-            print(f"[AchievementTracker] CSV file not found: {csv_path}")
-            return
+            csv_paths = self.content_service.get_files("achievements")
+        else:
+            csv_paths = [csv_path]
 
-        print(f"[AchievementTracker] Loading achievements from {csv_path}...")
         session = self.db.get_session()
         try:
-            with open(csv_path, 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                count = 0
-                for row in reader:
-                    key = row['key']
-                    name = row['name']
-                    description = row['description']
-                    stat_key = row['stat_key']
-                    category = row['category']
-                    tiers_str = row['tiers']
-                    
-                    # Validate JSON
-                    try:
-                        json.loads(tiers_str)
-                    except json.JSONDecodeError as e:
-                        print(f"[AchievementTracker] Error parsing JSON for {key}: {e}")
-                        continue
+            count = 0
+            for path in csv_paths:
+                if not os.path.isabs(path):
+                    path = os.path.join(BASE_DIR, path)
+                if not os.path.exists(path):
+                    continue
+                print(f"[AchievementTracker] Loading achievements from {path}...")
+                with open(path, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        key = row['key']
+                        name = row['name']
+                        description = row['description']
+                        stat_key = row['stat_key']
+                        category = row['category']
+                        tiers_str = row['tiers']
+                        
+                        # Validate JSON
+                        try:
+                            json.loads(tiers_str)
+                        except json.JSONDecodeError as e:
+                            print(f"[AchievementTracker] Error parsing JSON for {key}: {e}")
+                            continue
 
-                    ach = session.query(Achievement).filter_by(achievement_key=key).first()
-                    if not ach:
-                        ach = Achievement(
-                            achievement_key=key,
-                            name=name,
-                            description=description,
-                            stat_key=stat_key,
-                            category=category,
-                            tiers=tiers_str
-                        )
-                        session.add(ach)
-                    else:
-                        ach.name = name
-                        ach.description = description
-                        ach.stat_key = stat_key
-                        ach.category = category
-                        ach.tiers = tiers_str
-                    
-                    count += 1
-                
-                session.commit()
-                print(f"[AchievementTracker] Successfully processed {count} achievements.")
+                        ach = session.query(Achievement).filter_by(achievement_key=key).first()
+                        if not ach:
+                            ach = Achievement(
+                                achievement_key=key,
+                                name=name,
+                                description=description,
+                                stat_key=stat_key,
+                                category=category,
+                                tiers=tiers_str
+                            )
+                            session.add(ach)
+                        else:
+                            ach.name = name
+                            ach.description = description
+                            ach.stat_key = stat_key
+                            ach.category = category
+                            ach.tiers = tiers_str
+                        
+                        count += 1
+            session.commit()
+            print(f"[AchievementTracker] Successfully processed {count} achievements.")
                 
         except Exception as e:
             print(f"[AchievementTracker] Error loading CSV: {e}")
@@ -262,8 +280,16 @@ class AchievementTracker:
                 # If user doesn't exist, we shouldn't award achievements
                 return
             
+            self._ensure_active_achievement_definitions()
+            enabled_categories = {
+                c.strip().lower()
+                for c in self.content_service.get_enabled_achievement_categories(session=session)
+            }
             # Get all achievements
-            all_achievements = session.query(Achievement).all()
+            all_achievements = [
+                a for a in session.query(Achievement).all()
+                if self._is_achievement_available(a, enabled_categories)
+            ]
             
             # Get user stats (cache in dict for performance)
             user_stats = session.query(UserStat).filter_by(user_id=user_id).all()
@@ -578,9 +604,19 @@ class AchievementTracker:
         Get achievement statistics for a user
         """
         self.sync_live_stats(user_id)
+        self._ensure_active_achievement_definitions()
         session = self.db.get_session()
         try:
-            total_achievements = session.query(Achievement).count()
+            enabled_categories = {
+                c.strip().lower()
+                for c in self.content_service.get_enabled_achievement_categories(session=session)
+            }
+            all_achievements = session.query(Achievement).all()
+            available_keys = {
+                a.achievement_key for a in all_achievements
+                if self._is_achievement_available(a, enabled_categories)
+            }
+            total_achievements = len(available_keys)
             
             # Count unlocked achievements (at least bronze)
             user_achievements = session.query(UserAchievement, Achievement).join(
@@ -590,7 +626,7 @@ class AchievementTracker:
                 UserAchievement.current_tier != None
             ).all()
             
-            user_unlocked = len(user_achievements)
+            user_unlocked = len([ua for ua, ach in user_achievements if ach.achievement_key in available_keys])
             
             # Calculate points earned
             # Bronze: 10, Silver: 25, Gold: 50, Platinum: 100, Diamond: 250, Legendary: 500
@@ -603,6 +639,8 @@ class AchievementTracker:
             tier_order = ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'legendary']
             
             for ua, ach in user_achievements:
+                if ach.achievement_key not in available_keys:
+                    continue
                 if ua.current_tier in tier_points:
                     # Sum points for all tiers up to the current one
                     try:
@@ -626,12 +664,17 @@ class AchievementTracker:
         Get all available achievements with user progress, adapted for main.py UI.
         """
         self.sync_live_stats(user_id)
+        self._ensure_active_achievement_definitions()
         session = self.db.get_session()
         try:
+            enabled_categories = {
+                c.strip().lower()
+                for c in self.content_service.get_enabled_achievement_categories(session=session)
+            }
             query = session.query(Achievement)
             if category:
                 query = query.filter_by(category=category)
-            all_ach = query.all()
+            all_ach = [a for a in query.all() if self._is_achievement_available(a, enabled_categories)]
             user_ach_map = {ua.achievement_key: ua for ua in session.query(UserAchievement).filter_by(user_id=user_id).all()}
             
             result = []

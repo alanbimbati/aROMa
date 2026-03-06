@@ -20,6 +20,7 @@ import json
 from settings import PointsName, GRUPPO_AROMA
 from services.equipment_service import EquipmentService
 from services.leveling_service import LevelingService
+from services.season_content_service import get_season_content_service
 
 # Dynamic path resolution
 SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -81,11 +82,20 @@ class PvEService:
         self.mount_service = MountService()
         from services.guild_activity_service import GuildActivityService
         self.guild_activity_service = GuildActivityService()
+        self.content_service = get_season_content_service()
+        self._last_content_signature = self.content_service.get_runtime_signature()
         
         self.mob_data = self.load_mob_data()
         self.boss_data = self.load_boss_data()
         self.recent_mobs = [] # Track last 10 spawned mobs to avoid repetition
         self.pending_mob_effects = {} # {chat_id: [effect1, effect2, ...]}
+
+    def refresh_content_if_needed(self):
+        content_signature = self.content_service.get_runtime_signature()
+        if content_signature != self._last_content_signature:
+            self._last_content_signature = content_signature
+            self.mob_data = self.load_mob_data()
+            self.boss_data = self.load_boss_data()
 
     def get_living_mobs(self, chat_id=None, session=None, with_lock=False):
         """Helper to get all living mobs, optionally filtered by chat and locked"""
@@ -106,11 +116,16 @@ class PvEService:
         """Load mob data from CSV"""
         mobs = []
         try:
-            csv_path = os.path.join(BASE_DIR, 'data', 'mobs.csv')
-            with open(csv_path, 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    mobs.append(row)
+            csv_files = self.content_service.get_files("mobs")
+            for csv_path in csv_files:
+                if not os.path.isabs(csv_path):
+                    csv_path = os.path.join(BASE_DIR, csv_path)
+                if not os.path.exists(csv_path):
+                    continue
+                with open(csv_path, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        mobs.append(row)
         except Exception as e:
             print(f"Error loading mobs: {e}")
         return mobs
@@ -119,11 +134,16 @@ class PvEService:
         """Load boss data from CSV"""
         bosses = []
         try:
-            csv_path = os.path.join(BASE_DIR, 'data', 'bosses.csv')
-            with open(csv_path, 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    bosses.append(row)
+            csv_files = self.content_service.get_files("bosses")
+            for csv_path in csv_files:
+                if not os.path.isabs(csv_path):
+                    csv_path = os.path.join(BASE_DIR, csv_path)
+                if not os.path.exists(csv_path):
+                    continue
+                with open(csv_path, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        bosses.append(row)
         except Exception as e:
             print(f"Error loading bosses: {e}")
         return bosses
@@ -507,6 +527,7 @@ class PvEService:
 
     def spawn_specific_mob(self, mob_name=None, chat_id=None, reference_level=None, ignore_limit=False, session=None):
         """Spawn a specific mob by name or a random one if None. Returns (success, msg, mob_id)"""
+        self.refresh_content_if_needed()
         local_session = False
         if not session:
             session = self.db.get_session()
@@ -667,6 +688,7 @@ class PvEService:
 
     def spawn_boss(self, boss_name=None, chat_id=None, reference_level=None, ignore_limit=False, session=None):
         """Spawn a boss (Mob with is_boss=True). Returns (success, msg, mob_id)"""
+        self.refresh_content_if_needed()
         local_session = False
         if not session:
             session = self.db.get_session()
@@ -691,11 +713,16 @@ class PvEService:
         boss_data = None
         if boss_name:
             # Find specific boss
-            boss_data = next((b for b in self.boss_data if b['nome'].lower() == boss_name.lower()), None)
+            boss_data = next((b for b in self.boss_data if b['nome'].strip().lower() == boss_name.strip().lower()), None)
+            
+            # Fallback to mobs.csv if not found in bosses.csv (e.g. for dungeon bosses that are just strong mobs)
+            if not boss_data:
+                boss_data = next((m for m in self.mob_data if m['nome'].strip().lower() == boss_name.strip().lower()), None)
+                
             if not boss_data:
                 if local_session:
                     session.close()
-                return False, f"Boss '{boss_name}' not found.", None
+                return False, f"Boss '{boss_name}' not found in any database.", None
             
             if reference_level is not None:
                 level = reference_level + random.randint(5, 12)
@@ -2256,9 +2283,11 @@ class PvEService:
             p_user_check = session.query(Utente).filter_by(id_telegram=p.user_id).first()
             user_level = p_user_check.livello if p_user_check and p_user_check.livello else 1
             
-            # 1. Level Penalty
-            mob_level = boss.mob_level if hasattr(boss, 'mob_level') and boss.mob_level else 50
+            # 1. Level Difference Multiplier (Leecher Protection)
+            # min(1.0, (user_level + 10) / (mob_level + 10))
+            challenge_mult = min(1.0, (user_level + 10) / (mob_level + 10))
             
+            # 2. Level Penalty for high levels
             penalty_factor_xp = 1.0
             penalty_factor_wumpa = 1.0
             
@@ -2266,7 +2295,19 @@ class PvEService:
                 penalty_factor_xp = 0.5
                 penalty_factor_wumpa = 0.25
             
-            p_xp = int(TOTAL_POOL_XP * share * penalty_factor_xp)
+            p_xp = int(TOTAL_POOL_XP * share * penalty_factor_xp * challenge_mult)
+            
+            # 3. Single-Fight Cap (Max 1.5 Levels worth of EXP)
+            from services.leveling_service import LevelingService
+            lvl_service = LevelingService()
+            req_current = lvl_service.get_xp_requirement(user_level)
+            req_next = lvl_service.get_xp_requirement(user_level + 1)
+            level_pool = max(100, req_next - req_current)
+            max_p_xp = int(level_pool * 1.5)
+            
+            if p_xp > max_p_xp:
+                p_xp = max_p_xp
+
             p_wumpa = int(TOTAL_POOL_WUMPA * share * penalty_factor_wumpa)
             
             # 2. Daily Limit: "Fatigue" (Affaticamento)
@@ -2422,7 +2463,8 @@ class PvEService:
                     est_wumpa = int(boss_info.get('loot_wumpa', 1000))
             else:
                 difficulty_multiplier = difficulty ** 1.8
-                est_xp = int((mob_level * 5) * difficulty_multiplier)
+                hp_scaling = min(3.0, (mob.max_health / 1000) ** 0.35) if mob.max_health > 1000 else 1.0
+                est_xp = int((mob_level * 5) * hp_scaling * difficulty_multiplier)
                 if est_xp < 10: est_xp = 10
                 
                 # Wumpa estimate (0.05 * health * difficulty)

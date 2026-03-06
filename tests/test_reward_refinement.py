@@ -39,12 +39,13 @@ class TestRewardLogicRefinement(unittest.TestCase):
         # Correctly mock the filter().all() chain used in distribute_rewards
         session.query.return_value.filter.return_value.all.return_value = [user]
         # Mock add_exp_by_id to return leveled_up info
-        self.user_service.add_exp_by_id.return_value = {'leveled_up': False}
-        
-        summary = self.reward_service.distribute_rewards(rewards_data, self.mob, session)
-        
-        # Verify no rewards applied
-        self.user_service.add_exp_by_id.assert_called_with(123, 0, session=session)
+        with patch('services.reward_service.LevelingService') as MockLeveling:
+            MockLeveling.return_value.add_exp_by_id.return_value = {'leveled_up': False}
+            
+            summary = self.reward_service.distribute_rewards(rewards_data, self.mob, session)
+            
+            # Verify no rewards applied
+            MockLeveling.return_value.add_exp_by_id.assert_called_with(123, 0, session=session)
         self.user_service.add_points_by_id.assert_called_with(123, 0, is_drop=True, session=session)
         self.assertIn("(Fuggito)", summary)
         self.assertIn("0 Exp, 0", summary)
@@ -66,12 +67,13 @@ class TestRewardLogicRefinement(unittest.TestCase):
         session.query.return_value.filter.return_value.all.return_value = [user]
         
         # Mock add_exp_by_id to return leveled_up info
-        self.user_service.add_exp_by_id.return_value = {'leveled_up': False}
-        
-        summary = self.reward_service.distribute_rewards(rewards_data, self.mob, session)
-        
-        # Verify EXP is 0 but Wumpa is > 0
-        self.user_service.add_exp_by_id.assert_called_with(456, 0, session=session)
+        with patch('services.reward_service.LevelingService') as MockLeveling:
+            MockLeveling.return_value.add_exp_by_id.return_value = {'leveled_up': False}
+            
+            summary = self.reward_service.distribute_rewards(rewards_data, self.mob, session)
+            
+            # Verify EXP is 0 but Wumpa is > 0
+            MockLeveling.return_value.add_exp_by_id.assert_called_with(456, 0, session=session)
         
         # Check that add_points_by_id was called with something > 0
         args, kwargs = self.user_service.add_points_by_id.call_args

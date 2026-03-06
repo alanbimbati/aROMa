@@ -9,18 +9,18 @@ Cyberdemon,7500,90,ranged,Doom,Il demone cyborg,2600,650,70,"[84]","aggressive",
 General RAAM,8500,80,physical,Gears of War,Il generale Locust,2900,720,70,"[77]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Gears of War",4
 Alien Queen,9500,95,physical,Alien,La regina xenomorfa,3500,850,70,"[187]","aggressive","{""50"": ""phase2"", ""25"": ""phase3""}","Alien",5
 Songbird,720,75,ranged,Bioshock,Il guardiano alato,2400,580,70,"[128]","tactical","{""50"": ""phase2"", ""25"": ""phase3""}","Bioshock",3
-Freezer,1500,120,magic,Dragon Ball,L'imperatore dell'universo,5000,1500,85,"[144, 145]","boss","{""70"": ""phase2"", ""30"": ""phase3""}","Dragon Ball",5
-Cell,18000,130,physical,Dragon Ball,L'essere perfetto,6000,1800,90,"[146, 147]","boss","{""60"": ""phase2"", ""20"": ""phase3""}","Dragon Ball",6
-Majin Buu,2500,110,magic,Dragon Ball,La minaccia rosa,8000,2500,80,"[150, 151]","boss","{""80"": ""phase2"", ""40"": ""phase3""}","Dragon Ball",7
+Freezer (Final Form),1500,120,magic,Dragon Ball,L'imperatore dell'universo,5000,1500,85,"[144, 145]","boss","{""70"": ""phase2"", ""30"": ""phase3""}","Dragon Ball",5
+Cell (Perfect),18000,130,physical,Dragon Ball,L'essere perfetto,6000,1800,90,"[146, 147]","boss","{""60"": ""phase2"", ""20"": ""phase3""}","Dragon Ball",6
+Majin Buu (Fat),2500,110,magic,Dragon Ball,La minaccia rosa,8000,2500,80,"[150, 151]","boss","{""80"": ""phase2"", ""40"": ""phase3""}","Dragon Ball",7
 Broly,3000,150,physical,Dragon Ball,Il leggendario Super Saiyan,10000,3000,100,"[152, 153]","boss","{""50"": ""phase2"", ""10"": ""phase3""}","Dragon Ball",8
 Beerus,5000,200,magic,Dragon Ball,Il Dio della Distruzione,20000,5000,120,"[252, 255, 257]","boss","{""90"": ""phase2"", ""50"": ""phase3"", ""10"": ""phase4""}","Dragon Ball",10
 Vegeta,4000,100,physical,Dragon Ball,Il Principe dei Saiyan,1500,400,80,"[148, 149]","aggressive","{""50"": ""phase2""}","Dragon Ball",3
 C17,3500,90,ranged,Dragon Ball,Androide 17,1200,350,85,"[154]","tactical","{""50"": ""phase2""}","Dragon Ball",4
 C18,3500,90,ranged,Dragon Ball,Androide 18,1200,350,85,"[155]","tactical","{""50"": ""phase2""}","Dragon Ball",4
-Freezer First Form,2000,60,ranged,Dragon Ball,Freezer nella sua prima forma,800,200,60,"[144]","tactical","{""50"": ""phase2""}","Dragon Ball",4
-Freezer Second Form,3000,80,physical,Dragon Ball,Freezer gigante,1000,300,70,"[144]","aggressive","{""50"": ""phase2""}","Dragon Ball",4
-Freezer Third Form,4000,100,ranged,Dragon Ball,Freezer mostruoso,1200,350,90,"[145]","aggressive","{""50"": ""phase2""}","Dragon Ball",4
-Cell Imperfect,5000,110,physical,Dragon Ball,Cell che cerca C17 e C18,1500,400,80,"[146]","tactical","{""50"": ""phase2""}","Dragon Ball",5
+Freezer (First Form),2000,60,ranged,Dragon Ball,Freezer nella sua prima forma,800,200,60,"[144]","tactical","{""50"": ""phase2""}","Dragon Ball",4
+Freezer (Second Form),3000,80,physical,Dragon Ball,Freezer gigante,1000,300,70,"[144]","aggressive","{""50"": ""phase2""}","Dragon Ball",4
+Freezer (Third Form),4000,100,ranged,Dragon Ball,Freezer mostruoso,1200,350,90,"[145]","aggressive","{""50"": ""phase2""}","Dragon Ball",4
+Cell (Imperfect),5000,110,physical,Dragon Ball,Cell che cerca C17 e C18,1500,400,80,"[146]","tactical","{""50"": ""phase2""}","Dragon Ball",5
 Raditz,3000,80,physical,Dragon Ball,Il fratello di Goku,1000,300,70,"[148]","aggressive","{""50"": ""phase2""}","Dragon Ball",2
 Nappa,4500,110,physical,Dragon Ball,Il possente guerriero Saiyan,1800,450,75,"[149]","aggressive","{""50"": ""phase2""}","Dragon Ball",3
 Dodoria,4000,100,physical,Dragon Ball,Il braccio destro di Freezer,1500,400,70,"[144]","aggressive","{""50"": ""phase2""}","Dragon Ball",3
@@ -38,3 +38,19 @@ Corrupted Zamasu,25000,550,physical,Dragon Ball,La forma corrotta finale,15000,5
 Ginyu (Goku Body),6000,140,physical,Dragon Ball,Ginyu nel corpo di Goku,3000,800,95,"[154]","tactical","{""50"": ""phase2""}","Dragon Ball",5
 Vegeta (Great Ape),8000,180,physical,Dragon Ball,Vegeta trasformato in Scimmione Gigante,3500,900,95,"[148, 149]","berserk","{\"50\": \"phase2\", \"20\": \"phase3\"}","Dragon Ball",5
 Zarbon (Transformed),5500,140,physical,Dragon Ball,La vera forma mostruosa di Zarbon,2200,550,85,"[144]","aggressive","{\"50\": \"phase2\"}","Dragon Ball",4
+Golden Freezer,2500,180,magic,Dragon Ball,La forma dorata del tiranno,8000,2500,100,"[144, 145, 252]","boss","{""50"": ""phase2""}","Dragon Ball",8
+Super C17,6000,140,ranged,Dragon Ball,L'androide supremo,4000,1200,95,"[154]","tactical","{""50"": ""phase2""}","Dragon Ball",6
+Cell (Semi-Perfect),8000,125,physical,Dragon Ball,Cell dopo aver assorbito C17,2500,600,85,"[146, 147]","aggressive","{""50"": ""phase2""}","Dragon Ball",6
+Super Perfect Cell,25000,160,physical,Dragon Ball,Cell tornato dall'autodistruzione,10000,3000,100,"[146, 147, 144]","boss","{""50"": ""phase2""}","Dragon Ball",8
+Super Buu,12000,140,magic,Dragon Ball,Buu dopo aver assorbito il Buu grasso,5000,1500,90,"[150, 151]","aggressive","{""60"": ""phase2""}","Dragon Ball",7
+Buuhan,20000,180,magic,Dragon Ball,Buu dopo aver assorbito Gohan,10000,3000,95,"[150, 151, 148]","boss","{""50"": ""phase2""}","Dragon Ball",8
+Kid Buu,25000,220,magic,Dragon Ball,La forma originale e folle di Buu,20000,5000,110,"[150, 151, 152]","boss","{""50"": ""phase2"", ""20"": ""phase3""}","Dragon Ball",9
+Haze Shenron,10000,110,magic,Dragon Ball,Il drago dell'inquinamento (2 Stelle),3000,800,70,"[28]","tactical","{}","Dragon Ball",5
+Rage Shenron,12000,120,magic,Dragon Ball,Il drago dell'elettricità (5 Stelle),3500,900,75,"[28]","aggressive","{}","Dragon Ball",5
+Oceanus Shenron,14000,130,magic,Dragon Ball,Il drago dell'acqua e del vento (6 Stelle),4000,1000,80,"[28]","tactical","{}","Dragon Ball",6
+Naturon Shenron,16000,140,magic,Dragon Ball,Il drago della terra (7 Stelle),4500,1100,75,"[28]","aggressive","{}","Dragon Ball",6
+Nuova Shenron,18000,160,magic,Dragon Ball,Il drago del fuoco (4 Stelle),5000,1200,95,"[28, 144]","tactical","{}","Dragon Ball",7
+Eis Shenron,18000,160,magic,Dragon Ball,Il drago del ghiaccio (3 Stelle),5000,1200,95,"[28, 145]","tactical","{}","Dragon Ball",7
+Syn Shenron,25000,200,magic,Dragon Ball,Il drago originale (1 Stella),10000,3000,100,"[28, 144, 145]","boss","{""50"": ""phase2""}","Dragon Ball",8
+Omega Shenron,50000,350,magic,Dragon Ball,La fusione dei 7 draghi,50000,10000,110,"[28, 144, 145, 146]","boss","{""80"": ""phase2"", ""50"": ""phase3"", ""20"": ""phase4""}","Dragon Ball",10
+Whis,60000,400,magic,Dragon Ball,L'angelo assistente del Dio della Distruzione,100000,20000,150,"[252, 255, 257]","boss","{""90"": ""phase2"", ""50"": ""phase3""}","Dragon Ball",10

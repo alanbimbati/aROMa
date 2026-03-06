@@ -1,7 +1,7 @@
 
 import sys
 import os
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 # Set environment
 sys.path.append(os.getcwd())
@@ -82,17 +82,18 @@ def test_logic():
     # Mocking the session.query for Utente
     
     # Let's use distribute_rewards logic manually or check call args
-    reward_service.distribute_rewards(rewards_dungeon_data, mob_dungeon, session)
-    
-    # Capture calls to user_service.add_exp_by_id
-    args, kwargs = user_service.add_exp_by_id.call_args
-    target_id, xp = args[:2]
-    print(f"EXP distributed for dungeon mob: {xp}")
-    
-    if xp == 0:
-        print("✅ Dungeon EXP correctly set to 0!")
-    else:
-        print(f"❌ Dungeon EXP is {xp}, should be 0.")
+    with patch('services.reward_service.LevelingService') as MockLeveling:
+        reward_service.distribute_rewards(rewards_dungeon_data, mob_dungeon, session)
+        
+        # Capture calls to LevelingService.add_exp_by_id
+        args, kwargs = MockLeveling.return_value.add_exp_by_id.call_args
+        target_id, xp = args[:2]
+        print(f"EXP distributed for dungeon mob: {xp}")
+        
+        if xp == 0:
+            print("✅ Dungeon EXP correctly set to 0!")
+        else:
+            print(f"❌ Dungeon EXP is {xp}, should be 0.")
 
 if __name__ == "__main__":
     test_logic()

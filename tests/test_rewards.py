@@ -3,6 +3,7 @@ import os
 sys.path.append(os.getcwd())
 
 from services.user_service import UserService
+from services.leveling_service import LevelingService
 from database import Database
 from models.user import Utente
 
@@ -25,7 +26,7 @@ def test_rewards():
     print(f"Initial: EXP={initial_exp}, Points={initial_points}")
     
     # Test add_exp_by_id
-    user_service.add_exp_by_id(test_id, 50)
+    LevelingService().add_exp_by_id(test_id, 50)
     
     # Test add_points_by_id
     user_service.add_points_by_id(test_id, 100)
