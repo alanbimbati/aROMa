@@ -1,6 +1,8 @@
 from database import Database
 from models.system import CharacterAbility
 import csv
+import os
+from services.season_content_service import get_season_content_service
 
 class SkillService:
     """Service for managing character skills/abilities"""
@@ -8,31 +10,42 @@ class SkillService:
     def __init__(self):
         self.db = Database()
         self.abilities_cache = None
+        self._last_content_signature = None
     
     def load_abilities_from_csv(self):
         """Load abilities from CSV file"""
-        if self.abilities_cache is not None:
+        content_service = get_season_content_service()
+        content_signature = content_service.get_runtime_signature()
+        if self.abilities_cache is not None and self._last_content_signature == content_signature:
             return self.abilities_cache
+        self._last_content_signature = content_signature
             
         abilities = []
         try:
-            with open('data/abilities.csv', 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    abilities.append({
-                        'id': int(row['id']),
-                        'character_id': int(row['character_id']),
-                        'name': row['name'],
-                        'damage': int(row['damage']),
-                        'mana_cost': int(row['mana_cost']),
-                        'elemental_type': row['elemental_type'],
-                        'crit_chance': int(row.get('crit_chance', 5)),
-                        'crit_multiplier': float(row.get('crit_multiplier', 1.5)),
-                        'status_effect': row.get('status_effect', ''),
-                        'status_chance': int(row.get('status_chance', 0)),
-                        'status_duration': int(row.get('status_duration', 0)),
-                        'description': row.get('description', '')
-                    })
+            csv_files = content_service.get_files("abilities")
+
+            for path in csv_files:
+                if not os.path.isabs(path):
+                    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), path)
+                if not os.path.exists(path):
+                    continue
+                with open(path, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        abilities.append({
+                            'id': int(row['id']),
+                            'character_id': int(row['character_id']),
+                            'name': row['name'],
+                            'damage': int(row['damage']),
+                            'mana_cost': int(row['mana_cost']),
+                            'elemental_type': row['elemental_type'],
+                            'crit_chance': int(row.get('crit_chance', 5)),
+                            'crit_multiplier': float(row.get('crit_multiplier', 1.5)),
+                            'status_effect': row.get('status_effect', ''),
+                            'status_chance': int(row.get('status_chance', 0)),
+                            'status_duration': int(row.get('status_duration', 0)),
+                            'description': row.get('description', '')
+                        })
         except Exception as e:
             print(f"Error loading abilities: {e}")
         

@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "default": {
+    "characters": [
+      "data/characters.csv"
+    ],
+    "abilities": [
+      "data/abilities.csv"
+    ],
+    "mobs": [
+      "data/mobs.csv"
+    ],
+    "bosses": [
+      "data/bosses.csv"
+    ],
+    "dungeons": [
+      "data/dungeons.csv"
+    ],
+    "achievements": [
+      "data/achievements.csv"
+    ],
+    "achievement_categories": [
+      "classici",
+      "dragon_ball",
+      "mercato",
+      "crafting"
+    ]
+  },
+  "packs": {
+    "marvel_s2": {
+      "match": {
+        "theme": "Marvel"
+      },
+      "append": {
+        "characters": [
+          "data/season2_marvel_characters.csv"
+        ],
+        "abilities": [
+          "data/season2_marvel_abilities.csv"
+        ],
+        "mobs": [
+          "data/season2_marvel_mobs.csv"
+        ],
+        "bosses": [
+          "data/season2_marvel_bosses.csv"
+        ],
+        "dungeons": [
+          "data/season2_marvel_dungeons.csv"
+        ],
+        "achievements": [
+          "data/season2_marvel_achievements.csv"
+        ]
+      },
+      "achievement_categories_add": [
+        "marvel"
+      ],
+      "ui": {
+        "label": "Season 2 - Marvel",
+        "icon": "🕸️"
+      }
+    }
+  }
+}

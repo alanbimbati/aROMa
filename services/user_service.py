@@ -1219,7 +1219,8 @@ class UserService:
                 return None
                 
             now = datetime.now()
-            elapsed_minutes = int((now - user.resting_since).total_seconds() / 60)
+            import math
+            elapsed_minutes = math.ceil((now - user.resting_since).total_seconds() / 60)
             
             # Base: 1 HP and 1 Mana per minute
             # Apply multiplier

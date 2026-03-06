@@ -23,6 +23,7 @@ class Dungeon(Base):
     hype_start_time = Column(DateTime, nullable=True)
     is_hype_active = Column(Boolean, default=False)
     scheduled_for = Column(DateTime, nullable=True) # When the dungeon was scheduled to run today
+    is_solo = Column(Boolean, default=False) # True when created as a single-player run
 
 class DungeonParticipant(Base):
     __tablename__ = "dungeon_participant"

@@ -32,7 +32,16 @@ id,base_character_name,transformed_character_name,transformation_name,wumpa_cost
 31,Cloud,Cloud Limit,Limit Break,80000,3,120,60,110,0,,30
 32,Sephiroth,Sephiroth One Wing,One Winged Angel,120000,3,180,100,150,0,,50
 35,Goten,Goten SSJ,Super Saiyan,40000,3,40,20,40,0,,18
-36,Goten,Great Ape,Scimmione,0,1,150,0,100,0,,12
-37,Goku,Great Ape,Scimmione,0,1,150,0,100,0,,20
-38,Vegeta,Great Ape,Scimmione,0,1,150,0,100,0,,20
-39,Gohan,Great Ape,Scimmione,0,1,150,0,100,0,,15
+36,Goten,Great Ape,Scimmione,50000,1,150,50,100,0,,12
+37,Goku,Great Ape,Scimmione,100000,1,150,50,100,0,,20
+38,Vegeta,Great Ape,Scimmione,100000,1,150,50,100,0,,20
+40,Zamasu,Goku Black (SSR),Super Saiyan Rosé,100000,3,150,80,150,1,,45
+41,Goku Black (SSR),Fused Zamasu,Fusione Suprema,150000,3,200,120,200,1,40,55
+42,Trunks Base,Great Ape,Scimmione,80000,1,150,50,100,0,,15
+43,Nappa,Great Ape,Scimmione,100000,1,150,50,100,0,,20
+44,Raditz,Great Ape,Scimmione,100000,1,150,50,100,0,,20
+45,Bardack SSJ,Great Ape,Scimmione,120000,1,150,50,100,0,,25
+46,Tarles,Great Ape,Scimmione,100000,1,150,50,100,0,,20
+47,Broly,Great Ape,Scimmione,200000,1,200,80,150,0,,50
+48,Pan,Great Ape,Scimmione,80000,1,150,50,100,0,,15
+49,Gogeta SSJ4,Great Ape,Scimmione,300000,1,300,100,200,0,,40

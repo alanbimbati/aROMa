@@ -1,10 +1,21 @@
 import schedule
 import threading
+from sqlalchemy import text
 from database import Database
 from models.user import Utente
 from db_setup import init_database
 from services.user_service import UserService
 from services.leveling_service import LevelingService
+
+# All columns that must exist in their respective tables.
+# Format: (table_name, column_name, column_definition)
+REQUIRED_COLUMNS = [
+    ("dungeon", "is_solo",       "BOOLEAN DEFAULT FALSE"),
+    ("utente",  "current_hp",    "FLOAT"),
+    ("utente",  "active_status_effects", "TEXT"),
+    ("utente",  "daily_wumpa_earned",    "INTEGER DEFAULT 0"),
+    ("utente",  "has_turbo",     "BOOLEAN DEFAULT FALSE"),
+]
 
 class BootService:
     def __init__(self):
@@ -15,6 +26,9 @@ class BootService:
     def run_startup_sequence(self, bot=None):
         """Esegue le operazioni intere di boot del sistema"""
         print("[BOOT] Starting aROMa Bot initialization sequence...")
+        
+        # 0. Auto-migrate schema (add missing columns)
+        self.run_schema_migrations()
         
         # 1. Inizializza DB (Schema + Seed)
         init_database()
@@ -32,6 +46,23 @@ class BootService:
         self.startup_and_clean()
         
         print("[BOOT] Initialization sequence finished successfully.")
+
+    def run_schema_migrations(self):
+        """Auto-apply any missing columns to the database schema."""
+        session = self.db.get_session()
+        try:
+            for table, column, col_def in REQUIRED_COLUMNS:
+                try:
+                    session.execute(text(
+                        f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {col_def};"
+                    ))
+                    session.commit()
+                    print(f"[BOOT][MIGRATION] Ensured column '{column}' on table '{table}'")
+                except Exception as e:
+                    session.rollback()
+                    print(f"[BOOT][MIGRATION] Warning for '{column}' on '{table}': {e}")
+        finally:
+            session.close()
 
     def startup_and_clean(self):
         """Ricalcola stats e livelli per tutti gli utenti all'avvio"""
@@ -54,7 +85,6 @@ class BootService:
                         setattr(u, attr, 0)
 
                 # Ricalcolo livello usando la nuova curva
-                u.exp = min(u.exp or 0, 100000)
                 self.leveling_service.recalculate_level(u.id_telegram, session=session)
 
                 # Ricalcolo stats

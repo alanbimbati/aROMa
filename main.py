@@ -1280,12 +1280,33 @@ def handle_achievements_cmd(message, page=0, user_id=None, category=None):
         user_id = message.from_user.id
     
     if category is None or category == "menu":
+        from services.season_content_service import get_season_content_service
         markup = types.InlineKeyboardMarkup()
-        markup.row(
-            types.InlineKeyboardButton("🐉 Dragon Ball", callback_data="ach_cat|dragon_ball"),
-            types.InlineKeyboardButton("🏆 Classici", callback_data="ach_cat|classici")
-        )
-        msg = "🏆 **I TUOI ACHIEVEMENT**\n\nSeleziona una categoria per visualizzare i tuoi progressi:"
+        content_service = get_season_content_service()
+        categories = content_service.get_enabled_achievement_categories()
+        ui_cfg = content_service.get_active_ui_config()
+        label_map = {
+            "dragon_ball": "🐉 Dragon Ball",
+            "classici": "🏆 Classici",
+            "marvel": "🕸️ Marvel",
+            "mercato": "💰 Mercato",
+            "crafting": "🔨 Crafting",
+        }
+        if not categories:
+            categories = ["dragon_ball", "classici"]
+        buttons = [
+            types.InlineKeyboardButton(label_map.get(cat, cat.title()), callback_data=f"ach_cat|{cat}")
+            for cat in categories
+        ]
+        for i in range(0, len(buttons), 2):
+            markup.row(*buttons[i:i+2])
+        season_label = ui_cfg.get("label")
+        season_icon = ui_cfg.get("icon")
+        header = f"{season_icon} {season_label}" if season_label and season_icon else season_label
+        msg = "🏆 **I TUOI ACHIEVEMENT**\n"
+        if header:
+            msg += f"🎨 Tema attivo: **{header}**\n"
+        msg += "\nSeleziona una categoria per visualizzare i tuoi progressi:"
         if hasattr(message, 'message_id') and not hasattr(message, 'text'):
             bot.edit_message_text(msg, message.chat.id, message.message_id, reply_markup=markup, parse_mode='markdown')
         else:
@@ -1318,7 +1339,14 @@ def handle_achievements_cmd(message, page=0, user_id=None, category=None):
     end_idx = start_idx + ITEMS_PER_PAGE
     page_items = all_achievements[start_idx:end_idx]
     
-    cat_name = "DRAGON BALL 🐉" if category == "dragon_ball" else "CLASSICI 🏆"
+    cat_name_map = {
+        "dragon_ball": "DRAGON BALL 🐉",
+        "marvel": "MARVEL 🕸️",
+        "classici": "CLASSICI 🏆",
+        "mercato": "MERCATO 💰",
+        "crafting": "CRAFTING 🔨",
+    }
+    cat_name = cat_name_map.get(category, category.upper())
     msg = f"🏆 **ACHIEVEMENT: {cat_name}**\n"
     msg += f"📊 Progresso Totale: `{stats['completed']}/{stats['total_achievements']}`\n\n"
     
@@ -3566,6 +3594,7 @@ class BotCommands:
 
 
             # Show List
+            dungeon_service.refresh_cache_if_needed()
             dungeons = dungeon_service.dungeons_cache
             if not dungeons:
                 session.close()
@@ -3794,20 +3823,27 @@ class BotCommands:
         # 2. Check Mobs
         try:
             import csv
-            with open('data/mobs.csv', 'r') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    mob_name = row['nome']
-                    mob_name_clean = mob_name.lower().replace(" ", "_").replace("'", "")
-                    
-                    found = False
-                    for ext in ['.png', '.jpg', '.jpeg']:
-                        if os.path.exists(f"images/mobs/{mob_name_clean}{ext}"):
-                            found = True
-                            break
-                    
-                    if not found:
-                        missing_images.append({'name': mob_name, 'type': 'mob'})
+            from services.season_content_service import get_season_content_service
+            content_service = get_season_content_service()
+            for mob_path in content_service.get_files("mobs"):
+                if not os.path.isabs(mob_path):
+                    mob_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), mob_path)
+                if not os.path.exists(mob_path):
+                    continue
+                with open(mob_path, 'r') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        mob_name = row['nome']
+                        mob_name_clean = mob_name.lower().replace(" ", "_").replace("'", "")
+                        
+                        found = False
+                        for ext in ['.png', '.jpg', '.jpeg']:
+                            if os.path.exists(f"images/mobs/{mob_name_clean}{ext}"):
+                                found = True
+                                break
+                        
+                        if not found:
+                            missing_images.append({'name': mob_name, 'type': 'mob'})
         except Exception as e:
             print(f"Error checking mobs: {e}")
 
@@ -4530,40 +4566,41 @@ class BotCommands:
         next_lv_num = utente.livello + 1
         exp_req = LevelingService().get_xp_requirement(next_lv_num)
             
-        exp_percent = int((utente.exp / exp_req) * 10) if exp_req > 0 else 0
-        exp_bar = "▰" * exp_percent + "▱" * (10 - exp_percent)
-        msg += f"\n📈 **Exp**: `{utente.exp}/{exp_req}`\n`[{exp_bar}]`\n"
-        
-        # Profession Levels
-        from services.crafting_service import CraftingService
-        crafting_service = CraftingService()
-        prof_info = crafting_service.get_profession_info(utente.id_telegram)
-        prof_level = prof_info['level']
-        prof_xp = prof_info['xp']
-        prof_xp_needed = 100 * (prof_level * (prof_level + 1) // 2)
-        prof_percent = int((prof_xp / prof_xp_needed) * 10) if prof_xp_needed > 0 else 0
-        prof_bar = "▰" * prof_percent + "▱" * (10 - prof_percent)
-        msg += f"🔨 **Armaiolo**: Lv. `{prof_level}/50` | `{prof_xp}/{prof_xp_needed}` XP\n`[{prof_bar}]`\n"
-        
-        # Alchemy Level
-        alchemy_info = alchemy_service.get_alchemy_info(utente.id_telegram)
-        alch_level = alchemy_info['level']
-        alch_xp = alchemy_info['xp']
-        alch_xp_needed = 100 * (alch_level * (alch_level + 1) // 2)
-        alch_percent = int((alch_xp / alch_xp_needed) * 10) if alch_xp_needed > 0 else 0
-        alch_bar = "▰" * alch_percent + "▱" * (10 - alch_percent)
-        msg += f"⚗️ **Alchimista**: Lv. `{alch_level}/50` | `{alch_xp}/{alch_xp_needed}` XP\n`[{alch_bar}]`\n"
-        
-        # Garden Level
-        from services.garden_service import GardenService
-        garden_service = GardenService()
-        garden_info = garden_service.get_garden_info(utente.id_telegram)
-        garden_level = garden_info['level']
-        garden_xp = garden_info['xp']
-        garden_xp_needed = 100 * (garden_level * (garden_level + 1) // 2)
-        garden_percent = int((garden_xp / garden_xp_needed) * 10) if garden_xp_needed > 0 else 0
-        garden_bar = "▰" * garden_percent + "▱" * (10 - garden_percent)
-        msg += f"🌱 **Giardiniere**: Lv. `{garden_level}/50` | `{garden_xp}/{garden_xp_needed}` XP\n`[{garden_bar}]`\n"
+        if not is_potions:
+            exp_percent = int((utente.exp / exp_req) * 10) if exp_req > 0 else 0
+            exp_bar = "▰" * exp_percent + "▱" * (10 - exp_percent)
+            msg += f"\n📈 **Exp**: `{utente.exp}/{exp_req}`\n`[{exp_bar}]`\n"
+            
+            # Profession Levels
+            from services.crafting_service import CraftingService
+            crafting_service = CraftingService()
+            prof_info = crafting_service.get_profession_info(utente.id_telegram)
+            prof_level = prof_info['level']
+            prof_xp = prof_info['xp']
+            prof_xp_needed = 100 * (prof_level * (prof_level + 1) // 2)
+            prof_percent = int((prof_xp / prof_xp_needed) * 10) if prof_xp_needed > 0 else 0
+            prof_bar = "▰" * prof_percent + "▱" * (10 - prof_percent)
+            msg += f"🔨 **Armaiolo**: Lv. `{prof_level}/50` | `{prof_xp}/{prof_xp_needed}` XP\n`[{prof_bar}]`\n"
+            
+            # Alchemy Level
+            alchemy_info = alchemy_service.get_alchemy_info(utente.id_telegram)
+            alch_level = alchemy_info['level']
+            alch_xp = alchemy_info['xp']
+            alch_xp_needed = 100 * (alch_level * (alch_level + 1) // 2)
+            alch_percent = int((alch_xp / alch_xp_needed) * 10) if alch_xp_needed > 0 else 0
+            alch_bar = "▰" * alch_percent + "▱" * (10 - alch_percent)
+            msg += f"⚗️ **Alchimista**: Lv. `{alch_level}/50` | `{alch_xp}/{alch_xp_needed}` XP\n`[{alch_bar}]`\n"
+            
+            # Garden Level
+            from services.garden_service import GardenService
+            garden_service = GardenService()
+            garden_info = garden_service.get_garden_info(utente.id_telegram)
+            garden_level = garden_info['level']
+            garden_xp = garden_info['xp']
+            garden_xp_needed = 100 * (garden_level * (garden_level + 1) // 2)
+            garden_percent = int((garden_xp / garden_xp_needed) * 10) if garden_xp_needed > 0 else 0
+            garden_bar = "▰" * garden_percent + "▱" * (10 - garden_percent)
+            msg += f"🌱 **Giardiniere**: Lv. `{garden_level}/50` | `{garden_xp}/{garden_xp_needed}` XP\n`[{garden_bar}]`\n"
         
         msg += f"\n🍑 **{PointsName}**: `{utente.points}`"
         if utente.stat_points > 0:

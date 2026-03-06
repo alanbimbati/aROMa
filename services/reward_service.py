@@ -1,9 +1,11 @@
 import random
+import math
 from settings import PointsName
 from services.status_effects import StatusEffect
 from models.user import Utente
 from utils.bot_utils import get_mention_markdown, escape_markdown
 from services.leveling_service import LevelingService
+from services.season_content_service import get_season_content_service
 
 class RewardService:
     def __init__(self, db, user_service, item_service, season_manager):
@@ -11,9 +13,17 @@ class RewardService:
         self.user_service = user_service
         self.item_service = item_service
         self.season_manager = season_manager
+        self.content_service = get_season_content_service()
+        self._last_content_signature = self.content_service.get_runtime_signature()
         from services.crafting_service import CraftingService
         self.crafting_service = CraftingService()
         self.boss_data = self._load_boss_data()
+
+    def _refresh_boss_data_if_needed(self):
+        content_signature = self.content_service.get_runtime_signature()
+        if content_signature != self._last_content_signature:
+            self._last_content_signature = content_signature
+            self.boss_data = self._load_boss_data()
 
     def _load_boss_data(self):
         """Load boss data from CSV"""
@@ -21,10 +31,13 @@ class RewardService:
         import os
         bosses = []
         try:
-            # Resolve path relative to BASE_DIR which is two levels up from this service
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            csv_path = os.path.join(base_dir, 'data', 'bosses.csv')
-            if os.path.exists(csv_path):
+            content_service = get_season_content_service()
+            for csv_path in content_service.get_files("bosses"):
+                if not os.path.isabs(csv_path):
+                    csv_path = os.path.join(base_dir, csv_path)
+                if not os.path.exists(csv_path):
+                    continue
                 with open(csv_path, 'r', encoding='utf-8') as f:
                     reader = csv.DictReader(f)
                     for row in reader:
@@ -44,6 +57,7 @@ class RewardService:
         Returns:
             List of dictionaries containing reward info for each participant
         """
+        self._refresh_boss_data_if_needed()
         total_damage = sum(p.damage_dealt for p in participants)
         if total_damage <= 0:
             return []
@@ -69,49 +83,69 @@ class RewardService:
                 base_xp_pool = 10000
                 fixed_wumpa_pool = 1000
         else:
-            # Rebalanced EXP Formula (2026-02-21): 
-            # Include HP in the calculation to ensure high-HP mobs give proportional rewards.
-            # Base Factor: (level * 5) 
-            # HP Factor: log10(max_health / 100) or similar. 
-            # Let's use: (level * 2) * (max_health / 500)^0.5 * difficulty^1.5
-            # This makes HP a significant factor but not purely linear to avoid insane numbers.
-            
+            # Rebalanced EXP Formula (2026-03-04)
+            # Cap HP scaling to prevent exponential blowouts for endgame mobs
             mob_hp = getattr(mob, 'max_health', 100)
             difficulty_multiplier = difficulty ** 1.8
             
-            # Base reward based on level and HP
-            # Example: Lv 50, 10000 HP, Tier 5 -> (50*5) * (10000/500)^0.5 * 5^1.8 ≈ 250 * 4.47 * 18.1 ≈ 20,226 EXP
-            # Compared to old: 4,525 EXP.
-            # Large HP pool bosses/mobs now give much more.
-            hp_scaling = (mob_hp / 500) ** 0.5
+            # Gentle HP bonus, max 3x
+            hp_scaling = min(3.0, (mob_hp / 1000) ** 0.35) if mob_hp > 1000 else 1.0
+            
             base_xp_pool = int((mob_level * 5) * hp_scaling * difficulty_multiplier)
+            
+            # Base Wumpa is handled in the participant loop
             fixed_wumpa_pool = None
         
         # Add a small random variation (+/- 10%)
         variation = random.uniform(0.9, 1.1)
         base_xp_pool = int(base_xp_pool * variation)
-        
-        if base_xp_pool < 10: base_xp_pool = 10 # Minimum pool
+        if base_xp_pool < 10: base_xp_pool = 10
+
+        # Batch fetch levels to apply leecher protection
+        user_ids = [p.user_id for p in participants]
+        session = self.db.get_session()
+        user_levels = {u.id_telegram: u.livello for u in session.query(Utente.id_telegram, Utente.livello).filter(Utente.id_telegram.in_(user_ids)).all()}
+        session.close()
+
+        rewards = []
+        lvl_service = LevelingService()
 
         for p in participants:
             share = p.damage_dealt / total_damage
+            user_level = user_levels.get(p.user_id, 1) or 1
             
+            # 1. Challenge Multiplier (Leecher Protection)
+            challenge_mult = min(1.0, (user_level + 10) / (mob_level + 10))
+            
+            # 2. XP Penalty for high levels (existing logic moved here)
+            overlevel_penalty = 1.0
+            if user_level > mob_level + 10:
+                overlevel_penalty = 0.5
+
             # Wumpa (Points) calculation
             if is_boss and fixed_wumpa_pool:
                 wumpa = int(fixed_wumpa_pool * share)
             else:
                 wumpa = int(p.damage_dealt * 0.05 * difficulty)
-                
+            
+            if user_level > mob_level + 10:
+                wumpa = int(wumpa * 0.25)
             if wumpa < 1: wumpa = 1
 
-            # XP calculation
-            xp = int(base_xp_pool * share)
-            if xp < 1: xp = 1
+            # XP calculation with all factors
+            base_xp = int(base_xp_pool * share)
+            xp = int(base_xp * challenge_mult * overlevel_penalty)
             
-            # Turbo Bonus check (needs User object or flag passed, let's assume we handle it in distribution or here if we fetch user)
-            # For simplicity, we calculate base here. Modifiers can be applied in distribute or if we fetch users here.
-            # Let's keep it simple: return base values, fetch user in distribute to apply multipliers/status checks?
-            # Or better: fetch user here to check for 'stun' or 'dead' status which affects rewards (0 rewards).
+            # 3. Single-Fight Cap (Max 1.5 Levels worth of EXP)
+            req_current = lvl_service.get_xp_requirement(user_level)
+            req_next = lvl_service.get_xp_requirement(user_level + 1)
+            level_pool = max(100, req_next - req_current)
+            max_xp_gain = int(level_pool * 1.5)
+            
+            if xp > max_xp_gain:
+                xp = max_xp_gain
+                
+            if xp < 1: xp = 1
             
             rewards.append({
                 'user_id': p.user_id,

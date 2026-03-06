@@ -5,6 +5,7 @@ Replaces database queries for static character data
 import csv
 import os
 from typing import Optional, List, Dict, Any
+from services.season_content_service import get_season_content_service
 
 # Dynamic path resolution
 LOADER_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -17,11 +18,17 @@ class CharacterLoader:
         self._cache = None
         self._cache_by_id = {}
         self._cache_by_name = {}
+        self._last_content_signature = None
     
     def load_characters_from_csv(self) -> List[Dict[str, Any]]:
         """Load all characters from CSV with caching"""
-        if self._cache is not None:
+        content_service = get_season_content_service()
+        content_signature = content_service.get_runtime_signature()
+        if self._cache is not None and self._last_content_signature == content_signature:
             return self._cache
+        if self._last_content_signature != content_signature:
+            self.clear_cache()
+        self._last_content_signature = content_signature
         
         # Helper to safely convert to int
         def safe_int(value, default=0):
@@ -43,55 +50,61 @@ class CharacterLoader:
 
         characters = []
         try:
-            csv_path = os.path.join(BASE_DIR, 'data', 'characters.csv')
-            with open(csv_path, 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    char = {
-                        'id': safe_int(row.get('id')),
-                        'nome': row.get('nome', ''),
-                        'livello': safe_int(row.get('livello'), 1),
-                        'lv_premium': safe_int(row.get('lv_premium'), 0),
-                        'exp_required': safe_int(row.get('exp_required'), 100),
-                        'special_attack_name': row.get('special_attack_name', ''),
-                        'special_attack_damage': safe_int(row.get('special_attack_damage'), 0),
-                        'special_attack_mana_cost': safe_int(row.get('special_attack_mana_cost'), 0),
-                        'price': safe_int(row.get('price'), 0),
-                        'description': row.get('description', ''),
-                        'character_group': row.get('character_group', 'General'),
-                        'max_concurrent_owners': safe_int(row.get('max_concurrent_owners'), -1),
-                        'is_pokemon': safe_int(row.get('is_pokemon'), 0),
-                        'elemental_type': row.get('elemental_type', 'Normal'),
-                        'crit_chance': safe_int(row.get('crit_chance'), 5),
-                        'crit_multiplier': safe_float(row.get('crit_multiplier'), 1.5),
-                        'speed': safe_int(row.get('speed'), 30),
-                        # New unified schema fields
-                        'alignment': row.get('alignment', 'Good'),
-                        'entity_type': row.get('entity_type', 'Playable'),
-                        'spawn_eligible': row.get('spawn_eligible', 'false').lower() == 'true',
-                        'base_stat_multiplier': safe_float(row.get('base_stat_multiplier'), 1.0),
-                        'required_character_id': safe_int(row.get('required_character_id'), None) if row.get('required_character_id', '').strip() else None,
-                        # Transformation fields
-                        'is_transformation': safe_int(row.get('is_transformation'), 0),
-                        'base_character_id': safe_int(row.get('base_character_id'), None) if row.get('base_character_id', '').strip() else None,
-                        'transformation_mana_cost': safe_int(row.get('transformation_mana_cost'), 0),
-                        'transformation_duration_days': safe_int(row.get('transformation_duration_days'), 0),
-                        'transformation_duration_days': safe_int(row.get('transformation_duration_days'), 0),
-                        'special_attack_gif': row.get('special_attack_gif', ''),
-                        # Stat Bonuses
-                        'bonus_health': safe_int(row.get('bonus_health'), 0),
-                        'bonus_mana': safe_int(row.get('bonus_mana'), 0),
-                        'bonus_damage': safe_int(row.get('bonus_damage'), 0),
-                        'bonus_resistance': safe_int(row.get('bonus_resistance'), 0),
-                        'bonus_crit': safe_int(row.get('bonus_crit'), 0),
-                        'bonus_speed': safe_int(row.get('bonus_speed'), 0),
-                        'subgroup': row.get('subgroup', ''),
-                    }
-                    characters.append(char)
-                    
-                    # Build lookup caches
-                    self._cache_by_id[char['id']] = char
-                    self._cache_by_name[char['nome']] = char
+            csv_files = content_service.get_files("characters")
+
+            for csv_path in csv_files:
+                if not os.path.isabs(csv_path):
+                    csv_path = os.path.join(BASE_DIR, csv_path)
+                if not os.path.exists(csv_path):
+                    continue
+                with open(csv_path, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        char = {
+                            'id': safe_int(row.get('id')),
+                            'nome': row.get('nome', ''),
+                            'livello': safe_int(row.get('livello'), 1),
+                            'lv_premium': safe_int(row.get('lv_premium'), 0),
+                            'exp_required': safe_int(row.get('exp_required'), 100),
+                            'special_attack_name': row.get('special_attack_name', ''),
+                            'special_attack_damage': safe_int(row.get('special_attack_damage'), 0),
+                            'special_attack_mana_cost': safe_int(row.get('special_attack_mana_cost'), 0),
+                            'price': safe_int(row.get('price'), 0),
+                            'description': row.get('description', ''),
+                            'character_group': row.get('character_group', 'General'),
+                            'max_concurrent_owners': safe_int(row.get('max_concurrent_owners'), -1),
+                            'is_pokemon': safe_int(row.get('is_pokemon'), 0),
+                            'elemental_type': row.get('elemental_type', 'Normal'),
+                            'crit_chance': safe_int(row.get('crit_chance'), 5),
+                            'crit_multiplier': safe_float(row.get('crit_multiplier'), 1.5),
+                            'speed': safe_int(row.get('speed'), 30),
+                            # New unified schema fields
+                            'alignment': row.get('alignment', 'Good'),
+                            'entity_type': row.get('entity_type', 'Playable'),
+                            'spawn_eligible': row.get('spawn_eligible', 'false').lower() == 'true',
+                            'base_stat_multiplier': safe_float(row.get('base_stat_multiplier'), 1.0),
+                            'required_character_id': safe_int(row.get('required_character_id'), None) if row.get('required_character_id', '').strip() else None,
+                            # Transformation fields
+                            'is_transformation': safe_int(row.get('is_transformation'), 0),
+                            'base_character_id': safe_int(row.get('base_character_id'), None) if row.get('base_character_id', '').strip() else None,
+                            'transformation_mana_cost': safe_int(row.get('transformation_mana_cost'), 0),
+                            'transformation_duration_days': safe_int(row.get('transformation_duration_days'), 0),
+                            'transformation_duration_days': safe_int(row.get('transformation_duration_days'), 0),
+                            'special_attack_gif': row.get('special_attack_gif', ''),
+                            # Stat Bonuses
+                            'bonus_health': safe_int(row.get('bonus_health'), 0),
+                            'bonus_mana': safe_int(row.get('bonus_mana'), 0),
+                            'bonus_damage': safe_int(row.get('bonus_damage'), 0),
+                            'bonus_resistance': safe_int(row.get('bonus_resistance'), 0),
+                            'bonus_crit': safe_int(row.get('bonus_crit'), 0),
+                            'bonus_speed': safe_int(row.get('bonus_speed'), 0),
+                            'subgroup': row.get('subgroup', ''),
+                        }
+                        characters.append(char)
+
+                        # Build lookup caches
+                        self._cache_by_id[char['id']] = char
+                        self._cache_by_name[char['nome']] = char
                     
         except Exception as e:
             print(f"Error loading characters from CSV: {e}")

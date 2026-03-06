@@ -14,6 +14,7 @@ os.environ['TEST_DB'] = '1'
 from services.pve_service import PvEService
 from services.user_service import UserService
 from services.dungeon_service import DungeonService
+from services.leveling_service import LevelingService
 from models.user import Utente
 from models.pve import Mob
 from models.combat import CombatParticipation
@@ -32,6 +33,7 @@ class TestRewardsAndLeveling(unittest.TestCase):
         self.pve_service = PvEService()
         self.user_service = UserService()
         self.dungeon_service = DungeonService()
+        self.leveling_service = LevelingService()
         
         self.chat_id = 777
         self.user_id = 17001
@@ -149,7 +151,7 @@ class TestRewardsAndLeveling(unittest.TestCase):
         # Add enough EXP to level up (Level 1 -> 2 usually requires 100-400 EXP)
         # Level 2 requirement is 235 EXP.
         # We'll add 300 to be safe for Level 2
-        result = self.user_service.add_exp_by_id(self.user_id, 300)
+        result = self.leveling_service.add_exp_by_id(self.user_id, 300)
         
         self.assertTrue(result['leveled_up'])
         self.assertGreaterEqual(result['new_level'], 2)
