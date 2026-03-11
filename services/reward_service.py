@@ -105,13 +105,18 @@ class RewardService:
             
             base_xp_pool = int((mob_level * 5) * hp_scaling * difficulty_multiplier)
             
-            # Base Wumpa is handled in the participant loop
-            fixed_wumpa_pool = None
+            # Base Wumpa pool proportional to health and difficulty
+            fixed_wumpa_pool = int(mob_hp * 0.05 * difficulty)
+            if fixed_wumpa_pool < 10: fixed_wumpa_pool = 10
         
         # Add a small random variation (+/- 10%)
         variation = random.uniform(0.9, 1.1)
         base_xp_pool = int(base_xp_pool * variation)
         if base_xp_pool < 10: base_xp_pool = 10
+        
+        if fixed_wumpa_pool:
+            fixed_wumpa_pool = int(fixed_wumpa_pool * variation)
+            if fixed_wumpa_pool < 1: fixed_wumpa_pool = 1
 
         # Batch fetch levels to apply leecher protection
         user_ids = [p.user_id for p in participants]
@@ -136,7 +141,7 @@ class RewardService:
                 overlevel_penalty = 0.5
 
             # Wumpa (Points) calculation
-            if is_boss and fixed_wumpa_pool:
+            if fixed_wumpa_pool:
                 wumpa = int(fixed_wumpa_pool * share)
             else:
                 wumpa = int(dmg * 0.05 * difficulty)

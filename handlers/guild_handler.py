@@ -163,6 +163,7 @@ def process_guild_rename(message):
 def process_guild_deposit(message):
     try:
         amount = int(message.text)
+        print(f"[DEBUG][GUILD] User {message.from_user.id} depositing {amount} Wumpa")
         success, msg = guild_service.deposit_wumpa(message.from_user.id, amount)
         from main import bot
         bot.reply_to(message, msg)
@@ -179,7 +180,7 @@ def handle_guild_view(bot, call):
 
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton(f"🏠 Locanda ({guild['inn_level'] * 500} W)", callback_data="guild_upgrade|inn"))
-    markup.add(types.InlineKeyboardButton(f"⚔️ Armeria ({(guild['armory_level'] + 1) * 750} W)", callback_data="guild_upgrade|armory"))
+    markup.add(types.InlineKeyboardButton(f"⚔️ Armeria (Lv. {guild['armory_level']})", callback_data="guild_armory_view"))
     markup.add(types.InlineKeyboardButton(f"🏘️ Villaggio ({guild['village_level'] * 1000} W)", callback_data="guild_upgrade|village"))
     markup.add(types.InlineKeyboardButton(f"🔞 Bordello ({(guild['bordello_level'] + 1) * 1500} W)", callback_data="guild_upgrade|bordello"))
     
@@ -277,7 +278,8 @@ def handle_facility_view(bot, call, facility_type):
     facility_data = {
         'inn': {'name': '🏨 Locanda', 'level': guild['inn_level'], 'img_attr': 'inn_image'},
         'brewery': {'name': '🍻 Birrificio', 'level': guild['brewery_level'], 'img_attr': 'brewery_image'},
-        'bordello': {'name': '💃 Bordello delle Elfe', 'level': guild['bordello_level'], 'img_attr': 'bordello_image'}
+        'bordello': {'name': '💃 Bordello delle Elfe', 'level': guild['bordello_level'], 'img_attr': 'bordello_image'},
+        'armory': {'name': '⚔️ Armeria', 'level': guild['armory_level'], 'img_attr': 'armory_image'}
     }
     
     data = facility_data.get(facility_type)
@@ -295,7 +297,10 @@ def handle_facility_view(bot, call, facility_type):
         msg += "Il Bordello delle Elfe offre relax e Vigore ai membri della gilda.\n\n"
         if level == 0:
             msg += "🚨 *Questa struttura deve ancora essere costruita dal capogilda.*"
-            
+    elif facility_type == 'armory':
+        msg += "L'Armeria ti permette di potenziare il tuo equipaggiamento e depositare risorse utili per l'intera Gilda.\n\n"
+        if level == 0:
+            msg += "🚨 *L'Armeria deve ancora essere costruita dal capogilda.*"
 
     markup = types.InlineKeyboardMarkup()
     if level > 0:
@@ -307,6 +312,8 @@ def handle_facility_view(bot, call, facility_type):
              markup.add(types.InlineKeyboardButton("🍺 Bevi Birra", callback_data="buy_guild_beer"))
         elif facility_type == 'bordello':
              markup.add(types.InlineKeyboardButton("🔞 Visita", callback_data="visita_bordello_action")) # Action to visit
+        elif facility_type == 'armory':
+             markup.add(types.InlineKeyboardButton("📦 Risorse", callback_data="craft_view_resources"))
              
     if guild['role'] in ["Leader", "Officer"]:
         if level == 0:
@@ -461,6 +468,7 @@ def handle_guild_rank_cmd(bot, message):
 # Dispatcher update - we re-define it to include new functions
 def handle_guild_callbacks(bot, call):
     action = call.data
+    print(f"[DEBUG][GUILD_HANDLER] Callback received: {action} from user: {call.from_user.id}")
     
     if action == "guild_list_view":
         handle_guilds_list_cmd(bot, call.message)

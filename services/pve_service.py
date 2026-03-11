@@ -200,9 +200,10 @@ class PvEService:
         
         # Level Malus: if user level < transformation required level, increase mana cost
         required_level = character.get('livello', 1)
-        if user.livello < required_level:
+        user_level = _safe_int(getattr(user, 'livello', None), 1)
+        if user_level < required_level:
             # Multiplier: 1 + (diff / 5). Max 5x.
-            malus = 1 + (required_level - user.livello) / 5
+            malus = 1 + (required_level - user_level) / 5
             malus = min(malus, 5.0)
             mana_cost = int(mana_cost * malus)
             
@@ -210,7 +211,7 @@ class PvEService:
         mana_cost = int(mana_cost * multiplier)
         
         if user.mana < mana_cost:
-            malus_msg = " (Malus basso livello)" if user.livello < required_level else ""
+            malus_msg = " (Malus basso livello)" if user_level < required_level else ""
             return False, f"Mana insufficiente! Serve: {mana_cost}{malus_msg}, hai: {user.mana}", None, []
             
         # 0. STRICT HEALTH CHECK (User)
@@ -1127,6 +1128,8 @@ class PvEService:
                 # Parry Counterattack Bonus: Guaranteed Crit
                 self.is_parry_crit = False
                 self.parry_record = None
+                self.parry_multiplier = 1.0
+                self.parry_is_perfect = False
                 parry_state = pve_self.parry_service.get_active_counter_window(user.id_telegram)
                 if parry_state:
                     counter_data = pve_self.parry_service.calculate_counterattack_multiplier(parry_state['activated_at'])
@@ -1134,6 +1137,8 @@ class PvEService:
                         self.crit_chance = 110 # Guaranteed Crit
                         self.is_parry_crit = True
                         self.parry_record = parry_state
+                        self.parry_multiplier = counter_data.get('multiplier', 1.2)
+                        self.parry_is_perfect = (parry_state.get('status') == 'perfect')
         
         attacker = AttackerWrapper(user, character, base_damage)
         
@@ -1145,8 +1150,16 @@ class PvEService:
         
         defender = DefenderWrapper(mob)
         
-        # Calculate damage
-        combat_result = self.combat_service.calculate_damage(attacker, defender, ability)
+        # Calculate damage (normal/special) or parry counterattack damage
+        if getattr(attacker, 'is_parry_crit', False) and attacker.parry_record:
+            combat_result = self.combat_service.calculate_counterattack_damage(
+                attacker,
+                defender,
+                parry_multiplier=attacker.parry_multiplier,
+                is_perfect=attacker.parry_is_perfect
+            )
+        else:
+            combat_result = self.combat_service.calculate_damage(attacker, defender, ability)
         damage = combat_result['damage']
         
         # Log Parry Counterattack if applied
@@ -1724,7 +1737,8 @@ class PvEService:
             
             # Compact status for AoE to avoid massive cards
             hp_percent = int((mob.health / mob.max_health) * 100)
-            summary_msg += f"\n⚔️ **{mob.name}**: {hp_percent}% HP (-{damage})"
+            crit_text = " (💥 CRITICO!)" if combat_result['is_crit'] else ""
+            summary_msg += f"\n⚔️ **{mob.name}**: {hp_percent}% HP (-{damage}){crit_text}"
             
             if mob.last_message_id:
                 extra_data['delete_message_ids'].append(mob.last_message_id)
