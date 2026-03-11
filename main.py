@@ -1489,10 +1489,12 @@ def show_guild_piazza(chat_or_call, guild, index=0, edit=False):
     chat_id = chat_or_call.message.chat.id if hasattr(chat_or_call, 'message') else chat_or_call.chat.id
     
     # 0: Piazza, 1: Armoria, 2: Alchimia, 3: Giardino, 4: Locanda, 5: Bordello, 6: Scuderia, 7: Tempio, 8: Biblioteca
+    safe_guild_name = escape_markdown(guild.get('name', 'Gilda'))
+
     locations = [
         {
             'name': "⛲ Piazza della Gilda",
-            'desc': f"Benvenuti nel cuore di **{guild['name']}**! Il centro nevralgico del villaggio dove i membri possono depositare risorse e il Capogilda può gestire gli ampliamenti.",
+            'desc': f"Benvenuti nel cuore di **{safe_guild_name}**! Il centro nevralgico del villaggio dove i membri possono depositare risorse e il Capogilda può gestire gli ampliamenti.",
             'img': "./assets/guild/main.png",
             'level_key': 'village_level',
             'min_level': 1
@@ -1746,7 +1748,13 @@ def show_guild_piazza(chat_or_call, guild, index=0, edit=False):
     if not is_built:
         img_path = get_grayscale_asset(img_path)
         
+    # If the resolved image is unavailable, force text/caption update path.
+    can_use_image = os.path.exists(img_path)
+
     try:
+        if not can_use_image:
+            raise FileNotFoundError(f"Guild image missing: {img_path}")
+
         is_photo_msg = False
         if hasattr(chat_or_call, 'message') and chat_or_call.message.content_type == 'photo':
             is_photo_msg = True
@@ -1760,12 +1768,28 @@ def show_guild_piazza(chat_or_call, guild, index=0, edit=False):
                     reply_markup=markup
                 )
         elif edit and not is_photo_msg:
-             # Can't edit text to photo, delete and send new or just send new
-             try:
-                 bot.delete_message(chat_id, chat_or_call.message.message_id)
-             except: pass
+             # Can't edit text to photo.
+             # Important: send the new photo FIRST, then delete old message only on success.
+             # This prevents "message disappears" regressions if send_photo fails.
+             sent = None
              with open(img_path, 'rb') as photo:
-                bot.send_photo(chat_id, photo, caption=msg, reply_markup=markup, parse_mode='markdown', message_thread_id=getattr(chat_or_call, 'message_thread_id', None if not hasattr(chat_or_call, 'message') else getattr(chat_or_call.message, 'message_thread_id', None)))
+                sent = bot.send_photo(
+                    chat_id,
+                    photo,
+                    caption=msg,
+                    reply_markup=markup,
+                    parse_mode='markdown',
+                    message_thread_id=getattr(
+                        chat_or_call,
+                        'message_thread_id',
+                        None if not hasattr(chat_or_call, 'message') else getattr(chat_or_call.message, 'message_thread_id', None)
+                    )
+                )
+             if sent:
+                 try:
+                     bot.delete_message(chat_id, chat_or_call.message.message_id)
+                 except Exception:
+                     pass
         else:
             with open(img_path, 'rb') as photo:
                 bot.send_photo(chat_id, photo, caption=msg, reply_markup=markup, parse_mode='markdown', message_thread_id=getattr(chat_or_call, 'message_thread_id', None if not hasattr(chat_or_call, 'message') else getattr(chat_or_call.message, 'message_thread_id', None)))
@@ -1863,7 +1887,8 @@ def show_inn_view(call_or_message, edit=False):
         markup.add(types.InlineKeyboardButton("☀️ Svegliati", callback_data="inn_rest_stop"))
     else:
         if guild:
-            msg += f"🏰 Benvenuto nella Locanda di gilda (**{guild['name']}**)!\n"
+            safe_guild_name = escape_markdown(guild['name'])
+            msg += f"🏰 Benvenuto nella Locanda di gilda (**{safe_guild_name}**)!\n"
             msg += f"Grazie al livello della tua Locanda ({inn_level}), recupererai:\n"
             msg += f"✅ **{hp_rate:.1f} HP e {mana_rate:.1f} Mana al minuto.**\n\n"
         else:
@@ -2076,7 +2101,7 @@ def handle_guild_armory_view(call):
         
         # Get available equipment to craft
         equipment_list = session.execute(text("""
-            SELECT id, name, rarity, min_level, crafting_time, crafting_requirements
+            SELECT id, name, rarity, min_level, crafting_time, crafting_requirements, slot
             FROM equipment
             ORDER BY rarity ASC, min_level ASC
             LIMIT 10
@@ -2085,10 +2110,16 @@ def handle_guild_armory_view(call):
         if equipment_list:
             msg += "📜 **Equipaggiamento Disponibile**:\n"
             rarity_symbols = {1: '●', 2: '◆', 3: '★', 4: '✦', 5: '✪'}
+            slot_emoji = {
+                'head': '🎩', 'chest': '👕', 'main_hand': '⚔️', 'off_hand': '🛡️',
+                'legs': '👖', 'feet': '👞',
+                'accessory1': '💍', 'accessory2': '🔗'
+            }
             for eq in equipment_list:
-                eq_id, name, rarity, min_lvl, craft_time, requirements = eq
+                eq_id, name, rarity, min_lvl, craft_time, requirements, slot = eq
                 symbol = rarity_symbols.get(rarity, '●')
-                msg += f"{symbol} {name} (Lv.{min_lvl}, {(craft_time // 60) if craft_time is not None else 'N/A'}min)\n"
+                slot_icon = slot_emoji.get(slot, '📦')
+                msg += f"{symbol} {slot_icon} {name} (Lv.{min_lvl}, {(craft_time // 60) if craft_time is not None else 'N/A'}min)\n"
         else:
             msg += "_Nessun equipaggiamento disponibile._\n"
         
@@ -2472,9 +2503,10 @@ def handle_craft_select_equipment(call):
     try:
         # Get distinct sets that have at least one craftable item (rarity <= armory_level)
         sets = session.execute(text("""
-            SELECT DISTINCT set_name FROM equipment 
+            SELECT set_name, MIN(rarity) as min_r FROM equipment 
             WHERE set_name IS NOT NULL AND rarity <= :lvl
-            ORDER BY set_name ASC
+            GROUP BY set_name
+            ORDER BY min_r ASC, set_name ASC
         """), {"lvl": armory_level}).fetchall()
         
         # Count misc items craftable
@@ -2573,7 +2605,7 @@ def handle_craft_view_set(call):
                 SELECT id, name, rarity, min_level, stats_json, slot, crafting_requirements, crafting_time
                 FROM equipment
                 WHERE set_name = :sname AND rarity <= :lvl
-                ORDER BY min_level ASC, slot ASC
+                ORDER BY rarity ASC, min_level ASC, slot ASC
             """), {"sname": set_name, "lvl": armory_level}).fetchall()
             
         # Display Items
@@ -2844,10 +2876,44 @@ def handle_titles_cmd(message):
     bot.reply_to(message, msg, reply_markup=markup, parse_mode='markdown')
 
 @bot.message_handler(commands=['stagione', 'season', 'pass'])
-def handle_season_cmd(message, page=0, user_id=None):
+def handle_season_cmd(message, page=0, user_id=None, edit_existing=False):
     """Show seasonal progression and rewards with pagination"""
     if user_id is None:
         user_id = message.from_user.id
+
+    def _send_or_edit(text, reply_markup=None):
+        # Callback pagination path: update same message to reduce chat spam
+        if edit_existing and hasattr(message, 'message_id'):
+            try:
+                bot.edit_message_text(
+                    text,
+                    message.chat.id,
+                    message.message_id,
+                    reply_markup=reply_markup,
+                    parse_mode='markdown'
+                )
+                return
+            except telebot.apihelper.ApiTelegramException as e:
+                if "message is not modified" in str(e).lower():
+                    # Telegram API throws an error if we edit with identical text/markup
+                    # Just ignore it to avoid breaking the flow
+                    return
+                # Real error: attempt to fallback to delete+send
+                try:
+                    bot.delete_message(message.chat.id, message.message_id)
+                except Exception:
+                    pass
+                bot.send_message(message.chat.id, text, reply_markup=reply_markup, parse_mode='markdown')
+                return
+            except Exception:
+                # Fallback: remove old message and send a fresh one
+                try:
+                    bot.delete_message(message.chat.id, message.message_id)
+                except Exception:
+                    pass
+                bot.send_message(message.chat.id, text, reply_markup=reply_markup, parse_mode='markdown')
+                return
+        bot.reply_to(message, text, reply_markup=reply_markup, parse_mode='markdown')
     
     try:
         from services.season_manager import SeasonManager
@@ -2855,7 +2921,7 @@ def handle_season_cmd(message, page=0, user_id=None):
         
         status = manager.get_season_status(user_id)
         if not status:
-            bot.reply_to(message, "Nessuna stagione attiva al momento.")
+            _send_or_edit("Nessuna stagione attiva al momento.")
             return
             
         # Get active season to get all rewards
@@ -2911,14 +2977,11 @@ def handle_season_cmd(message, page=0, user_id=None):
         if not progress['has_premium']:
             markup.add(types.InlineKeyboardButton("🛒 Acquista Season Pass (1000 🍑)", callback_data="buy_season_pass"))
         
-        if hasattr(message, 'message_id') and not hasattr(message, 'text'): # Callback
-            bot.edit_message_text(msg, message.chat.id, message.message_id, reply_markup=markup, parse_mode='markdown')
-        else:
-            bot.reply_to(message, msg, reply_markup=markup, parse_mode='markdown')
+        _send_or_edit(msg, reply_markup=markup)
             
     except Exception as e:
         print(f"Error showing season: {e}")
-        bot.reply_to(message, "❌ Errore nel caricamento della stagione.")
+        _send_or_edit("❌ Errore nel caricamento della stagione.")
 
 
 
@@ -8886,9 +8949,11 @@ def callback_query(call):
     
     # SEASON PAGINATION
     if action.startswith("season_page|"):
-        page = int(action.split("|")[1])
-        handle_season_cmd(call.message, page=page, user_id=user_id)
-        safe_answer_callback(call.id)
+        try:
+            page = int(action.split("|")[1])
+            handle_season_cmd(call.message, page=page, user_id=user_id, edit_existing=True)
+        finally:
+            safe_answer_callback(call.id)
         return
 
     # REFRESH ENEMIES LIST
@@ -10779,9 +10844,11 @@ def callback_query(call):
 
     # SEASON PAGINATION
     elif action.startswith("season_page|"):
-        page = int(action.split("|")[1])
-        handle_season_cmd(call.message, page=page)
-        safe_answer_callback(call.id)
+        try:
+            page = int(action.split("|")[1])
+            handle_season_cmd(call.message, page=page, user_id=user_id, edit_existing=True)
+        finally:
+            safe_answer_callback(call.id)
         return
 
     # SEASON PASS PURCHASE
@@ -10793,7 +10860,7 @@ def callback_query(call):
         if success:
             safe_answer_callback(call.id, "✅ Acquisto completato!")
             # Update the season message to show the new status
-            handle_season_cmd(call.message)
+            handle_season_cmd(call.message, user_id=user_id, edit_existing=True)
         else:
             safe_answer_callback(call.id, "❌ Errore")
             bot.send_message(user_id, msg, parse_mode='markdown')
