@@ -394,29 +394,29 @@ class GuildService:
         return self.upgrade_bordello(leader_id)
 
     def get_potion_bonus(self, user_id):
-        """Get potion effectiveness bonus based on inn level (Active for 30 mins after beer)"""
+        """Get potion effectiveness bonus from active_status_effects (Persisted after drinking)"""
         session = self.db.get_session()
         user = session.query(Utente).filter_by(id_telegram=user_id).first()
-        if not user or not user.last_beer_usage:
+        if not user:
             session.close()
             return 1.0
             
-        # Check if 30 minutes have passed
-        now = datetime.now()
-        if (now - user.last_beer_usage).total_seconds() > 1800: # 30 mins
-            session.close()
-            return 1.0
-            
-        guild = self.get_user_guild(user_id)
-        if not guild:
-            session.close()
-            return 1.0
-            
-        # Brewery bonus logic
-        brew_level = guild.get('brewery_level', 1) or 1
-        bonus_pct = 15 + (brew_level * 5)
+        import json
+        from datetime import datetime
+        try:
+             effects = json.loads(user.active_status_effects or '[]')
+        except:
+             effects = []
+             
+        now = datetime.now().timestamp()
+        
+        max_bonus = 0
+        for e in effects:
+            if e.get('effect') == 'beer_potion_bonus' and e.get('expires_at', 0) > now:
+                max_bonus = max(max_bonus, e.get('value', 0))
+        
         session.close()
-        return 1.0 + (bonus_pct / 100.0)
+        return 1.0 + (max_bonus / 100.0)
 
     def buy_guild_drink(self, user_id, drink_type='beer'):
         """Buy a drink from the guild brewery"""
@@ -462,26 +462,55 @@ class GuildService:
         user.points -= drink['cost']
         user.last_beer_usage = now
         
-        # Heal Logic
-        heal_amount = int(user.max_health * drink['heal'])
-        user.current_hp = min((user.current_hp or 0) + heal_amount, user.max_health)
+        # Heal & Mana Logic (consistent with UserService)
+        from services.user_service import UserService
+        us = UserService()
         
-        # Potion Bonus Logic
+        heal_pct = drink['heal']
+        mana_pct = drink.get('mana_pct', heal_pct / 2) # Mana is half of HP or custom
+        
+        heal_amount = int(user.max_health * heal_pct)
+        mana_amount = int(user.max_mana * mana_pct)
+        
+        restored_hp = us.restore_health(user, heal_amount, session=session)
+        restored_mana = us.restore_mana(user, mana_amount, session=session)
+        
+        # Potion Bonus Logic (Persisted in active_status_effects)
         brew_level = guild.brewery_level if guild.brewery_level else 1
         base_bonus = 15 + (brew_level * 5)
         
         # Multiplier based on drink
         drink_mults = {
             'beer': 1.0, 'whiskey': 1.1, 'ambrosia': 1.25, 
-            'mead': 1.5, 'dragon_blood': 2.0, 'yggdrasil': 3.0
+            'mead': 1.5, 'dragon_blood': 2.0, 'yggdrasil': 3.5 # Slightly buffed end-game
         }
         drink_mult = drink_mults.get(drink_type, 1.0)
-        final_bonus = int(base_bonus * drink_mult)
+        final_bonus_pct = int(base_bonus * drink_mult)
+        
+        # Store in Status Effects
+        import json
+        try:
+            effects = json.loads(user.active_status_effects or '[]')
+        except:
+            effects = []
+            
+        # Remove old beer bonuses
+        effects = [e for e in effects if e.get('effect') != 'beer_potion_bonus']
+        
+        # Duration: 30 minutes
+        expires_at = (now + timedelta(minutes=30)).timestamp()
+        effects.append({
+            'effect': 'beer_potion_bonus',
+            'value': final_bonus_pct,
+            'expires_at': expires_at,
+            'name': drink['name']
+        })
+        user.active_status_effects = json.dumps(effects)
         
         session.commit()
         session.close()
         
-        return True, f"🍺 Hai bevuto **{drink['name']}**! Ti senti rinvigorito (+{heal_amount} HP).\n\n✨ Le tue pozioni saranno più efficaci del **{final_bonus}%** per 30 minuti!"
+        return True, f"🍺 Hai bevuto **{drink['name']}**! Ti senti rinvigorito (+{restored_hp} HP, +{restored_mana} Mana).\n\n✨ Le tue pozioni saranno più efficaci del **{final_bonus_pct}%** per 30 minuti!"
 
     def get_inn_image(self, inn_level):
         """Get the image path for the inn based on its level"""
@@ -631,60 +660,6 @@ class GuildService:
         finally:
             session.close()
 
-    def buy_drink(self, user_id, drink_key):
-        """Buy a drink at the brewery"""
-        # drink_key: 'beer', 'whiskey', 'ambrosia', 'mead', 'dragon_blood', 'yggdrasil'
-        session = self.db.get_session()
-        try:
-            member = session.query(GuildMember).filter_by(user_id=user_id).first()
-            if not member:
-                return False, "Non fai parte di nessuna gilda!"
-            
-            guild = session.query(Guild).filter_by(id=member.guild_id).first()
-            if guild.brewery_level < 1:
-                return False, "Il Birrificio non è ancora stato costruito o è di livello troppo basso!"
-                
-            # Configuration
-            DRINKS = {
-                'beer': {'name': 'Birra Chiara', 'lvl': 1, 'cost': 10, 'hp': 20, 'mana': 10, 'flavor': "Una birra fresca e leggera."},
-                'whiskey': {'name': 'Whiskey Nanico', 'lvl': 3, 'cost': 50, 'hp': 50, 'mana': 30, 'flavor': "Brucia la gola, ma scalda il cuore."},
-                'mead': {'name': 'Idromele dei Titani', 'lvl': 5, 'cost': 150, 'hp': 150, 'mana': 100, 'flavor': "Il nettare degli antichi guerrieri."},
-                'ambrosia': {'name': 'Ambrosia di Wumpa', 'lvl': 7, 'cost': 500, 'hp': 500, 'mana': 300, 'flavor': "Un gusto divino che ripristina le forze."},
-                'dragon_blood': {'name': 'Sangue di Drago', 'lvl': 9, 'cost': 1000, 'hp': 1000, 'mana': 500, 'flavor': "PICCANTE! Ti senti invincibile."},
-                'yggdrasil': {'name': 'Lacrima di Yggdrasil', 'lvl': 10, 'cost': 2500, 'hp': 9999, 'mana': 9999, 'flavor': "Una goccia di pura energia vitale."}
-            }
-            
-            drink = DRINKS.get(drink_key)
-            if not drink:
-                return False, "Bevanda non trovata!"
-                
-            if guild.brewery_level < drink['lvl']:
-                return False, f"Il Birrificio deve essere al livello {drink['lvl']} per servire questa bevanda!"
-                
-            user = session.query(Utente).filter_by(id_telegram=user_id).first()
-            if user.points < drink['cost']:
-                return False, f"Non hai abbastanza Wumpa! Costa {drink['cost']}."
-                
-            user.points -= drink['cost']
-            
-            # Helper to execute restore logic reuse?
-            # Just do it manually here
-            old_hp = user.current_hp if user.current_hp is not None else user.max_health
-            old_mana = user.current_mana if user.current_mana is not None else user.max_mana
-            
-            user.current_hp = min(user.max_health, old_hp + drink['hp'])
-            user.current_mana = min(user.max_mana, old_mana + drink['mana'])
-            
-            restored_hp = user.current_hp - old_hp
-            restored_mana = user.current_mana - old_mana
-            
-            session.commit()
-            return True, f"🍺 Hai bevuto **{drink['name']}**!\n\n_{drink['flavor']}_\n\n❤️ +{restored_hp} HP\n💙 +{restored_mana} Mana"
-        except Exception as e:
-            session.rollback()
-            return False, f"Errore: {e}"
-        finally:
-             session.close()
 
     def get_mana_cost_multiplier(self, user_id):
         """Get mana cost multiplier (0.5 if Vigore is active)"""

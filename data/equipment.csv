@@ -38,3 +38,5 @@ id,name,slot,rarity,min_level,stats_json,crafting_time,crafting_requirements,des
 22,Mantello Supremo,chest,5,50,"{""defense"": 10, ""mana"": 95, ""health"": 50, ""all_stats"": 5}",86400,"{""Diamante"": 48}",Mantello del Kaioshin Supremo,Set Kaioshin Supremo,
 23,Anello del Tempo,accessory2,5,50,"{""speed"": 10, ""crit_chance"": 10, ""all_stats"": 3}",86400,"{""Diamante"": 30}",Anello mistico che manipola il tempo,Set Kaioshin Supremo,
 41,Diadema Supremo,head,5,50,"{""mana"": 150, ""all_stats"": 10}",86400,"{""Diamante"": 40}",Il diadema indossato dai massimi reggenti divini,Set Kaioshin Supremo,
+41,Leggings di Ferro,legs,1,1,"{""defense"": 1}",600,"{""Rottami"": 10}",Leggings di ferro per principianti,Set Base,
+42,Stivali di Ferro,feet,1,1,"{""speed"": 1}",600,"{""Rottami"": 10}",Stivali di ferro per principianti,Set Base,

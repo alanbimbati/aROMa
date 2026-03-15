@@ -152,7 +152,9 @@ class AlchemyService:
                 job.status = 'claimed'
 
             # Update Alchemy XP
-            self.add_alchemy_xp(user_id, total_xp, session=session)
+            from services.crafting_service import CraftingService
+            cs = CraftingService()
+            leveled_up = cs.add_profession_xp(user_id, total_xp, profession_name='alchemist', session=session)
             
             # Log events for achievements
             from services.event_dispatcher import EventDispatcher
@@ -182,72 +184,16 @@ class AlchemyService:
             session.close()
 
     def get_alchemy_info(self, user_id):
-        """Get user alchemy level and XP"""
-        session = self.db.get_session()
-        try:
-            xp_stat = session.query(UserStat).filter_by(user_id=user_id, stat_key='alchemy_xp').first()
-            level_stat = session.query(UserStat).filter_by(user_id=user_id, stat_key='alchemy_level').first()
-            
-            return {
-                "level": int(level_stat.value) if level_stat else 1, 
-                "xp": int(xp_stat.value) if xp_stat else 0
-            }
-        finally:
-            session.close()
+        """Get user alchemy level and XP (using standardized CraftingService)"""
+        from services.crafting_service import CraftingService
+        cs = CraftingService()
+        return cs.get_profession_info(user_id, profession_name='alchemist')
 
     def add_alchemy_xp(self, user_id, amount, session=None):
-        """Add XP to user's alchemy and check for level up"""
-        local_session = False
-        if not session:
-            session = self.db.get_session()
-            local_session = True
-            
-        try:
-            info = self.get_alchemy_info(user_id)
-            current_xp = info['xp']
-            current_level = info['level']
-            
-            MAX_ALCHEMY_LEVEL = 50
-            if current_level >= MAX_ALCHEMY_LEVEL:
-                return False
-            
-            new_xp = current_xp + amount
-            new_level = current_level
-            
-            while True:
-                if new_level >= MAX_ALCHEMY_LEVEL:
-                    new_level = MAX_ALCHEMY_LEVEL
-                    break
-                
-                xp_needed = 100 * (new_level * (new_level + 1) // 2)
-                if new_xp >= xp_needed:
-                    new_level += 1
-                else:
-                    break
-            
-            # Update XP
-            xp_entry = session.query(UserStat).filter_by(user_id=user_id, stat_key='alchemy_xp').first()
-            if xp_entry:
-                xp_entry.value = new_xp
-            else:
-                xp_entry = UserStat(user_id=user_id, stat_key='alchemy_xp', value=new_xp)
-                session.add(xp_entry)
-            
-            # Update Level
-            lvl_entry = session.query(UserStat).filter_by(user_id=user_id, stat_key='alchemy_level').first()
-            if lvl_entry:
-                lvl_entry.value = new_level
-            else:
-                lvl_entry = UserStat(user_id=user_id, stat_key='alchemy_level', value=new_level)
-                session.add(lvl_entry)
-            
-            if local_session:
-                session.commit()
-            
-            return new_level > current_level
-        finally:
-            if local_session:
-                session.close()
+        """Add XP (DEPRECATED: Use CraftingService.add_profession_xp directly)"""
+        from services.crafting_service import CraftingService
+        cs = CraftingService()
+        return cs.add_profession_xp(user_id, amount, profession_name='alchemist', session=session)
 
     def get_alchemy_status(self, user_id):
         """Get current brewing queue status"""

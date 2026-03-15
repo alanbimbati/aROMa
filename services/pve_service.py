@@ -439,8 +439,9 @@ class PvEService:
             user_level = user.livello if user.livello else 1
             mob_level = mob.mob_level if mob.mob_level else 1
             
-            flee_chance = 0.5 * (mob_level / user_level)
-            flee_chance = min(0.9, max(0.1, flee_chance)) # Cap between 10% and 90%
+            # Flee chance: base 50% + 5% for each level user is above mob
+            flee_chance = 0.5 + (user_level - mob_level) * 0.05
+            flee_chance = min(0.95, max(0.1, flee_chance)) # Cap between 10% and 95%
             
             if random.random() < flee_chance:
                 # Success!
@@ -590,6 +591,11 @@ class PvEService:
         if mob_name:
             # Find specific mob
             mob_data = next((m for m in self.mob_data if m['nome'].lower() == mob_name.lower()), None)
+            
+            # FALLBACK: If not found in mobs, check bosses (useful for dungeons)
+            if not mob_data:
+                mob_data = next((b for b in self.boss_data if b['nome'].lower() == mob_name.lower()), None)
+                
             if not mob_data:
                 if local_session:
                     session.close()
