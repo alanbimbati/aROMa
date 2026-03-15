@@ -182,10 +182,13 @@ class DungeonService:
             current_idx_str = SystemState.get_val(session, 'current_dungeon_index', '1')
             current_idx = int(current_idx_str)
             
-            # Validation: cap at 20 or go random
+            # Validation: cap at max defined dungeon or go random
+            all_ids = sorted(self.dungeons_cache.keys())
+            max_id = all_ids[-1] if all_ids else 1
+            
             dungeon_def_id = current_idx
-            if dungeon_def_id > 20:
-                dungeon_def_id = random.randint(1, 20)
+            if dungeon_def_id > max_id:
+                dungeon_def_id = random.choice(all_ids) if all_ids else 1
                 
             dungeon_def = self.get_dungeon_def(dungeon_def_id)
             if not dungeon_def:
@@ -380,11 +383,22 @@ class DungeonService:
         return progress
 
     def can_access_dungeon(self, user_id, dungeon_def_id, session=None):
-        if dungeon_def_id == 1:
+        """Robust sequential unlocking check"""
+        all_ids = sorted(self.dungeons_cache.keys())
+        if not all_ids:
+             return True # No dungeons defined?
+             
+        if dungeon_def_id == all_ids[0]:
             return True
         
-        # Check if previous dungeon is completed
-        prev_id = dungeon_def_id - 1
+        # Check if previous dungeon in sequence is completed
+        try:
+            curr_idx = all_ids.index(dungeon_def_id)
+            prev_id = all_ids[curr_idx - 1]
+        except (ValueError, IndexError):
+            # If ID not found or first one, allow entry or fail safe
+            return True
+
         local_session = False
         if not session:
             session = self.db.get_session()
@@ -920,14 +934,15 @@ class DungeonService:
     def _advance_global_index(self, session):
         """Helper to advance the global dungeon index safely"""
         try:
+            all_ids = sorted(self.dungeons_cache.keys())
+            max_id = all_ids[-1] if all_ids else 1
+            
             current_idx_str = SystemState.get_val(session, 'current_dungeon_index', '1')
             current_idx = int(current_idx_str)
-            if current_idx < 20:
+            if current_idx < max_id:
                 SystemState.set_val(session, 'current_dungeon_index', current_idx + 1)
                 print(f"[DUNGEON] Advanced global index to {current_idx + 1}")
             else:
-                # Loop back or go random? For now, reset to 1 or stay at 20
-                # Let's reset to 1 to cycle through content
                 SystemState.set_val(session, 'current_dungeon_index', 1)
                 print(f"[DUNGEON] Reset global index to 1")
         except Exception as e:

@@ -418,7 +418,15 @@ class CraftingService:
             
             # 3. Award profession XP
             xp_gained = raw_qty * 5
-            self.add_profession_xp(user_id, xp_gained)
+            
+            # Profession mapping based on res_id
+            prof_name = 'armorsmith'
+            if res_id in [4, 5]:
+                prof_name = 'alchemist'
+            elif res_id in [7, 8, 9] or res_id > 7:
+                prof_name = 'gardener'
+                
+            self.add_profession_xp(user_id, xp_gained, profession_name=prof_name)
             
             session.commit()
             return {"success": True, "materials": results, "xp_gained": xp_gained}
@@ -455,7 +463,15 @@ class CraftingService:
                     continue
                     
                 armory_level = self.get_guild_armory_level(gid)
-                prof = self.get_profession_info(uid)
+                
+                # Determine profession name to pull correct level
+                prof_name = 'armorsmith'
+                if job.resource_id in [4, 5]:
+                    prof_name = 'alchemist'
+                elif job.resource_id in [7, 8, 9] or job.resource_id > 7:
+                    prof_name = 'gardener'
+                    
+                prof = self.get_profession_info(uid, profession_name=prof_name)
                 
                 res = self.complete_refinement(qid, user.livello, prof['level'], armory_level)
                 if res['success']:
@@ -738,7 +754,7 @@ class CraftingService:
             
             # Add profession XP
             xp_gain = 10 * (base_rarity + 1)
-            self.add_profession_xp(user_id, xp_gain)
+            self.add_profession_xp(user_id, xp_gain, profession_name='armorsmith')
             
             return {
                 "success": True,
@@ -798,20 +814,30 @@ class CraftingService:
         finally:
             session.close()
 
-    def get_profession_info(self, user_id):
+    def get_profession_info(self, user_id, profession_name='armorsmith'):
         """Get user profession level and XP from UserStats"""
         from models.stats import UserStat
         session = self.db.get_session()
         try:
             xp_stat = session.query(UserStat).filter_by(
                 user_id=user_id, 
-                stat_key='profession_xp'
+                stat_key=f'{profession_name}_xp'
             ).first()
             
             level_stat = session.query(UserStat).filter_by(
                 user_id=user_id, 
-                stat_key='profession_level'
+                stat_key=f'{profession_name}_level'
             ).first()
+            
+            # Fallback to old 'profession_xp' if armorsmith is requested but doesn't exist yet
+            if profession_name == 'armorsmith' and not xp_stat:
+                old_xp = session.query(UserStat).filter_by(user_id=user_id, stat_key='profession_xp').first()
+                if old_xp:
+                    xp_stat = old_xp
+            if profession_name == 'armorsmith' and not level_stat:
+                old_lvl = session.query(UserStat).filter_by(user_id=user_id, stat_key='profession_level').first()
+                if old_lvl:
+                    level_stat = old_lvl
             
             return {
                 "level": int(level_stat.value) if level_stat else 1, 
@@ -820,9 +846,9 @@ class CraftingService:
         finally:
             session.close()
 
-    def add_profession_xp(self, user_id, amount):
-        """Add XP to user's profession and check for level up"""
-        info = self.get_profession_info(user_id)
+    def add_profession_xp(self, user_id, amount, profession_name='armorsmith'):
+        """Add XP to user's specified profession and check for level up"""
+        info = self.get_profession_info(user_id, profession_name)
         current_xp = info['xp']
         current_level = info['level']
         
@@ -833,15 +859,6 @@ class CraftingService:
         
         new_xp = current_xp + amount
         
-        # Calculate level: 100 * (level * (level + 1) / 2) is the XP needed for NEXT level
-        # Level 1 -> 2: 100 * 1 = 100 xp
-        # Level 2 -> 3: 100 * (2+1) = 300 xp
-        # Level 3 -> 4: 100 * (3+3) = 600 xp
-        # new_level = 1
-        # while new_xp >= 100 * (new_level * (new_level + 1) // 2):
-        #     new_level += 1
-        
-        # Simpler check:
         new_level = current_level
         while True:
             if new_level >= MAX_PROFESSION_LEVEL:
@@ -861,23 +878,24 @@ class CraftingService:
             # Update XP (Atomic UPSERT style)
             xp_entry = session.query(UserStat).filter_by(
                 user_id=user_id, 
-                stat_key='profession_xp'
+                stat_key=f'{profession_name}_xp'
             ).first()
+            
             if xp_entry:
                 xp_entry.value = new_xp
             else:
-                xp_entry = UserStat(user_id=user_id, stat_key='profession_xp', value=new_xp)
+                xp_entry = UserStat(user_id=user_id, stat_key=f'{profession_name}_xp', value=new_xp)
                 session.add(xp_entry)
             
             # Update Level
             lvl_entry = session.query(UserStat).filter_by(
                 user_id=user_id, 
-                stat_key='profession_level'
+                stat_key=f'{profession_name}_level'
             ).first()
             if lvl_entry:
                 lvl_entry.value = new_level
             else:
-                lvl_entry = UserStat(user_id=user_id, stat_key='profession_level', value=new_level)
+                lvl_entry = UserStat(user_id=user_id, stat_key=f'{profession_name}_level', value=new_level)
                 session.add(lvl_entry)
             
             session.commit()
@@ -889,7 +907,7 @@ class CraftingService:
             event_type="PROFESSION_XP",
             user_id=user_id,
             value=amount,
-            context={"total_xp": new_xp, "old_level": current_level, "new_level": new_level}
+            context={"profession": profession_name, "total_xp": new_xp, "old_level": current_level, "new_level": new_level}
         )
         
         if new_level > current_level:
@@ -898,7 +916,7 @@ class CraftingService:
                 event_type="PROFESSION_LEVELUP",
                 user_id=user_id,
                 value=new_level,
-                context={"old_level": current_level}
+                context={"profession": profession_name, "old_level": current_level}
             )
             return True
         return False

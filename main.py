@@ -469,8 +469,7 @@ def get_main_menu():
     
     # Row 4: Gilda e Social
     markup.add(
-        types.KeyboardButton("🏰 Gilda"),
-        types.KeyboardButton("🏆 Classifica")
+        types.KeyboardButton("🏰 Gilda")
     )
     
     # Row 5: Dungeon and Guide
@@ -1050,7 +1049,7 @@ def handle_garden_view(call):
     markup.add(types.InlineKeyboardButton("💩 Compostiera", callback_data="garden_refine_view"))
 
     markup.add(types.InlineKeyboardButton("🔄 Aggiorna", callback_data="garden_view"))
-    markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guild_back_main"))
+    markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data="guild_tour|3"))
     
     safe_edit_message(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown', message_obj=call.message)
 
@@ -1268,8 +1267,26 @@ def handle_inventario_cmd(message):
             elif emoji == '🎒': 
                 emoji = '🧪'
             
-        # Create a button for each item type (Emoji + Name)
-        markup.add(types.InlineKeyboardButton(f"{emoji} {item}", callback_data=f"use_item|{item}"))
+        # Create a button for each item type
+        # Check if it's an equipment and if it's equipped
+        is_equipped = False
+        try:
+            temp_session = user_service.db.get_session()
+            eq_in_inv = temp_session.query(UserEquipment).join(Equipment, UserEquipment.equipment_id == Equipment.id)\
+                .filter(UserEquipment.user_id == user_id, Equipment.name == item, UserEquipment.equipped == True).first()
+            if eq_in_inv:
+                is_equipped = True
+                eq_id = eq_in_inv.id
+            temp_session.close()
+        except: pass
+
+        if is_equipped:
+            markup.row(
+                types.InlineKeyboardButton(f"✅ {item} (Equip)", callback_data="ignore"),
+                types.InlineKeyboardButton(f"❌ Rimuovi", callback_data=f"unequip_item|{eq_id}")
+            )
+        else:
+            markup.add(types.InlineKeyboardButton(f"{emoji} {item}", callback_data=f"use_item|{item}"))
     
     bot.reply_to(message, msg, reply_markup=markup, parse_mode='markdown')
 
@@ -1501,15 +1518,16 @@ def show_guild_piazza(chat_or_call, guild, index=0, edit=False):
         },
         {
             'name': "🔨 Armeria",
-            'desc': "Forgia i tuoi equipaggiamenti e raffina i materiali grezzi. Ogni livello aumenta la rarità degli oggetti creabili e l'efficienza della raffinazione.",
+            'desc': "Forgia i tuoi equipaggiamenti e raffina i materiali grezzi. Ogni livello aumenta la rarità degli oggetti creabili e l'efficienza della raffinazione (più materiali rari per ogni tonnellata).\n\n📦 **Risorse**: Deposita qui gli scarti dei mostri per usarli nel Crafting o venderli.",
             'img': "./assets/guild/armory.png",
             'level_key': 'armory_level',
             'min_level': 1,
             # 'callback': "guild_armory_view", # REMOVED: No Entra button
             'upgrade_cb': "guild_upgrade_armory",
             'direct_actions': [
-                ("⚒️ Crafting", "craft_select_equipment"),
-                ("💎 Raffineria", "guild_refinery_view")
+                ("⚒️ Inizia Crafting", "craft_select_equipment"),
+                ("💎 Raffineria", "guild_refinery_view"),
+                ("📦 Risorse", "craft_view_resources")
             ]
         },
         {
@@ -1528,13 +1546,14 @@ def show_guild_piazza(chat_or_call, guild, index=0, edit=False):
         },
         {
             'name': "🌻 Giardino Botanico",
-            'desc': "Coltiva erbe e ingredienti per le tue pozioni. Gli slot disponibili e la velocità di crescita migliorano con il livello della struttura.",
+            'desc': "Coltiva erbe e ingredienti per le tue pozioni. Ogni livello aumenta gli slot disponibili e la velocità di crescita.\n\n💩 **Cestino del Compost**: Qui puoi buttare le piante marce per trasformarle in **Fertilizzante** e **Materiali Alchemici** rari. Non sprecare nulla!",
             'img': "./assets/guild/garden.png",
             'level_key': 'garden_level',
             'min_level': 1,
-            # 'callback': "garden_view", # REMOVED
             'upgrade_cb': "guild_upgrade_garden",
-            # Direct Actions removed, handled dynamically
+            'direct_actions': [
+                ("💩 Compostiera", "garden_refine_view")
+            ]
         },
         {
             'name': "🏨 Locanda",
@@ -1607,6 +1626,7 @@ def show_guild_piazza(chat_or_call, guild, index=0, edit=False):
     is_leader = guild['role'] == "Leader"
     
     msg = f"🏛️ **{loc['name']}**\n"
+    msg += f"💰 **Tesoro di Gilda:** {guild.get('wumpa_bank', 0)} W\n"
     if not is_built:
         msg += "🌑 **[NON COSTRUITO]**\n"
         msg += "*(Questo edificio non è ancora attivo)*\n\n"
@@ -1735,21 +1755,32 @@ def show_guild_piazza(chat_or_call, guild, index=0, edit=False):
 
     # Image logic (grayscale if not built)
     # Use absolute paths to be safe in Docker/Production
-    img_path = os.path.join(BASE_DIR, loc['img'].lstrip('./'))
-    if not os.path.exists(img_path):
+    def resolve_path(p):
+        if not p: return None
+        if p.startswith('http'): return p
+        if p.startswith('/'): return p
+        if p.startswith('./'): return os.path.join(BASE_DIR, p[2:])
+        return os.path.join(BASE_DIR, p)
+        
+    img_path = resolve_path(loc['img'])
+    is_url = img_path and img_path.startswith('http')
+    
+    if not is_url and not os.path.exists(img_path):
         # Fallback to DB-stored path or default
         db_img = guild.get(loc['level_key'].replace('_level', '_image'))
         if db_img:
-            img_path = os.path.join(BASE_DIR, db_img.lstrip('./'))
+            img_path = resolve_path(db_img)
+            is_url = img_path and img_path.startswith('http')
             
-        if not os.path.exists(img_path):
+        if not is_url and (not img_path or not os.path.exists(img_path)):
              img_path = os.path.join(BASE_DIR, "assets", "guild", "main.png")
+             is_url = False
              
-    if not is_built:
+    if not is_built and not is_url:
         img_path = get_grayscale_asset(img_path)
         
     # If the resolved image is unavailable, force text/caption update path.
-    can_use_image = os.path.exists(img_path)
+    can_use_image = is_url or os.path.exists(img_path)
 
     try:
         if not can_use_image:
@@ -1760,31 +1791,45 @@ def show_guild_piazza(chat_or_call, guild, index=0, edit=False):
             is_photo_msg = True
 
         if edit and is_photo_msg:
-            with open(img_path, 'rb') as photo:
+            if is_url:
                 bot.edit_message_media(
-                    media=types.InputMediaPhoto(photo, caption=msg, parse_mode='markdown'),
+                    media=types.InputMediaPhoto(img_path, caption=msg, parse_mode='markdown'),
                     chat_id=chat_id,
                     message_id=chat_or_call.message.message_id,
                     reply_markup=markup
                 )
+            else:
+                with open(img_path, 'rb') as photo:
+                    bot.edit_message_media(
+                        media=types.InputMediaPhoto(photo, caption=msg, parse_mode='markdown'),
+                        chat_id=chat_id,
+                        message_id=chat_or_call.message.message_id,
+                        reply_markup=markup
+                    )
         elif edit and not is_photo_msg:
              # Can't edit text to photo.
              # Important: send the new photo FIRST, then delete old message only on success.
              # This prevents "message disappears" regressions if send_photo fails.
              sent = None
-             with open(img_path, 'rb') as photo:
-                sent = bot.send_photo(
-                    chat_id,
-                    photo,
-                    caption=msg,
-                    reply_markup=markup,
-                    parse_mode='markdown',
-                    message_thread_id=getattr(
-                        chat_or_call,
-                        'message_thread_id',
-                        None if not hasattr(chat_or_call, 'message') else getattr(chat_or_call.message, 'message_thread_id', None)
+             if is_url:
+                 sent = bot.send_photo(
+                     chat_id,
+                     img_path,
+                     caption=msg,
+                     reply_markup=markup,
+                     parse_mode='markdown',
+                     message_thread_id=getattr(chat_or_call, 'message_thread_id', None)
+                 )
+             else:
+                 with open(img_path, 'rb') as photo:
+                    sent = bot.send_photo(
+                        chat_id,
+                        photo,
+                        caption=msg,
+                        reply_markup=markup,
+                        parse_mode='markdown',
+                        message_thread_id=getattr(chat_or_call, 'message_thread_id', None if not hasattr(chat_or_call, 'message') else getattr(chat_or_call.message, 'message_thread_id', None))
                     )
-                )
              if sent:
                  try:
                      bot.delete_message(chat_id, chat_or_call.message.message_id)
@@ -2198,8 +2243,16 @@ def handle_refinery_view_generic(call, category='equipment'):
     msg += "\n_Puoi lavorare solo queste risorse oggi._\n\n"
     
     # Show user's profession level based on category
-    prof_info = crafting_service.get_profession_info(call.from_user.id)
-    prof_label = "🔨 **Livello Armaiolo**" if category == 'equipment' else "🧪 **Livello Alchimista**" if category == 'alchemy' else "🌿 **Livello Erborista**"
+    prof_name = 'armorsmith'
+    prof_label = "🔨 **Livello Armaiolo**"
+    if category == 'alchemy':
+        prof_name = 'alchemist'
+        prof_label = "🧪 **Livello Alchimista**"
+    elif category == 'garden':
+        prof_name = 'gardener'
+        prof_label = "🌿 **Livello Giardiniere**"
+        
+    prof_info = crafting_service.get_profession_info(call.from_user.id, profession_name=prof_name)
     msg += f"{prof_label}: {prof_info['level']}/50 ({prof_info['xp']} XP)\n"
     msg += "_Livelli più alti = maggiori probabilità di materiali rari_\n\n"
     
@@ -2250,13 +2303,15 @@ def handle_refinery_view_generic(call, category='equipment'):
         """), {"uid": call.from_user.id, "now": now_param, "res_ids": tuple([r['id'] for r in daily_resources] or [-1])}).scalar() or 0
         
         if completed_count > 0:
-            markup.add(types.InlineKeyboardButton(f"✅ Ritira {completed_count} Materiali", callback_data=f"refinery_claim_all|{category}"))
+            markup.row(types.InlineKeyboardButton(f"✅ Ritira {completed_count} Materiali", callback_data=f"refinery_claim_all|{category}"))
+        else:
+            # Add a placeholder button or just leave space to keep layout consistent
+            markup.row(types.InlineKeyboardButton("⏱️ Nulla da ritirare", callback_data="ignore"))
             
-        refresh_call = "guild_refinery_view" if category == 'equipment' else "alchemy_refine_view" if category == 'alchemy' else "garden_refine_view"
-        back_call = "guild_armory_view" if category == 'equipment' else "alchemy_menu" if category == 'alchemy' else "garden_view"
-        
-        markup.add(types.InlineKeyboardButton("🔄 Aggiorna", callback_data=refresh_call))
-        markup.add(types.InlineKeyboardButton("🔙 Indietro", callback_data=back_call))
+        markup.row(
+            types.InlineKeyboardButton("🔄 Aggiorna", callback_data=refresh_call),
+            types.InlineKeyboardButton("🔙 Indietro", callback_data=back_call)
+        )
         
         safe_edit_message(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='markdown', message_obj=call.message)
     finally:
@@ -2362,7 +2417,7 @@ def handle_refinery_claim_all(call):
         safe_answer_callback(call.id, "✅ Ritiro completato!")
         
         # Refresh the view
-        handle_guild_refinery_view(call)
+        handle_refinery_view_generic(call, category=category)
     else:
         # If it failed, show the error (e.g., "Nessun materiale pronto")
         error_msg = result['error']
@@ -2371,7 +2426,7 @@ def handle_refinery_claim_all(call):
             safe_answer_callback(call.id, "❌ Errore (vedi chat)", show_alert=True)
         else:
             bot.answer_callback_query(call.id, error_msg, show_alert=True)
-        handle_guild_refinery_view(call)
+        handle_refinery_view_generic(call, category=category)
 
 def handle_refinery_upgrade_view(call):
     """Show available material upgrades"""
@@ -2585,7 +2640,7 @@ def handle_craft_view_set(call):
                     'health': 'Vita', 'max_health': 'Vita',
                     'mana': 'Mana', 'max_mana': 'Mana',
                     'attack': 'Attacco', 'base_damage': 'Attacco',
-                    'defense': 'Difesa', 'resistance': 'Difesa',
+                    'defense': 'Resistenza', 'resistance': 'Resistenza',
                     'crit_chance': 'Critico', 'crit': 'Critico',
                     'speed': 'Velocità', 'all_stats': 'Tutte le Stat'
                 }
@@ -2647,7 +2702,7 @@ def handle_craft_view_set(call):
                 'health': 'Vita', 'max_health': 'Vita',
                 'mana': 'Mana', 'max_mana': 'Mana',
                 'attack': 'Attacco', 'base_damage': 'Attacco',
-                'defense': 'Difesa', 'resistance': 'Difesa',
+                'defense': 'Resistenza', 'resistance': 'Resistenza',
                 'crit_chance': 'Critico', 'crit': 'Critico',
                 'speed': 'Velocità', 'all_stats': 'Tutte le Stat'
             }
@@ -3628,14 +3683,25 @@ class BotCommands:
                 # Show Lobby UI
                 markup = types.InlineKeyboardMarkup()
                 if active_dungeon.status == "registration":
-                    markup.add(types.InlineKeyboardButton("➕ Unisciti", callback_data=f"dungeon_join|{active_dungeon.id}"))
-                    markup.add(types.InlineKeyboardButton("▶️ Avvia (Admin)", callback_data=f"dungeon_start|{active_dungeon.id}"))
-                elif active_dungeon.status == "active":
+                    is_private = self.message.chat.type == 'private'
+                    if not is_private:
+                        markup.add(types.InlineKeyboardButton("➕ Unisciti", callback_data=f"dungeon_join|{active_dungeon.id}"))
+                    
+                    start_label = "▶️ Avvia Dungeon" if is_private else "▶️ Avvia (Admin)"
+                    markup.add(types.InlineKeyboardButton(start_label, callback_data=f"dungeon_start|{active_dungeon.id}"))
+                if active_dungeon.status == "active":
                     markup.add(types.InlineKeyboardButton("👁️ Mostra Nemici", callback_data=f"dungeon_show_mobs|{active_dungeon.id}"))
                     markup.add(types.InlineKeyboardButton("🏃 Fuggire", callback_data="flee"))
+                if active_dungeon.status == "completed":
+                    markup.add(types.InlineKeyboardButton("🚪 Esci (Fine)", callback_data="dungeon_leave_global"))
                 
-                msg = f"🏰 **DUNGEON ATTIVO: {active_dungeon.name}**\n"
-                msg += f"Status: {active_dungeon.status}\n"
+                is_private = self.message.chat.type == 'private'
+                if is_private:
+                    msg = f"🏰 **DUNGEON SOLO: {active_dungeon.name}**\n"
+                    msg += "Pronto a iniziare l'avventura?\n"
+                else:
+                    msg = f"🏰 **DUNGEON ATTIVO: {active_dungeon.name}**\n"
+                    msg += f"Status: {active_dungeon.status}\n"
                     
                 # Get participants
                 participants = dungeon_service.get_dungeon_participants(active_dungeon.id, session=session)
@@ -4582,6 +4648,9 @@ class BotCommands:
                     
                     # Also check for Mana buff if stored in JSON
                     bonus_max_mana += effect.get('value_mana', 0)
+                elif etype == 'beer_potion_bonus':
+                    rem = int((effect.get('expires_at', 0) - now_ts) / 60)
+                    active_buffs_list.append(f"🍺 **{effect.get('name', 'Birra')}** (+{val}%, {rem}m)")
         
         # Vigore legacy check (if not yet moved to JSON)
         if hasattr(utente, 'vigore_until') and utente.vigore_until:
@@ -4639,7 +4708,9 @@ class BotCommands:
             # Profession Levels
             from services.crafting_service import CraftingService
             crafting_service = CraftingService()
-            prof_info = crafting_service.get_profession_info(utente.id_telegram)
+            
+            # Armorsmith
+            prof_info = crafting_service.get_profession_info(utente.id_telegram, profession_name='armorsmith')
             prof_level = prof_info['level']
             prof_xp = prof_info['xp']
             prof_xp_needed = 100 * (prof_level * (prof_level + 1) // 2)
@@ -4648,7 +4719,7 @@ class BotCommands:
             msg += f"🔨 **Armaiolo**: Lv. `{prof_level}/50` | `{prof_xp}/{prof_xp_needed}` XP\n`[{prof_bar}]`\n"
             
             # Alchemy Level
-            alchemy_info = alchemy_service.get_alchemy_info(utente.id_telegram)
+            alchemy_info = crafting_service.get_profession_info(utente.id_telegram, profession_name='alchemist')
             alch_level = alchemy_info['level']
             alch_xp = alchemy_info['xp']
             alch_xp_needed = 100 * (alch_level * (alch_level + 1) // 2)
@@ -4657,15 +4728,13 @@ class BotCommands:
             msg += f"⚗️ **Alchimista**: Lv. `{alch_level}/50` | `{alch_xp}/{alch_xp_needed}` XP\n`[{alch_bar}]`\n"
             
             # Garden Level
-            from services.garden_service import GardenService
-            garden_service = GardenService()
-            garden_info = garden_service.get_garden_info(utente.id_telegram)
+            garden_info = crafting_service.get_profession_info(utente.id_telegram, profession_name='gardener')
             garden_level = garden_info['level']
             garden_xp = garden_info['xp']
             garden_xp_needed = 100 * (garden_level * (garden_level + 1) // 2)
             garden_percent = int((garden_xp / garden_xp_needed) * 10) if garden_xp_needed > 0 else 0
             garden_bar = "▰" * garden_percent + "▱" * (10 - garden_percent)
-            msg += f"🌱 **Giardiniere**: Lv. `{garden_level}/50` | `{garden_xp}/{garden_xp_needed}` XP\n`[{garden_bar}]`\n"
+            msg += f"🌿 **Giardiniere**: Lv. `{garden_level}/50` | `{garden_xp}/{garden_xp_needed}` XP\n`[{garden_bar}]`\n"
         
         msg += f"\n🍑 **{PointsName}**: `{utente.points}`"
         if utente.stat_points > 0:
@@ -8360,21 +8429,33 @@ def callback_query(call):
         _, d_id_str = call.data.split("|", 1)
         try:
             d_id = int(d_id_str)
-            d_real_id, msg = dungeon_service.create_dungeon(call.message.chat.id, d_id, call.from_user.id)
+            is_solo = call.message.chat.type == 'private'
+            d_real_id, msg = dungeon_service.create_dungeon(call.message.chat.id, d_id, call.from_user.id, is_solo=is_solo)
+            
             if not d_real_id:
                 safe_answer_callback(call.id, msg, show_alert=True)
             else:
                 # Update message to Lobby
                 dungeon = dungeon_service.get_active_dungeon(call.message.chat.id)
+                is_private = call.message.chat.type == 'private'
+                
                 markup = types.InlineKeyboardMarkup()
-                markup.add(types.InlineKeyboardButton("➕ Unisciti", callback_data=f"dungeon_join|{dungeon.id}"))
-                markup.add(types.InlineKeyboardButton("▶️ Avvia (Admin)", callback_data=f"dungeon_start|{dungeon.id}"))
+                if not is_private:
+                    markup.add(types.InlineKeyboardButton("➕ Unisciti", callback_data=f"dungeon_join|{dungeon.id}"))
                 
-                msg_text = f"🏰 **DUNGEON ATTIVO: {dungeon.name}**\n"
-                msg_text += f"Status: {dungeon.status}\n\n"
+                start_label = "▶️ Avvia Dungeon" if is_private else "▶️ Avvia (Admin)"
+                markup.add(types.InlineKeyboardButton(start_label, callback_data=f"dungeon_start|{dungeon.id}"))
                 
-                participants = dungeon_service.get_dungeon_participants(dungeon.id)
-                msg_text += f"👥 Partecipanti ({len(participants)}):\n"
+                is_private = call.message.chat.type == 'private'
+                if is_private:
+                    msg_text = f"🏰 **DUNGEON SOLO: {dungeon.name}**\n"
+                    msg_text += "Pronto a iniziare l'avventura?\n"
+                else:
+                    msg_text = f"🏰 **DUNGEON ATTIVO: {dungeon.name}**\n"
+                    msg_text += f"Status: {dungeon.status}\n\n"
+                    
+                    participants = dungeon_service.get_dungeon_participants(dungeon.id)
+                    msg_text += f"👥 Partecipanti ({len(participants)}):\n"
                 u = None
                 for p in participants:
                     u = user_service.get_user(p.user_id)
@@ -8395,15 +8476,23 @@ def callback_query(call):
             # Update Lobby
             dungeon = dungeon_service.get_active_dungeon(call.message.chat.id)
             if dungeon:
+                 is_private = call.message.chat.type == 'private'
                  markup = types.InlineKeyboardMarkup()
-                 markup.add(types.InlineKeyboardButton("➕ Unisciti", callback_data=f"dungeon_join|{dungeon.id}"))
-                 markup.add(types.InlineKeyboardButton("▶️ Avvia (Admin)", callback_data=f"dungeon_start|{dungeon.id}"))
+                 if not is_private:
+                    markup.add(types.InlineKeyboardButton("➕ Unisciti", callback_data=f"dungeon_join|{dungeon.id}"))
                  
-                 msg_text = f"🏰 **DUNGEON ATTIVO: {dungeon.name}**\n"
-                 msg_text += f"Status: {dungeon.status}\n"
+                 start_label = "▶️ Avvia Dungeon" if is_private else "▶️ Avvia (Admin)"
+                 markup.add(types.InlineKeyboardButton(start_label, callback_data=f"dungeon_start|{dungeon.id}"))
                  
-                 participants = dungeon_service.get_dungeon_participants(dungeon.id)
-                 msg_text += f"\n👥 Partecipanti ({len(participants)}):\n"
+                 if is_private:
+                     msg_text = f"🏰 **DUNGEON SOLO: {dungeon.name}**\n"
+                     msg_text += "Pronto a iniziare l'avventura?\n"
+                 else:
+                     msg_text = f"🏰 **DUNGEON ATTIVO: {dungeon.name}**\n"
+                     msg_text += f"Status: {dungeon.status}\n"
+                     
+                     participants = dungeon_service.get_dungeon_participants(dungeon.id)
+                     msg_text += f"\n👥 Partecipanti ({len(participants)}):\n"
                  u = None
                  for p in participants:
                      u = user_service.get_user(p.user_id)
@@ -8498,18 +8587,27 @@ def callback_query(call):
         if active_dungeon and active_dungeon.status in ["registration", "active"]:
              markup = types.InlineKeyboardMarkup()
              if active_dungeon.status == "registration":
-                 markup.add(types.InlineKeyboardButton("➕ Unisciti", callback_data=f"dungeon_join|{active_dungeon.id}"))
-                 markup.add(types.InlineKeyboardButton("▶️ Avvia (Admin)", callback_data=f"dungeon_start|{active_dungeon.id}"))
+                 is_private = call.message.chat.type == 'private'
+                 if not is_private:
+                     markup.add(types.InlineKeyboardButton("➕ Unisciti", callback_data=f"dungeon_join|{active_dungeon.id}"))
+                 
+                 start_label = "▶️ Avvia Dungeon" if is_private else "▶️ Avvia (Admin)"
+                 markup.add(types.InlineKeyboardButton(start_label, callback_data=f"dungeon_start|{active_dungeon.id}"))
              elif active_dungeon.status == "active":
                  markup.add(types.InlineKeyboardButton("👁️ Mostra Nemici", callback_data=f"dungeon_show_mobs|{active_dungeon.id}"))
                  markup.add(types.InlineKeyboardButton("🏃 Fuggire", callback_data="flee"))
              
-             msg = f"🏰 **DUNGEON ATTIVO: {active_dungeon.name}**\n"
-             msg += f"Status: {active_dungeon.status}\n"
-                 
-             # Get participants
-             participants = dungeon_service.get_dungeon_participants(active_dungeon.id, session=session)
-             msg += f"\n👥 Partecipanti ({len(participants)}):\n"
+             is_private = call.message.chat.type == 'private'
+             if is_private:
+                 msg = f"🏰 **DUNGEON SOLO: {active_dungeon.name}**\n"
+                 msg += "Pronto a iniziare l'avventura?\n"
+             else:
+                 msg = f"🏰 **DUNGEON ATTIVO: {active_dungeon.name}**\n"
+                 msg += f"Status: {active_dungeon.status}\n"
+                     
+                 # Get participants
+                 participants = dungeon_service.get_dungeon_participants(active_dungeon.id, session=session)
+                 msg += f"\n👥 Partecipanti ({len(participants)}):\n"
              u = None
              for p in participants:
                   u = user_service.get_user(p.user_id)

@@ -313,6 +313,10 @@ def handle_facility_view(bot, call, facility_type):
         elif facility_type == 'bordello':
              markup.add(types.InlineKeyboardButton("🔞 Visita", callback_data="visita_bordello_action")) # Action to visit
         elif facility_type == 'armory':
+             markup.add(
+                 types.InlineKeyboardButton("⚒️ Inizia Crafting", callback_data="craft_select_equipment"),
+                 types.InlineKeyboardButton("💎 Raffineria", callback_data="guild_refinery_view")
+             )
              markup.add(types.InlineKeyboardButton("📦 Risorse", callback_data="craft_view_resources"))
              
     if guild['role'] in ["Leader", "Officer"]:

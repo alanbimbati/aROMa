@@ -692,6 +692,32 @@ class UserService:
         msg += f"💎 Punti Stat: {utente.stat_points}\n"
         msg += trans_text
         
+        # Active Buffs
+        import json
+        try:
+             effects = json.loads(utente.active_status_effects or '[]')
+        except:
+             effects = []
+             
+        now = datetime.now()
+        buffs = []
+        
+        # Vigore (Mana cost reduction from Bordello)
+        if utente.vigore_until and utente.vigore_until > now:
+             mins = int((utente.vigore_until - now).total_seconds() / 60)
+             buffs.append(f"💪 **Vigore**: Costo Mana -50% ({mins}m)")
+             
+        # Beer Potion Bonus
+        for e in effects:
+            if e.get('effect') == 'beer_potion_bonus':
+                expires = datetime.fromtimestamp(e.get('expires_at', 0))
+                if expires > now:
+                    mins = int((expires - now).total_seconds() / 60)
+                    buffs.append(f"🍺 **{e.get('name', 'Birra')}**: Pozioni +{e.get('value', 0)}% ({mins}m)")
+                    
+        if buffs:
+             msg += "\n✨ **Buff Attivi**:\n" + "\n".join(buffs) + "\n"
+
         # Guild Info
         from services.guild_service import GuildService
         guild_service = GuildService()
