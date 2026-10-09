@@ -404,3 +404,17 @@ h1 { font-size: clamp(22px, 5vw, 32px); }
 
 .manage { display: grid; gap: 10px; } .manage input, #view form input[type=number], #view .row input[type=number] { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); }
 .manage form input { flex: 1; min-width: 160px; }
+
+/* games: a card is just the box and its title; the rest opens on click */
+.gamegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 14px; }
+.gamegrid .game { flex-direction: column; align-items: center; gap: 8px; padding: 10px; text-align: center; cursor: pointer; color: var(--text); font: inherit; }
+.gamegrid .game:hover, .gamegrid .game:focus-visible { border-color: var(--accent); }
+.gamegrid .game .case { flex: none; width: 100%; max-width: 132px; }
+.gamegrid .game .gtitle { font-weight: 600; font-size: 13px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.gdetail { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; }
+.gdetail .case { flex: 0 0 140px; width: 140px; display: flex; flex-direction: column; border-radius: 4px 6px 6px 4px; overflow: hidden; }
+.gdetail .case .band { background: var(--band); color: #fff; font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 3px 6px; text-align: center; }
+.gdetail .case .art { aspect-ratio: var(--ratio); background: var(--panel-2); display: flex; align-items: center; justify-content: center; font-size: 36px; }
+.gdetail .case .art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gdetail .gbody { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+@media (max-width: 520px) { .gdetail { flex-direction: column; align-items: center; } .gdetail .gbody { width: 100%; } }
