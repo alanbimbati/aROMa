@@ -1,9 +1,10 @@
 """Give every game of the catalogue a picture: Steam box art for the PC ones, a title card for what no database knows.
 
-    python scripts/complete_game_covers.py [--no-steam]
+    python scripts/complete_game_covers.py [--no-steam] [--retry-generated]
 
 Runs after fetch_game_covers.py and only touches games that have no cover yet. The Steam match must be close
-(a wrong cover is worse than none); whatever stays unmatched gets a generated card in the colour of its platform,
+(a wrong cover is worse than none). Ports of PC games on other consoles (Switch, PS3, PS4) use the same Steam art when
+the title matches, with --retry-generated looking again at games that only had a generated card. Whatever stays unmatched gets a generated card in the colour of its platform,
 recorded as 'generated' in data/games_covers.csv so it can be replaced when a real picture turns up.
 """
 import csv
@@ -27,6 +28,7 @@ INDEX = os.path.join(BASE_DIR, 'data', 'games_covers.csv')
 SEARCH = 'https://store.steampowered.com/api/storesearch/?l=english&cc=us&term='
 ART = 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/%d/%s'
 FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
+PORTS = {'Switch', 'PS3', 'PS4'}
 COLOUR = {'PS1': '#5b606b', 'PS2': '#1b2a6b', 'PS3': '#23262e', 'PS4': '#0b3d91', 'PSP': '#59606e', 'Nintendo DS': '#6d6d6d',
           'Nintendo 3DS': '#c8102e', 'Game Boy Advance': '#4b2e83', 'GameCube': '#4c3b8f', 'Wii': '#3a8fb7', 'Switch': '#e60012',
           'SNES': '#7d7aa8', 'PC': '#2f3a4a', 'PC (DOS)': '#2f3a4a', 'Xbox': '#107c10', 'Xbox 360': '#4d8a00'}
@@ -87,17 +89,20 @@ def main():
     steam = generated = 0
     for g in games:
         path = os.path.join(OUT_DIR, g['id'] + '.webp')
-        if os.path.exists(path):
-            continue
         platforms = json.loads(g['platforms'])
+        retry = '--retry-generated' in sys.argv and index.get(g['id'], {}).get('source') == 'generated'
+        if os.path.exists(path) and not retry:
+            continue
         im = None
         source = 'generated'
-        if '--no-steam' not in sys.argv and any(p.startswith('PC') for p in platforms):
+        if '--no-steam' not in sys.argv and any(p.startswith('PC') or p in PORTS for p in platforms):
             data = steam_cover(g['title'])
             if data:
                 im, source = Image.open(io.BytesIO(data)).convert('RGB'), 'steam'
                 im.thumbnail((320, 440))
         if im is None:
+            if retry:
+                continue  # keep the card it already has
             im = title_card(g['title'], platforms)
         im.save(path, 'WEBP', quality=82)
         index[g['id']] = {'id': g['id'], 'source': source}

@@ -685,3 +685,31 @@ class TestInventoryGuildForge(unittest.TestCase):
         self.assertFalse(nothing['ok'])
         self.assertFalse(act(action='craft', option='999999')['ok'])
         self.assertTrue(act(action='disband')['ok'])
+
+    def test_dragon_needs_seven_matching_balls(self):
+        from services.item_service import ItemService
+        from models.items import Collezionabili
+        session = Database().get_session()
+        session.query(Collezionabili).filter_by(id_telegram=str(self.SMITH)).delete()
+        session.commit()
+        session.close()
+        c = self.as_user(self.SMITH)
+        post = lambda **kw: c.post('/api/me/dragon', json=kw, headers=SAME_SITE).json()
+        items = ItemService()
+        for i in range(1, 7):
+            items.add_item(self.SMITH, f'La Sfera del Drago Shenron {i}')
+        inv = c.get('/api/me/inventory').json()
+        shenron = next(d for d in inv['dragons'] if d['key'] == 'shenron')
+        self.assertEqual((shenron['have'], shenron['ready']), (6, False))
+        self.assertTrue(all(i['ball'] for i in inv['items'] if 'Sfera' in i['name']))
+        self.assertFalse(post(dragon='shenron', choices=['wumpa'])['ok'])  # six are not seven
+        items.add_item(self.SMITH, 'La Sfera del Drago Porunga 7')  # a ball of the other dragon does not count
+        self.assertFalse(post(dragon='shenron', choices=['wumpa'])['ok'])
+        items.add_item(self.SMITH, 'La Sfera del Drago Shenron 7')
+        self.assertFalse(post(dragon='shenron', choices=['oro'])['ok'])  # not a wish he grants
+        before = c.get('/api/me').json()['wumpa']
+        done = post(dragon='shenron', choices=['wumpa'])
+        self.assertTrue(done['ok'], done)
+        self.assertGreater(c.get('/api/me').json()['wumpa'], before)
+        self.assertEqual(next(d for d in done['dragons'] if d['key'] == 'shenron')['have'], 0)
+        self.assertFalse(post(dragon='shenron', choices=['wumpa'])['ok'])  # the balls are gone

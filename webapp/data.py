@@ -304,14 +304,56 @@ def inventory(user_id):
     stuff = []
     for name, qty in items.get_inventory(user_id):
         meta = items.get_item_metadata(name)
-        stuff.append({'name': name, 'quantity': qty, 'emoji': meta.get('emoji', '🎒'), 'description': meta.get('descrizione', '')})
+        stuff.append({'name': name, 'quantity': qty, 'emoji': meta.get('emoji', '🎒'), 'description': meta.get('descrizione', ''),
+                      'ball': 'Sfera del Drago' in name})
     res = CraftingService().get_user_resources(user_id)
     refined = [{**r, 'next': UPGRADES.get(r['material_id'])} for r in res['refined'] if r['quantity']]
     names = {r['material_id']: r['name'] for r in res['refined']}
     for r in refined:
         r['next_name'] = names.get(r['next'])
         r['can_upgrade'] = bool(r['next']) and r['quantity'] >= 10
-    return {'items': stuff, 'raw': [r for r in res['raw'] if r['quantity']], 'refined': refined}
+    return {'items': stuff, 'raw': [r for r in res['raw'] if r['quantity']], 'refined': refined, 'dragons': dragons(user_id)}
+
+
+DRAGONS = {
+    'shenron': dict(name='Shenron', emoji='🐉', wishes=1, options=[('wumpa', 'Wumpa (1000-2000)'), ('exp', 'EXP (1000-2000)')]),
+    'porunga': dict(name='Porunga', emoji='🐲', wishes=3, options=[('wumpa', 'Wumpa (300-500)'), ('item', 'Un oggetto raro')]),
+}
+
+
+def dragons(user_id):
+    """The two sets of Dragon Balls: how many of each the player holds and what the dragon would grant."""
+    from services.wish_service import WishService
+    user = UserService().get_user(user_id)
+    if not user:
+        return []
+    have = dict(zip(('shenron', 'porunga'), WishService().get_dragon_ball_counts(user)))
+    return [{'key': k, 'name': d['name'], 'emoji': d['emoji'], 'have': have[k], 'ready': have[k] >= 7, 'wishes': d['wishes'],
+             'options': [{'key': o, 'label': l} for o, l in d['options']]} for k, d in DRAGONS.items()]
+
+
+def summon_dragon(user_id, dragon, choices):
+    """Call a dragon with the seven matching balls. Porunga's three wishes are chosen together here, because
+    the balls are spent on the first one and a page closed halfway would lose the rest."""
+    from services.wish_service import WishService
+    d = DRAGONS.get(dragon)
+    user = UserService().get_user(user_id)
+    wish = WishService()
+    if not d or not user:
+        return {'ok': False, 'message': 'Drago sconosciuto.', **inventory(user_id)}
+    valid = {o for o, _ in d['options']}
+    if len(choices) != d['wishes'] or any(c not in valid for c in choices):
+        return {'ok': False, 'message': f"Scegli {d['wishes']} desiderio/i.", **inventory(user_id)}
+    has_shenron, has_porunga = wish.check_dragon_balls(user)
+    if not (has_shenron if dragon == 'shenron' else has_porunga):
+        return {'ok': False, 'message': f"Ti servono le 7 sfere di {d['name']}.", **inventory(user_id)}
+    wish.log_summon(user_id, d['name'])
+    if dragon == 'shenron':
+        lines = [wish.grant_wish(user, choices[0], 'Shenron')]
+    else:
+        lines = [wish.grant_porunga_wish(user, c, n) for n, c in enumerate(choices, 1)]
+    lines = [str(x).replace('**', '').replace('\n\n', ' ') for x in lines]
+    return {'ok': not lines[0].startswith('❌'), 'message': ' | '.join(lines), **inventory(user_id)}
 
 
 def use_item(user_id, name):
