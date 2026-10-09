@@ -5035,6 +5035,15 @@ class BotCommands:
                     if transforms:
                         markup.add(types.InlineKeyboardButton("🔥 Trasformazione", callback_data=f"transform_menu|{character['id']}"))
 
+                # straight into the web panel: a one-time link, so it is made each time the profile is drawn
+                try:
+                    from webapp.auth import create_login_link
+                    link = create_login_link(self.chatid)
+                    if link.startswith("https://"):  # a url button only takes an https address
+                        markup.add(types.InlineKeyboardButton("🌐 Apri il pannello aROMa", url=link))
+                except Exception as e:
+                    print(f"[WEB] no panel button on the profile: {e}")
+
         # Send or Edit with Image
         image_handled = False
         is_media = self.message.content_type in ['photo', 'animation', 'video']
