@@ -13,7 +13,7 @@ id,source
 13,generated
 18,generated
 19,generated
-20,generated
+20,steam
 21,generated
 22,generated
 23,Sony - PlayStation 2/Named_Boxarts/Mountain Bike Adrenaline (USA).png
@@ -30,11 +30,11 @@ id,source
 34,generated
 35,"Sony - PlayStation 2/Named_Boxarts/Soldier of Fortune - Gold Edition (Europe) (En,Fr,De,Es,It) (v1.01).png"
 36,generated
-37,generated
+37,steam
 38,generated
 39,generated
-40,generated
-41,generated
+40,steam
+41,steam
 42,generated
 43,"Sony - PlayStation 2/Named_Boxarts/State of Emergency (Europe) (En,Fr,Es,It) (v3.00).png"
 44,"Sony - PlayStation 2/Named_Boxarts/Bionicle (Europe) (En,Fr,De,Es,It,Da).png"
@@ -43,13 +43,13 @@ id,source
 47,generated
 48,Sony - PlayStation 2/Named_Boxarts/Unlimited Saga (Europe).png
 49,Sony - PlayStation/Named_Boxarts/Arc the Lad (Japan) (Rev 1).png
-50,generated
-51,generated
+50,steam
+51,steam
 52,generated
 53,"Sony - PlayStation/Named_Boxarts/Wacky Races (Europe) (En,Fr,De,Es,It,Nl).png"
-54,generated
-55,generated
-56,generated
+54,steam
+55,steam
+56,steam
 57,generated
 58,"Sony - PlayStation 2/Named_Boxarts/Sengoku Anthology (Europe) (En,Fr,De,Es,It).png"
 59,"Sony - PlayStation 2/Named_Boxarts/Scooby-Doo! Unmasked (Europe) (En,Fr,Es,It).png"
@@ -78,12 +78,12 @@ id,source
 82,"Sony - PlayStation 2/Named_Boxarts/God of War II (Europe, Australia) (En,Fr,De,Es,It,Ru).png"
 83,"Sony - PlayStation 2/Named_Boxarts/God of War (Europe, Australia) (En,Fr,De,Es,It).png"
 84,generated
-85,generated
+85,steam
 86,generated
 87,generated
 88,"Sony - PlayStation 2/Named_Boxarts/WWE SmackDown! vs. Raw 2006 (Europe, Australia).png"
 89,steam
-90,generated
+90,steam
 91,generated
 92,generated
 93,"Sony - PlayStation 2/Named_Boxarts/Toy Golf Extreme (Europe) (En,Fr,De,Es,It).png"
@@ -96,7 +96,7 @@ id,source
 100,steam
 101,steam
 102,"Nintendo - Wii/Named_Boxarts/101-in-1 Sports Party Megamix (Europe) (En,Fr,De,Es,It,Nl).png"
-103,generated
+103,steam
 104,Sony - PlayStation 2/Named_Boxarts/Pink Pong (Europe).png
 105,"Sony - PlayStation 2/Named_Boxarts/SpinDrive Ping Pong (Europe) (En,Fr,De).png"
 106,steam
@@ -125,7 +125,7 @@ id,source
 129,generated
 130,generated
 131,generated
-132,generated
+132,steam
 133,steam
 134,generated
 135,"Sony - PlayStation 2/Named_Boxarts/Spiderwick Chronicles, The (Europe) (En,Fr,De,Es,It).png"
@@ -134,11 +134,11 @@ id,source
 138,generated
 139,generated
 140,generated
-141,generated
-142,generated
+141,steam
+142,steam
 143,steam
 144,generated
-145,generated
+145,steam
 146,generated
 147,"Sony - PlayStation 2/Named_Boxarts/Def Jam - Fight for NY (Europe, Australia) (En,Fr).png"
 148,"Sony - PlayStation 2/Named_Boxarts/Altered Beast (Europe) (En,Fr,De,Es,It).png"
@@ -146,9 +146,9 @@ id,source
 150,"Sony - PlayStation 2/Named_Boxarts/Mr. Bean (Europe) (En,Fr,De,Es,It,Nl,Pt,Sv,No,Da,Fi).png"
 151,"Sony - PlayStation 2/Named_Boxarts/Agent Hugo - RoboRumble (Europe) (En,Fr,De,Es,It,Nl,Pt,Sv,No,Da,Fi).png"
 152,generated
-153,generated
-154,generated
-155,generated
+153,steam
+154,steam
+155,steam
 156,"Sony - PlayStation 2/Named_Boxarts/Legacy of Kain - Soul Reaver 2 (Europe) (En,Fr,De,Es,It).png"
 157,"Sony - PlayStation 2/Named_Boxarts/Scooby-Doo! and the Spooky Swamp (Europe) (En,Fr,De,Es,It).png"
 158,"Sony - PlayStation 2/Named_Boxarts/Van Helsing (Europe, Australia) (En,Fr,De,Es,It).png"
@@ -249,7 +249,7 @@ id,source
 260,generated
 261,generated
 262,generated
-263,generated
+263,steam
 264,Sony - PlayStation 2/Named_Boxarts/Blade II (Europe).png
 265,"Sony - PlayStation 2/Named_Boxarts/Frank Herbert's Dune (Europe) (En,Fr,De,Es,It).png"
 266,Sony - PlayStation 2/Named_Boxarts/Gun Club (Italy).png
@@ -293,7 +293,7 @@ id,source
 305,generated
 306,generated
 307,Nintendo - Super Nintendo Entertainment System/Named_Boxarts/Chrono Trigger (USA).png
-308,generated
+308,steam
 309,generated
 310,generated
 311,generated
@@ -310,7 +310,7 @@ id,source
 323,generated
 324,steam
 325,generated
-326,generated
+326,steam
 327,steam
 328,generated
 329,steam
@@ -322,7 +322,7 @@ id,source
 338,generated
 339,"Sony - PlayStation 2/Named_Boxarts/Suffering, The - Ties That Bind (Europe) (En,Es,It).png"
 340,"Sony - PlayStation 2/Named_Boxarts/Suffering, The (Europe) (En,Es,It).png"
-341,generated
+341,steam
 342,Sony - PlayStation 3/Named_Boxarts/Demon's Souls (Europe).png
 343,generated
 344,"Sony - PlayStation 2/Named_Boxarts/Haunting Ground (Europe) (En,Fr,De,Es,It).png"
@@ -367,7 +367,7 @@ id,source
 387,Sony - PlayStation/Named_Boxarts/Alone in the Dark - The New Nightmare (Europe) (Disc 1).png
 388,"Sony - PlayStation/Named_Boxarts/Alone in the Dark - Jack Is Back (Europe) (En,Fr,De,Es,It).png"
 390,generated
-391,generated
+391,steam
 392,"Sony - PlayStation 2/Named_Boxarts/Project Zero 3 (Europe) (En,Fr,De,Es,It).png"
 393,generated
 394,"Sony - PlayStation 2/Named_Boxarts/Project Zero (Europe) (En,Fr,De,Es,It).png"
@@ -1730,12 +1730,12 @@ id,source
 2199,"Sony - PlayStation 2/Named_Boxarts/Yu-Gi-Oh! The Duelists of the Roses (Europe) (Fr,De,Es,It).png"
 2200,"Sony - PlayStation 2/Named_Boxarts/Yu-Gi-Oh! Capsule Monster Coliseum (Europe) (En,Fr,De,Es,It).png"
 2201,generated
-2202,generated
+2202,steam
 2203,generated
-2204,generated
-2208,generated
-2209,generated
-2210,generated
+2204,steam
+2208,steam
+2209,steam
+2210,steam
 2211,generated
 2212,generated
 2213,generated
@@ -1743,33 +1743,33 @@ id,source
 2216,generated
 2217,generated
 2218,generated
-2219,generated
+2219,steam
 2220,generated
 2221,generated
 2222,generated
 2223,generated
 2224,generated
 2225,Sony - PlayStation 3/Named_Boxarts/Heavy Rain (Europe).png
-2226,generated
+2226,steam
 2227,generated
 2229,generated
 2230,generated
 2231,generated
 2232,generated
-2233,generated
+2233,steam
 2234,generated
 2235,generated
-2236,generated
-2237,generated
+2236,steam
+2237,steam
 2238,generated
 2239,generated
-2240,generated
+2240,steam
 2242,generated
 2243,generated
-2244,generated
+2244,steam
 2246,generated
 2247,generated
-2248,generated
+2248,steam
 2249,generated
 2250,Sony - PlayStation 3/Named_Boxarts/Killzone 2 (USA).png
 2251,generated
@@ -1778,7 +1778,7 @@ id,source
 2254,generated
 2255,generated
 2256,generated
-2257,generated
+2257,steam
 2258,generated
 2259,generated
 2260,generated
@@ -1787,7 +1787,7 @@ id,source
 2265,generated
 2266,generated
 2268,steam
-2271,generated
+2271,steam
 2272,generated
 2275,generated
 2276,generated
@@ -1801,69 +1801,69 @@ id,source
 2285,generated
 2286,generated
 2287,generated
-2289,generated
+2289,steam
 2290,generated
 2291,generated
 2292,generated
 2293,generated
-2294,generated
-2295,generated
-2296,generated
-2297,generated
-2298,generated
-2299,generated
+2294,steam
+2295,steam
+2296,steam
+2297,steam
+2298,steam
+2299,steam
 2300,generated
-2301,generated
+2301,steam
 2302,generated
 2303,generated
 2304,Sony - PlayStation 3/Named_Boxarts/Grand Theft Auto V (USA).png
 2305,generated
 2307,generated
-2308,generated
+2308,steam
 2309,generated
-2311,generated
-2312,generated
+2311,steam
+2312,steam
 2313,generated
 2314,generated
 2315,generated
 2316,generated
 2317,generated
-2318,generated
+2318,steam
 2319,generated
-2320,generated
-2322,generated
-2323,generated
-2324,generated
-2325,generated
-2326,generated
+2320,steam
+2322,steam
+2323,steam
+2324,steam
+2325,steam
+2326,steam
 2327,generated
 2328,generated
-2329,generated
-2330,generated
+2329,steam
+2330,steam
 2331,generated
-2332,generated
-2333,generated
+2332,steam
+2333,steam
 2334,generated
 2335,generated
 2336,generated
-2337,generated
-2338,generated
+2337,steam
+2338,steam
 2339,generated
-2340,generated
+2340,steam
 2341,generated
 2342,generated
 2343,generated
 2344,generated
-2345,generated
+2345,steam
 2346,generated
 2347,generated
 2348,generated
 2349,generated
-2350,generated
-2351,generated
-2352,generated
+2350,steam
+2351,steam
+2352,steam
 2353,generated
-2354,generated
+2354,steam
 2355,generated
 2356,"Nintendo - GameCube/Named_Boxarts/Donkey Kong Jungle Beat (Europe) (En,Fr,De,Es,It).png"
 2359,generated
@@ -2059,8 +2059,8 @@ id,source
 2559,Sony - PlayStation 2/Named_Boxarts/Onmyou Taisenki - Byakko Enbu (Japan) (EyeToy Camera Doukonban).png
 2560,generated
 2561,generated
-2562,generated
-2563,generated
+2562,steam
+2563,steam
 2564,generated
 2565,generated
 2567,Nintendo - Nintendo 64/Named_Boxarts/Star Fox 64 (USA) (Rev 1).png
@@ -2193,7 +2193,7 @@ id,source
 2722,"Nintendo - Nintendo DS/Named_Boxarts/Crash Boom Bang! (Europe) (En,Fr,De,Es,It).png"
 2723,"Nintendo - Nintendo DS/Named_Boxarts/Crash - Mind over Mutant (Europe) (En,Fr,De,Es,It,Nl).png"
 2724,"Nintendo - Nintendo DS/Named_Boxarts/Crash of the Titans (Europe) (En,Fr,De,Es,It,Nl).png"
-2725,generated
+2725,steam
 2726,generated
 2727,"Nintendo - Game Boy Advance/Named_Boxarts/Crash of the Titans (Europe) (En,Fr,De,Es,It,Nl).png"
 2728,"Nintendo - Game Boy Advance/Named_Boxarts/Crash Bandicoot Fusion (Europe) (En,Fr,De,Es,It).png"
@@ -2225,7 +2225,7 @@ id,source
 2759,Nintendo - Game Boy Advance/Named_Boxarts/Dragon Ball Z - Buu's Fury (USA).png
 2760,"Nintendo - Game Boy Advance/Named_Boxarts/Dragon Ball - Advanced Adventure (Europe) (En,Fr,De,Es,It).png"
 2762,"Nintendo - Game Boy Advance/Named_Boxarts/Dragon Ball Z - Supersonic Warriors (Europe) (En,Fr,De,Es,It).png"
-2764,generated
+2764,steam
 2765,Nintendo - Game Boy Color/Named_Boxarts/Dragon Ball Z - Legendary Super Warriors (Europe).png
 2766,Nintendo - Game Boy Advance/Named_Boxarts/Dragon Ball Z - Collectible Card Game (USA).png
 2767,"Nintendo - Game Boy Advance/Named_Boxarts/Dragon Ball Z - Taiketsu (Europe) (En,Fr,De,Es,It).png"
@@ -2235,7 +2235,7 @@ id,source
 2772,"Nintendo - Nintendo DS/Named_Boxarts/Dragon Ball Z - Supersonic Warriors 2 (Europe) (En,Fr,De,Es,It).png"
 2774,"Nintendo - Game Boy Color/Named_Boxarts/Dragon Warrior Monsters (USA, Europe) (SGB Enhanced) (GB Compatible).png"
 2775,"Nintendo - Wii/Named_Boxarts/Dragon Quest Swords - The Masked Queen and the Tower of Mirrors (Europe) (En,Fr,De,Es,It).png"
-2776,generated
+2776,steam
 2777,generated
 2778,generated
 2779,generated
@@ -2447,7 +2447,7 @@ id,source
 3068,steam
 3069,generated
 3070,"Sony - PlayStation 2/Named_Boxarts/Motocross Mania 3 (Europe) (En,Fr,De,Es,It).png"
-3073,generated
+3073,steam
 3074,"Sony - PlayStation 2/Named_Boxarts/Smash Cars (Europe) (En,Fr,De,Es,It).png"
 3075,"Sony - PlayStation 2/Named_Boxarts/Flintstones in Viva Rock Vegas, The (Europe) (En,Fr,De).png"
 3076,"Sony - PlayStation 2/Named_Boxarts/Twisted Metal - Black (Europe) (En,Fr,De,Es,It).png"

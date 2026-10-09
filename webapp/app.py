@@ -155,6 +155,11 @@ class NameBody(BaseModel):
     name: str
 
 
+class DragonBody(BaseModel):
+    dragon: str
+    choices: list[str]
+
+
 class CharBody(BaseModel):
     id: int
     buy: bool = False
@@ -243,6 +248,11 @@ def inventory_use(body: NameBody, user_id: int = Depends(current_user)):
 @app.post("/api/me/inventory/upgrade", dependencies=[Depends(same_site_request)])
 def inventory_upgrade(body: UpgradeBody, user_id: int = Depends(current_user)):
     return data.upgrade_material(user_id, body.id, body.count)
+
+
+@app.post("/api/me/dragon", dependencies=[Depends(same_site_request)])
+def me_dragon(body: DragonBody, user_id: int = Depends(current_user)):
+    return data.summon_dragon(user_id, body.dragon, body.choices)
 
 
 @app.post("/api/me/character", dependencies=[Depends(same_site_request)])

@@ -816,12 +816,23 @@ function paintInventory() {
   const v = state.inv;
   $('#view').innerHTML = html`<h1>Inventario</h1>
     <h2>Oggetti</h2>${v.items.length ? raw(`<div class="cols">${v.items.map((i) => `<div class="panel"><div class="row spread"><b>${i.emoji} ${esc(i.name)}</b><span class="pill">×${fmt(i.quantity)}</span></div>
-      <p class="sub">${esc(i.description)}</p><button class="btn primary use" data-useitem="${esc(i.name)}">Usa</button></div>`).join('')}</div>`) : raw('<div class="panel empty">Nessun oggetto.</div>')}
+      <p class="sub">${esc(i.description)}</p>${i.ball ? '<p class="sub">Servono le 7 sfere dello stesso drago: evoca da qui sotto.</p>' : `<button class="btn primary use" data-useitem="${esc(i.name)}">Usa</button>`}</div>`).join('')}</div>`) : raw('<div class="panel empty">Nessun oggetto.</div>')}
+    ${v.dragons.some((d) => d.have) ? raw(`<h2>Sfere del Drago</h2><div class="cols">${v.dragons.map((d) => `<div class="panel dragon ${d.ready ? 'ready' : ''}"><div class="row spread"><b>${d.emoji} ${esc(d.name)}</b><span class="pill ${d.ready ? 'good' : ''}">${d.have}/7 sfere</span></div>
+      ${d.ready ? `<p class="sub">${d.wishes === 1 ? 'Un desiderio.' : `${d.wishes} desideri.`} Le sfere si consumano.</p>
+      ${Array.from({ length: d.wishes }, (_, n) => `<label class="sub">${d.wishes > 1 ? `Desiderio ${n + 1}` : 'Desiderio'}<select data-wish="${d.key}" aria-label="Desiderio ${n + 1} di ${esc(d.name)}">${d.options.map((o) => `<option value="${o.key}">${esc(o.label)}</option>`).join('')}</select></label>`).join('')}
+      <button class="btn primary use" data-summon="${d.key}">Evoca ${esc(d.name)}</button>` : `<p class="sub">Ti servono tutte e 7 le sfere di ${esc(d.name)} per evocarlo.</p>`}</div>`).join('')}</div>`) : ''}
     <h2>Risorse</h2>${v.raw.length ? raw(`<div class="row">${v.raw.map((r) => `<span class="pill">${esc(r.name)} ×${fmt(r.quantity)}</span>`).join('')}</div>`) : raw('<div class="panel empty">Nessuna risorsa grezza.</div>')}
     <h2>Materiali raffinati</h2>${v.refined.length ? raw(`<div class="slots2">${v.refined.map((r) => `<div class="slot2 ${r.can_upgrade ? 'ready' : ''}"><div><b>${esc(r.name)}</b> ×${fmt(r.quantity)}${r.next ? `<div class="sub">10 → 1 ${esc(r.next_name || '')}</div>` : ''}</div>
       ${r.next ? `<div class="uses"><button class="btn use ${r.can_upgrade ? 'primary' : ''}" data-upg="${r.material_id}" ${r.can_upgrade ? '' : 'disabled'} title="${r.can_upgrade ? '' : 'Ne servono 10'}">Converti</button></div>` : ''}</div>`).join('')}</div>`) : raw('<div class="panel empty">Nessun materiale raffinato. Si ottengono dalla Raffineria.</div>')}`;
   const apply = (r) => { toast(r.message, r.ok); state.inv = r; paintInventory(); };
   document.querySelectorAll('[data-useitem]').forEach((b) => b.addEventListener('click', async () => apply(await act('/api/me/inventory/use', { name: b.dataset.useitem }))));
+  document.querySelectorAll('[data-summon]').forEach((b) => b.addEventListener('click', async () => {
+    const key = b.dataset.summon;
+    const choices = [...document.querySelectorAll(`[data-wish="${key}"]`)].map((s) => s.value);
+    if (!confirm('Le sfere verranno consumate. Evocare il drago?')) return;
+    b.disabled = true;
+    apply(await act('/api/me/dragon', { dragon: key, choices }));
+  }));
   document.querySelectorAll('[data-upg]').forEach((b) => b.addEventListener('click', async () => apply(await act('/api/me/inventory/upgrade', { id: Number(b.dataset.upg), count: 1 }))));
 }
 
