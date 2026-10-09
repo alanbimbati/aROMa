@@ -173,6 +173,11 @@ class RewardService:
                 # Penalty: -50% if the player is much stronger than the mob
                 challenge_factor = 0.5
 
+            if dungeon_level:
+                # a player below the dungeon's level is paid by their own level, not by the dungeon's
+                from services.dungeon_rewards import player_scale
+                challenge_factor *= player_scale(dungeon_level[0], user_level)
+
             # Wumpa (Points) calculation
             if fixed_wumpa_pool:
                 wumpa = int(fixed_wumpa_pool * share * challenge_factor)

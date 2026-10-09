@@ -22,14 +22,25 @@ def budget(level):
     return int(exp), int(wumpa)
 
 
+def player_scale(level, player_level):
+    """Share of the dungeon's budget a player below its level gets: a dungeon is paid by the player's own level step
+    (up to 1.5x it for a harder dungeon), so three dungeons made for level 35 do not take a level-1 player to level
+    10. Never above 1: a stronger player earns what the dungeon pays, no more."""
+    pl, level = max(1, int(player_level or 1)), max(1, int(level))
+    if pl >= level:
+        return 1.0
+    own = (10 * ((pl + 1) ** 2.5 - pl ** 2.5) / dungeons_per_level(pl)) * min(1.5, level / pl)
+    return min(1.0, own / budget(level)[0])
+
+
 def team_bonus(fighters):
     return 1 + min(TEAM_BONUS_CAP, TEAM_BONUS * (max(1, fighters) - 1))
 
 
-def completion(level, fighters=1):
+def completion(level, fighters=1, player_level=None):
     """What each participant gets when the dungeon is cleared."""
     exp, wumpa = budget(level)
-    bonus = team_bonus(fighters)
+    bonus = team_bonus(fighters) * (player_scale(level, player_level) if player_level else 1.0)
     return int(exp * (1 - KILL_SHARE) * bonus), int(wumpa * (1 - KILL_SHARE) * bonus)
 
 
