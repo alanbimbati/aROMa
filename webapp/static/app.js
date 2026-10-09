@@ -720,16 +720,41 @@ const CASES = {
   'PC': [0.74, '#3a3f47', 'PC'], 'PC (DOS)': [0.74, '#3a3f47', 'PC'], 'Xbox': [0.72, '#107c10', 'Xbox'], 'Xbox 360': [0.72, '#6bb700', 'Xbox 360'],
 };
 const caseOf = (g) => CASES[g.platforms.find((p) => CASES[p])] || [0.72, '#3a3f47', g.platforms[0] || ''];
+const gameCard = (g) => {
+  const [ratio, band, label] = caseOf(g);
+  return `<button class="panel game" data-game="${g.id}" aria-label="${esc(g.title)}, ${esc(label)}"><div class="case" style="--ratio:${ratio};--band:${band}">
+    <span class="band">${esc(label)}</span>
+    <div class="art">${g.cover ? `<img src="/img/game/${g.id}.webp" alt="" loading="lazy">` : '<span aria-hidden="true">🎮</span>'}</div></div>
+  <span class="gtitle">${esc(g.title)}</span></button>`;
+};
+async function openGame(id, bot) {
+  const g = await api(`/api/games/${id}`);
+  const [ratio, band, label] = caseOf(g);
+  const modal = $('#modal');
+  modal.innerHTML = html`<div class="wsheet panel"><button class="x" aria-label="Chiudi">✕</button>
+    <div class="gdetail"><div class="case" style="--ratio:${ratio};--band:${band}"><span class="band">${label}</span>
+      <div class="art">${raw(g.cover ? `<img src="/img/game/${g.id}.webp" alt="Copertina di ${esc(g.title)}">` : '<span aria-hidden="true">🎮</span>')}</div></div>
+    <div class="gbody"><h2 style="margin:0">${g.title}</h2>
+      <div class="row">${raw(g.platforms.map((p) => `<span class="pill">${esc(p)}</span>`).join('') + (g.year ? `<span class="pill">${g.year}</span>` : '') + (g.languages.includes('Italiano') ? '<span class="pill good">🇮🇹 Italiano</span>' : ''))}</div>
+      ${raw(g.genres.length ? `<div class="muted">${esc(g.genres.join(' · '))}</div>` : '')}
+      ${raw(g.developer || g.publisher ? `<div class="muted">${esc([g.developer, g.publisher && g.publisher !== g.developer ? g.publisher : ''].filter(Boolean).join(' / '))}</div>` : '')}
+      ${raw(g.languages.length ? `<div class="muted">Lingue: ${esc(g.languages.join(', '))}</div>` : '')}
+      ${raw(g.regions && g.regions.length ? `<div class="muted">Regioni: ${esc(g.regions.join(', '))}</div>` : '')}</div></div>
+    ${raw(g.description ? `<p>${esc(g.description)}</p>` : '')}
+    ${raw(bot ? `<a class="chip consult" href="https://t.me/${esc(bot)}?start=game_${g.id}" target="_blank" rel="noopener">Consulta nel bot</a>` : '')}</div>`;
+  modal.hidden = false; document.body.style.overflow = 'hidden';
+}
+let gamesObserver;
 const gameFilters = { q: '', platform: '', genre: '', language: '', region: '', sort: 'titolo', page: 1 };
 async function viewGames() {
+  gameFilters.page = 1;
   $('#view').innerHTML = '<div class="panel empty">Carico il catalogo…</div>';
   const f = gameFilters;
   const qs = new URLSearchParams(Object.entries(f).filter(([, v]) => v !== '' && v !== null));
   const r = await api('/api/games?' + qs);
   const opts = (list, cur, all) => `<option value="">${all}</option>` + list.map(([v, n]) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(v)} (${fmt(n)})</option>`).join('');
-  const pages = Math.max(1, Math.ceil(r.total / r.per_page));
   $('#view').innerHTML = html`<h1>Catalogo giochi</h1>
-    <p class="muted">Solo consultazione: cerca e filtra la libreria degli album. Per averne una copia usa gli album come sempre.</p>
+    <p class="muted">Solo consultazione: cerca, filtra e tocca un gioco per i dettagli.</p>
     <div class="filters">
       <input id="g-q" type="search" placeholder="Cerca titolo, genere, descrizione…" value="${f.q}" aria-label="Cerca nel catalogo">
       <select id="g-platform" aria-label="Piattaforma">${raw(opts(r.facets.platforms, f.platform, 'Tutte le piattaforme'))}</select>
@@ -739,23 +764,33 @@ async function viewGames() {
       <select id="g-sort" aria-label="Ordina per">${raw([['titolo', 'Titolo A–Z'], ['anno', 'Anno (nuovi prima)'], ['recenti', 'Ultimi aggiunti']].map(([v, l]) => `<option value="${v}" ${f.sort === v ? 'selected' : ''}>${l}</option>`).join(''))}</select>
       <span class="count">${fmt(r.total)} giochi</span>
     </div>
-    ${r.items.length ? raw(`<div class="cols">${r.items.map((g) => `<div class="panel game">
-      ${(() => { const [ratio, band, label] = caseOf(g); return `<div class="case" style="--ratio:${ratio};--band:${band}" title="${esc(label)}">
-        <span class="band">${esc(label)}</span>
-        <div class="art">${g.cover ? `<img src="/img/game/${g.id}.webp" alt="Copertina di ${esc(g.title)}" loading="lazy">` : '<span aria-hidden="true">🎮</span>'}</div></div>`; })()}
-      <div class="gbody"><b>${esc(g.title)}</b>
-      <div class="row">${g.platforms.map((p) => `<span class="pill">${esc(p)}</span>`).join('')}${g.year ? `<span class="pill">${g.year}</span>` : ''}${g.languages.includes('Italiano') ? '<span class="pill good">🇮🇹 Italiano</span>' : ''}</div>
-      <div class="muted">${esc(g.genres.join(' · '))}${g.developer ? ` · ${esc(g.developer)}` : ''}${g.publisher && g.publisher !== g.developer ? ` / ${esc(g.publisher)}` : ''}</div>
-      <p class="muted clamp">${esc(g.description)}</p>
-      ${r.bot ? `<a class="chip consult" href="https://t.me/${esc(r.bot)}?start=game_${g.id}" target="_blank" rel="noopener">Consulta nel bot</a>` : ''}</div></div>`).join('')}</div>`) : raw('<div class="panel empty">Nessun gioco con questi filtri. Prova ad allargare la ricerca.</div>')}
-    <div class="row spread" style="margin-top:14px"><button class="chip" id="g-prev" ${f.page <= 1 ? 'disabled' : ''}>← Precedente</button>
-      <span class="muted">Pagina ${f.page} di ${pages}</span><button class="chip" id="g-next" ${f.page >= pages ? 'disabled' : ''}>Successiva →</button></div>`;
-  const reload = (patch) => { Object.assign(f, patch, 'page' in patch ? {} : { page: 1 }); viewGames(); };
+    ${r.items.length ? raw(`<div class="gamegrid" id="g-list">${r.items.map(gameCard).join('')}</div>`) : raw('<div class="panel empty">Nessun gioco con questi filtri. Prova ad allargare la ricerca.</div>')}
+    <div id="g-more" class="muted" style="text-align:center;margin:18px 0" aria-live="polite"></div>`;
+  const reload = (patch) => { Object.assign(f, patch, { page: 1 }); viewGames(); };
   let timer;
   $('#g-q').addEventListener('input', (e) => { clearTimeout(timer); timer = setTimeout(() => { f.q = e.target.value; f.page = 1; viewGames().then(() => { const i = $('#g-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }); }, 300); });
   for (const [id, key] of [['g-platform', 'platform'], ['g-genre', 'genre'], ['g-language', 'language'], ['g-region', 'region'], ['g-sort', 'sort']]) $('#' + id).addEventListener('change', (e) => reload({ [key]: e.target.value }));
-  $('#g-prev').addEventListener('click', () => reload({ page: f.page - 1 }));
-  $('#g-next').addEventListener('click', () => reload({ page: f.page + 1 }));
+  $('#view').addEventListener('click', (e) => { const c = e.target.closest('[data-game]'); if (c) openGame(c.dataset.game, r.bot).catch(() => toast('Non riesco ad aprire il gioco.', false)); });
+  // the next page is fetched when the end of the list comes into view, and appended: no pages to flip
+  if (gamesObserver) gamesObserver.disconnect();
+  const more = $('#g-more'), list = $('#g-list');
+  if (!list) return;
+  const pages = Math.max(1, Math.ceil(r.total / r.per_page));
+  let loading = false;
+  const done = () => { more.textContent = r.total > r.per_page ? `Hai visto tutti i ${fmt(r.total)} giochi` : ''; };
+  if (f.page >= pages) return done();
+  gamesObserver = new IntersectionObserver(async (entries) => {
+    if (!entries.some((e) => e.isIntersecting) || loading) return;
+    loading = true; more.textContent = 'Carico altri giochi…';
+    try {
+      f.page += 1;
+      const next = await api('/api/games?' + new URLSearchParams(Object.entries(f).filter(([, v]) => v !== '' && v !== null)));
+      list.insertAdjacentHTML('beforeend', next.items.map(gameCard).join(''));
+      if (f.page >= pages) { gamesObserver.disconnect(); done(); } else more.textContent = '';
+    } catch (e) { f.page -= 1; more.textContent = 'Non riesco a caricare altri giochi, scorri ancora per riprovare.'; }
+    loading = false;
+  }, { rootMargin: '600px 0px' });
+  gamesObserver.observe(more);
 }
 
 // ---------- feedback ----------
