@@ -121,8 +121,8 @@ class TestDungeonLogic(unittest.TestCase):
         self.assertIsNotNone(dungeon, f"Dungeon with id {d_id} not found. All: {[d.id for d in all_dungeons]}")
         self.assertEqual(dungeon.current_stage, 1)
         
-        # Kill stage 1 mobs (there are 3)
-        for _ in range(3):
+        # Kill stage 1 mobs (there are 5)
+        for _ in range(5):
             mob = session.query(Mob).filter_by(dungeon_id=d_id, is_dead=False).first()
             if not mob: break # Added this line to ensure the loop doesn't break if mob is None
             mob_id = mob.id

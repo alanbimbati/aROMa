@@ -59,3 +59,12 @@ rollback_dietpi.sh
 Dockerfile
 docker-compose*.yml
 .dockerignore
+
+# Big, mounted as volumes at run time (see docker-compose.yml)
+images/
+assets/
+cache/
+nohup.out
+*.dump
+*.sql
+*.sql.gz

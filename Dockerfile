@@ -9,6 +9,11 @@ RUN pip install --user --no-cache-dir -r requirements.txt
 # Runtime stage
 FROM python:3.10-slim
 
+# Fonts for the badge images, and the PostgreSQL client for the backup taken before a season launch
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core fonts-noto-color-emoji postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash aroma
 
@@ -26,6 +31,8 @@ USER aroma
 
 # Add local bin to PATH
 ENV PATH=/home/aroma/.local/bin:$PATH
+# The libraries live in the aroma user's folder: let root (the init step) find them too
+ENV PYTHONUSERBASE=/home/aroma/.local
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \

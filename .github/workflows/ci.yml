@@ -1,0 +1,152 @@
+name: CI
+
+# Runs on every push and pull request.
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.10"   # what the Dockerfile runs
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements.dev.txt
+      - name: Fonts for the badge images
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-dejavu-core fonts-noto-color-emoji
+      - run: pip install -r requirements.txt -r requirements.dev.txt
+      - name: Every file compiles
+        run: python -m compileall -q . -x '(\.git|node_modules)'
+      - name: Badge images (generated, not stored in git)
+        run: python scripts/generate_badge_images.py
+      - name: Generated data files are up to date
+        run: |
+          python scripts/marvel_roster.py --apply >/dev/null
+          python scripts/marvel_dungeons.py --apply >/dev/null
+          python -m scripts.marvel_achievements >/dev/null
+          git diff --exit-code -- data/ || (echo "::error::data/ is out of date: run the three scripts above and commit the result" && exit 1)
+      - name: Test suite
+        run: python -m pytest tests --timeout=60 --timeout-method=signal -q --tb=short -p no:cacheprovider --junitxml=junit.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: junit
+          path: junit.xml
+
+  webapp:
+    name: Web app
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Frontend script parses
+        run: node --check webapp/static/app.js
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements.txt -r requirements.dev.txt
+      - name: Web app tests
+        run: python -m pytest tests/test_webapp.py --timeout=60 --timeout-method=signal -q -p no:cacheprovider
+      - name: Static export builds
+        run: |
+          EXPORT_DIR=$RUNNER_TEMP/site API_ORIGIN=https://api.example.org WEBAPP_URL=https://aroma.example.org \
+            DB_TYPE=sqlite TEST_DB=1 python -m webapp.export_static
+          python -c "import json,sys; json.load(open('$RUNNER_TEMP/site/vercel.json'))"
+
+  docker:
+    name: Docker and compose
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compose file is valid
+        run: cp .env.example .env && docker compose config -q
+      - name: Image builds
+        run: docker build -t aroma-bot:ci .
+      - name: Libraries import inside the image, for the app user and for root (the init step)
+        run: |
+          docker run --rm aroma-bot:ci python -c "import sqlalchemy, telebot, fastapi, nostr_sdk, PIL, psycopg2"
+          docker run --rm --user root aroma-bot:ci python -c "import sqlalchemy, fastapi, nostr_sdk"
+          docker run --rm aroma-bot:ci pg_dump --version
+
+  upgrade:
+    name: Upgrade rehearsal (previous release -> this one)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: alan
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: aroma_bot
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U alan -d aroma_bot" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DB_TYPE: postgresql
+      DB_HOST: localhost
+      DB_PORT: "5432"
+      DB_NAME: aroma_bot
+      DB_USER: alan
+      DB_PASSWORD: ci
+      TEST: "0"
+      MARVEL_LAUNCH: "1"
+      FETCH_IMAGES: "0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client fonts-dejavu-core fonts-noto-color-emoji
+      - run: pip install -r requirements.txt
+      - name: Check out the previous release next to this one
+        run: |
+          BASE=$(git merge-base origin/main HEAD 2>/dev/null || true)
+          if [ -z "$BASE" ] || [ "$BASE" = "$(git rev-parse HEAD)" ]; then BASE=$(git rev-parse HEAD~1); fi
+          echo "previous release: $BASE"
+          git worktree add ../previous "$BASE"
+      - name: Build the OLD database with the OLD code, and fill it with invented players
+        run: |
+          (cd ../previous && python db_setup.py)
+          python scripts/ci/seed_synthetic_players.py
+          python scripts/verify_launch.py --snapshot before.json
+      - name: Upgrade with this release (backup, migrations, Marvel launch)
+        run: |
+          mkdir -p backups images
+          python scripts/init_stack.py
+      - name: Everything that should have changed did, and nothing was lost
+        run: python scripts/verify_launch.py --check before.json
+      - name: A second start does not wipe or back up again
+        run: |
+          python scripts/init_stack.py | tee second.log
+          ! grep -q "Marvel launch" second.log
+          test "$(ls backups | wc -l)" = "1"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: upgrade-debug
+          path: |
+            before.json
+            second.log

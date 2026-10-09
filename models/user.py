@@ -63,6 +63,9 @@ class Utente(Base):
     title = Column(String, nullable=True)  # Currently equipped title
     titles = Column(String, nullable=True)  # JSON: List of unlocked titles
     
+    # Verified Nostr identity (npub, bech32): where achievement badges are awarded
+    npub = Column(String(70), nullable=True)
+
     # Last character change timestamp
     last_character_change = Column(DateTime, nullable=True)
     

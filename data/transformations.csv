@@ -45,3 +45,36 @@ id,base_character_name,transformed_character_name,transformation_name,wumpa_cost
 47,Broly,Great Ape,Scimmione,200000,1,200,80,150,0,,50
 48,Pan,Great Ape,Scimmione,80000,1,150,50,100,0,,15
 49,Gogeta SSJ4,Great Ape,Scimmione,300000,1,300,100,200,0,,40
+50,Peter Parker,Spider-Man,Spider-Man,10000,3,100,50,60,0,,10
+51,Spider-Man,Iron Spider,Iron Spider,30000,3,300,150,180,0,,30
+52,Iron Spider,Cosmic Spider-Man,Cosmic Spider-Man,50000,3,500,250,300,0,,50
+53,Tony Stark,Iron Man Mark 1,Iron Man Mark 1,10000,3,100,50,60,0,,10
+54,Iron Man Mark 1,Iron Man Hulkbuster,Iron Man Hulkbuster,30000,3,300,150,180,0,,30
+55,Iron Man Hulkbuster,Iron Man Bleeding Edge,Iron Man Bleeding Edge,50000,3,500,250,300,0,,50
+56,Steve Rogers,Captain America,Captain America,10000,3,100,50,60,0,,10
+57,Captain America,Captain America (Worth),Captain America (Worth),40000,3,400,200,240,1,,40
+58,Bruce Banner,Hulk,Hulk,10000,3,100,50,60,0,,10
+59,Hulk,World Breaker Hulk,World Breaker Hulk,40000,3,400,200,240,0,,40
+60,Thor Odinson,Thor,Thor,15000,3,150,75,90,0,,15
+61,Thor,King Thor,King Thor,45000,3,450,225,270,1,,45
+62,King Thor,Rune King Thor,Rune King Thor,60000,3,600,300,360,1,,60
+63,Natasha Romanoff,Black Widow,Black Widow,12000,3,120,60,72,0,,12
+64,Clint Barton,Hawkeye,Hawkeye,12000,3,120,60,72,0,,12
+65,Hawkeye,Ronin,Ronin,25000,3,250,125,150,0,,25
+66,Stephen Strange,Doctor Strange,Doctor Strange,20000,3,200,100,120,0,,20
+67,Doctor Strange,Sorcerer Supreme,Sorcerer Supreme,50000,3,500,250,300,0,,50
+68,Wanda Maximoff,Scarlet Witch,Scarlet Witch,25000,3,250,125,150,0,,25
+69,Scarlet Witch,Scarlet Witch (Darkhold),Scarlet Witch (Darkhold),60000,3,600,300,360,1,,60
+70,Carol Danvers,Captain Marvel,Captain Marvel,25000,3,250,125,150,0,,25
+71,Captain Marvel,Binary Form,Binary Form,55000,3,550,275,330,0,,55
+72,T'Challa,Black Panther,Black Panther,15000,3,150,75,90,0,,15
+73,Black Panther,King of the Dead,King of the Dead,45000,3,450,225,270,1,,45
+74,Groot (Baby),Groot,Groot,15000,3,150,75,90,0,,15
+75,Groot,King Groot,King Groot,40000,3,400,200,240,1,,40
+76,Peter Quill,Star-Lord,Star-Lord,15000,3,150,75,90,0,,15
+77,Logan (Weapon X),Wolverine,Wolverine,15000,3,150,75,90,0,,15
+78,Wolverine,Old Man Logan,Old Man Logan,40000,3,400,200,240,0,,40
+79,Wade Wilson,Deadpool,Deadpool,14000,3,140,70,84,0,,14
+80,Eddie Brock,Venom,Venom,15000,3,150,75,90,0,,15
+81,Venom,King in Black Venom,King in Black Venom,55000,3,550,275,330,1,,55
+82,Thanos,Thanos (Guanto dell'Infinito),Thanos (Guanto dell'Infinito),95000,3,950,475,570,1,,95

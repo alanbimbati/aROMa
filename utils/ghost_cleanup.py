@@ -7,6 +7,15 @@ from database import Database
 from models.user import Utente
 from settings import TEST, GRUPPO_AROMA
 
+# What Telegram answers when the user is simply not in that chat (as opposed to any other failure)
+NOT_A_MEMBER_MARKERS = ("user not found", "participant_id_invalid", "member not found", "user_not_participant")
+
+
+def _definitely_not_a_member(error):
+    message = str(error).lower()
+    return any(marker in message for marker in NOT_A_MEMBER_MARKERS)
+
+
 def cleanup_ghost_users(bot):
     """
     Remove users who are not members of the official group.
@@ -40,11 +49,15 @@ def cleanup_ghost_users(bot):
                     kept_count += 1
                     
             except Exception as e:
-                # User not found in group or other error
-                print(f"[GHOST_CLEANUP] Error checking user {user_id}: {e}")
-                print(f"[GHOST_CLEANUP] Removing user {user_id} (not in group)")
-                session.delete(user)
-                removed_count += 1
+                # Only a definite "this person is not in the group" removes a player. Anything else (network,
+                # rate limit, a wrong token, Telegram being down) says nothing about the player: keep them.
+                if _definitely_not_a_member(e):
+                    print(f"[GHOST_CLEANUP] Removing user {user_id} (not in group: {e})")
+                    session.delete(user)
+                    removed_count += 1
+                else:
+                    print(f"[GHOST_CLEANUP] Could not check user {user_id}, keeping them: {e}")
+                    kept_count += 1
         
         session.commit()
         print(f"[GHOST_CLEANUP] Cleanup complete. Removed: {removed_count}, Kept: {kept_count}")

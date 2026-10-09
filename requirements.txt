@@ -7,3 +7,7 @@ sqlalchemy>=2.0.30
 psycopg2-binary
 python-dateutil
 alembic
+nostr-sdk==0.45.1
+fastapi
+uvicorn[standard]
+itsdangerous

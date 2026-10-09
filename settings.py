@@ -2,13 +2,16 @@ import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 CANALE_LOG          =    '-1001469821841'
-TEST                =    1
+# Everything that differs between a test bot and the real one comes from the environment (.env),
+# so the same checkout runs both: TEST=0 BOT_TOKEN=... on the server, nothing at all for development.
+TEST                =    int(os.getenv('TEST', 1))
+TEST_MODE           =    TEST
 
-TEST_TOKEN      = '5481883387:AAGTJ1nxa1JUt-kIapuoV1l8C8W3KihMq4c'
-AROMA_TOKEN     = '1354552262:AAEqcMo6worCz7a19X-XRtOw5uL3ecY3SH4'
+TEST_TOKEN      = os.getenv('TEST_BOT_TOKEN') or '5481883387:AAGTJ1nxa1JUt-kIapuoV1l8C8W3KihMq4c'
+AROMA_TOKEN     = os.getenv('BOT_TOKEN') or '1354552262:AAEqcMo6worCz7a19X-XRtOw5uL3ecY3SH4'
 
-TEST_GRUPPO     = -1001721979634
-AROMA_GRUPPO    = -1001457029650
+TEST_GRUPPO     = int(os.getenv('TEST_GROUP_ID', -1001721979634))
+AROMA_GRUPPO    = int(os.getenv('GROUP_ID', -1001457029650))
 
 if TEST:
     BOT_TOKEN       = TEST_TOKEN

@@ -31,6 +31,8 @@ class AchievementTracker:
 
     def _is_achievement_available(self, achievement, inactive_seasonal_categories) -> bool:
         """Hide only achievements from seasonal categories that are currently inactive."""
+        if achievement.stat_key == 'season_podium':
+            return False  # assigned directly at season end, not a trackable goal
         category = (achievement.category or "").strip().lower()
         return category not in inactive_seasonal_categories
 
@@ -422,6 +424,7 @@ class AchievementTracker:
                     unlocked_tier = tier_name
                     # Collect reward data
                     rewards_to_award.append({
+                        'achievement_key': achievement.achievement_key,
                         'achievement_name': achievement.name,
                         'achievement_description': achievement.description,
                         'tier_name': tier_name,
@@ -460,6 +463,11 @@ class AchievementTracker:
         tier_name = reward_data['tier_name']
         tier_data = reward_data['tier_data']
         rewards = tier_data.get('rewards', {})
+        try:
+            from services.nostr_service import queue_badge
+            queue_badge(user_id, reward_data['achievement_key'], tier_name, session=session)
+        except Exception as e:
+            print(f"[Nostr] Could not queue badge: {e}")
         username = user.nome if user.nome else (user.username if user.username else f"User {user_id}")
         
         # Notification message

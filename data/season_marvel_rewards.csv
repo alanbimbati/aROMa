@@ -1,0 +1,75 @@
+level_required,is_premium,reward_type,reward_value,reward_name,icon
+1,0,points,150,150 Wumpa,💰
+1,1,points,400,400 Wumpa,💰
+2,0,points,300,300 Wumpa,💰
+2,1,points,800,800 Wumpa,💰
+3,0,points,450,450 Wumpa,💰
+3,1,points,1200,1200 Wumpa,💰
+4,0,points,600,600 Wumpa,💰
+4,1,points,1600,1600 Wumpa,💰
+4,1,character,669,Echo,🦸
+5,0,points,750,750 Wumpa,💰
+5,0,character,668,Falcon,🦸
+5,1,points,2000,2000 Wumpa,💰
+6,0,points,900,900 Wumpa,💰
+6,1,points,2400,2400 Wumpa,💰
+7,0,points,1050,1050 Wumpa,💰
+7,1,points,2800,2800 Wumpa,💰
+8,0,points,1200,1200 Wumpa,💰
+8,1,points,3200,3200 Wumpa,💰
+8,1,character,676,Punisher,🦸
+9,0,points,1350,1350 Wumpa,💰
+9,1,points,3600,3600 Wumpa,💰
+10,0,points,1500,1500 Wumpa,💰
+10,0,character,674,Daredevil,🦸
+10,1,points,4000,4000 Wumpa,💰
+11,0,points,1650,1650 Wumpa,💰
+11,1,points,4400,4400 Wumpa,💰
+12,0,points,1800,1800 Wumpa,💰
+12,1,points,4800,4800 Wumpa,💰
+12,1,character,681,Nightcrawler,🦸
+13,0,points,1950,1950 Wumpa,💰
+13,1,points,5200,5200 Wumpa,💰
+14,0,points,2100,2100 Wumpa,💰
+14,1,points,5600,5600 Wumpa,💰
+15,0,points,2250,2250 Wumpa,💰
+15,0,character,679,Kitty Pryde,🦸
+15,1,points,6000,6000 Wumpa,💰
+16,0,points,2400,2400 Wumpa,💰
+16,1,points,6400,6400 Wumpa,💰
+16,1,character,684,Okoye,🦸
+17,0,points,2550,2550 Wumpa,💰
+17,1,points,6800,6800 Wumpa,💰
+18,0,points,2700,2700 Wumpa,💰
+18,1,points,7200,7200 Wumpa,💰
+19,0,points,2850,2850 Wumpa,💰
+19,1,points,7600,7600 Wumpa,💰
+20,0,points,3000,3000 Wumpa,💰
+20,0,character,688,Cyclops,🦸
+20,1,points,8000,8000 Wumpa,💰
+20,1,character,694,Gamora,🦸
+21,0,points,3150,3150 Wumpa,💰
+21,1,points,8400,8400 Wumpa,💰
+22,0,points,3300,3300 Wumpa,💰
+22,1,points,8800,8800 Wumpa,💰
+23,0,points,3450,3450 Wumpa,💰
+23,1,points,9200,9200 Wumpa,💰
+24,0,points,3600,3600 Wumpa,💰
+24,1,points,9600,9600 Wumpa,💰
+24,1,character,708,War Machine,🦸
+25,0,points,3750,3750 Wumpa,💰
+25,0,character,698,Rocket Raccoon,🦸
+25,1,points,10000,10000 Wumpa,💰
+26,0,points,3900,3900 Wumpa,💰
+26,1,points,10400,10400 Wumpa,💰
+27,0,points,4050,4050 Wumpa,💰
+27,1,points,10800,10800 Wumpa,💰
+28,0,points,4200,4200 Wumpa,💰
+28,1,points,11200,11200 Wumpa,💰
+28,1,character,719,Thing,🦸
+29,0,points,4350,4350 Wumpa,💰
+29,1,points,11600,11600 Wumpa,💰
+30,0,points,4500,4500 Wumpa,💰
+30,0,character,713,Human Torch,🦸
+30,1,points,12000,12000 Wumpa,💰
+30,1,character,721,Iron Man,🦸

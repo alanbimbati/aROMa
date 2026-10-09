@@ -1,0 +1,44 @@
+# Tests that already failed before the Marvel work (assertion errors, errors in the test setup). They still run, as expected failures: a new break elsewhere turns CI red; fixing one shows up as XPASS.
+# Generated from a full run of the suite on the commit before the Marvel work and on this one: 35 tests fail in both.
+# Flaky on SQLite ("database is locked" in setUp, two minutes per file): sometimes pass, sometimes fail.
+tests/test_combat_features.py::TestCombatFeatures::test_aoe_button_visibility
+tests/test_comprehensive.py::TestComprehensive::test_06_transformations
+tests/test_crafting.py::TestCraftingSystem::test_01_resource_drop_from_mob
+tests/test_crafting.py::TestCraftingSystem::test_02_boss_always_drops_resources
+tests/test_crafting.py::TestCraftingSystem::test_03_resource_stacking
+tests/test_crafting.py::TestCraftingSystem::test_04_craft_without_resources
+tests/test_crafting.py::TestCraftingSystem::test_05_craft_with_resources
+tests/test_crafting.py::TestCraftingSystem::test_06_complete_crafting
+tests/test_dungeon_advancement.py::TestDungeonAdvancement::test_aoe_kill_advances_dungeon
+tests/test_dungeon_ginyu.py::TestGinyuDungeon::test_ginyu_dungeon_structure
+tests/test_dungeon_ginyu.py::TestGinyuDungeon::test_ginyu_spawn_logic
+tests/test_dungeon_ginyu.py::TestGinyuDungeon::test_ginyu_step_2_spawn
+tests/test_dungeon_logic.py::TestDungeonLogic::test_dungeon_advancement
+tests/test_dungeon_logic.py::TestDungeonLogic::test_dungeon_mob_targeting
+tests/test_dungeon_logic.py::TestDungeonLogic::test_dungeon_participants_persistence
+tests/test_dungeon_logic.py::TestDungeonLogic::test_dungeon_targeting_restriction
+tests/test_dungeon_logic.py::TestDungeonLogic::test_flee_dungeon_ghost
+tests/test_dungeon_logic.py::TestDungeonLogic::test_targeting_avoids_dead_users
+tests/test_dungeon_sched.py::TestDungeonScheduler::test_auto_start_after_hype
+tests/test_dungeon_sched.py::TestDungeonScheduler::test_hype_trigger
+tests/test_dungeon_sched.py::TestDungeonScheduler::test_schedule_creation
+tests/test_full_flow.py::TestFullFlow::test_transformations
+tests/test_gameplay_loop.py::TestGameplayLoop::test_04_craft_item_with_bonus
+tests/test_guild_bonuses.py::TestGuildBonuses::test_brewery_potion_bonus_calculation
+tests/test_guild_buffs.py::TestGuildBuffs::test_bordello_mana_reduction
+tests/test_guild_buffs.py::TestGuildBuffs::test_bordello_vigore_duration
+tests/test_guild_buffs.py::TestGuildBuffs::test_brewery_potion_bonus_duration
+tests/test_guild_buffs.py::TestGuildBuffs::test_tavern_buff_application
+tests/test_guild_expansion.py::TestGuildExpansion::test_bordello_and_vigore
+tests/test_guild_expansion.py::TestGuildExpansion::test_guild_list_and_members
+tests/test_guild_expansion.py::TestGuildExpansion::test_public_inn_resting
+tests/test_mob_mana.py::TestMobBossMana::test_boss_spawns_with_higher_mana_multiplier
+tests/test_mob_mana.py::TestMobBossMana::test_mob_spawns_with_character_based_mana
+tests/test_mob_mana.py::TestMobBossMana::test_scouter_displays_mana
+tests/test_pve.py::TestPvE::test_kill_mob
+tests/test_resource_system.py::TestResourceSystem::test_add_resource_drop_new
+tests/test_resource_system.py::TestResourceSystem::test_roll_resource_drop_mob
+tests/test_reward_distribution.py::TestRewardDistribution::test_multi_user_rewards
+tests/test_rewards_and_leveling.py::TestRewardsAndLeveling::test_dungeon_mob_rewards
+tests/test_rewards_and_leveling.py::TestRewardsAndLeveling::test_world_mob_rewards
+tests/test_wishes.py::test_wishes

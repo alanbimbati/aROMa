@@ -168,6 +168,8 @@ class StatAggregator:
                 
         elif event_type == 'dungeon_run':
             self._increment_stat(user_id, 'dungeons_completed', 1)
+            if context.get('dungeon_def_id') is not None:
+                self._increment_stat(user_id, f"dungeon_def_{context['dungeon_def_id']}_completed", 1)
             if context.get('damage_rank') == 1:
                 self._increment_stat(user_id, 'dungeon_mvp_damage', 1)
                 

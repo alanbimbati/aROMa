@@ -23,6 +23,39 @@ class CraftingService:
     _resource_cache_timestamp = None
     _CACHE_DURATION_SECONDS = 300
 
+    # Central Profession Registry
+    PROFESSIONS = {
+        'armorsmith': {
+            'name': 'armorsmith',
+            'label': 'Armaiolo',
+            'icon': '🔨',
+            'prefix': 'profession', # Legacy: profession_level
+            'resources': [1, 2, 3, 6, 7]
+        },
+        'alchemy': {
+            'name': 'alchemy',
+            'label': 'Alchimista',
+            'icon': '🧪',
+            'prefix': 'alchemy', # alchemy_level
+            'resources': [4, 5]
+        },
+        'garden': {
+            'name': 'garden',
+            'label': 'Giardiniere',
+            'icon': '🌿',
+            'prefix': 'garden', # garden_level
+            'resources': list(range(8, 18))
+        }
+    }
+
+    @classmethod
+    def get_profession_by_resource(cls, resource_id):
+        """Map a resource ID to its associated profession"""
+        for prof_key, config in cls.PROFESSIONS.items():
+            if resource_id in config['resources']:
+                return prof_key
+        return 'armorsmith' # Default fallback
+
     def __init__(self):
         self.db = Database()
         from services.event_dispatcher import EventDispatcher
@@ -418,14 +451,7 @@ class CraftingService:
             
             # 3. Award profession XP
             xp_gained = raw_qty * 5
-            
-            # Profession mapping based on res_id
-            prof_name = 'armorsmith'
-            if res_id in [4, 5]:
-                prof_name = 'alchemist'
-            elif res_id in [7, 8, 9] or res_id > 7:
-                prof_name = 'gardener'
-                
+            prof_name = self.get_profession_by_resource(res_id)
             self.add_profession_xp(user_id, xp_gained, profession_name=prof_name)
             
             session.commit()
@@ -465,12 +491,7 @@ class CraftingService:
                 armory_level = self.get_guild_armory_level(gid)
                 
                 # Determine profession name to pull correct level
-                prof_name = 'armorsmith'
-                if job.resource_id in [4, 5]:
-                    prof_name = 'alchemist'
-                elif job.resource_id in [7, 8, 9] or job.resource_id > 7:
-                    prof_name = 'gardener'
-                    
+                prof_name = self.get_profession_by_resource(job.resource_id)
                 prof = self.get_profession_info(uid, profession_name=prof_name)
                 
                 res = self.complete_refinement(qid, user.livello, prof['level'], armory_level)
@@ -819,26 +840,25 @@ class CraftingService:
         from models.stats import UserStat
         session = self.db.get_session()
         try:
+            config = self.PROFESSIONS.get(profession_name, self.PROFESSIONS['armorsmith'])
+            prefix = config['prefix']
+            
             xp_stat = session.query(UserStat).filter_by(
                 user_id=user_id, 
-                stat_key=f'{profession_name}_xp'
+                stat_key=f'{prefix}_xp'
             ).first()
             
             level_stat = session.query(UserStat).filter_by(
                 user_id=user_id, 
-                stat_key=f'{profession_name}_level'
+                stat_key=f'{prefix}_level'
             ).first()
             
-            # Fallback to old 'profession_xp' if armorsmith is requested but doesn't exist yet
-            if profession_name == 'armorsmith' and not xp_stat:
-                old_xp = session.query(UserStat).filter_by(user_id=user_id, stat_key='profession_xp').first()
-                if old_xp:
-                    xp_stat = old_xp
-            if profession_name == 'armorsmith' and not level_stat:
-                old_lvl = session.query(UserStat).filter_by(user_id=user_id, stat_key='profession_level').first()
-                if old_lvl:
-                    level_stat = old_lvl
-            
+            # Special fallback for garden if requested as gardener (compatibility)
+            if not xp_stat and profession_name == 'garden':
+                 xp_stat = session.query(UserStat).filter_by(user_id=user_id, stat_key='gardener_xp').first()
+            if not level_stat and profession_name == 'garden':
+                 level_stat = session.query(UserStat).filter_by(user_id=user_id, stat_key='gardener_level').first()
+
             return {
                 "level": int(level_stat.value) if level_stat else 1, 
                 "xp": int(xp_stat.value) if xp_stat else 0
@@ -846,8 +866,11 @@ class CraftingService:
         finally:
             session.close()
 
-    def add_profession_xp(self, user_id, amount, profession_name='armorsmith'):
-        """Add XP to user's specified profession and check for level up"""
+    def add_profession_xp(self, user_id, amount, profession_name='armorsmith', session=None):
+        """Add XP to user's specified profession and check for level up.
+
+        `session` is accepted because the alchemy and garden services pass theirs, but the write always
+        goes through its own short session, so it never waits on the caller's open transaction."""
         info = self.get_profession_info(user_id, profession_name)
         current_xp = info['xp']
         current_level = info['level']

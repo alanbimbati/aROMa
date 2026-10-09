@@ -46,6 +46,24 @@ class RewardService:
             print(f"Error loading bosses in RewardService: {e}")
         return bosses
 
+    def _dungeon_level(self, mob):
+        """(recommended level, enemy units) when the mob belongs to a dungeon that has a recommended level."""
+        dungeon_id = getattr(mob, 'dungeon_id', None)
+        if not dungeon_id:
+            return None
+        from models.dungeon import Dungeon
+        from services.dungeon_service import DungeonService
+        session = self.db.get_session()
+        try:
+            dungeon = session.query(Dungeon).filter_by(id=dungeon_id).first()
+            service = DungeonService()
+            d_def = service.get_dungeon_def(dungeon.dungeon_def_id) if dungeon else None
+            if d_def and d_def.get('recommended_level'):
+                return d_def['recommended_level'], service.enemy_units(d_def)
+        finally:
+            session.close()
+        return None
+
     def calculate_rewards(self, mob, participants):
         """
         Calculate rewards for a mob kill.
@@ -81,6 +99,7 @@ class RewardService:
         
         # Check if this is a boss and get its special pool
         is_boss = getattr(mob, 'is_boss', False)
+        level_relative = False
         if is_boss:
             boss_info = next((b for b in self.boss_data if b['nome'] == mob.name), None)
             if boss_info:
@@ -104,11 +123,19 @@ class RewardService:
             hp_scaling = min(3.0, (mob_hp / 1000) ** 0.35) if mob_hp > 1000 else 1.0
             
             base_xp_pool = int((mob_level * 5) * hp_scaling * difficulty_multiplier)
+            level_relative = True
             
             # Base Wumpa pool proportional to health and difficulty
             fixed_wumpa_pool = int(mob_hp * 0.05 * difficulty)
             if fixed_wumpa_pool < 10: fixed_wumpa_pool = 10
         
+        # A dungeon made for a level pays by that level, whatever the enemy's own numbers say
+        dungeon_level = self._dungeon_level(mob)
+        if dungeon_level:
+            from services.dungeon_rewards import kill_pool
+            fighters = len([p for p in participants if (getattr(p, 'damage_dealt', 0) or 0) > 0])
+            base_xp_pool, fixed_wumpa_pool = kill_pool(dungeon_level[0], dungeon_level[1], is_boss, fighters)
+
         # Add a small random variation (+/- 10%)
         variation = random.uniform(0.9, 1.1)
         base_xp_pool = int(base_xp_pool * variation)
@@ -132,27 +159,37 @@ class RewardService:
             share = dmg / total_damage
             user_level = user_levels.get(p.user_id, 1) or 1
             
-            # 1. Challenge Multiplier (Leecher Protection)
-            challenge_mult = min(1.0, (user_level + 10) / (mob_level + 10))
-            
-            # 2. XP Penalty for high levels (existing logic moved here)
-            overlevel_penalty = 1.0
-            if user_level > mob_level + 10:
-                overlevel_penalty = 0.5
+            # Challenge Bonus & Overlevel Penalty
+            # Rewarding players for fighting stronger enemies, penalizing for farming weak ones.
+            challenge_factor = 1.0
+            if dungeon_level:
+                # the dungeon already pays by its level: no bonus on top, only the penalty for farming far below it
+                if user_level > dungeon_level[0] + 15:
+                    challenge_factor = 0.5
+            elif mob_level > user_level:
+                # Bonus: +2% for every level of difference, capped at +200% (3x total)
+                challenge_factor = 1.0 + min(2.0, (mob_level - user_level) * 0.02)
+            elif user_level > mob_level + 15:
+                # Penalty: -50% if the player is much stronger than the mob
+                challenge_factor = 0.5
 
             # Wumpa (Points) calculation
             if fixed_wumpa_pool:
-                wumpa = int(fixed_wumpa_pool * share)
+                wumpa = int(fixed_wumpa_pool * share * challenge_factor)
             else:
-                wumpa = int(dmg * 0.05 * difficulty)
+                wumpa = int(dmg * 0.05 * difficulty * challenge_factor)
             
-            if user_level > mob_level + 10:
-                wumpa = int(wumpa * 0.25)
             if wumpa < 1: wumpa = 1
 
-            # XP calculation with all factors
+            # XP calculation with Challenge Factor
             base_xp = int(base_xp_pool * share)
-            xp = int(base_xp * challenge_mult * overlevel_penalty)
+            xp = int(base_xp * challenge_factor)
+            if level_relative and not dungeon_level:
+                # A world mob pays a share of the player's own level step, so the pace does not depend on how high
+                # mobs reach: ~3 months of daily play to level 100 (evals/progression_sim.py)
+                step = max(100, lvl_service.get_xp_requirement(user_level + 1) - lvl_service.get_xp_requirement(user_level))
+                ratio = min(2.0, max(0.25, mob_level / max(1, user_level)))
+                xp = int(step * 0.03 * difficulty * ratio * variation * share)
             
             # 3. Single-Fight Cap (Max 1.5 Levels worth of EXP)
             req_current = lvl_service.get_xp_requirement(user_level)

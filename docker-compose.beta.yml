@@ -1,0 +1,10 @@
+# Beta stack next to the real one: own database, own bot token, own group. Used with
+#   docker compose -p aroma_beta -f docker-compose.yml -f docker-compose.beta.yml --env-file .env.beta ...
+x-beta-env: &beta-env
+  env_file: !override [.env.beta]
+services:
+  postgres: {container_name: aroma_beta_postgres}
+  init: {container_name: aroma_beta_init, <<: *beta-env}
+  aroma_bot: {container_name: aroma_beta_bot, <<: *beta-env}
+  web: {container_name: aroma_beta_web, <<: *beta-env}
+  quicktunnel: {container_name: aroma_beta_quicktunnel}
