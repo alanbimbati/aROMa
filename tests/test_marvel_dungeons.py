@@ -105,3 +105,26 @@ def test_dungeon_rewards_follow_the_level_and_favour_teams():
     units = DungeonService.enemy_units(d)
     total = sum(dr.kill_pool(5, units, False)[0] for _ in range(5)) + dr.kill_pool(5, units, True)[0] + dr.completion(5)[0]
     assert abs(total - exp) <= 8
+
+
+def test_a_low_level_player_is_not_paid_by_a_far_higher_dungeon():
+    from services import dungeon_rewards as dr
+    need = lambda lv: int(10 * lv ** 2.5)
+    exp_full = dr.budget(35)[0]
+    assert dr.budget(35)[0] * dr.player_scale(35, 1) < need(2)                      # one clear of a level-35 dungeon never makes a level-1 player level up twice
+    assert dr.player_scale(35, 1) < dr.player_scale(35, 20) < dr.player_scale(35, 35) == 1.0
+    assert dr.player_scale(5, 50) == 1.0           # a stronger player earns the dungeon's pay, no more
+    assert dr.completion(35, 1, 1)[0] < dr.completion(35, 1, 30)[0] < exp_full
+    assert 1.5 < need(2) / (dr.budget(5)[0] * dr.player_scale(5, 1)) < 6  # a couple of dungeons for the first level
+
+
+def test_dungeon_enemies_hurt_by_their_share_of_a_players_health():
+    from types import SimpleNamespace
+    from services.combat_service import CombatService
+    from services.pve_service import PvEService
+    for level in (5, 30, 80):
+        _, attack = PvEService.level_budget(level)
+        user = SimpleNamespace(livello=level, invincible_until=None, allocated_resistance=0)
+        hits = [CombatService().calculate_mob_damage_to_user(SimpleNamespace(attack_damage=attack, name='x'), user) for _ in range(50)]
+        health = 100 + 6 * level
+        assert 0.01 * health <= sum(hits) / len(hits) <= 0.04 * health   # about 2% of the player's health, not a flat 1

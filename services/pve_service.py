@@ -507,7 +507,10 @@ class PvEService:
         hit, health = 10 + 3 * level, 100 + 6 * level
         turns, share = (BOSS_TURNS, BOSS_HIT) if boss else (MOB_TURNS, MOB_HIT)
         scale = weight ** 0.5  # enemy hp and damage both grow with it, and the damage taken with their product
-        return max(1, int(hit * turns * scale)), max(1, int(health * share * scale))
+        # the hit a player takes is attack * 0.25 / (1 + 0.02 * level) (CombatService.calculate_mob_damage_to_user):
+        # the attack is made to land at that share of their health, not one a fourth of it
+        attack = health * share * scale * (1 + 0.02 * level) / 0.25
+        return max(1, int(hit * turns * scale)), max(1, int(attack))
 
     def _allocate_mob_stats(self, level, difficulty, is_boss=False):
         """

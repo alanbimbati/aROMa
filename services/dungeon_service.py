@@ -957,11 +957,18 @@ class DungeonService:
         us = UserService()
         lvl = LevelingService()
 
+        from models.user import Utente
+        levels = {u.id_telegram: u.livello for u in session.query(Utente.id_telegram, Utente.livello).filter(
+            Utente.id_telegram.in_([p.user_id for p in participants])).all()}
         for p in participants:
-            if wumpa > 0:
-                us.add_points_by_id(p.user_id, wumpa, is_drop=True, session=session)
-            if exp > 0:
-                lvl.add_exp_by_id(p.user_id, exp, session=session)
+            p_exp, p_wumpa = exp, wumpa
+            if d_def and d_def.get('recommended_level'):
+                # a player below the dungeon's level is paid by their own level, not by the dungeon's
+                p_exp, p_wumpa = completion(d_def['recommended_level'], len(participants), levels.get(p.user_id, 1))
+            if p_wumpa > 0:
+                us.add_points_by_id(p.user_id, p_wumpa, is_drop=True, session=session)
+            if p_exp > 0:
+                lvl.add_exp_by_id(p.user_id, p_exp, session=session)
             
         if local_session:
             session.commit()
