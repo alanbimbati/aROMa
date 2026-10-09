@@ -77,6 +77,11 @@ def _is_true_flag(value):
         return value.strip().lower() in {"1", "true", "yes", "y", "on"}
     return False
 
+# How a dungeon enemy compares with a player of its level (see PvEService.level_budget)
+MOB_TURNS, MOB_HIT = 2.0, 0.02   # a mob dies in ~1 hit and takes 2% of the player's health per hit
+BOSS_TURNS, BOSS_HIT = 8, 0.03
+
+
 class PvEService:
     def __init__(self):
         self.db = Database()
@@ -493,6 +498,17 @@ class PvEService:
         # Return None if spawn failed (e.g., too many mobs)
         return None, None
 
+    @staticmethod
+    def level_budget(level, boss=False, weight=1.0):
+        """(hp, damage) of an enemy made for a player of exactly this level, as dungeons with a recommended level
+        want it. Free spawns keep the CSV base plus a random level; here the ladder must climb smoothly, so the stats
+        follow what a player of that level has (about 10+3L damage a turn, specials being limited by mana, 100+6L health) and the CSV only names the
+        enemy. Tuned with evals/balance_sim.py."""
+        hit, health = 10 + 3 * level, 100 + 6 * level
+        turns, share = (BOSS_TURNS, BOSS_HIT) if boss else (MOB_TURNS, MOB_HIT)
+        scale = weight ** 0.5  # enemy hp and damage both grow with it, and the damage taken with their product
+        return max(1, int(hit * turns * scale)), max(1, int(health * share * scale))
+
     def _allocate_mob_stats(self, level, difficulty, is_boss=False):
         """
         Allocate stats based on level and difficulty using a point-based system.
@@ -560,7 +576,7 @@ class PvEService:
         max_mana = int(base_mana * multiplier)
         return max_mana
 
-    def spawn_specific_mob(self, mob_name=None, chat_id=None, reference_level=None, ignore_limit=False, session=None):
+    def spawn_specific_mob(self, mob_name=None, chat_id=None, reference_level=None, ignore_limit=False, session=None, level=None, weight=1.0):
         """Spawn a specific mob by name or a random one if None. Returns (success, msg, mob_id)"""
         self.refresh_content_if_needed()
         local_session = False
@@ -587,6 +603,7 @@ class PvEService:
         current_season = session.query(Season).filter_by(is_active=True).first()
         theme = current_season.theme.strip().lower() if current_season and current_season.theme else None
         
+        exact_level = level is not None
         mob_data = None
         if mob_name:
             # Find specific mob
@@ -601,7 +618,9 @@ class PvEService:
                     session.close()
                 return False, f"Mostro '{mob_name}' non trovato.", None
             
-            if reference_level is not None:
+            if level is not None:
+                level = max(1, int(level))  # exact level asked by the caller (dungeons with a recommended level)
+            elif reference_level is not None:
                 # Level range: -10 to +10 from reference, min 1
                 level = max(1, reference_level + random.randint(-10, 10))
             else:
@@ -694,6 +713,8 @@ class PvEService:
         # Damage: base + (level * 1) + dmg_bonus (was 3)
         hp = int(mob_data['hp']) + (level * 10) + hp_bonus
         damage = int(mob_data['attack_damage']) + (level * 1) + dmg_bonus
+        if exact_level:
+            hp, damage = self.level_budget(level, boss=False, weight=weight)
         
         # Mana: Use character-based calculation with 3x multiplier for mobs
         max_mana = self._calculate_character_mana(mob_data['nome'], level, is_boss=False)
@@ -732,7 +753,7 @@ class PvEService:
             session.close()
         return True, f"Un {mob_name} (Lv. {level}) è apparso! (Vel: {speed}, Res: {resistance}%)", mob_id
 
-    def spawn_boss(self, boss_name=None, chat_id=None, reference_level=None, ignore_limit=False, session=None):
+    def spawn_boss(self, boss_name=None, chat_id=None, reference_level=None, ignore_limit=False, session=None, level=None, weight=1.0):
         """Spawn a boss (Mob with is_boss=True). Returns (success, msg, mob_id)"""
         self.refresh_content_if_needed()
         local_session = False
@@ -756,6 +777,7 @@ class PvEService:
         current_season = session.query(Season).filter_by(is_active=True).first()
         theme = current_season.theme if current_season else None
         
+        exact_level = level is not None
         boss_data = None
         if boss_name:
             # Find specific boss
@@ -770,7 +792,9 @@ class PvEService:
                     session.close()
                 return False, f"Boss '{boss_name}' not found in any database.", None
             
-            if reference_level is not None:
+            if level is not None:
+                level = max(1, int(level))  # exact level asked by the caller (dungeons with a recommended level)
+            elif reference_level is not None:
                 level = reference_level + random.randint(5, 12)
             else:
                 difficulty = int(boss_data.get('difficulty', 5)) if str(boss_data.get('difficulty', 5)).isdigit() else 5
@@ -838,6 +862,8 @@ class PvEService:
         # Damage: base + (level * 1) + dmg_bonus (Standard Mob scaling)
         hp = hp_base + (level * 200) + hp_bonus
         damage = int(boss_data['attack_damage']) + (level * 1) + dmg_bonus
+        if exact_level:
+            hp, damage = self.level_budget(level, boss=True, weight=weight)
         
         # Mana: Use character-based calculation with 5x multiplier for bosses
         max_mana = self._calculate_character_mana(boss_data['nome'], level, is_boss=True)

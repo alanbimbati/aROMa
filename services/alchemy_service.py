@@ -154,7 +154,7 @@ class AlchemyService:
             # Update Alchemy XP
             from services.crafting_service import CraftingService
             cs = CraftingService()
-            leveled_up = cs.add_profession_xp(user_id, total_xp, profession_name='alchemist', session=session)
+            leveled_up = cs.add_profession_xp(user_id, total_xp, profession_name='alchemy', session=session)
             
             # Log events for achievements
             from services.event_dispatcher import EventDispatcher
@@ -187,13 +187,13 @@ class AlchemyService:
         """Get user alchemy level and XP (using standardized CraftingService)"""
         from services.crafting_service import CraftingService
         cs = CraftingService()
-        return cs.get_profession_info(user_id, profession_name='alchemist')
+        return cs.get_profession_info(user_id, profession_name='alchemy')
 
     def add_alchemy_xp(self, user_id, amount, session=None):
         """Add XP (DEPRECATED: Use CraftingService.add_profession_xp directly)"""
         from services.crafting_service import CraftingService
         cs = CraftingService()
-        return cs.add_profession_xp(user_id, amount, profession_name='alchemist', session=session)
+        return cs.add_profession_xp(user_id, amount, profession_name='alchemy', session=session)
 
     def get_alchemy_status(self, user_id):
         """Get current brewing queue status"""

@@ -541,6 +541,9 @@ def migrate_other_tables(db):
         add_col('dungeon', 'stats', 'TEXT DEFAULT \'{}\'')
         add_col('dungeon', 'start_time', 'TIMESTAMP WITHOUT TIME ZONE')
         add_col('dungeon', 'score', 'VARCHAR(10)')
+        add_col('dungeon', 'is_solo', 'BOOLEAN DEFAULT FALSE')
+        add_col('season_progress', 'total_exp', 'BIGINT DEFAULT 0')
+        add_col('utente', 'npub', 'VARCHAR(70)')
 
         print("✅ Other tables migration check completed!")
     except Exception as e:

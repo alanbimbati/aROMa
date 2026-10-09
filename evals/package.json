@@ -1,0 +1,7 @@
+{
+  "name": "aroma-evals",
+  "private": true,
+  "type": "module",
+  "description": "Measures aROMa's web app: screenshots, accessibility, speed. Judges (agents) read the output against evals/rubrics.",
+  "dependencies": { "puppeteer-core": "^23.0.0", "axe-core": "^4.10.0" }
+}

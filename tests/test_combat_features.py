@@ -19,14 +19,14 @@ class TestCombatFeatures(unittest.TestCase):
         self.user_service = UserService()
         self.pve_service = PvEService()
         
-        # Clear DB
+        # Clear DB - use DELETE which works on all databases
         from sqlalchemy import text
         try:
-            self.session.execute(text("TRUNCATE combat_participation CASCADE"))
-            self.session.execute(text("TRUNCATE mob CASCADE"))
-            self.session.execute(text("TRUNCATE utente CASCADE"))
+            self.session.execute(text("DELETE FROM combat_participation"))
+            self.session.execute(text("DELETE FROM mob"))
+            self.session.execute(text("DELETE FROM utente WHERE id_telegram IN (11111, 22222)"))
         except:
-             pass
+             self.session.rollback()
         self.session.commit()
         
         # Patch AchievementTracker._apply_reward to prevent main import and bot calls
@@ -79,9 +79,9 @@ class TestCombatFeatures(unittest.TestCase):
         self.session.rollback()
         from sqlalchemy import text
         try:
-            self.session.execute(text("TRUNCATE combat_participation CASCADE"))
-            self.session.execute(text("TRUNCATE mob CASCADE"))
-            self.session.execute(text("TRUNCATE utente CASCADE"))
+            self.session.execute(text("DELETE FROM combat_participation"))
+            self.session.execute(text("DELETE FROM mob"))
+            self.session.execute(text("DELETE FROM utente WHERE id_telegram IN (11111, 22222)"))
             self.session.commit()
         except:
              self.session.rollback()

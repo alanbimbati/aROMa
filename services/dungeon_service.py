@@ -11,6 +11,7 @@ import csv
 import json
 import os
 from services.season_content_service import get_season_content_service
+from services.dungeon_rewards import BOSS_UNITS, completion
 
 # Dynamic path resolution
 SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -182,12 +183,13 @@ class DungeonService:
             current_idx_str = SystemState.get_val(session, 'current_dungeon_index', '1')
             current_idx = int(current_idx_str)
             
-            # Validation: cap at max defined dungeon or go random
-            all_ids = sorted(self.dungeons_cache.keys())
-            max_id = all_ids[-1] if all_ids else 1
-            
-            dungeon_def_id = current_idx
-            if dungeon_def_id > max_id:
+            # The daily sequence only walks dungeons the current season offers: the stored
+            # index may point at another season's dungeon (or past the last one).
+            all_ids = self.get_active_dungeon_ids(session=session)
+            upcoming = [i for i in all_ids if i >= current_idx]
+            if upcoming:
+                dungeon_def_id = upcoming[0]
+            else:
                 dungeon_def_id = random.choice(all_ids) if all_ids else 1
                 
             dungeon_def = self.get_dungeon_def(dungeon_def_id)
@@ -319,6 +321,20 @@ class DungeonService:
         finally:
             session.close()
 
+    def get_active_dungeon_ids(self, session=None):
+        from services.season_gate import get_active_season_theme
+        theme = get_active_season_theme(session)
+        # Between seasons nothing is gated: every dungeon is on offer.
+        if not theme:
+            return sorted(self.dungeons_cache.keys())
+
+        active_ids = []
+        for d_id, d_def in self.dungeons_cache.items():
+            if d_def.get('saga', '').strip().lower() == theme.strip().lower():
+                active_ids.append(d_id)
+                
+        return sorted(active_ids)
+
     def load_dungeons(self):
         """Load dungeons from CSV"""
         dungeons = {}
@@ -338,6 +354,9 @@ class DungeonService:
                         
                         row['id'] = int(row['id'])
                         row['difficulty'] = int(row['difficulty'])
+                        # Optional: the level the enemies are made at (dungeons without it keep the random level of their tier)
+                        rl = (row.get('recommended_level') or '').strip() if isinstance(row.get('recommended_level'), str) else ''
+                        row['recommended_level'] = int(rl) if rl.isdigit() else None
                         # Parse rewards JSON
                         try:
                             raw_rewards = row['rewards'].strip()
@@ -368,6 +387,31 @@ class DungeonService:
             print(f"Error loading dungeons: {e}")
         return dungeons
 
+    @staticmethod
+    def stage_levels(dungeon_def, stage_num):
+        """(mob level, boss level) for a stage: the dungeon's recommended level, a little higher stage after stage and
+        for the boss. (None, None) for dungeons without one, which keep the random level of their tier."""
+        base = dungeon_def.get('recommended_level')
+        if not base:
+            return None, None
+        climb = (stage_num - 1) * max(1, base // 8)
+        return base + climb, base + 2 + climb
+
+    @staticmethod
+    def enemy_units(dungeon_def):
+        """Enemies in a dungeon, a boss counting for three: what its budgets are split over."""
+        units = 0
+        for step in dungeon_def.get('steps', []):
+            units += sum(m.get('count', 1) for m in step.get('mobs', [])) + (BOSS_UNITS if 'boss' in step else 0)
+        return units
+
+    @staticmethod
+    def enemy_weight(dungeon_def):
+        """How much of the dungeon's budget each enemy gets: a long dungeon with many enemies makes each one weaker,
+        so a dungeon is about as hard to get through whatever its length."""
+        units = DungeonService.enemy_units(dungeon_def)
+        return min(1.0, 5 / units) if units else 1.0
+
     def get_dungeon_def(self, dungeon_def_id):
         self.refresh_cache_if_needed()
         return self.dungeons_cache.get(dungeon_def_id)
@@ -382,11 +426,39 @@ class DungeonService:
             session.close()
         return progress
 
+    # A run that actually began counts as the day's attempt, however it ended
+    ATTEMPT_STATUSES = ("completed", "active", "failed", "expired", "fled")
+
+    def has_played_today(self, session, user_id, dungeon_def_id, exclude_id=None):
+        """Every dungeon can be played once a day by each player, win or lose, solo or with the group.
+
+        A lobby that was never started is not an attempt. The day ends at midnight server time,
+        when the group dungeons also flee.
+        """
+        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        query = session.query(Dungeon.id).filter(
+            Dungeon.dungeon_def_id == dungeon_def_id,
+            Dungeon.status.in_(self.ATTEMPT_STATUSES),
+            Dungeon.start_time != None,
+            Dungeon.start_time >= today_start,
+            Dungeon.id.in_(session.query(DungeonParticipant.dungeon_id).filter_by(user_id=user_id)),
+        )
+        if exclude_id is not None:
+            query = query.filter(Dungeon.id != exclude_id)
+        return query.first() is not None
+
+    @staticmethod
+    def already_played_message(name):
+        return f"⏰ Hai già tentato **{name}** oggi: ogni dungeon si gioca una volta al giorno, vinca o perda. Ritorna domani."
+
     def can_access_dungeon(self, user_id, dungeon_def_id, session=None):
         """Robust sequential unlocking check"""
-        all_ids = sorted(self.dungeons_cache.keys())
+        all_ids = self.get_active_dungeon_ids(session=session)
         if not all_ids:
              return True # No dungeons defined?
+             
+        if dungeon_def_id not in all_ids:
+            return False
              
         if dungeon_def_id == all_ids[0]:
             return True
@@ -431,23 +503,10 @@ class DungeonService:
                 session.close()
             return None, "Non hai ancora sbloccato questo dungeon! Completa prima i precedenti."
         
-        # --- DAILY SOLO LIMIT CHECK ---
-        if is_solo:
-            today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-            already_done_today = session.query(Dungeon).filter(
-                Dungeon.is_solo == True,
-                Dungeon.dungeon_def_id == dungeon_def_id,
-                Dungeon.status.in_(["completed", "active", "registration"]),
-                # Find dungeon where this user is a participant
-                Dungeon.id.in_(
-                    session.query(DungeonParticipant.dungeon_id).filter_by(user_id=creator_id)
-                ),
-                Dungeon.created_at >= today_start
-            ).first()
-
-            if already_done_today:
-                if local_session: session.close()
-                return None, f"⏰ Hai già completato **{dungeon_def['name']}** in solo oggi! Ritorna domani."
+        # --- DAILY LIMIT: once a day per dungeon, solo or not ---
+        if self.has_played_today(session, creator_id, dungeon_def_id):
+            if local_session: session.close()
+            return None, self.already_played_message(dungeon_def['name'])
         
         # Cleanup ghost dungeons first
         self._cleanup_ghost_dungeons(chat_id, session)
@@ -518,6 +577,9 @@ class DungeonService:
                 if local_session: session.close()
                 return False, "Non hai ancora sbloccato questo dungeon (devi finire quelli precedenti)!"
         # If it's already active, we allow anyone to join to avoid blocking "intruders" or late joins
+        if self.has_played_today(session, user_id, dungeon.dungeon_def_id, exclude_id=dungeon.id):
+            if local_session: session.close()
+            return False, self.already_played_message(dungeon.name)
 
         # Check if already joined
         exists = session.query(DungeonParticipant).filter_by(
@@ -573,6 +635,9 @@ class DungeonService:
             if not exists:
                 # Check prerequisites only if not active (if active, we assume open entry)
                 # OR relaxed requirement: everyone can join active dungeon
+                if self.has_played_today(session, user_id, dungeon.dungeon_def_id, exclude_id=dungeon_id):
+                    if local_session: session.close()
+                    return False
                 
                 participant = DungeonParticipant(dungeon_id=dungeon_id, user_id=user_id)
                 session.add(participant)
@@ -607,28 +672,22 @@ class DungeonService:
                 session.close()
             return False, "Non c'è nessun dungeon in fase di iscrizione.", []
             
-        # Auto-mark as solo if only 1 participant at start time
         participants = session.query(DungeonParticipant).filter_by(dungeon_id=dungeon.id).all()
+        # Whoever already played this dungeon today does not play it again (they joined before, or in another chat)
+        repeaters = [p for p in participants if self.has_played_today(session, p.user_id, dungeon.dungeon_def_id, exclude_id=dungeon.id)]
+        if repeaters:
+            dungeon_name = dungeon.name
+            if len(repeaters) == len(participants):
+                if local_session: session.close()
+                return False, self.already_played_message(dungeon_name), []
+            for p in repeaters:
+                session.delete(p)
+            session.flush()
+            participants = [p for p in participants if p not in repeaters]
+
+        # Auto-mark as solo if only 1 participant at start time
         if len(participants) == 1:
             dungeon.is_solo = True
-            solo_user_id = participants[0].user_id
-            
-            # --- DAILY SOLO LIMIT CHECK ---
-            today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-            already_done_today = session.query(Dungeon).filter(
-                Dungeon.is_solo == True,
-                Dungeon.dungeon_def_id == dungeon.dungeon_def_id,
-                Dungeon.status == "completed",
-                Dungeon.id.in_(
-                    session.query(DungeonParticipant.dungeon_id).filter_by(user_id=solo_user_id)
-                ),
-                Dungeon.created_at >= today_start
-            ).first()
-
-            if already_done_today:
-                if local_session: session.close()
-                dungeon_name = dungeon.name
-                return False, f"⏰ Hai già completato **{dungeon_name}** in solo oggi! Ritorna domani.", []
             
         dungeon.status = "active"
         dungeon.current_stage = 1
@@ -678,6 +737,8 @@ class DungeonService:
             return "Errore stage.", []
             
         step_data = steps[stage_num - 1]
+        mob_level, boss_level = self.stage_levels(dungeon_def, stage_num)
+        weight = self.enemy_weight(dungeon_def)
         
         from services.pve_service import PvEService
         pve = PvEService()
@@ -706,7 +767,7 @@ class DungeonService:
                 name = mob_entry['name']
                 count = mob_entry.get('count', 1)
                 for _ in range(count):
-                    success, m, mob_id = pve.spawn_specific_mob(mob_name=name, chat_id=dungeon.chat_id, ignore_limit=True, session=session)
+                    success, m, mob_id = pve.spawn_specific_mob(mob_name=name, chat_id=dungeon.chat_id, ignore_limit=True, session=session, level=mob_level, weight=weight)
                     print(f"[DEBUG] spawn_specific_mob result: success={success}, mob_id={mob_id}, name={name}, chat_id={dungeon.chat_id}")
                     if success:
                         self._assign_mob_to_dungeon(mob_id, dungeon_id, session=session)
@@ -724,7 +785,7 @@ class DungeonService:
         # Handle Boss
         if 'boss' in step_data:
             boss_name = step_data['boss']
-            success, m, mob_id = pve.spawn_boss(boss_name=boss_name, chat_id=dungeon.chat_id, ignore_limit=True, session=session)
+            success, m, mob_id = pve.spawn_boss(boss_name=boss_name, chat_id=dungeon.chat_id, ignore_limit=True, session=session, level=boss_level, weight=weight)
             print(f"[DEBUG] spawn_boss result: success={success}, mob_id={mob_id}, name={boss_name}, chat_id={dungeon.chat_id}")
             
             if not success:
@@ -887,6 +948,9 @@ class DungeonService:
         rewards = d_def.get('rewards', {}) if d_def else {}
         wumpa = int(rewards.get('wumpa', 0) or 0)
         exp = int(rewards.get('exp', 0) or 0)
+        if d_def and d_def.get('recommended_level'):
+            # Paid by the dungeon's level, and more to each member the bigger the team
+            exp, wumpa = completion(d_def['recommended_level'], len(participants))
 
         from services.user_service import UserService
         from services.leveling_service import LevelingService
@@ -918,7 +982,7 @@ class DungeonService:
                     event_type='dungeon_run',
                     user_id=p.user_id,
                     value=1,
-                    context={'dungeon_id': dungeon_id, 'dungeon_name': dungeon.name},
+                    context={'dungeon_id': dungeon_id, 'dungeon_def_id': dungeon.dungeon_def_id, 'dungeon_name': dungeon.name},
                     session=session
                 )
         
@@ -932,19 +996,15 @@ class DungeonService:
         return f"🏆 **DUNGEON COMPLETATO!** 🏆\n\n**Rango: {score}**\n{details}\n\n**Partecipanti:** {participants_str}"
 
     def _advance_global_index(self, session):
-        """Helper to advance the global dungeon index safely"""
+        """Move the daily sequence to the next dungeon the current season offers"""
         try:
-            all_ids = sorted(self.dungeons_cache.keys())
-            max_id = all_ids[-1] if all_ids else 1
-            
-            current_idx_str = SystemState.get_val(session, 'current_dungeon_index', '1')
-            current_idx = int(current_idx_str)
-            if current_idx < max_id:
-                SystemState.set_val(session, 'current_dungeon_index', current_idx + 1)
-                print(f"[DUNGEON] Advanced global index to {current_idx + 1}")
-            else:
-                SystemState.set_val(session, 'current_dungeon_index', 1)
-                print(f"[DUNGEON] Reset global index to 1")
+            all_ids = self.get_active_dungeon_ids(session=session)
+            current_idx = int(SystemState.get_val(session, 'current_dungeon_index', '1'))
+            later = [i for i in all_ids if i > current_idx]
+            # Past the last one the sequence starts over from the season's first dungeon
+            next_idx = later[0] if later else (all_ids[0] if all_ids else 1)
+            SystemState.set_val(session, 'current_dungeon_index', next_idx)
+            print(f"[DUNGEON] Advanced global index to {next_idx}")
         except Exception as e:
             print(f"[ERROR] Failed to advance dungeon index: {e}")
 

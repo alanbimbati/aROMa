@@ -8,18 +8,34 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 OUT_DIR = os.path.join('assets', 'characters', 'marvel')
 W, H = 1024, 1024
 
-MARVEL_NAMES = [
-    'Spider-Man','Iron Man','Thor','Hulk','Captain America','Black Widow','Hawkeye','Doctor Strange','Scarlet Witch','Vision',
-    'Black Panther','Ant-Man','Wasp','Falcon','Winter Soldier','War Machine','Captain Marvel','Star-Lord','Gamora','Drax',
-    'Rocket Raccoon','Groot','Mantis','Nebula','Loki','Thanos','Nick Fury','Moon Knight','Daredevil','Elektra',
-    'Punisher','Blade','Ghost Rider','Wolverine','Deadpool','Storm','Cyclops','Jean Grey','Rogue','Iceman',
-    'Nightcrawler','Colossus','Beast','Professor X','Magneto','Mystique','Emma Frost','Kitty Pryde','Jubilee','Cable',
-    'Psylocke','Domino','X-23','Shang-Chi','Ms. Marvel','She-Hulk','Kate Bishop','Echo','Yelena Belova','America Chavez',
-    'Shuri','Okoye','M’Baku','Namor','Silver Surfer','Fantastic Four','Mr. Fantastic','Invisible Woman','Human Torch','Thing',
-    'Ultron','Red Skull','Baron Zemo','Kingpin','Green Goblin','Venom','Carnage','Morbius','Vulture','Mysterio',
-    'Sandman','Electro','Kraven','Doc Ock','Lizard','Rhino','Taskmaster','Kang','Hela','Sentry',
-    'Nova','Adam Warlock','Quicksilver','Agatha Harkness','Wiccan','Speed','Monica Rambeau','Photon','Blue Marvel','Ares'
-]
+import csv
+
+def get_names_from_csv(csv_name, group_col, group_val, name_col='nome'):
+    names = []
+    try:
+        path = os.path.join('data', csv_name)
+        if not os.path.exists(path):
+            return []
+        with open(path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if row.get(group_col, '').strip() == group_val:
+                    names.append(row[name_col])
+    except Exception as e:
+        print(f"Error reading {csv_name}: {e}")
+    return names
+
+def get_all_marvel_names():
+    names = set()
+    # Playable characters
+    names.update(get_names_from_csv('characters.csv', 'character_group', 'Marvel'))
+    # Mobs
+    names.update(get_names_from_csv('mobs.csv', 'saga', 'Marvel'))
+    # Bosses
+    names.update(get_names_from_csv('bosses.csv', 'saga', 'Marvel'))
+    return sorted(list(names))
+
+MARVEL_NAMES = get_all_marvel_names()
 
 
 def slugify(name: str) -> str:
@@ -176,10 +192,14 @@ def render_card(name: str):
 
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
+    existing = set(os.listdir(OUT_DIR))
     generated = 0
     for name in MARVEL_NAMES:
         slug = slugify(name)
-        out = os.path.join(OUT_DIR, f'{slug}.png')
+        file_name = f'{slug}.png'
+        if file_name in existing:
+            continue
+        out = os.path.join(OUT_DIR, file_name)
         img = render_card(name)
         img.save(out, 'PNG', optimize=True)
         generated += 1

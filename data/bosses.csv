@@ -54,3 +54,24 @@ Eis Shenron,18000,160,magic,Dragon Ball,Il drago del ghiaccio (3 Stelle),5000,12
 Syn Shenron,25000,200,magic,Dragon Ball,Il drago originale (1 Stella),10000,3000,100,"[28, 144, 145]","boss","{""50"": ""phase2""}","Dragon Ball",8
 Omega Shenron,50000,350,magic,Dragon Ball,La fusione dei 7 draghi,50000,10000,110,"[28, 144, 145, 146]","boss","{""80"": ""phase2"", ""50"": ""phase3"", ""20"": ""phase4""}","Dragon Ball",10
 Whis,60000,400,magic,Dragon Ball,L'angelo assistente del Dio della Distruzione,100000,20000,150,"[252, 255, 257]","boss","{""90"": ""phase2"", ""50"": ""phase3""}","Dragon Ball",10
+Teschio Rosso,4000,100,magic,Marvel,Capo dell'Hydra,2000,400,70,[],tactical,"{""50"": ""phase2""}",Marvel,3
+Loki,6000,150,magic,Marvel,Dio dell'Inganno,4000,800,80,[],tactical,"{""50"": ""phase2"", ""20"": ""phase3""}",Marvel,5
+Thor (Boss),8000,180,physical,Marvel,Dio del Tuono,5000,1000,85,[],aggressive,"{""50"": ""phase2""}",Marvel,6
+Odin (Boss),15000,250,magic,Marvel,Il Padre di Tutti,10000,2000,75,[],boss,"{""60"": ""phase2"", ""30"": ""phase3""}",Marvel,8
+Hela,12000,220,magic,Marvel,Dea della Morte,8000,1800,90,[],aggressive,"{""50"": ""phase2""}",Marvel,7
+Ultron,10000,200,physical,Marvel,IA Ribelle,6000,1200,70,[],boss,"{""50"": ""phase2""}",Marvel,6
+Ronan l'Accusatore,7000,160,physical,Marvel,Guerriero Kree,4500,900,60,[],aggressive,"{""50"": ""phase2""}",Marvel,5
+Star-Lord (Boss),5000,120,ranged,Marvel,Leader dei Guardiani,3000,600,75,[],tactical,{},Marvel,4
+Groot & Rocket,7000,140,ranged,Marvel,Duo galattico,4000,800,60,[],tactical,"{""50"": ""phase2""}",Marvel,5
+Ego il Pianeta Vivente,25000,350,magic,Marvel,Il Celestiale,15000,4000,90,[],boss,"{""70"": ""phase2"", ""30"": ""phase3""}",Marvel,9
+Thanos,35000,450,physical,Marvel,Il Titano Pazzo,20000,5000,95,[],boss,"{""50"": ""phase2"", ""25"": ""phase3""}",Marvel,10
+Thanos (Guanto dell'Infinito),80000,800,magic,Marvel,La fine di tutto,50000,15000,110,[],boss,"{""80"": ""phase2"", ""50"": ""phase3"", ""20"": ""phase4""}",Marvel,10
+Silver Surfer (Boss),22000,300,magic,Marvel,L'Araldo,12000,3500,120,[],tactical,"{""50"": ""phase2""}",Marvel,8
+Galactus (Boss),150000,1500,magic,Marvel,Il Divoratore di Mondi,100000,30000,100,[],boss,"{""80"": ""phase2"", ""50"": ""phase3"", ""20"": ""phase4""}",Marvel,10
+Vulture,900,30,physical,Marvel,L'Avvoltoio di New York,400,100,45,[],tactical,"{""50"": ""phase2""}",Marvel,1
+Rhino,1800,55,physical,Marvel,Una corazza vivente che non si ferma,800,200,40,[],tactical,"{""50"": ""phase2""}",Marvel,2
+Green Goblin,4500,115,magic,Marvel,L'incubo di Oscorp,2200,500,75,[],tactical,"{""50"": ""phase2"", ""20"": ""phase3""}",Marvel,4
+Kraven,6500,145,physical,Marvel,Il cacciatore supremo,3500,700,75,[],tactical,"{""50"": ""phase2""}",Marvel,5
+Carnage,11000,210,physical,Marvel,Caos in forma di simbionte,6000,1200,85,[],boss,"{""50"": ""phase2"", ""20"": ""phase3""}",Marvel,7
+Magneto,16000,270,magic,Marvel,Il Padrone del Magnetismo,9000,1800,85,[],boss,"{""50"": ""phase2"", ""20"": ""phase3""}",Marvel,8
+Kang,28000,380,magic,Marvel,Il Conquistatore,15000,3000,90,[],boss,"{""80"": ""phase2"", ""50"": ""phase3"", ""20"": ""phase4""}",Marvel,9

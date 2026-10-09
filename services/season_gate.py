@@ -16,17 +16,13 @@ def get_active_season_theme(session=None):
 
     try:
         now = datetime.now()
-        # Primary: active season in date window
+        # Strictly the date window: an expired season is closed by the
+        # scheduler, and until then it must not keep gating content.
         season = session.query(Season).filter(
             Season.is_active == True,
             Season.start_date <= now,
             Season.end_date >= now
         ).order_by(Season.id.desc()).first()
-        # Fallback: any is_active season even if dates are misconfigured
-        if not season:
-            season = session.query(Season).filter(
-                Season.is_active == True
-            ).order_by(Season.id.desc()).first()
         if not season or not season.theme:
             return None
         return season.theme.strip()

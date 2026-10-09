@@ -16,10 +16,10 @@ class GardenService:
         """Get user garden level and XP (using standardized CraftingService)"""
         from services.crafting_service import CraftingService
         cs = CraftingService()
-        return cs.get_profession_info(user_id, profession_name='gardener')
+        return cs.get_profession_info(user_id, profession_name='garden')
 
     def add_garden_xp(self, user_id, amount, session=None):
         """Add XP (DEPRECATED: Use CraftingService.add_profession_xp directly)"""
         from services.crafting_service import CraftingService
         cs = CraftingService()
-        return cs.add_profession_xp(user_id, amount, profession_name='gardener', session=session)
+        return cs.add_profession_xp(user_id, amount, profession_name='garden', session=session)

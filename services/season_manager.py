@@ -30,11 +30,6 @@ class SeasonManager:
                 Season.start_date <= now,
                 Season.end_date >= now
             ).order_by(Season.id.desc()).first()
-            # Fallback: keep season usable if date bounds are stale but flag is active
-            if not season:
-                season = session.query(Season).filter(
-                    Season.is_active == True
-                ).order_by(Season.id.desc()).first()
             return season
         finally:
             if local_session:
@@ -91,7 +86,7 @@ class SeasonManager:
                 session.close()
             
     def add_seasonal_exp(self, user_id, amount, session=None):
-        """Add EXP to user's seasonal progress. Returns (rewards, season_end_msg)"""
+        """Add EXP to user's seasonal progress. Returns (rewards, None); the second slot is kept for callers that unpack it."""
         season = self.get_active_season(session=session)
         if not season:
             return [], None
@@ -113,6 +108,7 @@ class SeasonManager:
                     season_id=season.id,
                     current_exp=0,
                     current_level=1,
+                    total_exp=0,
                     last_update=datetime.now()
                 )
                 session.add(progress)
@@ -120,6 +116,7 @@ class SeasonManager:
             # Apply season multiplier
             amount = int(amount * season.exp_multiplier)
             progress.current_exp += amount
+            progress.total_exp = int(progress.total_exp or 0) + amount
             progress.last_update = datetime.now()
             
             # Check for level up
@@ -144,21 +141,16 @@ class SeasonManager:
                 progress.current_exp = 0
                 
             rewards = []
-            season_end_msg = None
             
             if leveled_up:
                 rewards = self.check_and_award_rewards(user_id, season.id, progress.current_level, session)
-                
-                # Check if reached max rank (Season End Condition)
-                if progress.current_level >= self.MAX_RANK:
-                    season_end_msg = self.end_season(season.id, user_id, session)
             
             if local_session:
                 session.commit()
             else:
                 session.flush()
                 
-            return rewards, season_end_msg
+            return rewards, None
         except Exception as e:
             if local_session:
                 session.rollback()
@@ -168,66 +160,59 @@ class SeasonManager:
             if local_session:
                 session.close()
 
-    def end_season(self, season_id, winner_user_id, session=None):
-        """End the season, calculate stats, award top 3, and return summary message"""
-        close_session = False
-        if session is None:
+    PODIUM_PRIZES = [1000, 500, 200]
+    PODIUM_EMOJIS = ["🥇", "🥈", "🥉"]
+
+    def close_expired_seasons(self):
+        """Close every active season past its end_date. Returns the summaries to announce."""
+        session = self.db.get_session()
+        try:
+            expired_ids = [sid for (sid,) in session.query(Season.id).filter(
+                Season.is_active == True,
+                Season.end_date < datetime.now()
+            ).all()]
+        finally:
+            session.close()
+        return [m for m in (self.end_season(sid) for sid in expired_ids) if m]
+
+    def end_season(self, season_id, session=None):
+        """Close the season, pay the top 3 by cumulative seasonal EXP and return the summary message."""
+        close_session = session is None
+        if close_session:
             session = self.db.get_session()
-            close_session = True
-            
+
         try:
             season = session.query(Season).filter_by(id=season_id).first()
             if not season or not season.is_active:
                 return None
-                
-            # 1. Close Season
+
             season.is_active = False
-            season.end_date = datetime.now()
-            
-            # Calculate Duration
-            duration = season.end_date - season.start_date
-            days = duration.days
-            
-            # 2. Get Top 3
-            # We need to join with Utente to get names
+
             top_users = session.query(SeasonProgress, Utente).join(Utente, SeasonProgress.user_id == Utente.id_telegram)\
-                .filter(SeasonProgress.season_id == season_id)\
-                .order_by(SeasonProgress.current_level.desc(), SeasonProgress.current_exp.desc())\
-                .limit(3).all()
-                
-            # 3. Award Wumpa and Build Message
-            winner_user = self.user_service.get_user(winner_user_id)
-            winner_name = winner_user.game_name or winner_user.nome or "Eroe"
-            
-            msg = f"\n🏆 **LA STAGIONE È TERMINATA!** 🏆\n\n"
-            msg += f"🥇 **{winner_name}** ha raggiunto il Grado {self.MAX_RANK} e ha concluso la stagione!\n"
-            msg += f"⏱️ Durata: {days} giorni\n\n"
-            msg += "🏅 **CLASSIFICA FINALE**\n"
-            
-            prizes = [1000, 500, 200]
-            emojis = ["🥇", "🥈", "🥉"]
-            
+                .filter(SeasonProgress.season_id == season_id, SeasonProgress.total_exp > 0)\
+                .order_by(SeasonProgress.total_exp.desc(), SeasonProgress.current_level.desc())\
+                .limit(len(self.PODIUM_PRIZES)).all()
+
+            msg = f"\n🏆 **{season.name.upper()} È TERMINATA!** 🏆\n\n"
+            if not top_users:
+                msg += "Nessun eroe ha partecipato alla stagione.\n"
+
+            podium = []
             for i, (progress, user) in enumerate(top_users):
-                prize = prizes[i] if i < len(prizes) else 0
-                emoji = emojis[i] if i < len(emojis) else "🔸"
+                prize = self.PODIUM_PRIZES[i]
                 name = user.game_name or user.nome or f"User {user.id_telegram}"
-                
-                # Award Prize
-                # Update directly to avoid nested session
-                user.points = int(user.points) + prize
-                
-                msg += f"{emoji} **{name}** - Grado {progress.current_level} (+{prize} 🍑)\n"
-                
+                user.points = int(user.points or 0) + prize
+                self.award_podium(session, season, i + 1, user.id_telegram)
+                podium.append((user.id_telegram, i + 1))
+                msg += f"{self.PODIUM_EMOJIS[i]} **{name}** - Grado {progress.current_level}, {progress.total_exp} EXP (+{prize} 🍑)\n"
+
+            if top_users:
+                msg += "\n🏅 I primi tre ricevono un achievement esclusivo."
+
             if close_session:
                 session.commit()
             else:
-                # If sharing session, we might want to flush or commit here to ensure it saves?
-                # Or let caller handle it. But caller (add_seasonal_exp) commits BEFORE calling this currently.
-                # We will fix caller next.
-                pass
-            return msg
-            return msg
-            
+                session.flush()
         except Exception as e:
             print(f"Error ending season: {e}")
             if close_session:
@@ -236,7 +221,80 @@ class SeasonManager:
         finally:
             if close_session:
                 session.close()
-            
+
+        # After the commit: the queue reads the achievement rows just written.
+        for user_id, position in podium:
+            self._queue_podium_badge(user_id, season_id, position)
+        return msg
+
+    def award_podium(self, session, season, position, user_id, label=None):
+        """Grant the podium achievements for a season (created on first use): the place reached, being on the podium
+        at all and, for the winner, the champion's. Idempotent."""
+        name = label or season.name
+        emoji = self.PODIUM_EMOJIS[position - 1]
+        place = ["1°", "2°", "3°"][position - 1]
+        self._grant(session, f"season_{season.id}_podium_{position}", f"{emoji} {place} posto - {name}",
+                    f"Sei arrivato {place} nella classifica finale di {name}.", user_id)
+        self._grant(session, f"season_{season.id}_podium", f"🏆 Sul podio - {name}",
+                    f"Hai chiuso {name} tra i primi tre giocatori.", user_id)
+        if position == 1:
+            self._grant(session, f"season_{season.id}_champion", f"👑 Campione - {name}",
+                        f"Hai vinto {name}: nessuno ha fatto più strada di te.", user_id)
+
+    def _grant(self, session, key, name, description, user_id):
+        from models.achievements import Achievement, UserAchievement
+        import json
+
+        achievement = session.query(Achievement).filter_by(achievement_key=key).first()
+        if not achievement:
+            # stat_key 'season_podium' is never produced as a stat, so the regular
+            # checker leaves these rows alone: they are only ever assigned here.
+            achievement = Achievement(
+                achievement_key=key,
+                name=name,
+                description=description,
+                stat_key='season_podium',
+                category='stagione',
+                tiers=json.dumps({"gold": {"threshold": 1, "rewards": {"title": name}}}),
+                hidden=True
+            )
+            session.add(achievement)
+            session.flush()  # the next podium player finds it instead of creating it again
+
+        owned = session.query(UserAchievement).filter_by(user_id=user_id, achievement_key=key).first()
+        if owned and owned.current_tier:
+            return
+        if not owned:
+            owned = UserAchievement(user_id=user_id, achievement_key=key)
+            session.add(owned)
+        owned.current_tier = 'gold'
+        owned.progress_value = 1
+        owned.unlocked_at = datetime.now()
+
+        self.user_service.add_title(user_id, name, session=session)
+
+    @staticmethod
+    def _queue_podium_badge(user_id, season_id, position):
+        try:
+            from services.nostr_service import queue_badge
+            queue_badge(user_id, f"season_{season_id}_podium_{position}", 'gold')
+        except Exception as e:
+            print(f"[Nostr] Could not queue podium badge: {e}")
+
+    def seed_rewards_from_csv(self, session, season_id, csv_path):
+        """Fill a season's pass from a CSV (level_required, is_premium, reward_type, reward_value, reward_name, icon). Idempotent."""
+        import csv
+        if session.query(SeasonReward).filter_by(season_id=season_id).count():
+            return 0
+        with open(csv_path, newline='', encoding='utf-8') as f:
+            rows = list(csv.DictReader(f))
+        for r in rows:
+            session.add(SeasonReward(
+                season_id=season_id, level_required=int(r['level_required']), is_premium=bool(int(r['is_premium'])),
+                reward_type=r['reward_type'], reward_value=r['reward_value'], reward_name=r['reward_name'], icon=r['icon']))
+        session.flush()
+        return len(rows)
+
     def check_and_award_rewards(self, user_id, season_id, current_level, session=None):
         """Check and award rewards up to current Grado"""
         close_session = False
@@ -322,7 +380,7 @@ class SeasonManager:
                     new_ownership = UserCharacter(
                         user_id=user_id,
                         character_id=char_id,
-                        obtained_at=datetime.date.today()
+                        obtained_at=datetime.now().date()
                     )
                     session.add(new_ownership)
                     if close_session:
@@ -444,7 +502,7 @@ class SeasonManager:
             # Join with Utente to get names
             top_users = session.query(SeasonProgress, Utente).join(Utente, SeasonProgress.user_id == Utente.id_telegram)\
                 .filter(SeasonProgress.season_id == season.id)\
-                .order_by(SeasonProgress.current_level.desc(), SeasonProgress.current_exp.desc())\
+                .order_by(SeasonProgress.total_exp.desc(), SeasonProgress.current_level.desc())\
                 .limit(limit).all()
                 
             results = []

@@ -79,3 +79,12 @@ nohup.out
 *.png
 curve_level.py
 tree.txt
+
+# Static build of the web app
+export/
+webapp/dist/
+
+# game cover pictures are built by scripts/fetch_game_covers.py
+cache/game_covers/
+cache/libretro_*.json
+.env.beta

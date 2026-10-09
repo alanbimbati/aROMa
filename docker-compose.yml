@@ -1,4 +1,26 @@
-version: "3.9"
+# One command sets everything up:   docker compose up -d --build
+# All settings live in .env (copy .env.example). Optional parts are switched on there (COMPOSE_PROFILES).
+x-app: &app
+  image: aroma-bot:latest
+  build:
+    context: .
+    dockerfile: Dockerfile
+  pull_policy: never
+  restart: unless-stopped
+  env_file:
+    - .env
+  environment: &app-env
+    TZ: Europe/Rome
+    DB_TYPE: postgresql
+    DB_HOST: postgres
+    DB_PORT: 5432
+    DB_NAME: ${DB_NAME:-aroma_bot}
+    DB_USER: ${DB_USER:-alan}
+    DB_PASSWORD: ${DB_PASSWORD:-asd1XD2LoL3}
+    TEST: 0
+    TEST_DB: 0
+  networks:
+    - aroma_network
 
 services:
   # PostgreSQL Database
@@ -21,7 +43,6 @@ services:
       start_period: 10s
     networks:
       - aroma_network
-    # Resource limits
     deploy:
       resources:
         limits:
@@ -31,44 +52,43 @@ services:
           cpus: '0.25'
           memory: 256M
 
-  # Aroma Bot
-  aroma_bot:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: aroma-bot:latest
-    container_name: aroma_bot
-    restart: unless-stopped
+  # Runs once before everything else: backup (if a season launch is pending), migrations, pictures.
+  init:
+    <<: *app
+    container_name: aroma_init
+    restart: "no"
+    user: root  # writes into the mounted folders; it hands them back to their owner when done
+    command: ["python3", "scripts/init_stack.py"]
+    environment:
+      <<: *app-env
+      MARVEL_LAUNCH: ${MARVEL_LAUNCH:-0}
+      FETCH_IMAGES: ${FETCH_IMAGES:-1}
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
-      # Data persistence
       - ./data:/app/data
       - ./images:/app/images
-      # For development: mount code (comment out in production)
-      # - .:/app
-    env_file:
-      - .env
-    environment:
-      - TZ=Europe/Rome
-      - DB_TYPE=postgresql
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=aroma_bot
-      - DB_USER=${DB_USER:-alan}
-      - DB_PASSWORD=${DB_PASSWORD:-asd1XD2LoL3}
-      - TEST=0
-      - TEST_DB=0
-    networks:
-      - aroma_network
-    # Logging configuration
+      - ./assets:/app/assets
+      - ./backups:/app/backups
+
+  # Aroma Bot
+  aroma_bot:
+    <<: *app
+    container_name: aroma_bot
+    command: ["python3", "main.py"]
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    volumes:
+      - ./data:/app/data
+      - ./images:/app/images
+      - ./assets:/app/assets
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    # Resource limits
     deploy:
       resources:
         limits:
@@ -77,6 +97,81 @@ services:
         reservations:
           cpus: '0.5'
           memory: 512M
+
+  # Web app: character catalogue, profile, stats, achievements, season, dungeons
+  web:
+    <<: *app
+    container_name: aroma_web
+    command: ["python", "-m", "webapp"]
+    environment:
+      <<: *app-env
+      WEBAPP_PORT: 8080  # inside the container; WEBAPP_PORT in .env is the port published on the host
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    ports:
+      - "${WEBAPP_PORT:-8080}:8080"
+    volumes:
+      - ./data:/app/data
+      - ./images:/app/images:ro
+      - ./assets:/app/assets:ro
+      - ./cache:/app/cache
+      - ./export:/app/export  # `python -m webapp.export_static` writes the static site here
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 512M
+
+  # Public address for the web app without opening ports on the router: set COMPOSE_PROFILES=tunnel and
+  # CLOUDFLARE_TUNNEL_TOKEN in .env (see webapp/README.md).
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: aroma_tunnel
+    restart: unless-stopped
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - web
+    networks:
+      - aroma_network
+
+  # Public address for the web app with ngrok, the quickest way: set COMPOSE_PROFILES=ngrok and NGROK_AUTHTOKEN in
+  # .env. Leave WEBAPP_URL empty and the bot reads the address from the tunnel (it changes at every restart on the
+  # free plan; set NGROK_DOMAIN to your free static domain to keep it fixed, and WEBAPP_URL to the same).
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: aroma_ngrok
+    restart: unless-stopped
+    profiles: ["ngrok"]
+    command: http web:8080 ${NGROK_DOMAIN:+--url=${NGROK_DOMAIN}}
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    depends_on:
+      - web
+    networks:
+      - aroma_network
+
+  # Same without an account: a Cloudflare quick tunnel (COMPOSE_PROFILES=quicktunnel, WEBAPP_URL empty). The address
+  # is random and changes at every restart; the bot reads it from the tunnel's metrics endpoint.
+  quicktunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: aroma_quicktunnel
+    restart: unless-stopped
+    profiles: ["quicktunnel"]
+    command: tunnel --no-autoupdate --metrics 0.0.0.0:2000 --url http://web:8080
+    depends_on:
+      - web
+    networks:
+      - aroma_network
 
 volumes:
   postgres_data:

@@ -1,0 +1,135 @@
+id,character_id,name,damage,mana_cost,elemental_type,crit_chance,crit_multiplier,status_effect,status_chance,status_duration,description
+1001,611,Excelsior!,26,12,Normal,5,1.5,buff_attack,30,2,Usa Excelsior!.
+1002,612,Web Shooter,32,14,Normal,5,1.5,slow,25,2,Usa Web Shooter.
+1003,613,Web Swing,80,30,Normal,5,1.5,slow,25,2,Usa Web Swing.
+1004,614,Waldo Strike,200,70,Normal,5,1.5,weakness,25,2,Usa Waldo Strike.
+1005,615,Enigma Force,320,110,Normal,5,1.5,stun,15,1,Usa Enigma Force.
+1006,616,Repulsor Glove,32,14,Normal,5,1.5,burn,25,3,Usa Repulsor Glove.
+1007,617,Flamethrower,80,30,Normal,5,1.5,burn,25,3,Usa Flamethrower.
+1008,618,Jackhammer Punch,200,70,Normal,5,1.5,stun,15,1,Usa Jackhammer Punch.
+1009,619,Unibeam,320,110,Normal,5,1.5,burn,25,3,Usa Unibeam.
+1010,620,Shield Throw,32,14,Normal,5,1.5,buff_defense,30,2,Usa Shield Throw.
+1011,621,Shield Charge,80,30,Normal,5,1.5,buff_defense,30,2,Usa Shield Charge.
+1012,622,Mjolnir Strike,260,90,Normal,5,1.5,stun,15,1,Usa Mjolnir Strike.
+1013,623,Gamma Burst,32,14,Normal,5,1.5,weakness,25,2,Usa Gamma Burst.
+1014,624,Hulk Smash,80,30,Normal,5,1.5,stun,15,1,Usa Hulk Smash.
+1015,625,Earthquake,260,90,Normal,5,1.5,stun,15,1,Usa Earthquake.
+1016,626,Lightning Strike,50,20,Normal,5,1.5,stun,15,1,Usa Lightning Strike.
+1017,627,Thunderous Blast,110,40,Normal,5,1.5,stun,15,1,Usa Thunderous Blast.
+1018,628,God Blast,290,100,Normal,5,1.5,stun,15,1,Usa God Blast.
+1019,629,Rune Magic,380,130,Normal,5,1.5,burn,25,3,Usa Rune Magic.
+1020,630,Pistol Shot,38,16,Normal,5,1.5,bleed,25,3,Usa Pistol Shot.
+1021,631,Widow's Bite,92,34,Normal,5,1.5,stun,15,1,Usa Widow's Bite.
+1022,632,Arrow Shot,38,16,Normal,5,1.5,bleed,25,3,Usa Arrow Shot.
+1023,633,Explosive Arrow,92,34,Normal,5,1.5,bleed,25,3,Usa Explosive Arrow.
+1024,634,Katana Slash,170,60,Normal,5,1.5,bleed,25,3,Usa Katana Slash.
+1025,635,Eldritch Whip,50,20,Normal,5,1.5,confusion,20,2,Usa Eldritch Whip.
+1026,636,Crimson Bands,140,50,Normal,5,1.5,mind_control,10,2,Usa Crimson Bands.
+1027,637,Eye of Agamotto,320,110,Normal,5,1.5,mind_control,10,2,Usa Eye of Agamotto.
+1028,638,Chaos Bolt,50,20,Normal,5,1.5,confusion,20,2,Usa Chaos Bolt.
+1029,639,Chaos Magic,170,60,Normal,5,1.5,confusion,20,2,Usa Chaos Magic.
+1030,640,Reality Warp,380,130,Normal,5,1.5,mind_control,10,2,Usa Reality Warp.
+1031,641,Photon Blast,50,20,Normal,5,1.5,burn,25,3,Usa Photon Blast.
+1032,642,Binary Burst,170,60,Normal,5,1.5,burn,25,3,Usa Binary Burst.
+1033,643,Stellar Eruption,350,120,Normal,5,1.5,burn,25,3,Usa Stellar Eruption.
+1034,644,Vibranium Claw,44,18,Normal,5,1.5,bleed,25,3,Usa Vibranium Claw.
+1035,645,Panther Habit Burst,110,40,Normal,5,1.5,bleed,25,3,Usa Panther Habit Burst.
+1036,646,Ancestral Strike,290,100,Normal,5,1.5,weakness,25,2,Usa Ancestral Strike.
+1037,647,I am Groot,32,14,Normal,5,1.5,buff_defense,30,2,Usa I am Groot.
+1038,648,Branch Impale,110,40,Normal,5,1.5,buff_defense,30,2,Usa Branch Impale.
+1039,649,Forest Wrath,260,90,Normal,5,1.5,buff_defense,30,2,Usa Forest Wrath.
+1040,650,Blaster,44,18,Normal,5,1.5,burn,25,3,Usa Blaster.
+1041,651,Element Gun,110,40,Normal,5,1.5,burn,25,3,Usa Element Gun.
+1042,652,Berserker Claw,50,20,Normal,5,1.5,bleed,25,3,Usa Berserker Claw.
+1043,653,X-Slash,110,40,Normal,5,1.5,bleed,25,3,Usa X-Slash.
+1044,654,Savage Strike,260,90,Normal,5,1.5,bleed,25,3,Usa Savage Strike.
+1045,655,Katana,44,18,Normal,5,1.5,confusion,20,2,Usa Katana.
+1046,656,Fourth Wall Break,104,38,Normal,5,1.5,confusion,20,2,Usa Fourth Wall Break.
+1047,657,Symbiote Tendril,44,18,Normal,5,1.5,poison,25,3,Usa Symbiote Tendril.
+1048,658,Lethal Protector,110,40,Normal,5,1.5,poison,25,3,Usa Lethal Protector.
+1049,659,Necrosword,350,120,Normal,5,1.5,poison,25,3,Usa Necrosword.
+1050,660,Tesseract Blast,260,90,Normal,5,1.5,weakness,25,2,Usa Tesseract Blast.
+1051,661,Illusion Strike,380,130,Normal,5,1.5,confusion,20,2,Usa Illusion Strike.
+1052,662,Encephalo Ray,440,150,Normal,5,1.5,burn,25,3,Usa Encephalo Ray.
+1053,663,Titan Punch,560,190,Normal,5,1.5,stun,15,1,Usa Titan Punch.
+1054,664,Snap,590,200,Normal,5,1.5,stun,15,1,Usa Snap.
+1055,665,Power Cosmic,530,180,Normal,5,1.5,freeze,15,1,Usa Power Cosmic.
+1056,666,Cosmic Devour,620,210,Normal,5,1.5,weakness,25,2,Usa Cosmic Devour.
+1057,667,Trick Arrow,87,33,Normal,10,1.7,bleed,25,3,Usa Trick Arrow.
+1058,668,Redwing Strike,110,42,Normal,7,1.5,slow,25,2,Usa Redwing Strike.
+1059,669,Mimic Strike,134,48,Normal,5,1.5,weakness,25,2,Usa Mimic Strike.
+1060,670,Wasp Sting,139,52,Normal,7,1.5,stun,15,1,Usa Wasp Sting.
+1061,671,Pym Particle Punch,152,54,Normal,5,1.5,weakness,25,2,Usa Pym Particle Punch.
+1062,672,Talon Dive,150,56,Normal,7,1.5,bleed,25,3,Usa Talon Dive.
+1063,673,Widow's Bite,156,56,Normal,10,1.7,bleed,25,3,Usa Widow's Bite.
+1064,674,Billy Club Flurry,177,64,Normal,4,1.5,stun,15,1,Usa Billy Club Flurry.
+1065,675,Sai Dance,167,60,Normal,10,1.7,bleed,25,3,Usa Sai Dance.
+1066,676,Suppressing Fire,173,62,Normal,10,1.7,slow,25,2,Usa Suppressing Fire.
+1067,677,Metal Fist Barrage,208,74,Normal,4,1.5,stun,15,1,Usa Metal Fist Barrage.
+1068,678,Daywalker Slash,214,76,Normal,4,1.5,bleed,25,3,Usa Daywalker Slash.
+1069,679,Phase Strike,201,74,Normal,7,1.5,confusion,20,2,Usa Phase Strike.
+1070,680,Plasmoid Burst,218,70,Normal,5,1.5,burn,25,3,Usa Plasmoid Burst.
+1071,681,Bamf Strike,213,78,Normal,7,1.5,confusion,20,2,Usa Bamf Strike.
+1072,682,Chain Lightning,230,74,Normal,5,1.5,stun,15,1,Usa Chain Lightning.
+1073,683,Ten Rings Combo,245,87,Normal,4,1.5,stun,15,1,Usa Ten Rings Combo.
+1074,684,Vibranium Spear,230,81,Normal,10,1.7,bleed,25,3,Usa Vibranium Spear.
+1075,685,Gorilla Guard,231,86,Normal,5,1.5,buff_defense,30,2,Usa Gorilla Guard.
+1076,686,Crescent Darts,264,93,Normal,4,1.5,bleed,25,3,Usa Crescent Darts.
+1077,687,Adamantium Claws,253,92,Normal,7,1.5,bleed,25,3,Usa Adamantium Claws.
+1078,688,Optic Blast,258,91,Normal,10,1.7,burn,25,3,Usa Optic Blast.
+1079,689,Glacial Wave,278,88,Normal,5,1.5,freeze,15,1,Usa Glacial Wave.
+1080,690,Rhino Charge,264,98,Normal,5,1.5,stun,15,1,Usa Rhino Charge.
+1081,691,Great Hunt,276,97,Normal,10,1.7,bleed,25,3,Usa Great Hunt.
+1082,692,Lucky Shot,281,99,Normal,10,1.7,weakness,25,2,Usa Lucky Shot.
+1083,693,Photographic Reflexes,287,101,Normal,10,1.7,weakness,25,2,Usa Photographic Reflexes.
+1084,694,Godslayer Slash,308,106,Normal,5,1.5,bleed,25,3,Usa Godslayer Slash.
+1085,695,Lightning Strike,314,99,Normal,5,1.5,stun,15,1,Usa Lightning Strike.
+1086,696,Cybernetic Strike,326,112,Normal,5,1.5,weakness,25,2,Usa Cybernetic Strike.
+1087,697,Destroyer's Blades,345,121,Normal,4,1.5,bleed,25,3,Usa Destroyer's Blades.
+1088,698,Big Gun Blast,321,113,Normal,10,1.7,burn,25,3,Usa Big Gun Blast.
+1089,699,Illusion Storm,344,109,Normal,5,1.5,confusion,20,2,Usa Illusion Storm.
+1090,700,Sand Prison,326,120,Normal,5,1.5,slow,25,2,Usa Sand Prison.
+1091,701,Primal Pounce,376,131,Normal,4,1.5,stun,15,1,Usa Primal Pounce.
+1092,702,Psychic Knife,350,126,Normal,7,1.5,bleed,25,3,Usa Psychic Knife.
+1093,703,Photon Burst,374,118,Normal,5,1.5,burn,25,3,Usa Photon Burst.
+1094,704,Organic Steel,353,130,Normal,5,1.5,buff_defense,30,2,Usa Organic Steel.
+1095,705,Empathic Wave,386,121,Normal,5,1.5,confusion,20,2,Usa Empathic Wave.
+1096,706,Helicarrier Barrage,372,130,Normal,10,1.7,weakness,25,2,Usa Helicarrier Barrage.
+1097,707,Solar Beam,398,125,Normal,5,1.5,burn,25,3,Usa Solar Beam.
+1098,708,Ultimate Arsenal,384,134,Normal,10,1.7,burn,25,3,Usa Ultimate Arsenal.
+1099,709,Reptile Venom,426,148,Normal,4,1.5,poison,25,3,Usa Reptile Venom.
+1100,710,Power Drain,433,151,Normal,4,1.5,weakness,25,2,Usa Power Drain.
+1101,711,Gamma Slam,439,153,Normal,4,1.5,stun,15,1,Usa Gamma Slam.
+1102,712,Sonic Rush,407,146,Normal,7,1.5,confusion,20,2,Usa Sonic Rush.
+1103,713,Flame On!,434,136,Normal,5,1.5,burn,25,3,Usa Flame On!.
+1104,714,Force Field,434,136,Normal,5,1.5,buff_defense,30,2,Usa Force Field.
+1105,715,Embiggen Fist,440,150,Normal,5,1.5,stun,15,1,Usa Embiggen Fist.
+1106,716,Vibranium Gauntlet,440,150,Normal,5,1.5,stun,15,1,Usa Vibranium Gauntlet.
+1107,717,Pumpkin Bomb,446,152,Normal,5,1.5,burn,25,3,Usa Pumpkin Bomb.
+1108,718,Stretch Bind,452,154,Normal,5,1.5,slow,25,2,Usa Stretch Bind.
+1109,719,It's Clobberin' Time,426,156,Normal,5,1.5,stun,15,1,Usa It's Clobberin' Time.
+1110,720,Shapeshift Strike,441,158,Normal,7,1.5,confusion,20,2,Usa Shapeshift Strike.
+1111,721,Mark 85 Nanotech Barrage,470,160,Normal,5,1.5,burn,25,3,Usa Mark 85 Nanotech Barrage.
+1112,722,Blood Fury,489,170,Normal,4,1.5,weakness,25,2,Usa Blood Fury.
+1113,723,Reality Hex,476,149,Normal,5,1.5,confusion,20,2,Usa Reality Hex.
+1114,724,Lightning Dash,458,164,Normal,7,1.5,confusion,20,2,Usa Lightning Dash.
+1115,725,Nova Force,488,166,Normal,5,1.5,burn,25,3,Usa Nova Force.
+1116,726,Temporal Rifle,475,165,Normal,10,1.7,bleed,25,3,Usa Temporal Rifle.
+1117,727,Crushing Grip,465,170,Normal,5,1.5,stun,15,1,Usa Crushing Grip.
+1118,728,Tentacle Barrage,506,172,Normal,5,1.5,slow,25,2,Usa Tentacle Barrage.
+1119,729,Masters' Strike,486,169,Normal,10,1.7,weakness,25,2,Usa Masters' Strike.
+1120,730,Witch Curse,518,162,Normal,5,1.5,mind_control,10,2,Usa Witch Curse.
+1121,731,Star Portal Kick,545,189,Normal,4,1.5,stun,15,1,Usa Star Portal Kick.
+1122,732,Fantastic Combo,530,180,Normal,5,1.5,buff_attack,30,2,Usa Fantastic Combo.
+1123,733,Penance Stare,551,191,Normal,4,1.5,burn,25,3,Usa Penance Stare.
+1124,734,Symbiote Frenzy,557,193,Normal,4,1.5,bleed,25,3,Usa Symbiote Frenzy.
+1125,735,Anti-Matter Burst,542,184,Normal,5,1.5,weakness,25,2,Usa Anti-Matter Burst.
+1126,736,Trident Tsunami,576,199,Normal,4,1.5,stun,15,1,Usa Trident Tsunami.
+1127,737,Cerebro Command,566,177,Normal,5,1.5,mind_control,10,2,Usa Cerebro Command.
+1128,738,Diamond Mind,572,178,Normal,5,1.5,mind_control,10,2,Usa Diamond Mind.
+1129,739,Photon Nova,572,178,Normal,5,1.5,burn,25,3,Usa Photon Nova.
+1130,740,Magnetic Crush,584,182,Normal,5,1.5,stun,15,1,Usa Magnetic Crush.
+1131,741,Chrono Strike,590,184,Normal,5,1.5,slow,25,2,Usa Chrono Strike.
+1132,742,Soul Gem Blast,596,186,Normal,5,1.5,burn,25,3,Usa Soul Gem Blast.
+1133,743,Void Surge,632,218,Normal,4,1.5,weakness,25,2,Usa Void Surge.
+1134,744,Phoenix Rising,614,191,Normal,5,1.5,burn,25,3,Usa Phoenix Rising.

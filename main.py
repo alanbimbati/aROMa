@@ -429,60 +429,44 @@ def send_welcome(message):
         
         welcome_msg = f"🎮 Benvenuto in **aROMa RPG**, {nome}!\n\n"
         welcome_msg += "Sei stato registrato con successo. Usa i bottoni qui sotto per navigare nel gioco!\n\n"
+        welcome_msg += "🌐 Per statistiche, gilda, mercato e guide usa /pannello.\n\n"
         welcome_msg += "📖 Usa /help per vedere tutti i comandi disponibili."
     else:
         welcome_msg = f"👋 Bentornato, {utente.game_name or nome}!\n\n"
-        welcome_msg += "Usa i bottoni qui sotto per navigare nel gioco!"
+        welcome_msg += "Usa i bottoni qui sotto per navigare nel gioco!\n🌐 Il resto è nel pannello: /pannello"
     
+    # A link from the web app's games catalogue: show that game's card (information only)
+    from services.game_info import parse_start_payload
+    game_id = parse_start_payload(message.text)
+    if game_id is not None and send_game_card(message.chat.id, game_id):
+        return
+
     # Send welcome message with main menu
     bot.send_message(message.chat.id, welcome_msg, reply_markup=get_main_menu(), parse_mode='markdown')
 
-def get_main_menu():
-    """Create the main menu with persistent keyboard buttons"""
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    
-    # Row 1: Profilo e Scegli Personaggio
-    markup.add(
-        types.KeyboardButton("👤 Profilo"),
-        types.KeyboardButton("👤 Scegli Personaggio")
-    )
-    
-    # Row 2: Inventario
-    markup.add(
-        types.KeyboardButton("🎒 Inventario")
-    )
 
-    # Row 2.5: Mercato
-    markup.add(
-        types.KeyboardButton("🏪 Mercato Globale")
-    )
-    
-    # Row 3: Achievement e Stagione
-    markup.add(
-        types.KeyboardButton("🏆 Achievement"),
-        types.KeyboardButton("🏆 Classifica")
-    )
-    
-    markup.add(
-        types.KeyboardButton("🌟 Stagione")
-    )
-    
-    # Row 4: Gilda e Social
-    markup.add(
-        types.KeyboardButton("🏰 Gilda")
-    )
-    
-    # Row 5: Dungeon and Guide
-    markup.add(
-        types.KeyboardButton("🏰 Dungeon"),
-        types.KeyboardButton("📖 Guida")
-    )
-    
-    # Row 6: Shortcut to Combat
-    markup.add(
-        types.KeyboardButton("⚔️ Combatti")
-    )
-    
+def send_game_card(chat_id, game_id):
+    """The catalogue entry of a game, with its cover when it has one. False if there is no such game."""
+    from webapp import games
+    from services.game_info import card_text, cover_jpeg
+    game = games.detail(game_id)
+    if not game:
+        return False
+    text = card_text(game)
+    cover = cover_jpeg(game_id)
+    if cover:
+        bot.send_photo(chat_id, cover, caption=text, parse_mode='HTML', reply_markup=get_main_menu())
+    else:
+        bot.send_message(chat_id, text, parse_mode='HTML', reply_markup=get_main_menu())
+    return True
+
+def get_main_menu():
+    """Persistent keyboard: only what is quicker in the chat. Everything else (achievements, season, guild,
+    market, guides, Nostr) lives in the aROMa panel, reached with /pannello."""
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    markup.add(types.KeyboardButton("👤 Profilo"), types.KeyboardButton("👤 Scegli Personaggio"))
+    markup.add(types.KeyboardButton("🎒 Inventario"), types.KeyboardButton("🏆 Classifica"))
+    markup.add(types.KeyboardButton("🏰 Dungeon"), types.KeyboardButton("⚔️ Combatti"))
     return markup
 
 @bot.message_handler(commands=['menu'])
@@ -702,6 +686,132 @@ def handle_scegli_personaggio_old_button(message):
     """Backward compatibility for old button"""
     cmd = BotCommands(message, bot)
     cmd.handle_choose_character()
+
+NOSTR_GUIDE = (
+    "❓ **Come si crea un account Nostr**\n\n"
+    "Nostr è una rete aperta: il tuo account è una coppia di chiavi che custodisci tu, non un profilo su un sito.\n\n"
+    "1️⃣ Scarica un'app Nostr, per esempio **Primal** (iOS, Android e web), **Amethyst** (Android) o **Damus** (iOS).\n"
+    "2️⃣ Crea un nuovo account dall'app: scegli un nome e, se vuoi, una foto.\n"
+    "3️⃣ **Salva la tua chiave segreta** (inizia con `nsec1…`) in un posto sicuro, come un password manager. "
+    "Se la perdi non c'è modo di recuperare l'account, e chi la ottiene può usarlo al posto tuo. "
+    "Non darla mai a nessuno, nemmeno a questo bot.\n"
+    "4️⃣ Nel tuo profilo trovi la **chiave pubblica** (inizia con `npub1…`): è quella che incolli qui. "
+    "È fatta per essere condivisa.\n\n"
+    "Quando colleghi l'account, il bot ti manda un messaggio privato Nostr con un codice: serve un'app recente che li supporti. "
+    "I badge, una volta assegnati, li vedi nella sezione badge del tuo profilo."
+)
+
+
+def send_nostr_menu(chat_id, user_id, message_id=None):
+    """The Nostr home: status, and the buttons that fit it"""
+    from services import nostr_service
+    npub = nostr_service.get_linked_npub(user_id)
+    markup = types.InlineKeyboardMarkup()
+    if npub:
+        text = ("⚡ **Nostr**\n\n✅ Account collegato:\n`" + npub[:14] + "…" + npub[-6:] + "`\n\n"
+                "Ogni achievement che sblocchi diventa un badge Nostr sul tuo profilo.")
+        markup.row(types.InlineKeyboardButton("🔄 Cambia account", callback_data="nostr|link"))
+        markup.row(types.InlineKeyboardButton("❌ Scollega", callback_data="nostr|unlink"))
+    else:
+        text = ("⚡ **Nostr**\n\nCollega il tuo account Nostr e ogni achievement che sblocchi diventa un vero badge sul tuo profilo.\n\n"
+                "Non hai ancora un account? Ti spiego come crearne uno.")
+        markup.row(types.InlineKeyboardButton("🔗 Collega il mio account", callback_data="nostr|link"))
+        markup.row(types.InlineKeyboardButton("❓ Non ho un account Nostr", callback_data="nostr|guide"))
+    if message_id:
+        safe_edit_message(text, chat_id, message_id, reply_markup=markup)
+    else:
+        bot.send_message(chat_id, text, reply_markup=markup, parse_mode='markdown')
+
+
+def nostr_receive_npub(message):
+    from services import nostr_service
+    if not message.text or message.text.startswith('/'):
+        bot.reply_to(message, "Collegamento annullato.")
+        return
+    ok, msg = nostr_service.start_link(message.from_user.id, message.text.strip())
+    sent = bot.reply_to(message, msg, parse_mode='markdown')
+    if ok:
+        bot.register_next_step_handler(sent, nostr_receive_code)
+
+
+def nostr_receive_code(message):
+    from services import nostr_service
+    if not message.text or message.text.startswith('/'):
+        bot.reply_to(message, "Collegamento annullato. Puoi riprendere dal bottone ⚡ Nostr.")
+        return
+    ok, msg = nostr_service.confirm_link(message.from_user.id, message.text.strip())
+    sent = bot.reply_to(message, msg, parse_mode='markdown')
+    if not ok and msg == "Codice errato.":
+        bot.register_next_step_handler(sent, nostr_receive_code)
+    elif ok:
+        send_nostr_menu(message.chat.id, message.from_user.id)
+
+
+@bot.message_handler(commands=['pannello', 'panel', 'web'])
+@bot.message_handler(func=lambda message: message.text == "🌐 Web App")  # the old keyboard button, until clients refresh
+def handle_web_app(message):
+    """Hand out a one-time link to the web app"""
+    if message.chat.type != 'private':
+        bot.reply_to(message, "Usa la Web App in chat privata con il bot.")
+        return
+    if not user_service.get_user(message.from_user.id):
+        bot.reply_to(message, "Utente non trovato. Usa /start prima.")
+        return
+    try:
+        from webapp.auth import create_login_link
+        link = create_login_link(message.from_user.id)
+    except Exception as e:
+        print(f"[WEB] could not create login link (is WEBAPP_URL set to the public address?): {e}")
+        bot.reply_to(message, "La Web App non è disponibile al momento.")
+        return
+    text = ("🌐 **Pannello aROMa**\nProfilo e statistiche, equipaggiamento, gilda e villaggio, mercato, dungeon, "
+            "achievement, stagione e guide.\nIl link è personale e vale 10 minuti: non condividerlo.")
+    if link.startswith("https://"):
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("Accedi al pannello aROMa", url=link))
+        bot.reply_to(message, text, reply_markup=markup, parse_mode='markdown')
+    else:
+        bot.reply_to(message, f"{text}\n\n{link}", parse_mode='markdown', disable_web_page_preview=True)
+
+@bot.message_handler(func=lambda message: message.text == "⚡ Nostr")
+def handle_nostr_button(message):
+    if message.chat.type != 'private':
+        bot.reply_to(message, "Usa il bottone Nostr in chat privata con il bot.")
+        return
+    if not user_service.get_user(message.from_user.id):
+        bot.reply_to(message, "Utente non trovato. Usa /start prima.")
+        return
+    send_nostr_menu(message.chat.id, message.from_user.id)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("nostr|"))
+def handle_nostr_callback(call):
+    from services import nostr_service
+    action = call.data.split("|")[1]
+    chat_id, user_id, message_id = call.message.chat.id, call.from_user.id, call.message.message_id
+    safe_answer_callback(call.id)
+
+    if action == "menu":
+        send_nostr_menu(chat_id, user_id, message_id)
+    elif action == "guide":
+        markup = types.InlineKeyboardMarkup()
+        markup.row(types.InlineKeyboardButton("🔗 Ho creato l'account, collega", callback_data="nostr|link"))
+        markup.row(types.InlineKeyboardButton("🔙 Indietro", callback_data="nostr|menu"))
+        safe_edit_message(NOSTR_GUIDE, chat_id, message_id, reply_markup=markup)
+    elif action == "link":
+        sent = bot.send_message(chat_id, "Incollami la tua chiave pubblica Nostr (`npub1…`). Per annullare scrivi /annulla.",
+                                parse_mode='markdown')
+        bot.register_next_step_handler(sent, nostr_receive_npub)
+    elif action == "unlink":
+        markup = types.InlineKeyboardMarkup()
+        markup.row(types.InlineKeyboardButton("✅ Sì, scollega", callback_data="nostr|unlink_ok"),
+                   types.InlineKeyboardButton("🔙 No", callback_data="nostr|menu"))
+        safe_edit_message("Vuoi scollegare l'account Nostr? I badge già ricevuti restano tuoi, "
+                          "ma non ne arriveranno altri finché non ricolleghi.", chat_id, message_id, reply_markup=markup)
+    elif action == "unlink_ok":
+        nostr_service.unlink(user_id)
+        send_nostr_menu(chat_id, user_id, message_id)
+
 
 @bot.message_handler(func=lambda message: message.text == "🏆 Achievement")
 def handle_achievement_button(message):
@@ -1289,6 +1399,36 @@ def handle_inventario_cmd(message):
             markup.add(types.InlineKeyboardButton(f"{emoji} {item}", callback_data=f"use_item|{item}"))
     
     bot.reply_to(message, msg, reply_markup=markup, parse_mode='markdown')
+
+@bot.message_handler(commands=['nostr'])
+def handle_nostr_cmd(message):
+    """Link a Nostr identity (npub) to receive achievement badges"""
+    import re
+    from services import nostr_service
+    user_id = message.from_user.id
+    if message.chat.type != 'private':
+        bot.reply_to(message, "Usa /nostr in chat privata con il bot.")
+        return
+    if not user_service.get_user(user_id):
+        bot.reply_to(message, "Utente non trovato. Usa /start prima.")
+        return
+
+    args = message.text.split()[1:]
+    if not args:
+        send_nostr_menu(message.chat.id, user_id)
+    elif args[0].lower() in ('codice', 'code') and len(args) > 1:
+        ok, msg = nostr_service.confirm_link(user_id, args[1])
+        bot.reply_to(message, msg, parse_mode='markdown')
+    elif len(args) == 1 and not args[0].lower().startswith('npub') and re.fullmatch(r'[0-9a-fA-F]{6}', args[0]):
+        # The bare code, as people tend to paste it
+        ok, msg = nostr_service.confirm_link(user_id, args[0])
+        bot.reply_to(message, msg, parse_mode='markdown')
+    elif args[0].lower() == 'scollega':
+        done = nostr_service.unlink(user_id)
+        bot.reply_to(message, "Nostr scollegato." if done else "Non hai nessuna npub collegata.")
+    else:
+        ok, msg = nostr_service.start_link(user_id, args[0])
+        bot.reply_to(message, msg, parse_mode='markdown')
 
 @bot.message_handler(commands=['achievements', 'ach'])
 def handle_achievements_cmd(message, page=0, user_id=None, category=None):
@@ -2246,10 +2386,10 @@ def handle_refinery_view_generic(call, category='equipment'):
     prof_name = 'armorsmith'
     prof_label = "🔨 **Livello Armaiolo**"
     if category == 'alchemy':
-        prof_name = 'alchemist'
+        prof_name = 'alchemy'
         prof_label = "🧪 **Livello Alchimista**"
     elif category == 'garden':
-        prof_name = 'gardener'
+        prof_name = 'garden'
         prof_label = "🌿 **Livello Giardiniere**"
         
     prof_info = crafting_service.get_profession_info(call.from_user.id, profession_name=prof_name)
@@ -3741,7 +3881,7 @@ class BotCommands:
             markup = types.InlineKeyboardMarkup()
             
             # Sort by ID
-            sorted_ids = sorted(dungeons.keys())
+            sorted_ids = dungeon_service.get_active_dungeon_ids(session=session)
             
             for d_id in sorted_ids:
                 d = dungeons[d_id]
@@ -3760,7 +3900,9 @@ class BotCommands:
                     rank = f" (Rango: {p.best_rank})"
                     
                 btn_text = f"{status_icon} {d['name']} (Diff: {d['difficulty']}){rank}"
-                if is_unlocked:
+                if is_unlocked and dungeon_service.has_played_today(session, self.chatid, d_id):
+                    markup.add(types.InlineKeyboardButton(f"⏳ {d['name']} (già giocato oggi)", callback_data="ignore"))
+                elif is_unlocked:
                     markup.add(types.InlineKeyboardButton(btn_text, callback_data=f"dungeon_host|{d_id}"))
                 else:
                     markup.add(types.InlineKeyboardButton(f"🔒 {d['name']} (Bloccato)", callback_data="ignore"))
@@ -3801,7 +3943,7 @@ class BotCommands:
             return
             
         d_real_id, msg = dungeon_service.create_dungeon(self.message.chat.id, d_id, self.chatid)
-        self.bot.reply_to(self.message, f"❌ {msg}", parse_mode='markdown')
+        self.bot.reply_to(self.message, msg if d_real_id else f"❌ {msg}", parse_mode='markdown')
 
     # @bot.message_handler(commands=['join'])
     # def handle_join_dungeon_cmd(self, message):
@@ -4719,7 +4861,7 @@ class BotCommands:
             msg += f"🔨 **Armaiolo**: Lv. `{prof_level}/50` | `{prof_xp}/{prof_xp_needed}` XP\n`[{prof_bar}]`\n"
             
             # Alchemy Level
-            alchemy_info = crafting_service.get_profession_info(utente.id_telegram, profession_name='alchemist')
+            alchemy_info = crafting_service.get_profession_info(utente.id_telegram, profession_name='alchemy')
             alch_level = alchemy_info['level']
             alch_xp = alchemy_info['xp']
             alch_xp_needed = 100 * (alch_level * (alch_level + 1) // 2)
@@ -4728,7 +4870,7 @@ class BotCommands:
             msg += f"⚗️ **Alchimista**: Lv. `{alch_level}/50` | `{alch_xp}/{alch_xp_needed}` XP\n`[{alch_bar}]`\n"
             
             # Garden Level
-            garden_info = crafting_service.get_profession_info(utente.id_telegram, profession_name='gardener')
+            garden_info = crafting_service.get_profession_info(utente.id_telegram, profession_name='garden')
             garden_level = garden_info['level']
             garden_xp = garden_info['xp']
             garden_xp_needed = 100 * (garden_level * (garden_level + 1) // 2)
@@ -7516,19 +7658,15 @@ def handle_guild_inn_wake(call):
     """Wake up from Inn rest"""
     user_id = call.from_user.id
     
+    multiplier = 1.0
+    guild = guild_service.get_user_guild(user_id)
+    if guild:
+        inn_level = guild.get('inn_level', 1) or 1
+        multiplier = 1.0 + (inn_level * 0.5)
+        
     from services.user_service import UserService
     us = UserService()
-    
-    session = us.db.get_session()
-    user = session.query(Utente).filter_by(id_telegram=user_id).first()
-    if user:
-        user.resting_since = None
-        user.vigore_until = None # Optional: clear buffs? Maybe not.
-        session.commit()
-        msg = "☀️ Ti sei svegliato bello riposato!"
-    else:
-        msg = "Errore utente."
-    session.close()
+    success, msg = us.stop_resting(user_id, recovery_multiplier=multiplier)
     
     safe_answer_callback(call.id, msg, show_alert=True)
     # Refresh to show "Riposa" again
@@ -8447,6 +8585,7 @@ def callback_query(call):
                 markup.add(types.InlineKeyboardButton(start_label, callback_data=f"dungeon_start|{dungeon.id}"))
                 
                 is_private = call.message.chat.type == 'private'
+                participants = []  # a solo run has no lobby list to show
                 if is_private:
                     msg_text = f"🏰 **DUNGEON SOLO: {dungeon.name}**\n"
                     msg_text += "Pronto a iniziare l'avventura?\n"
@@ -8484,6 +8623,7 @@ def callback_query(call):
                  start_label = "▶️ Avvia Dungeon" if is_private else "▶️ Avvia (Admin)"
                  markup.add(types.InlineKeyboardButton(start_label, callback_data=f"dungeon_start|{dungeon.id}"))
                  
+                 participants = []  # a solo run has no lobby list to show
                  if is_private:
                      msg_text = f"🏰 **DUNGEON SOLO: {dungeon.name}**\n"
                      msg_text += "Pronto a iniziare l'avventura?\n"
@@ -11299,6 +11439,33 @@ def job_dungeon_check():
     except Exception as e:
         print(f"[ERROR] job_dungeon_check: {e}")
 
+def process_nostr_outbox_job():
+    """Publish pending Nostr badge awards"""
+    try:
+        from services.nostr_service import process_outbox
+        process_outbox(limit=20)
+    except Exception as e:
+        print(f"[NOSTR JOB ERROR] {e}")
+
+def reconcile_nostr_badges_job():
+    """Safety net: every unlocked achievement of a linked user must have its badge queued"""
+    try:
+        from services.nostr_service import reconcile_all
+        queued = reconcile_all()
+        if queued:
+            print(f"[NOSTR] Reconciliation queued {queued} missing badges")
+    except Exception as e:
+        print(f"[NOSTR JOB ERROR] reconcile: {e}")
+
+def job_close_expired_seasons():
+    """Close seasons past their end date, pay the podium and announce it"""
+    try:
+        from services.season_manager import SeasonManager
+        for msg in SeasonManager().close_expired_seasons():
+            bot.send_message(GRUPPO_AROMA, msg, parse_mode='markdown')
+    except Exception as e:
+        print(f"[ERROR] job_close_expired_seasons: {e}")
+
 def job_weekly_ranking():
     """Weekly Season Ranking Announcement"""
     print("[SCHEDULER] Running weekly ranking job...")
@@ -11513,6 +11680,9 @@ schedule.every(1).minutes.do(process_refinery_queue_job)
 schedule.every(1).minutes.do(process_alchemy_queue_job)
 schedule.every(1).minutes.do(process_garden_growth_job)
 schedule.every(1).minutes.do(job_dungeon_check)
+schedule.every(10).minutes.do(job_close_expired_seasons)
+schedule.every(1).minutes.do(process_nostr_outbox_job)
+schedule.every().hour.do(reconcile_nostr_badges_job)
 schedule.every().sunday.at("20:00").do(job_weekly_ranking)
 schedule.every().sunday.at("21:00").do(job_guild_weekly_rewards)
 schedule.every().day.at("04:00").do(lambda: BackupService().create_backup())  # Daily Backup at 4 AM
@@ -11692,6 +11862,14 @@ if __name__ == '__main__':
 
     # 6️⃣ Avvia il bot
     try:
+        try:
+            bot.set_my_commands([
+                types.BotCommand("pannello", "Accedi al pannello aROMa"),
+                types.BotCommand("menu", "Mostra i bottoni"),
+                types.BotCommand("help", "Elenco dei comandi"),
+            ])
+        except Exception as e:
+            print(f"[BOT] could not register the command list: {e}")
         bot.infinity_polling(timeout=10, long_polling_timeout=5)
     except Exception as e:
         print(f"Bot polling crash: {e}")

@@ -30,6 +30,10 @@ class SeasonProgress(Base):
     
     current_exp = Column(Integer, default=0)
     current_level = Column(Integer, default=1)  # This is the "Grado"
+
+    # Cumulative EXP gained in the season: current_exp resets on every rank-up,
+    # so the podium cannot be decided on it (and it is zeroed at the max rank).
+    total_exp = Column(BigInteger, default=0)
     
     # Track if user has purchased the premium pass for this season
     has_premium_pass = Column(Boolean, default=False)
