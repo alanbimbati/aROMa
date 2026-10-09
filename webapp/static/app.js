@@ -339,7 +339,7 @@ async function paintCharActions(d) {
   if (!box || !state.me || !state.mine) return;
   const m = state.mine, mine = d.id === m.selected;
   const can = m.selectable.includes(d.id), owned = m.owned.includes(d.id);
-  const buyable = !can && !owned && d.price > 0 && !(m.taken && m.taken[d.id] && !m.taken[d.id].mine);
+  const buyable = !owned && d.price > 0 && !(m.taken && m.taken[d.id] && !m.taken[d.id].mine);
   const call = async (body) => {
     const r = await act('/api/me/character', body);
     toast(r.message, r.ok);
@@ -355,9 +355,8 @@ async function paintCharActions(d) {
           <div class="uses"><button class="btn use ${x.can_activate ? 'primary' : ''}" data-tf="activate" data-id="${x.id}" ${x.can_activate ? '' : 'disabled'}>Attiva</button></div></div>`).join('') : '<p class="muted">Nessuna trasformazione disponibile per ora.</p>'}`;
     } catch (e) { tf = ''; }
   }
-  box.innerHTML = `<div class="row" style="margin:10px 0">${mine ? '<span class="pill good">✅ Personaggio in uso</span>'
-    : can ? '<button class="btn primary" id="ch-use">Usa questo personaggio</button>'
-      : buyable ? `<button class="btn primary" id="ch-buy" ${m.wumpa >= d.price ? '' : 'disabled'}>Acquista · 🍑 ${fmt(d.price)}</button>` : ''}</div>${tf}`;
+  const buyBtn = buyable ? `<button class="btn ${can ? '' : 'primary'}" id="ch-buy" ${m.wumpa >= d.price ? '' : 'disabled'} title="${m.wumpa >= d.price ? '' : 'Wumpa insufficienti'}">Acquista · 🍑 ${fmt(d.price)}</button>` : '';
+  box.innerHTML = `<div class="row" style="margin:10px 0">${mine ? '<span class="pill good">✅ Personaggio in uso</span>' : can ? '<button class="btn primary" id="ch-use">Usa questo personaggio</button>' : ''}${owned && !mine ? '<span class="pill">Già tuo</span>' : ''}${buyBtn}</div>${tf}`;
   const u = $('#ch-use'), b = $('#ch-buy');
   if (u) u.addEventListener('click', () => call({ id: d.id }));
   if (b) b.addEventListener('click', () => { if (confirm(`Acquistare ${d.name} per ${fmt(d.price)} Wumpa?`)) call({ id: d.id, buy: true }); });
