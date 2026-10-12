@@ -128,3 +128,13 @@ def test_dungeon_enemies_hurt_by_their_share_of_a_players_health():
         hits = [CombatService().calculate_mob_damage_to_user(SimpleNamespace(attack_damage=attack, name='x'), user) for _ in range(50)]
         health = 100 + 6 * level
         assert 0.01 * health <= sum(hits) / len(hits) <= 0.04 * health   # about 2% of the player's health, not a flat 1
+
+
+def test_combat_pause_switch(monkeypatch):
+    import settings
+    monkeypatch.delenv('COMBAT_PAUSED', raising=False)
+    assert settings.combat_paused() is False
+    monkeypatch.setenv('COMBAT_PAUSED', '1')
+    assert settings.combat_paused() is True
+    from services.dungeon_service import DungeonService
+    assert DungeonService().check_daily_dungeon_trigger(chat_id=1) is None  # paused: it touches nothing

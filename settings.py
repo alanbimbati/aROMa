@@ -64,3 +64,8 @@ from telebot import types
 from utils.bot_utils import SafeTeleBot
 bot = SafeTeleBot(BOT_TOKEN, threaded=True, num_threads=4, parse_mode='Markdown')
 hideBoard = types.ReplyKeyboardRemove()  
+
+
+def combat_paused():
+    """COMBAT_PAUSED=1 in .env stops everything the bot starts on its own in the group (mobs, bosses, dungeons, their attacks)."""
+    return os.getenv('COMBAT_PAUSED', '0').strip() == '1'

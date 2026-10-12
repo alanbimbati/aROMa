@@ -34,6 +34,9 @@ class DungeonService:
 
     def check_daily_dungeon_trigger(self, chat_id=None, bot=None):
         """Checks if a dungeon should start or if hype phase is due. Run periodically."""
+        from settings import combat_paused
+        if combat_paused():
+            return
         if not chat_id:
             from settings import GRUPPO_AROMA
             chat_id = GRUPPO_AROMA
