@@ -11141,6 +11141,8 @@ def regenerate_mana_job():
         print(f"[MANA REGEN ERROR] {e}")
 
 def spawn_daily_mob_job():
+    if combat_paused():
+        return
     # Random check to spawn at any time (Restrictions removed)
     now = datetime.datetime.now()
     
@@ -11191,6 +11193,8 @@ def spawn_daily_mob_job():
                             last_known_msg_id = sent.message_id
 
 def spawn_weekly_boss_job():
+    if combat_paused():
+        return
     success, msg, boss_id = pve_service.spawn_boss(chat_id=GRUPPO_AROMA)
     if success and boss_id:
         boss = pve_service.get_current_boss_status()
@@ -11224,6 +11228,8 @@ def spawn_weekly_boss_job():
                 pve_service.update_mob_message_id(boss_id, sent_boss_msg.message_id)
 
 def mob_attack_job():
+    if combat_paused():
+        return
     # Both mobs and bosses auto-attack periodically (all are Mob now, bosses have is_boss=True)
     
     # Process all enemy attacks (mobs and bosses)
@@ -11424,6 +11430,8 @@ def process_dungeon_events(events, chat_id):
 # --- Scheduler Logic ---
 def job_dungeon_check():
     """Periodic check for dungeon events"""
+    if combat_paused():
+        return
     try:
         # Check triggers
         # We handle result which might be event string or dict
