@@ -11,6 +11,7 @@ Tests:
 
 import sys
 import os
+import subprocess
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import unittest
@@ -40,7 +41,7 @@ class TestCraftingSystem(unittest.TestCase):
              res_count = session.execute(text('SELECT count(*) FROM resources')).scalar()
              if res_count == 0:
                  print("🌱 Seeding test database...")
-                 os.system('python3 db_setup.py > /dev/null 2>&1')
+                 subprocess.run(['python3', 'db_setup.py'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception as e:
              print(f"⚠️ Warning during setup: {e}")
         finally:
@@ -48,7 +49,9 @@ class TestCraftingSystem(unittest.TestCase):
 
         # Initialize crafting system using the official setup script
         print("\n🔧 Initializing crafting system database...")
-        os.system('TEST_DB=1 python3 db_setup.py > /dev/null 2>&1')
+        env = os.environ.copy()
+        env['TEST_DB'] = '1'
+        subprocess.run(['python3', 'db_setup.py'], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
         session = cls.db.get_session()
         try:

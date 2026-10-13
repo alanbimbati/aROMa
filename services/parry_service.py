@@ -580,6 +580,19 @@ class ParryService:
     
     def _increment_stat(self, user_id, stat_name, count=1, session=None):
         """Increment a stat counter"""
+
+        ALLOWED_STATS = {
+            'total_parry_attempts', 'total_parry_success', 'total_parry_perfect',
+            'total_parry_failed', 'max_parry_streak', 'current_parry_streak',
+            'max_perfect_streak', 'current_perfect_streak', 'boss_parries',
+            'perfect_boss_parries', 'total_damage_avoided', 'total_counterattack_damage',
+            'total_counters_in_window', 'total_counters_late', 'average_reaction_time_ms',
+            'best_reaction_time_ms', 'average_counter_time_ms', 'flawless_victories',
+            'speed_victories', 'created_at', 'updated_at'
+        }
+        if stat_name not in ALLOWED_STATS:
+            raise ValueError(f"Invalid stat name: {stat_name}")
+
         local_session = False
         if session is None:
             session = self.db.get_session()
