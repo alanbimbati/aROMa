@@ -251,6 +251,7 @@ class TestCounterattackDamage(unittest.TestCase):
         """Test 1.5x damage + forced crit on perfect parry counter"""
         attacker = Mock()
         attacker.damage_total = 100
+        attacker.crit_chance = 0
         attacker.crit_multiplier = 1.5
         attacker.active_status_effects = "[]" # Mock JSON string
         
