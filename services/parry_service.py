@@ -15,7 +15,7 @@ from sqlalchemy import text
 from datetime import datetime, timedelta
 from services.event_dispatcher import EventDispatcher
 import json
-
+from models.parry_models import ParryStats
 
 class ParryService:
     """Service for managing parry mechanics and tracking"""
@@ -588,6 +588,11 @@ class ParryService:
         try:
             self._initialize_stats(user_id, session=session)
             
+            # Validate stat_name to prevent SQL injection
+            valid_columns = ParryStats.__table__.columns.keys()
+            if stat_name not in valid_columns:
+                raise ValueError(f"Invalid stat_name for parry_stats: {stat_name}")
+
             now = datetime.now()
             query = text(f"""
                 UPDATE parry_stats
