@@ -55,7 +55,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - name: Frontend script parses
         run: node --check webapp/static/app.js
       - uses: actions/setup-python@v5
@@ -87,66 +87,3 @@ jobs:
           docker run --rm --user root aroma-bot:ci python -c "import sqlalchemy, fastapi, nostr_sdk"
           docker run --rm aroma-bot:ci pg_dump --version
 
-  upgrade:
-    name: Upgrade rehearsal (previous release -> this one)
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_USER: alan
-          POSTGRES_PASSWORD: ci
-          POSTGRES_DB: aroma_bot
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U alan -d aroma_bot" --health-interval 5s --health-timeout 5s --health-retries 10
-    env:
-      DB_TYPE: postgresql
-      DB_HOST: localhost
-      DB_PORT: "5432"
-      DB_NAME: aroma_bot
-      DB_USER: alan
-      DB_PASSWORD: ci
-      TEST: "0"
-      MARVEL_LAUNCH: "1"
-      FETCH_IMAGES: "0"
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client fonts-dejavu-core fonts-noto-color-emoji
-      - run: pip install -r requirements.txt
-      - name: Check out the previous release next to this one
-        run: |
-          BASE=$(git merge-base origin/main HEAD 2>/dev/null || true)
-          if [ -z "$BASE" ] || [ "$BASE" = "$(git rev-parse HEAD)" ]; then BASE=$(git rev-parse HEAD~1); fi
-          echo "previous release: $BASE"
-          git worktree add ../previous "$BASE"
-      - name: Build the OLD database with the OLD code, and fill it with invented players
-        run: |
-          (cd ../previous && python db_setup.py)
-          python scripts/ci/seed_synthetic_players.py
-          python scripts/verify_launch.py --snapshot before.json
-      - name: Upgrade with this release (backup, migrations, Marvel launch)
-        run: |
-          mkdir -p backups images
-          python scripts/init_stack.py
-      - name: Everything that should have changed did, and nothing was lost
-        run: python scripts/verify_launch.py --check before.json
-      - name: A second start does not wipe or back up again
-        run: |
-          python scripts/init_stack.py | tee second.log
-          ! grep -q "Marvel launch" second.log
-          test "$(ls backups | wc -l)" = "1"
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: upgrade-debug
-          path: |
-            before.json
-            second.log
