@@ -590,15 +590,21 @@ class ParryService:
             "max_perfect_streak",
             "current_perfect_streak",
             "boss_parries",
+            "perfect_boss_parries",
             "pvp_parries",
+            "total_damage_avoided",
+            "total_counterattack_damage",
             "total_counterattacks",
+            "total_counters_in_window",
+            "total_counters_late",
+            "flawless_victories",
+            "speed_victories",
             "total_damage_mitigated",
             "total_counter_damage"
         ]
 
         if stat_name not in valid_stats:
-            print(f"[ParryService] Invalid stat name: {stat_name}")
-            return
+            raise ValueError(f"Invalid stat name: {stat_name}")
 
         local_session = False
         if session is None:
