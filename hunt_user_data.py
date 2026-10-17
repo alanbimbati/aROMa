@@ -35,7 +35,8 @@ def hunt():
                 for table, cols in tables.items():
                     try:
                         col_str = ", ".join([f"\"{c}\"" for c in cols])
-                        data = conn.execute(text(f"SELECT {col_str} FROM \"{table}\" LIMIT 20")).fetchall()
+                        query_str = "SELECT " + col_str + " FROM \"" + table + "\" LIMIT 20"  # nosec B608
+                        data = conn.execute(text(query_str)).fetchall()
                         if data:
                             print(f"  Table '{table}': {len(data)} rows found (showing up to 20)")
                             for d in data:

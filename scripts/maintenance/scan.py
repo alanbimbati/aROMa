@@ -1,3 +1,4 @@
+import ast
 import anthropic
 from telethon import TelegramClient
 from telethon.tl.types import PeerChannel
@@ -50,7 +51,7 @@ def fromClaudeToDict(content):
     string = string.replace("\n","")
 
     try:
-        data = eval(string)
+        data = ast.literal_eval(string)
         return data
     except Exception as e:
         return e

@@ -580,6 +580,26 @@ class ParryService:
     
     def _increment_stat(self, user_id, stat_name, count=1, session=None):
         """Increment a stat counter"""
+        valid_stats = [
+            "total_parry_attempts",
+            "total_parry_success",
+            "total_parry_perfect",
+            "total_parry_failed",
+            "max_parry_streak",
+            "current_parry_streak",
+            "max_perfect_streak",
+            "current_perfect_streak",
+            "boss_parries",
+            "pvp_parries",
+            "total_counterattacks",
+            "total_damage_mitigated",
+            "total_counter_damage"
+        ]
+
+        if stat_name not in valid_stats:
+            print(f"[ParryService] Invalid stat name: {stat_name}")
+            return
+
         local_session = False
         if session is None:
             session = self.db.get_session()
@@ -593,7 +613,7 @@ class ParryService:
                 UPDATE parry_stats
                 SET {stat_name} = {stat_name} + :count, updated_at = :updated_at
                 WHERE user_id = :uid
-            """)
+            """)  # nosec B608
             session.execute(query, {"uid": user_id, "count": count, "updated_at": now})
             
             if local_session:
