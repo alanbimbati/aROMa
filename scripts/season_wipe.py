@@ -66,7 +66,7 @@ def reset_everyone(session, stan_lee_id, keep_equipped=()):
             text('delete from user_equipment where not (equipped = true and user_id = any(:keep))'), {'keep': keep}).rowcount
     for table in RESET_TABLES:
         if table in present and table != 'user_equipment':
-            counts[table] = session.execute(text(f'delete from "{table}"')).rowcount
+            counts[table] = session.execute(text(f'delete from "{table}"')).rowcount  # nosec B608
     if 'market_listings' in present:
         counts['market_listings (active)'] = session.execute(text("delete from market_listings where status = 'active'")).rowcount
     print("Azzerato: " + ", ".join(f"{t} {n}" for t, n in counts.items() if n))

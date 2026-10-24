@@ -31,7 +31,7 @@ def run(apply):
                     "select :n, name, slot, rarity, min_level, stats_json, crafting_time, crafting_requirements, "
                     "description, set_name, effect_type from equipment where id = :o"), {"n": new_id, "o": old_id})
             for table in ("user_equipment", "crafting_queue"):
-                moved = session.execute(text(f"update {table} set equipment_id = :n where equipment_id = :o"),
+                moved = session.execute(text(f"update {table} set equipment_id = :n where equipment_id = :o"),  # nosec B608
                                         {"n": new_id, "o": old_id}).rowcount
                 print(f"{name}: {moved} rows of {table} moved {old_id} -> {new_id}")
         if apply:
