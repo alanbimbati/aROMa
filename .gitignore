@@ -64,10 +64,8 @@ full_test_output*.txt
 test*.txt
 final_test_report*.txt
 find_*.py
-verify_*.py
 repro_*.py
 debug_*.py
-seed_*.py
 clean_*.py
 clean_db.py
 force_recalc.py
@@ -88,3 +86,4 @@ webapp/dist/
 cache/game_covers/
 cache/libretro_*.json
 .env.beta
+bandit_results.json

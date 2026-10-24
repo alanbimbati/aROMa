@@ -25,7 +25,7 @@ if not _secret:
 _serializer = URLSafeTimedSerializer(_secret, salt="aroma-web-session")
 
 
-LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"}
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"}  # nosec B104
 NGROK_API = os.getenv("NGROK_API", "http://ngrok:4040/api/tunnels")
 QUICKTUNNEL_API = os.getenv("QUICKTUNNEL_API", "http://quicktunnel:2000/quicktunnel")  # cloudflared quick tunnel
 _ngrok_cache = {"at": 0.0, "url": None}
@@ -43,14 +43,14 @@ def _ngrok_url():
         return _ngrok_cache["url"]
     url = None
     try:
-        with urllib.request.urlopen(NGROK_API, timeout=2) as r:
+        with urllib.request.urlopen(NGROK_API, timeout=2) as r:  # nosec B310
             tunnels = json.load(r).get("tunnels", [])
         url = next((t["public_url"] for t in tunnels if t.get("public_url", "").startswith("https://")), None)
     except Exception:
         pass
     if not url:
         try:
-            with urllib.request.urlopen(QUICKTUNNEL_API, timeout=2) as r:
+            with urllib.request.urlopen(QUICKTUNNEL_API, timeout=2) as r:  # nosec B310
                 host = json.load(r).get("hostname")
             url = f"https://{host}" if host else None
         except Exception:

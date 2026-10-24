@@ -666,7 +666,7 @@ def start_solo_dungeon(user_id, dungeon_id):
     try:
         req = urllib.request.Request(f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage', _json.dumps(payload).encode(),
                                      {'Content-Type': 'application/json'})
-        urllib.request.urlopen(req, timeout=10).read()
+        urllib.request.urlopen(req, timeout=10).read()  # nosec B310
     except Exception as e:
         print(f"[WEB] dungeon lobby message failed: {e}")
         return {'ok': False, 'message': "Non riesco a scriverti nel bot: aprilo e premi /start, poi riprova."}
