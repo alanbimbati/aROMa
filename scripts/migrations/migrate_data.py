@@ -6,9 +6,27 @@ import os
 SOURCE_DB = "points_fix_source.db"
 TARGET_DB = "points_final.db"
 
+VALID_TABLES = {
+        "utente", "guilds", "guild_members", "guild_upgrades", "guild_items",
+        "collezionabili", "mob_ability", "combat_participation",
+        "achievement", "user_achievement", "game_event",
+        "character_ownership", "dungeon", "dungeon_participant",
+        "games", "steam", "giocoutente", "nomigiochi",
+        "mob", "raid", "raid_participation",
+        "season", "season_progress", "season_reward", "season_claimed_reward",
+        "user_stat",
+        "livello", "character_ability", "character_transformation", "user_transformation",
+        "domenica", "user_character",
+        "points", "gruppo", "giocoaroma"
+    }
+
 def migrate_table(table_name):
     print(f"Migrating {table_name}...")
     
+    if table_name not in VALID_TABLES:
+        print(f"Invalid table name: {table_name}")
+        return
+
     if not os.path.exists(SOURCE_DB):
         print(f"Source DB {SOURCE_DB} not found!")
         return
@@ -19,7 +37,7 @@ def migrate_table(table_name):
     src_cursor = src_conn.cursor()
     
     try:
-        src_cursor.execute(f"SELECT * FROM {table_name}")
+        src_cursor.execute(f"SELECT * FROM {table_name}")  # nosec B608
         rows = src_cursor.fetchall()
     except Exception as e:
         print(f"Skipping {table_name}: {e}")
@@ -39,7 +57,7 @@ def migrate_table(table_name):
     # Get target columns
     tgt_conn = sqlite3.connect(TARGET_DB)
     tgt_cursor = tgt_conn.cursor()
-    tgt_cursor.execute(f"PRAGMA table_info({table_name})")
+    tgt_cursor.execute(f"PRAGMA table_info({table_name})")  # nosec B608
     tgt_cols_info = tgt_cursor.fetchall()
     tgt_columns = set([c[1] for c in tgt_cols_info])
     tgt_conn.close()
@@ -56,7 +74,7 @@ def migrate_table(table_name):
     # Prepare insert statement
     cols_str = ", ".join(common_columns)
     params_str = ", ".join([f":{c}" for c in common_columns])
-    sql = text(f"INSERT INTO {table_name} ({cols_str}) VALUES ({params_str})")
+    sql = text(f"INSERT INTO {table_name} ({cols_str}) VALUES ({params_str})")  # nosec B608
     
     count = 0
     for row in rows:
@@ -74,19 +92,7 @@ def migrate_table(table_name):
 
 if __name__ == "__main__":
     # List of tables to migrate
-    tables = [
-        "utente", "guilds", "guild_members", "guild_upgrades", "guild_items",
-        "collezionabili", "mob_ability", "combat_participation",
-        "achievement", "user_achievement", "game_event",
-        "character_ownership", "dungeon", "dungeon_participant",
-        "games", "steam", "giocoutente", "nomigiochi",
-        "mob", "raid", "raid_participation",
-        "season", "season_progress", "season_reward", "season_claimed_reward",
-        "user_stat",
-        "livello", "character_ability", "character_transformation", "user_transformation",
-        "domenica", "user_character",
-        "points", "gruppo", "giocoaroma"
-    ]
+    tables = VALID_TABLES
     
     for t in tables:
         migrate_table(t)
