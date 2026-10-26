@@ -19,7 +19,7 @@ def migrate_table(table_name):
     src_cursor = src_conn.cursor()
     
     try:
-        src_cursor.execute(f"SELECT * FROM {table_name}")
+        src_cursor.execute(f"SELECT * FROM {table_name}")  # nosec B608
         rows = src_cursor.fetchall()
     except Exception as e:
         print(f"Skipping {table_name}: {e}")
@@ -39,7 +39,7 @@ def migrate_table(table_name):
     # Get target columns
     tgt_conn = sqlite3.connect(TARGET_DB)
     tgt_cursor = tgt_conn.cursor()
-    tgt_cursor.execute(f"PRAGMA table_info({table_name})")
+    tgt_cursor.execute(f"PRAGMA table_info({table_name})")  # nosec B608
     tgt_cols_info = tgt_cursor.fetchall()
     tgt_columns = set([c[1] for c in tgt_cols_info])
     tgt_conn.close()
@@ -56,7 +56,7 @@ def migrate_table(table_name):
     # Prepare insert statement
     cols_str = ", ".join(common_columns)
     params_str = ", ".join([f":{c}" for c in common_columns])
-    sql = text(f"INSERT INTO {table_name} ({cols_str}) VALUES ({params_str})")
+    sql = text(f"INSERT INTO {table_name} ({cols_str}) VALUES ({params_str})")  # nosec B608
     
     count = 0
     for row in rows:

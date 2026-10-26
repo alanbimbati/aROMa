@@ -88,3 +88,5 @@ webapp/dist/
 cache/game_covers/
 cache/libretro_*.json
 .env.beta
+bandit_report.txt
+bandit_report_new.txt
