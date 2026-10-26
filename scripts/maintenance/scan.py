@@ -4,6 +4,7 @@ from telethon.tl.types import PeerChannel
 from settings import *
 from model import GameInfo
 import os
+import ast
 
 claude_client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
 channel_id = int(PREMIUM_CHANNELS['tutto'])
@@ -50,7 +51,7 @@ def fromClaudeToDict(content):
     string = string.replace("\n","")
 
     try:
-        data = eval(string)
+        data = ast.literal_eval(string)
         return data
     except Exception as e:
         return e
