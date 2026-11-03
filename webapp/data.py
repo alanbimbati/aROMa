@@ -358,7 +358,11 @@ def summon_dragon(user_id, dragon, choices):
 
 def use_item(user_id, name):
     from services.item_service import ItemService
-    ok, message = ItemService().use_item(user_id, name)
+    service = ItemService()
+    # use_item only consumes: like the bot, the effect has to be applied (and committed) afterwards
+    ok, message = service.use_item(user_id, name)
+    if ok:
+        message, _ = service.apply_effect(UserService().get_user(user_id), name)
     return {'ok': ok, 'message': str(message).replace('**', ''), **inventory(user_id)}
 
 

@@ -666,6 +666,24 @@ class TestInventoryGuildForge(unittest.TestCase):
         self.assertFalse(c.post('/api/me/inventory/upgrade', json={'id': 3, 'count': 1}, headers=SAME_SITE).json()['ok'])
         self.assertEqual(c.post('/api/me/inventory/use', json={'name': 'x'}).status_code, 403)
 
+    def test_using_a_potion_restores_what_it_promises(self):
+        from models.items import Collezionabili
+        from services.potion_service import PotionService
+        potion = next(p for p in PotionService().get_all_potions() if p['tipo'] == 'mana_potion')
+        session = Database().get_session()
+        user = session.query(Utente).filter_by(id_telegram=self.BOSS).first()
+        user.max_mana, user.mana = 1000, 0
+        session.commit()
+        session.close()
+        ItemService().add_item(self.BOSS, potion['nome'])
+        r = self.as_user(self.BOSS).post('/api/me/inventory/use', json={'name': potion['nome']}, headers=SAME_SITE).json()
+        self.assertTrue(r['ok'])
+        self.assertGreater(UserService().get_user(self.BOSS).mana, 0)
+        session = Database().get_session()
+        session.query(Collezionabili).filter_by(id_telegram=str(self.BOSS)).delete()
+        session.commit()
+        session.close()
+
     def test_character_picking_refuses_what_is_not_owned(self):
         c = self.as_user(self.BOSS)
         r = c.post('/api/me/character', json={'id': 999999}, headers=SAME_SITE).json()
