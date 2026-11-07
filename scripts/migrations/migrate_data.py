@@ -18,8 +18,13 @@ def migrate_table(table_name):
     src_conn.row_factory = sqlite3.Row
     src_cursor = src_conn.cursor()
     
+    import re
+    if not re.match(r'^[a-zA-Z0-9_]+$', table_name):
+        print(f"Skipping {table_name}: invalid table name")
+        return
+
     try:
-        src_cursor.execute(f"SELECT * FROM {table_name}")
+        src_cursor.execute(f"SELECT * FROM {table_name}")  # nosec B608
         rows = src_cursor.fetchall()
     except Exception as e:
         print(f"Skipping {table_name}: {e}")
@@ -39,7 +44,7 @@ def migrate_table(table_name):
     # Get target columns
     tgt_conn = sqlite3.connect(TARGET_DB)
     tgt_cursor = tgt_conn.cursor()
-    tgt_cursor.execute(f"PRAGMA table_info({table_name})")
+    tgt_cursor.execute(f"PRAGMA table_info({table_name})")  # nosec B608
     tgt_cols_info = tgt_cursor.fetchall()
     tgt_columns = set([c[1] for c in tgt_cols_info])
     tgt_conn.close()

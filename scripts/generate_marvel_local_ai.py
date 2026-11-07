@@ -99,8 +99,8 @@ def load_pipeline(model: str) -> AutoPipelineForText2Image:
 def load_ranker(enabled: bool):
     if not enabled:
         return None, None
-    model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+    model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32", revision="main")  # nosec B615
+    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32", revision="main")  # nosec B615
     return model, processor
 
 

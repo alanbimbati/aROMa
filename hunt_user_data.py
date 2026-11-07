@@ -32,10 +32,15 @@ def hunt():
                     if table not in tables: tables[table] = []
                     tables[table].append(col)
                 
+                import re
                 for table, cols in tables.items():
+                    if not re.match(r'^[a-zA-Z0-9_]+$', table):
+                        continue
                     try:
-                        col_str = ", ".join([f"\"{c}\"" for c in cols])
-                        data = conn.execute(text(f"SELECT {col_str} FROM \"{table}\" LIMIT 20")).fetchall()
+                        valid_cols = [c for c in cols if re.match(r'^[a-zA-Z0-9_]+$', c)]
+                        if not valid_cols: continue
+                        col_str = ", ".join([f"\"{c}\"" for c in valid_cols])
+                        data = conn.execute(text(f"SELECT {col_str} FROM \"{table}\" LIMIT 20")).fetchall()  # nosec B608
                         if data:
                             print(f"  Table '{table}': {len(data)} rows found (showing up to 20)")
                             for d in data:
