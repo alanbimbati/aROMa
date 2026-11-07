@@ -42,7 +42,7 @@ def norm(title):
 def steam_cover(title):
     """Image bytes of the best Steam match for this title, or None."""
     try:
-        found = json.load(urllib.request.urlopen(SEARCH + urllib.parse.quote(title[:80]), timeout=20)).get('items', [])
+        found = json.load(urllib.request.urlopen(SEARCH + urllib.parse.quote(title[:80]), timeout=20)).get('items', [])  # nosec B310
     except Exception:
         return None
     wanted = norm(title)
@@ -52,7 +52,7 @@ def steam_cover(title):
         return None
     for name in ('library_600x900.jpg', 'header.jpg'):
         try:
-            return urllib.request.urlopen(ART % (best[1]['id'], name), timeout=20).read()
+            return urllib.request.urlopen(ART % (best[1]['id'], name), timeout=20).read()  # nosec B310
         except Exception:
             continue
     return None

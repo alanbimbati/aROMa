@@ -57,7 +57,7 @@ def listing(system):
     if os.path.exists(cache):
         return json.load(open(cache))
     url = ROOT + urllib.parse.quote(system) + '/Named_Boxarts/'
-    page = urllib.request.urlopen(url, timeout=60).read().decode('utf-8', 'replace')
+    page = urllib.request.urlopen(url, timeout=60).read().decode('utf-8', 'replace')  # nosec B310
     names = [html.unescape(urllib.parse.unquote(h))[:-4] for h in re.findall(r'href="([^"]+\.png)"', page)]
     os.makedirs(os.path.dirname(cache), exist_ok=True)
     json.dump(names, open(cache, 'w'))
@@ -115,7 +115,7 @@ def main():
                 break
         if row['source']:
             try:
-                data = urllib.request.urlopen(ROOT + urllib.parse.quote(row['source']), timeout=30).read()
+                data = urllib.request.urlopen(ROOT + urllib.parse.quote(row['source']), timeout=30).read()  # nosec B310
                 im = Image.open(io.BytesIO(data)).convert('RGB')
                 im.thumbnail((320, 320))
                 im.save(os.path.join(OUT_DIR, g['id'] + '.webp'), 'WEBP', quality=82)

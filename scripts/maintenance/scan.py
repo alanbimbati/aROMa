@@ -49,8 +49,9 @@ def fromClaudeToDict(content):
     string = "{"+content+"}"
     string = string.replace("\n","")
 
+    import ast
     try:
-        data = eval(string)
+        data = ast.literal_eval(string)
         return data
     except Exception as e:
         return e
