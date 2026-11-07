@@ -675,9 +675,11 @@ class TestInventoryGuildForge(unittest.TestCase):
         user.max_mana, user.mana = 1000, 0
         session.commit()
         session.close()
+        from services.item_service import ItemService
         ItemService().add_item(self.BOSS, potion['nome'])
         r = self.as_user(self.BOSS).post('/api/me/inventory/use', json={'name': potion['nome']}, headers=SAME_SITE).json()
         self.assertTrue(r['ok'])
+        from services.user_service import UserService
         self.assertGreater(UserService().get_user(self.BOSS).mana, 0)
         session = Database().get_session()
         session.query(Collezionabili).filter_by(id_telegram=str(self.BOSS)).delete()
