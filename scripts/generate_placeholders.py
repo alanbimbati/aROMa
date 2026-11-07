@@ -5,7 +5,7 @@ import hashlib
 
 def get_color(name):
     """Generate a consistent color from name"""
-    hash_object = hashlib.md5(name.encode())
+    hash_object = hashlib.md5(name.encode(), usedforsecurity=False)
     hex_hash = hash_object.hexdigest()
     r = int(hex_hash[0:2], 16)
     g = int(hex_hash[2:4], 16)

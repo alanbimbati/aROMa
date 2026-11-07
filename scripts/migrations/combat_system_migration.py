@@ -23,15 +23,19 @@ def migrate_db():
         ("required_character_id", "INTEGER DEFAULT NULL")
     ]
     
+    import re
     for col_name, col_def in columns_to_add:
+        if not re.match(r'^[a-zA-Z0-9_]+$', col_name):
+            print(f"   ❌ Error: invalid column name '{col_name}'")
+            continue
         try:
-            session.execute(text(f"SELECT {col_name} FROM livello LIMIT 1"))
+            session.execute(text(f"SELECT {col_name} FROM livello LIMIT 1"))  # nosec B608
             print(f"   ✓ Column '{col_name}' already exists.")
         except Exception:
             print(f"   + Adding column '{col_name}'...")
             try:
                 session.rollback()
-                session.execute(text(f"ALTER TABLE livello ADD COLUMN {col_name} {col_def}"))
+                session.execute(text(f"ALTER TABLE livello ADD COLUMN {col_name} {col_def}"))  # nosec B608
                 session.commit()
             except Exception as e:
                 print(f"   ❌ Error adding {col_name}: {e}")
