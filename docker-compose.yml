@@ -77,6 +77,12 @@ services:
     <<: *app
     container_name: aroma_bot
     command: ["python3", "main.py"]
+    # Reaps the healthcheck's python3 left behind when it times out: without it they piled up as zombies.
+    init: true
+    # The image's check imports the whole database layer: every 30s it loaded the Pi more than the bot itself.
+    healthcheck:
+      interval: 2m
+      timeout: 30s
     depends_on:
       init:
         condition: service_completed_successfully
