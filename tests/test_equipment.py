@@ -44,7 +44,7 @@ class TestEquipmentSystem(unittest.TestCase):
             
             # Clean up specific test equipment to avoid conflicts
             test_equip_ids = [1, 6, 7, 8, 11, 16, 21]
-            session.execute(text(f'DELETE FROM equipment WHERE id IN ({",".join(map(str, test_equip_ids))})'))
+            session.execute(text(f'DELETE FROM equipment WHERE id IN ({",".join(map(str, test_equip_ids))})'))  # nosec B608
             session.commit()
             
             # Seed Test Equipment
