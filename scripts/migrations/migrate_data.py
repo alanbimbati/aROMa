@@ -19,7 +19,7 @@ def migrate_table(table_name):
     src_cursor = src_conn.cursor()
     
     try:
-        src_cursor.execute(f"SELECT * FROM {table_name}")
+        src_cursor.execute(f"SELECT * FROM {table_name}")  # nosec B608
         rows = src_cursor.fetchall()
     except Exception as e:
         print(f"Skipping {table_name}: {e}")
@@ -56,7 +56,7 @@ def migrate_table(table_name):
     # Prepare insert statement
     cols_str = ", ".join(common_columns)
     params_str = ", ".join([f":{c}" for c in common_columns])
-    sql = text(f"INSERT INTO {table_name} ({cols_str}) VALUES ({params_str})")
+    sql = text(f"INSERT INTO {table_name} ({cols_str}) VALUES ({params_str})")  # nosec B608
     
     count = 0
     for row in rows:

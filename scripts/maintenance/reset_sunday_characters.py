@@ -31,7 +31,7 @@ def reset_sunday_characters():
         print("✅ Cleared all character ownerships")
         
         # Reset all users to Chocobo
-        session.execute(text(f"UPDATE utente SET livello_selezionato = {chocobo_id}"))
+        session.execute(text("UPDATE utente SET livello_selezionato = :chocobo_id"), {"chocobo_id": chocobo_id})
         result = session.execute(text("SELECT COUNT(*) FROM utente"))
         user_count = result.fetchone()[0]
         

@@ -588,12 +588,16 @@ class ParryService:
         try:
             self._initialize_stats(user_id, session=session)
             
+            VALID_STATS = {'total_parry_attempts', 'total_counters_in_window', 'total_counters_late', 'total_parry_failed', 'total_parry_success', 'total_parry_perfect', 'total_counterattack_damage', 'total_damage_avoided'}
+            if stat_name not in VALID_STATS:
+                raise ValueError(f"Invalid stat name: {stat_name}")
+
             now = datetime.now()
             query = text(f"""
                 UPDATE parry_stats
                 SET {stat_name} = {stat_name} + :count, updated_at = :updated_at
                 WHERE user_id = :uid
-            """)
+            """)  # nosec B608
             session.execute(query, {"uid": user_id, "count": count, "updated_at": now})
             
             if local_session:
