@@ -1,13 +1,15 @@
-pyTelegramBotAPI
-schedule
-requests
-Pillow
-python-dotenv
-sqlalchemy>=2.0.30
-psycopg2-binary
-python-dateutil
-alembic
+# Exact versions, the ones production runs: an unpinned install picks SQLAlchemy 2.1 on a newer Python,
+# whose default PostgreSQL driver (psycopg 3) is not installed here.
+pyTelegramBotAPI==4.37.0
+schedule==1.2.2
+requests==2.34.2
+Pillow==12.3.0
+python-dotenv==1.2.4
+SQLAlchemy==2.0.55
+psycopg2-binary==2.9.13
+python-dateutil==3.0.0
+alembic==1.20.1
 nostr-sdk==0.45.1
-fastapi
-uvicorn[standard]
-itsdangerous
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+itsdangerous==2.2.0

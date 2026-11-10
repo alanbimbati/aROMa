@@ -7,8 +7,10 @@ CANALE_LOG          =    '-1001469821841'
 TEST                =    int(os.getenv('TEST', 1))
 TEST_MODE           =    TEST
 
-TEST_TOKEN      = os.getenv('TEST_BOT_TOKEN') or '0:REMOVED'
-AROMA_TOKEN     = os.getenv('BOT_TOKEN') or '0:REMOVED'
+# No token in the code: without one in .env the bot starts nowhere, while tests and tools still import.
+NO_TOKEN        = '0:unset'
+TEST_TOKEN      = os.getenv('TEST_BOT_TOKEN') or NO_TOKEN
+AROMA_TOKEN     = os.getenv('BOT_TOKEN') or NO_TOKEN
 
 TEST_GRUPPO     = int(os.getenv('TEST_GROUP_ID', -1001721979634))
 AROMA_GRUPPO    = int(os.getenv('GROUP_ID', -1001457029650))

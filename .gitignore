@@ -91,3 +91,12 @@ cache/libretro_*.json
 # What CI's upgrade rehearsal runs: the patterns above would hide them from it
 !scripts/ci/seed_synthetic_players.py
 !scripts/verify_launch.py
+
+# Database dumps and copies: they hold the players, never commit one
+*.dump
+*.sql.gz
+*.backup
+*.backup_*
+*.db
+*.db.*
+backups/

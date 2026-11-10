@@ -9,6 +9,7 @@ try:
 except Exception as e:  # the test client needs its HTTP library installed (see requirements.dev.txt)
     raise unittest.SkipTest(f"fastapi test client unavailable: {e}")
 
+from nostr_sdk import Keys
 from database import Database
 from models.nostr import NostrBadgeOutbox, NostrLinkChallenge
 from models.character_ownership import CharacterOwnership
@@ -260,7 +261,7 @@ class TestWebApp(unittest.TestCase):
         self.assertEqual(client.post('/api/me/nostr/unlink', headers=SAME_SITE).status_code, 200)
 
     def test_nostr_rejects_a_bad_npub_without_sending_anything(self):
-        os.environ['NOSTR_NSEC'] = os.environ.get('NOSTR_NSEC') or 'nsec1REMOVED'
+        os.environ['NOSTR_NSEC'] = os.environ.get('NOSTR_NSEC') or Keys.generate().secret_key().to_bech32()
         r = self.logged_in().post('/api/me/nostr/start', json={'npub': 'not-an-npub'}, headers=SAME_SITE)
         self.assertEqual(r.status_code, 200)
         self.assertFalse(r.json()['ok'])

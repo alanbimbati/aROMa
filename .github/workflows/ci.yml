@@ -147,7 +147,7 @@ jobs:
         run: |
           python scripts/init_stack.py | tee second.log
           ! grep -q "Marvel launch" second.log
-          test "$(ls backups/pre_marvel_* | wc -l)" = "1"  # the launch's own backups: the folder holds an old dump too
+          test "$(ls backups/pre_marvel_* | wc -l)" = "1"
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
