@@ -156,7 +156,7 @@ class TransformationService:
                 # Logic: Check UserCharacters for valid bases
                 session_to_use = session if session else self.db.get_session()
                 try:
-                    from models.system import CharacterTransformation, UserCharacter
+                    from models.system import UserCharacter
                     valid_bases = session_to_use.query(CharacterTransformation.base_character_id).filter_by(transformed_character_id=500).all()
                     base_ids = [vb[0] for vb in valid_bases]
                     

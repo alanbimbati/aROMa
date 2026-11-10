@@ -1,5 +1,6 @@
 
 import unittest
+from tests.db_utils import truncate
 from unittest.mock import MagicMock, patch
 import sys
 import os
@@ -54,7 +55,7 @@ class TestCombatMechanics(unittest.TestCase):
         
         from sqlalchemy import text
         try:
-            self.session.execute(text("TRUNCATE combat_participation CASCADE"))
+            truncate(self.session, "combat_participation")
         except:
             self.session.execute(text("DELETE FROM combat_participation"))
         self.session.commit()

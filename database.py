@@ -70,7 +70,7 @@ class Database:
             # SQLite fallback (for testing)
             test_mode = os.getenv('TEST_DB') == '1'
             self.is_test_mode = test_mode
-            db_name = 'test_points.db' if test_mode else 'points.db'
+            db_name = os.getenv('SQLITE_PATH') or ('test_points.db' if test_mode else 'points.db')
             
             connection_string = f'sqlite:///{db_name}'
             

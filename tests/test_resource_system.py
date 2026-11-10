@@ -40,27 +40,25 @@ class TestResourceSystem(unittest.TestCase):
             self.assertEqual(len(drops), 0)
 
     def test_roll_resource_drop_mob(self):
-        # Mob drop scaling
-        # Level 5
-        with patch('random.random', return_value=0.0): 
-             with patch('random.randint', return_value=1):
-                 self.mock_session.execute.return_value.fetchone.return_value = (202, 'images/res.png')
-                 
-                 drops = self.service.roll_resource_drop(mob_level=5, mob_is_boss=False)
-                 self.assertEqual(len(drops), 1)
-                 self.assertEqual(drops[0][0], 202)
-                 
+        from datetime import datetime
+        # The service draws from an in-memory resource cache, not from a query per drop
+        cache = [{'id': 202, 'name': 'Res', 'rarity': 1, 'image': 'images/res.png'}]
+        with patch.object(CraftingService, '_resource_cache', cache), \
+             patch.object(CraftingService, '_resource_cache_timestamp', datetime.now()):
+            with patch('random.random', return_value=0.0), patch('random.randint', return_value=1):
+                drops = self.service.roll_resource_drop(mob_level=5, mob_is_boss=False)
+        self.assertEqual(drops, [(202, 1, 'images/res.png')])
+
     def test_add_resource_drop_new(self):
-        # Test adding a drop for a new resource
-        # return None for existing check
-        self.mock_session.execute.return_value.fetchone.return_value = None
-        
+        # No existing row for this user/resource: a new UserResource is added and committed
+        self.service.event_dispatcher = MagicMock()
+        self.mock_session.query.return_value.filter_by.return_value.first.return_value = None
+
         success = self.service.add_resource_drop(user_id=1, resource_id=10, quantity=1)
-        
+
         self.assertTrue(success)
-        # Verify insert called
-        # We can't easily check SQL string exact match but we can check call count
-        self.assertTrue(self.mock_session.execute.called)
+        added = self.mock_session.add.call_args[0][0]
+        self.assertEqual((added.user_id, added.resource_id, added.quantity), (1, 10, 1))
         self.mock_session.commit.assert_called()
 
 if __name__ == '__main__':

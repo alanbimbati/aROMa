@@ -48,32 +48,28 @@ class TestGuildBonuses(unittest.TestCase):
         self.assertEqual(multiplier, 1.0, "Multiplier should be 1.0 when Vigore is None")
 
     def test_brewery_potion_bonus_calculation(self):
-        """Test calculation of beer bonus based on brewery level"""
+        """The potion bonus is the best live beer_potion_bonus among the user's persisted status effects"""
+        import json, time
         user_id = 12345
-        
-        # Mock Guild logic inside get_user_guild
-        # We need to mock get_user_guild to return a dict with brewery_level
-        
-        # Case 1: No Guild -> 1.0
         mock_user = MagicMock()
-        mock_user.last_beer_usage = datetime.datetime.now()
         self.mock_session.query.return_value.filter_by.return_value.first.return_value = mock_user
-        
-        with patch.object(self.guild_service, 'get_user_guild', return_value=None):
-            bonus = self.guild_service.get_potion_bonus(user_id)
-            self.assertEqual(bonus, 1.0, "Should be 1.0 (no bonus) if not in guild")
-            
-        # Case 2: Guild with Brewery Lv 1
-        mock_user.last_beer_usage = datetime.datetime.now()
-        with patch.object(self.guild_service, 'get_user_guild', return_value={'brewery_level': 1, 'inn_level': 1}):
-            bonus = self.guild_service.get_potion_bonus(user_id)
-            self.assertEqual(bonus, 1.20, "Lv 1 Brewery should give +20% (1.20)")
-            
-        # Case 3: Brewery Lv 5
-        mock_user.last_beer_usage = datetime.datetime.now()
-        with patch.object(self.guild_service, 'get_user_guild', return_value={'brewery_level': 5, 'inn_level': 1}):
-            bonus = self.guild_service.get_potion_bonus(user_id)
-            self.assertEqual(bonus, 1.40, "Lv 5 Brewery should give +40% (1.40)")
+        later, earlier = time.time() + 3600, time.time() - 60
+
+        # No effects -> 1.0
+        mock_user.active_status_effects = None
+        self.assertEqual(self.guild_service.get_potion_bonus(user_id), 1.0, "Should be 1.0 (no bonus) without effects")
+
+        # A live +20% effect
+        mock_user.active_status_effects = json.dumps([{'effect': 'beer_potion_bonus', 'value': 20, 'expires_at': later}])
+        self.assertEqual(self.guild_service.get_potion_bonus(user_id), 1.20, "A live +20% effect should give 1.20")
+
+        # Expired effects are ignored, the best live one wins
+        mock_user.active_status_effects = json.dumps([
+            {'effect': 'beer_potion_bonus', 'value': 90, 'expires_at': earlier},
+            {'effect': 'beer_potion_bonus', 'value': 20, 'expires_at': later},
+            {'effect': 'beer_potion_bonus', 'value': 40, 'expires_at': later},
+        ])
+        self.assertEqual(self.guild_service.get_potion_bonus(user_id), 1.40, "Best live effect (+40%) should win")
 
     @patch('services.potion_service.Database')
     @patch('services.potion_service.UserService')

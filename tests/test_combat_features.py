@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 import datetime
 import json
 from database import Database
@@ -267,7 +267,7 @@ class TestCombatFeatures(unittest.TestCase):
         from utils.markup_utils import get_combat_markup
         
         # Mock get_mob_details (called by get_combat_markup for item check)
-        mock_pve.get_mob_details.return_value = {'id': 123, 'name': 'Mob1'}
+        mock_pve.get_mob_details.return_value = MagicMock(id=123)
         
         # 1. Test with 1 mob
         mock_pve.get_active_mobs_count.return_value = 1

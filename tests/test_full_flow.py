@@ -316,7 +316,7 @@ class TestFullFlow(unittest.TestCase):
         # Check active
         active = self.trans_service.get_active_transformation(self.user, session=self.session)
         self.assertIsNotNone(active)
-        self.assertEqual(active.id, trans.id)
+        self.assertEqual(active['id'], trans.id)
         
         # Check bonuses
         bonuses = self.trans_service.get_transformation_bonuses(self.user, session=self.session)

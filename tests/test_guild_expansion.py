@@ -1,4 +1,5 @@
 import unittest
+from tests.db_utils import truncate
 from sqlalchemy import text
 import datetime
 import sys
@@ -27,10 +28,10 @@ class TestGuildExpansion(unittest.TestCase):
     def setUp(self):
         session = self.db.get_session()
         # Clean up using CASCADE to handle all dependencies
-        session.execute(text("TRUNCATE TABLE utente, guilds, guild_members, crafting_queue, user_refined_materials, parry_states RESTART IDENTITY CASCADE"))
+        truncate(session, "utente", "guilds", "guild_members", "crafting_queue", "user_refined_materials", "parry_states")
         session.commit()
         
-        u1 = Utente(id_telegram=self.u1_id, nome="Leader", livello=10, points=5000, health=100, max_health=100, current_hp=50, mana=20, max_mana=100)
+        u1 = Utente(id_telegram=self.u1_id, nome="Leader", livello=10, points=20000, health=100, max_health=100, current_hp=50, mana=20, max_mana=100)
         u2 = Utente(id_telegram=self.u2_id, nome="Member", livello=5, points=1000, health=100, max_health=100, current_hp=50, mana=20, max_mana=100)
         session.add(u1)
         session.add(u2)
@@ -44,8 +45,8 @@ class TestGuildExpansion(unittest.TestCase):
         
         session = self.db.get_session()
         user = session.query(Utente).filter_by(id_telegram=self.u1_id).first()
-        # Mock resting_since to 10 minutes ago
-        user.resting_since = datetime.datetime.now() - datetime.timedelta(minutes=10)
+        # 9.5 minutes ago: a started minute counts as a whole one, so this reads as 10
+        user.resting_since = datetime.datetime.now() - datetime.timedelta(minutes=9, seconds=30)
         session.commit()
         
         status = self.user_service.get_resting_status(self.u1_id)
@@ -80,8 +81,8 @@ class TestGuildExpansion(unittest.TestCase):
         # Ensure guild exists
         self.guild_service.create_guild(self.u1_id, "BordelloGuild")
         
-        # Deposit wumpa for upgrade
-        self.guild_service.deposit_wumpa(self.u1_id, 2000)
+        # Deposit the 15000 wumpa the first level costs
+        self.guild_service.deposit_wumpa(self.u1_id, 15000)
         
         # Upgrade bordello
         success, msg = self.guild_service.upgrade_bordello(self.u1_id)

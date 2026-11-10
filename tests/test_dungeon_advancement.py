@@ -1,5 +1,6 @@
 
 import unittest
+from tests.db_utils import truncate
 import sys
 import os
 import datetime
@@ -42,10 +43,10 @@ class TestDungeonAdvancement(unittest.TestCase):
         
         from sqlalchemy import text
         try:
-            self.session.execute(text("TRUNCATE dungeon_participant CASCADE"))
-            self.session.execute(text("TRUNCATE combat_participation CASCADE"))
-            self.session.execute(text("TRUNCATE dungeon_progress CASCADE"))
-            self.session.execute(text("TRUNCATE user_resources CASCADE"))
+            truncate(self.session, "dungeon_participant")
+            truncate(self.session, "combat_participation")
+            truncate(self.session, "dungeon_progress")
+            truncate(self.session, "user_resources")
         except:
             pass
         self.session.commit()
@@ -62,13 +63,13 @@ class TestDungeonAdvancement(unittest.TestCase):
         d_id, msg = self.dungeon_service.create_dungeon(self.chat_id, 1, self.user_id, session=self.session)
         self.assertIsNotNone(d_id)
         
-        # 2. Start dungeon (spawns 3 saibaman)
+        # 2. Start dungeon (spawns 5 saibaman)
         success, msg, events = self.dungeon_service.start_dungeon(self.chat_id, session=self.session)
         self.assertTrue(success)
         
         # 3. Verify mobs exist
         mobs = self.session.query(Mob).filter_by(dungeon_id=d_id, is_dead=False).all()
-        self.assertEqual(len(mobs), 3)
+        self.assertEqual(len(mobs), 5)
         
         # 4. Perform AoE attack that kills them all
         # We'll set their health to 1 to ensure they die

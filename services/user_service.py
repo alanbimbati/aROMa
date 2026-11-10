@@ -561,7 +561,8 @@ class UserService:
                 event_type='point_gain',
                 user_id=user_id,
                 value=points,
-                context={'is_drop': is_drop, 'new_total': utente.points}
+                context={'is_drop': is_drop, 'new_total': utente.points},
+                session=None if local_session else session
             )
         
         if local_session:
@@ -1318,7 +1319,7 @@ class UserService:
                 event_type='minutes_rested_inn',
                 user_id=user_id,
                 value=status['minutes'],
-                session=None
+                session=None if local_session else session
             )
             
         # 2. HP Restored
@@ -1327,7 +1328,7 @@ class UserService:
                 event_type='hp_restored_inn',
                 user_id=user_id,
                 value=status['hp'],
-                session=None
+                session=None if local_session else session
             )
             
         # 3. Mana Restored
@@ -1336,7 +1337,7 @@ class UserService:
                 event_type='mana_restored_inn',
                 user_id=user_id,
                 value=status['mana'],
-                session=None
+                session=None if local_session else session
             )
             
         # 4. Sonno Leggero (Count rests with >= 10 HP)

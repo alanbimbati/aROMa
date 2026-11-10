@@ -105,7 +105,7 @@ class TestRefinery(unittest.TestCase):
         if other:
             res = self.crafting.start_refinement(self.test_guild_id, self.test_user_id, other[0], 10)
             self.assertFalse(res['success'])
-            self.assertEqual(res['error'], "Questo materiale non può essere raffinato oggi!")
+            self.assertEqual(res['error'], "Questo materiale non può essere lavorato oggi!")
             print("✅ Correctly blocked refinement of non-daily resource")
         session.close()
 

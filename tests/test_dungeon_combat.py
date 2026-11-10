@@ -1,5 +1,6 @@
 
 import unittest
+from tests.db_utils import truncate
 import sys
 import os
 import datetime
@@ -52,8 +53,8 @@ class TestNameError(unittest.TestCase):
         
         from sqlalchemy import text
         try:
-            self.session.execute(text("TRUNCATE dungeon_participant CASCADE"))
-            self.session.execute(text("TRUNCATE combat_participation CASCADE"))
+            truncate(self.session, "dungeon_participant")
+            truncate(self.session, "combat_participation")
         except:
             pass
         self.session.commit()

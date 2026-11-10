@@ -969,6 +969,8 @@ class PvEService:
                 'damage': mob.attack_damage,
                 'speed': mob_speed,
                 'resistance': mob.resistance,
+                'mana': mob.mana,
+                'max_mana': mob.max_mana,
                 'cooldown_total': round(cooldown_seconds, 1),
                 'next_attack_in': round(next_attack_in, 1),
                 'is_boss': mob.is_boss

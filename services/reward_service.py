@@ -355,7 +355,7 @@ class RewardService:
                         resource_name = new_session.execute(text("SELECT name FROM resources WHERE id = :id"), {"id": resource_id}).scalar()
                 
                 # Add drop
-                success = self.crafting_service.add_resource_drop(user_id, resource_id, quantity=qty, source="mob")
+                success = self.crafting_service.add_resource_drop(user_id, resource_id, quantity=qty, source="mob", session=session)
                 print(f"[DEBUG] RewardService: Added drop {resource_id} x{qty} - Success: {success}")
                 
                 if success and resource_name:

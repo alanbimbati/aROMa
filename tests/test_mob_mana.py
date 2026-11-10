@@ -87,7 +87,7 @@ class TestMobBossMana:
     def test_mob_spawns_with_character_based_mana(self, pve_service):
         """Verify mobs spawn with character-based mana (3x multiplier)"""
         # Spawn a specific mob
-        success, msg, mob_id = pve_service.spawn_specific_mob(mob_name="Goomba", reference_level=10)
+        success, msg, mob_id = pve_service.spawn_specific_mob(mob_name="Goomba", level=10)
         
         assert success, f"Failed to spawn mob: {msg}"
         assert mob_id is not None
@@ -115,7 +115,7 @@ class TestMobBossMana:
     def test_boss_spawns_with_higher_mana_multiplier(self, pve_service):
         """Verify bosses spawn with 5x mana multiplier"""
         # Spawn a specific boss
-        success, msg, boss_id = pve_service.spawn_boss(boss_name="Bowser", reference_level=20)
+        success, msg, boss_id = pve_service.spawn_boss(boss_name="Bowser", level=20)
         
         assert success, f"Failed to spawn boss: {msg}"
         assert boss_id is not None

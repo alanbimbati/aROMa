@@ -1,4 +1,5 @@
 import unittest
+from tests.db_utils import truncate
 from sqlalchemy import text
 import datetime
 from services.guild_service import GuildService
@@ -15,7 +16,7 @@ class TestGuildBuffs(unittest.TestCase):
         self.session = self.db.get_session()
         
         # Clean up using CASCADE
-        self.session.execute(text("TRUNCATE TABLE utente, guilds, guild_members, crafting_queue, user_refined_materials, parry_states RESTART IDENTITY CASCADE"))
+        truncate(self.session, "utente", "guilds", "guild_members", "crafting_queue", "user_refined_materials", "parry_states")
         self.session.commit()
         
         # Create test user
@@ -43,7 +44,8 @@ class TestGuildBuffs(unittest.TestCase):
         self.assertEqual(bonus, 1.0)
         
         # Drink beer
-        self.guild_service.buy_craft_beer(self.user_id)
+        success, _ = self.guild_service.buy_guild_drink(self.user_id, 'beer')
+        self.assertTrue(success)
         
         # Bonus should be active
         bonus = self.guild_service.get_potion_bonus(self.user_id)
@@ -51,7 +53,11 @@ class TestGuildBuffs(unittest.TestCase):
         
         # Mock time forward 31 minutes
         user = self.session.query(Utente).filter_by(id_telegram=self.user_id).first()
-        user.last_beer_usage = datetime.datetime.now() - datetime.timedelta(minutes=31)
+        import json
+        effects = json.loads(user.active_status_effects)
+        for effect in effects:
+            effect['expires_at'] = (datetime.datetime.now() - datetime.timedelta(minutes=1)).timestamp()
+        user.active_status_effects = json.dumps(effects)
         self.session.commit()
         
         # Bonus should be gone
@@ -130,12 +136,12 @@ class TestGuildBuffs(unittest.TestCase):
         self.session.commit()
 
         # Usage
-        success, msg = self.guild_service.buy_craft_beer(user_id)
+        success, msg = self.guild_service.buy_guild_drink(user_id, 'beer')
         self.assertTrue(success)
-        self.assertIn("bevuto una Birra Artigianale", msg)
+        self.assertIn("Hai bevuto **Birra Chiara**", msg)
 
         # Verify Potion Bonus Multiplier
-        # Formula: 15 + (brew_level * 5)
+        # Formula: 15 + (brew_level * 5), scaled by the drink (beer x1.0)
         # Lv 10 Brewery -> 15 + 50 = 65% -> 1.65 multiplier
         bonus = self.guild_service.get_potion_bonus(user_id)
         self.assertAlmostEqual(bonus, 1.65, places=2, msg="Level 10 Brewery should give 65% bonus (1.65x)")

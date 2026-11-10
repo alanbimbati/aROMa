@@ -7,6 +7,15 @@ from services.dungeon_service import DungeonService
 import datetime
 import json
 
+def frozen(moment):
+    """A stand-in for the `datetime` class the service imports, whose now() is fixed."""
+    class Frozen(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return moment
+    return Frozen
+
+
 class TestDungeonScheduler(unittest.TestCase):
     def setUp(self):
         self.db = Database()
@@ -36,18 +45,13 @@ class TestDungeonScheduler(unittest.TestCase):
         session.commit()
         session.close()
 
-    @patch('services.dungeon_service.datetime')
-    def test_schedule_creation(self, mock_datetime):
+    def test_schedule_creation(self):
         """Test that a dungeon is scheduled if none exists today"""
         # Set time to 10:00 AM
         fixed_now = datetime.datetime(2025, 1, 1, 10, 0, 0)
-        mock_datetime.datetime.now.return_value = fixed_now
-        mock_datetime.timedelta = datetime.timedelta # Keep real timedelta
-        mock_datetime.datetime.combine = datetime.datetime.combine # Keep real combine
-        mock_datetime.time = datetime.time # Keep real time
-        
+
         # Mock random so we know the scheduled time (delay_mins = 30)
-        with patch('random.randint', return_value=30):
+        with patch('services.dungeon_service.datetime', frozen(fixed_now)), patch('random.randint', return_value=30):
             self.dungeon_service.check_daily_dungeon_trigger(self.test_chat_id)
             
         # Verify DB
@@ -62,8 +66,7 @@ class TestDungeonScheduler(unittest.TestCase):
         self.assertEqual(dungeon.scheduled_for, expected_time)
         session.close()
 
-    @patch('services.dungeon_service.datetime')
-    def test_hype_trigger(self, mock_datetime):
+    def test_hype_trigger(self):
         """Test that hype starts when scheduled time triggers"""
         # Setup: Dungeon scheduled for 12:00
         session = self.db.get_session()
@@ -83,10 +86,9 @@ class TestDungeonScheduler(unittest.TestCase):
         
         # Set time to 12:01
         fixed_now = datetime.datetime(2025, 1, 1, 12, 1, 0)
-        mock_datetime.datetime.now.return_value = fixed_now
-        mock_datetime.timedelta = datetime.timedelta
 
-        result = self.dungeon_service.check_daily_dungeon_trigger(self.test_chat_id)
+        with patch('services.dungeon_service.datetime', frozen(fixed_now)):
+            result = self.dungeon_service.check_daily_dungeon_trigger(self.test_chat_id)
         
         self.assertEqual(result, "DUNGEON_PREANNOUNCED")
         
@@ -103,9 +105,8 @@ class TestDungeonScheduler(unittest.TestCase):
         self.assertEqual(d.hype_start_time, fixed_now)
         session.close()
 
-    @patch('services.dungeon_service.datetime')
-    def test_auto_start_after_hype(self, mock_datetime):
-        """Test that dungeon starts and users auto-join after hype"""
+    def test_auto_start_after_hype(self):
+        """Test that the dungeon starts after hype with the users who joined during registration"""
         # Setup: Dungeon with hype active since 12:00
         session = self.db.get_session()
         hype_start = datetime.datetime(2025, 1, 1, 12, 0, 0)
@@ -123,35 +124,26 @@ class TestDungeonScheduler(unittest.TestCase):
         session.add(d)
         session.commit()
         d_id = d.id
+        # Only users who joined during registration take part: inactive ones are not pulled in
+        session.add_all([DungeonParticipant(dungeon_id=d_id, user_id=901), DungeonParticipant(dungeon_id=d_id, user_id=902)])
+        session.commit()
         session.close()
         
-        # Set time to 12:06 (Hype duration is 5 mins)
+        # Set time to 12:06 (Hype duration is 2 mins)
         fixed_now = datetime.datetime(2025, 1, 1, 12, 6, 0)
-        mock_datetime.datetime.now.return_value = fixed_now
-        mock_datetime.timedelta = datetime.timedelta 
         
         # Need to patch spawn_step to avoid implicit database calls needing real mob data
         # or we verify mob spawning separately.
         # But we want to test auto-join count.
         # Let's mock spawn_step.
         
-        with patch.object(self.dungeon_service, 'spawn_step', return_value=([], [])) as mock_spawn:
+        with patch('services.dungeon_service.datetime', frozen(fixed_now)), \
+             patch.object(self.dungeon_service, 'spawn_step', return_value=([], [])) as mock_spawn:
             result = self.dungeon_service.check_daily_dungeon_trigger(self.test_chat_id)
             
             self.assertIsInstance(result, dict)
             self.assertEqual(result['type'], "DUNGEON_STARTED")
-            # We created 2 test users (901, 902), plus potentially others in DB?
-            # get_session().query(Utente).all() returns ALL users.
-            # Tests run on test DB which should be clean or have only our users.
-            # But test_dungeon_logic might have left users if not cleaned up properly?
-            # Our tearDown/setUp cleans up.
-            # But duplicate users with same ID? 'id_telegram' is primary key usually? 
-            # Check models/user.py? Usually id is PK, id_telegram is Unique.
-            
-            # Since we cleared 901/902, and added them, we expect at least 2.
-            # But query(Utente).all() might return more from other tests if DB not cleared.
-            # We check that >= 2
-            self.assertTrue(result['participant_count'] >= 2)
+            self.assertEqual(result['participant_count'], 2)
             
             # Verify DB status
             session = self.db.get_session()
