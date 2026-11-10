@@ -38,7 +38,15 @@ def test_wishes():
     
     print(f"User created with exp=None, points=None")
     
+    from services.item_service import ItemService
+    def give_spheres():
+        # A Shenron wish consumes the seven dragon balls
+        for i in range(1, 8):
+            ItemService().add_item(test_user_id, f"La Sfera del Drago Shenron {i}", session=session)
+        session.commit()
+
     # Test Shenron Wumpa Wish
+    give_spheres()
     print("Testing Shenron Wumpa wish...")
     msg = wish_service.grant_wish(user, "wumpa", "Shenron")
     print(f"  Result: {msg}")
@@ -50,6 +58,7 @@ def test_wishes():
     assert user.points is not None and user.points > 0
     
     # Test Shenron EXP Wish
+    give_spheres()
     print("Testing Shenron EXP wish...")
     msg = wish_service.grant_wish(user, "exp", "Shenron")
     print(f"  Result: {msg}")

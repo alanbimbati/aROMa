@@ -84,8 +84,9 @@ class TestRewardDistribution(unittest.TestCase):
         
         # Check message content
         print(f"DEBUG: Kill Message:\n{msg}")
-        self.assertIn("Alan Bimbati", msg)
-        self.assertIn("Viktor", msg)
+        # Players are mentioned by their @username, which pings them in the group
+        self.assertIn("@user1", msg)
+        self.assertIn("@user2", msg)
         self.assertIn("Ricompense Distribuite", msg)
         # Check for the damage message
         self.assertIn("dmg", msg) 

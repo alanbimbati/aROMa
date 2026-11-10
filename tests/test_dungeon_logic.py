@@ -150,22 +150,25 @@ class TestDungeonLogic(unittest.TestCase):
         session = self.db.get_session()
         dungeon = session.query(Dungeon).filter_by(id=d_id).first()
         self.assertEqual(dungeon.current_stage, 2)
-        
-        # Kill boss
-        boss = session.query(Mob).filter_by(dungeon_id=d_id, is_dead=False).first()
-        self.assertIsNotNone(boss, "Boss not spawned!")
-        boss_id = boss.id
-        session.close() # CLOSE BEFORE CALLING SERVICE
-        
-        # Re-fetch user for the boss fight
-        u_temp = session.query(Utente).filter_by(id_telegram=13001).first()
-        u_temp.last_attack_time = datetime.datetime.now() - datetime.timedelta(minutes=5)
-        session.commit()
-        
-        success, msg, extra = self.pve_service.attack_mob(u_temp, base_damage=99999, mob_id=boss_id)
-        print(f"DEBUG: Boss Kill Msg: {msg}")
-        self.assertTrue(success)
-        
+        session.close()
+
+        # Clear every remaining stage (mobs, then the bosses) until the dungeon is over
+        for _ in range(20):
+            session = self.db.get_session()
+            status = session.query(Dungeon).filter_by(id=d_id).first().status
+            mob = session.query(Mob).filter_by(dungeon_id=d_id, is_dead=False).first()
+            mob_id = mob.id if mob else None
+            u_temp = session.query(Utente).filter_by(id_telegram=13001).first()
+            u_temp.last_attack_time = datetime.datetime.now() - datetime.timedelta(minutes=5)
+            session.commit()
+            session.close()
+            if status == "completed" or mob_id is None:
+                break
+
+            u_temp = self.user_service.get_user(13001)
+            success, msg, extra = self.pve_service.attack_mob(u_temp, base_damage=99999, mob_id=mob_id)
+            self.assertTrue(success, f"Attack failed for mob {mob_id}: {msg}")
+
         # Check completed
         session = self.db.get_session()
         dungeon = session.query(Dungeon).filter_by(id=d_id).first()

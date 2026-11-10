@@ -1346,7 +1346,7 @@ class UserService:
                 event_type='rest_sessions_10hp',
                 user_id=user_id,
                 value=1, # Increment count by 1
-                session=session
+                session=None if local_session else session
             )
             
         return True, f"Hai smesso di riposare. Hai recuperato {status['hp']} HP e {status['mana']} Mana in {status['minutes']} minuti."

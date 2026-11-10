@@ -35,6 +35,9 @@ class TestProfessionAchievements(unittest.TestCase):
         self.cultivation_service = CultivationService()
         self.alchemy_service = AlchemyService()
         self.achievement_tracker = AchievementTracker()
+        # Load the definitions now: doing it lazily inside a test would write while its session holds pending events
+        self.achievement_tracker._ensure_active_achievement_definitions()
+        self.achievement_tracker.load_from_json()  # the profession achievements live here, loaded at boot
         
         # We assume achievements already exist in the target DB
         # Re-open session to ensure clean state
