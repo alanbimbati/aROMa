@@ -1,3 +1,4 @@
+import re
 import telebot
 from telebot import types, util
 from telebot.apihelper import ApiTelegramException
@@ -58,7 +59,11 @@ from services.cultivation_service import CultivationService
 stat_service = StatBuildService()
 
 from utils.markup_utils import get_combat_markup
-from utils.ephemeral import send_ephemeral_reply, player_combat_report
+from utils.ephemeral import send_ephemeral_reply, player_combat_report, is_web_call, WEB_CALL_PREFIX
+from utils.markup_utils import set_arena_link
+from services import web_actions
+
+_web_answers = {}
 from utils.ghost_cleanup import cleanup_ghost_users
 from services.leveling_service import LevelingService
 from services.boot_service import BootService
@@ -128,6 +133,11 @@ def get_combat_link():
 
 def safe_answer_callback(call_id, text=None, show_alert=False):
     """Safely answer a callback query, ignoring timeout errors"""
+    if is_web_call(call_id):
+        # A button pressed in the web app: the answer goes back to the page, Telegram knows nothing of it.
+        if text:
+            _web_answers.setdefault(call_id, {}).update(text=text, alert=show_alert)
+        return
     try:
         bot.answer_callback_query(call_id, text=text, show_alert=show_alert)
     except Exception as e:
@@ -137,6 +147,52 @@ def safe_answer_callback(call_id, text=None, show_alert=False):
             pass
         else:
             print(f"[ERROR] Failed to answer callback {call_id}: {e}")
+
+def web_detail(call, text):
+    """What an action did, for the web page that asked for it (the chat reads it on the mob's card)."""
+    if is_web_call(call.id):
+        _web_answers.setdefault(call.id, {})['detail'] = text
+
+
+def run_web_action(action):
+    """Play a fight button pressed in the web app through the same handler as the chat's buttons."""
+    from types import SimpleNamespace
+    call_id = f"{WEB_CALL_PREFIX}{action['id']}"
+    ok, text = False, "Qualcosa non ha funzionato, riprova."
+    try:
+        mob = pve_service.get_mob_details(int(action['data'].rsplit('|', 1)[1]))
+        chat = SimpleNamespace(id=action['chat_id'], type='private' if action['chat_id'] > 0 else 'supergroup')
+        message = SimpleNamespace(chat=chat, message_id=getattr(mob, 'last_message_id', None), photo=True,
+                                  content_type='photo', from_user=None, message_thread_id=None, text=None,
+                                  reply_markup=None)
+        sender = SimpleNamespace(id=action['user_id'], username=None, first_name=None, last_name=None)
+        callback_query(SimpleNamespace(id=call_id, data=action['data'], from_user=sender, message=message))
+        answer = _web_answers.get(call_id, {})
+        text = answer.get('detail') or answer.get('text') or "Fatto."
+        # The chat uses alerts for refusals; the Scouter sheet is the one alert that is an answer.
+        ok = bool(answer.get('detail')) or not answer.get('alert') or text.startswith('🔍')
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"[WEB] action {action} failed: {e}")
+    finally:
+        _web_answers.pop(call_id, None)
+    # The page draws the mob itself: the chat's text card would only repeat it.
+    text = re.sub(r'\n*╔.*?╝[^\n]*', '', text, flags=re.S)
+    plain = text.replace('**', '').replace('*', '').replace('`', '').replace('\\_', '_')
+    web_actions.complete(action['id'], ok, plain)
+
+
+def web_action_worker():
+    while True:
+        try:
+            for action in web_actions.claim_pending():
+                threading.Thread(target=run_web_action, args=(action,), daemon=True).start()
+        except Exception as e:
+            print(f"[WEB] action queue unreadable: {e}")
+            time.sleep(5)
+        time.sleep(0.4)
+
 
 def send_combat_report(call, cooldown_multiplier=1):
     """After an action in the group, tell the player alone their HP, mana and cooldown."""
@@ -446,6 +502,10 @@ def send_welcome(message):
         welcome_msg = f"👋 Bentornato, {utente.game_name or nome}!\n\n"
         welcome_msg += "Usa i bottoni qui sotto per navigare nel gioco!\n🌐 Il resto è nel pannello: /pannello"
     
+    if re.match(r'/start(?:@\w+)?\s+arena$', (message.text or '').strip()):
+        send_arena_button(message)
+        return
+
     # A link from the web app's games catalogue: show that game's card (information only)
     from services.game_info import parse_start_payload
     game_id = parse_start_payload(message.text)
@@ -454,6 +514,35 @@ def send_welcome(message):
 
     # Send welcome message with main menu
     bot.send_message(message.chat.id, welcome_msg, reply_markup=get_main_menu(), parse_mode='markdown')
+
+
+def bot_start_link(payload):
+    return f"https://t.me/{bot.get_me().username}?start={payload}"
+
+
+@bot.message_handler(commands=['arena'])
+def send_arena_button(message):
+    """The fights as a page inside Telegram: mobs, buttons and the player's state, updated in place."""
+    if message.chat.type != 'private':
+        # Telegram opens a page inside the chat only from the private chat with the bot: send the player there.
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("⚔️ Apri l'Arena", url=os.getenv('ARENA_LINK') or bot_start_link('arena')))
+        bot.reply_to(message, "⚔️ L'Arena si apre dalla chat privata con il bot.", reply_markup=markup)
+        return
+    try:
+        from webapp.auth import webapp_url
+        url = f"{webapp_url()}/?page=arena"
+    except Exception as e:
+        print(f"[WEB] no address for the Arena (is WEBAPP_URL set to the public address?): {e}")
+        url = ""
+    if not url.startswith("https://"):
+        bot.reply_to(message, "L'Arena non è disponibile al momento.")
+        return
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("⚔️ Apri l'Arena", web_app=types.WebAppInfo(url)))
+    bot.send_message(message.chat.id, "⚔️ **Arena**\nI nemici del gruppo e dei tuoi dungeon in una pagina: la vita, "
+                     "i bottoni e il tuo stato si aggiornano lì, senza nuovi messaggi.", reply_markup=markup,
+                     parse_mode='markdown')
 
 
 def send_game_card(chat_id, game_id):
@@ -10391,6 +10480,7 @@ def callback_query(call):
             image_path = extra_data.get('image_path')
             old_msg_id = extra_data.get('delete_message_id')
             
+            web_detail(call, msg)
             mention = get_mention_markdown(utente.id_telegram, utente.username if utente.username else utente.nome)
             full_msg = f"{mention}\n{msg}"
             
@@ -10500,6 +10590,7 @@ def callback_query(call):
             special_name = character.get('special_attack_name', 'Attacco Speciale')
             msg = f"✨ **{special_name}!** ✨\n{msg}"
             
+            web_detail(call, msg)
             mention = get_mention_markdown(utente.id_telegram, utente.username if utente.username else utente.nome)
             full_msg = f"{mention}\n{msg}"
             
@@ -10543,6 +10634,7 @@ def callback_query(call):
         
         if success:
             safe_answer_callback(call.id, "🏃 Fuga riuscita!")
+            web_detail(call, msg)
             
             # If successful, we might want to update the message or delete it
             # But flee_mob might return a message saying "You fled from X"
@@ -10635,6 +10727,7 @@ def callback_query(call):
                     except:
                         pass
             
+            web_detail(call, msg)
             mention = get_mention_markdown(utente.id_telegram, utente.username if utente.username else utente.nome)
             full_msg = f"{mention}\n{msg}"
             
@@ -10832,6 +10925,7 @@ def callback_query(call):
                 safe_answer_callback(call.id, "🛡️ Difesa e Recupero!")
             except Exception:
                 pass
+            web_detail(call, msg)
             
             mention = get_mention_markdown(utente.id_telegram, utente.username if utente.username else utente.nome)
             full_msg = f"{mention}\n{msg}"
@@ -11898,17 +11992,24 @@ if __name__ == '__main__':
     schedule.every(30).seconds.do(lambda: achievement_tracker.process_achievements_job())
 
     threading.Thread(target=lambda: schedule_checker(), daemon=True).start()
+    threading.Thread(target=web_action_worker, daemon=True).start()
+    schedule.every().day.at("04:30").do(web_actions.purge)
 
     # 6️⃣ Avvia il bot
     try:
         try:
             bot.set_my_commands([
                 types.BotCommand("pannello", "Accedi al pannello aROMa"),
+                types.BotCommand("arena", "Combatti da una pagina che si aggiorna"),
                 types.BotCommand("menu", "Mostra i bottoni"),
                 types.BotCommand("help", "Elenco dei comandi"),
             ])
         except Exception as e:
             print(f"[BOT] could not register the command list: {e}")
+        try:
+            set_arena_link(os.getenv('ARENA_LINK') or bot_start_link('arena'))
+        except Exception as e:
+            print(f"[BOT] no Arena button under the mobs: {e}")
         bot.infinity_polling(timeout=10, long_polling_timeout=5)
     except Exception as e:
         print(f"Bot polling crash: {e}")

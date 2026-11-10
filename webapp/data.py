@@ -99,6 +99,10 @@ def _user(session, user_id):
     return session.query(Utente).filter_by(id_telegram=user_id).first()
 
 
+def is_player(user_id):
+    return _with_session(lambda session: _user(session, user_id) is not None)
+
+
 def title_sources(session):
     """title text -> the achievement tier that awards it, and the saga that achievement belongs to."""
     seasonal = _seasonal_groups()
