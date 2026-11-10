@@ -11,9 +11,17 @@ def ephemeral_enabled():
     return os.getenv('EPHEMERAL_COMBAT', '1').strip() == '1'
 
 
+WEB_CALL_PREFIX = "web:"
+
+
+def is_web_call(call_id):
+    """A button pressed in the web app, played by the bot as if it were a callback: Telegram has no such query."""
+    return str(call_id).startswith(WEB_CALL_PREFIX)
+
+
 def send_ephemeral_reply(bot, call, text, parse_mode='Markdown'):
     """False means the player saw nothing and the caller must fall back to what it did before."""
-    if not ephemeral_enabled():
+    if not ephemeral_enabled() or is_web_call(call.id):
         return False
     # No chat_id on purpose: with it, a server that ignores the ephemeral part would post in the group.
     params = {'text': text, 'ephemeral_message_parameters': json.dumps({'callback_query_id': call.id})}

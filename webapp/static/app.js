@@ -37,7 +37,19 @@ async function api(path) {
 }
 
 // ---------- boot ----------
+// Opened inside Telegram as a Mini App: Telegram's signed data logs the player in, and ?page= says where to land
+// (Telegram keeps the address fragment for itself, so the page cannot be named there).
+async function telegramEntry() {
+  const tg = window.Telegram && window.Telegram.WebApp;
+  if (!tg || !tg.initData) return;
+  try { tg.ready(); tg.expand(); } catch (e) { /* an old client: the page works anyway */ }
+  const page = new URLSearchParams(location.search).get('page');
+  history.replaceState(null, '', `${location.pathname}${location.search}#/${page || 'arena'}`);
+  try { await post('/api/login/telegram', { init_data: tg.initData }); } catch (e) { /* not a player yet: the login card says how */ }
+}
+
 async function boot() {
+  await telegramEntry();
   renderTabs();
   $('#view').innerHTML = '<div class="grid">' + '<div class="skeleton"></div>'.repeat(8) + '</div>';
   try {
@@ -63,7 +75,7 @@ function renderWho() {
 }
 
 const allocLabels = { health: 'Salute', mana: 'Mana', damage: 'Danno', speed: 'Velocità', resistance: 'Resistenza', crit: 'Critico' };
-const TABS = [['personaggi', 'Personaggi'], ['profilo', 'Profilo'], ['statistiche', 'Statistiche'], ['achievement', 'Achievement'], ['stagione', 'Stagione'], ['dungeon', 'Dungeon'], ['inventario', 'Inventario'], ['equipaggiamento', 'Equipaggiamento'], ['gilda', 'Gilda'], ['guide', 'Guide'], ['giochi', 'Giochi']];
+const TABS = [['personaggi', 'Personaggi'], ['profilo', 'Profilo'], ['statistiche', 'Statistiche'], ['achievement', 'Achievement'], ['stagione', 'Stagione'], ['dungeon', 'Dungeon'], ['arena', 'Arena'], ['inventario', 'Inventario'], ['equipaggiamento', 'Equipaggiamento'], ['gilda', 'Gilda'], ['guide', 'Guide'], ['giochi', 'Giochi']];
 function renderTabs(active) {
   $('#tabs').innerHTML = TABS.map(([k, label]) => `<a href="#/${k}" class="${k === active ? 'on' : ''}">${label}</a>`).join('');
 }
@@ -73,9 +85,10 @@ window.addEventListener('hashchange', route);
 async function route() {
   const [, page = 'personaggi', arg] = location.hash.split('/');
   closeModal(false);
+  stopArena();
   if (page !== 'statistiche') state.stats = null; // fresh figures every time the page is opened
   renderTabs(page === 'personaggio' ? 'personaggi' : page);
-  const views = { personaggi: viewCharacters, personaggio: viewCharacters, profilo: viewProfile, statistiche: viewStats, achievement: viewAchievements, stagione: viewSeason, dungeon: viewDungeons, inventario: viewInventory, equipaggiamento: viewEquipment, gilda: viewGuild, guide: viewGuides, giochi: viewGames };
+  const views = { personaggi: viewCharacters, personaggio: viewCharacters, profilo: viewProfile, statistiche: viewStats, achievement: viewAchievements, stagione: viewSeason, dungeon: viewDungeons, arena: viewArena, inventario: viewInventory, equipaggiamento: viewEquipment, gilda: viewGuild, guide: viewGuides, giochi: viewGames };
   const view = views[page] || viewCharacters;
   try {
     await view(arg);
@@ -704,6 +717,126 @@ async function viewDungeons() {
     toast(r.message, r.ok);
     if (r.ok) setTimeout(viewDungeons, 600); else b.disabled = false;
   }));
+}
+
+// ---------- arena: the fights as a page that updates in place ----------
+// Cards are patched, not redrawn: a health bar that keeps its element slides to the new value.
+const arena = { poll: null, tick: null, data: null, at: 0, busy: false, log: [] };
+const ARENA_COOLDOWN = new Set(['attack', 'special', 'aoe', 'special_aoe', 'defend']);
+
+function stopArena() {
+  clearInterval(arena.poll); clearInterval(arena.tick);
+  arena.poll = arena.tick = null;
+}
+
+async function viewArena() {
+  if (!state.me) throw Object.assign(new Error('login'), { login: true });
+  arena.log = [];
+  $('#view').innerHTML = `<h1>Arena</h1><div class="ar">
+    <div class="panel ar-me"><div class="row spread"><b id="ar-name"></b><span class="row" id="ar-status"></span></div>
+      <div class="ar-stat"><span>❤️</span><div class="bar hp"><i id="ar-hp"></i></div><span id="ar-hp-n"></span></div>
+      <div class="ar-stat"><span>💙</span><div class="bar mana"><i id="ar-mana"></i></div><span id="ar-mana-n"></span></div></div>
+    <div class="ar-log" id="ar-log" aria-live="polite"></div>
+    <div class="ar-mobs" id="ar-mobs"></div><div class="panel empty" id="ar-empty" hidden></div></div>`;
+  $('#ar-mobs').addEventListener('click', arenaClick);
+  setArena(await api('/api/combat'));
+  arena.poll = setInterval(async () => {
+    if (document.hidden || arena.busy) return;
+    try { setArena(await api('/api/combat')); } catch (e) { /* a missed beat: the next one catches up */ }
+  }, 2500);
+  arena.tick = setInterval(tickArena, 500);
+}
+
+function setArena(data) {
+  if (!$('#ar-mobs')) return;
+  arena.data = data; arena.at = Date.now();
+  paintArena();
+}
+
+const arenaReadyIn = () => Math.max(0, (arena.data.player.ready_in || 0) - (Date.now() - arena.at) / 1000);
+const pct = (v, max) => (max > 0 ? Math.max(0, Math.min(100, Math.round((100 * v) / max))) : 0);
+
+function mobButtons(m, p) {
+  const b = (action, label, cls = '') => `<button class="btn ${cls}" data-act="${action}" data-mob="${m.id}">${label}</button>`;
+  return b('attack', '⚔️ Attacca', 'primary') + b('special', `✨ ${esc(p.special.name)}${p.special.mana ? ` · ${p.special.mana}💙` : ''}`)
+    + b('defend', '🛡️ Difesa') + (m.aoe ? b('aoe', '💥 AoE') + b('special_aoe', '🌟 Speciale AoE') : '')
+    + b('flee', '🏃 Fuggi') + (p.scouter ? b('scan', '🔍 Scan') : '');
+}
+
+function paintArena() {
+  const { player: p, mobs, paused } = arena.data;
+  if (!p) { $('#ar-mobs').innerHTML = ''; $('#ar-empty').hidden = false; $('#ar-empty').textContent = 'Non sei ancora un giocatore: apri il bot e premi /start.'; return; }
+  $('#ar-name').textContent = state.me.name;
+  $('#ar-hp').style.width = `${pct(p.hp, p.max_hp)}%`; $('#ar-hp-n').textContent = `${fmt(p.hp)}/${fmt(p.max_hp)}`;
+  $('#ar-mana').style.width = `${pct(p.mana, p.max_mana)}%`; $('#ar-mana-n').textContent = `${fmt(p.mana)}/${fmt(p.max_mana)}`;
+
+  const box = $('#ar-mobs');
+  const seen = new Set();
+  mobs.forEach((m) => {
+    seen.add(String(m.id));
+    let card = box.querySelector(`.ar-mob[data-id="${m.id}"]`);
+    if (!card) {
+      card = document.createElement('article');
+      card.className = 'panel ar-mob' + (m.boss ? ' boss' : '');
+      card.dataset.id = m.id;
+      card.innerHTML = `<img alt="" src="${img(m.img, 256)}" onerror="this.onerror=null;this.src='/img/default/256.webp'">
+        <div class="ar-body"><div class="row spread"><b class="ar-title"></b><span class="row ar-tags"></span></div>
+          <div class="ar-stat"><span>❤️</span><div class="bar hp"><i></i></div><span class="ar-hp-n"></span></div>
+          <div class="muted ar-facts"></div><div class="ar-actions"></div></div>`;
+      box.appendChild(card);
+    }
+    card.querySelector('.ar-title').textContent = m.name;
+    card.querySelector('.ar-tags').innerHTML = `${m.boss ? '<span class="pill premium">👑 Boss</span>' : ''}<span class="pill">Lv. ${m.level}</span>
+      <span class="pill">${m.private ? '👤 Privato' : '👥 Gruppo'}</span>${m.dungeon ? '<span class="pill">🏰 Dungeon</span>' : ''}${m.defending ? '<span class="pill">🛡️ In difesa</span>' : ''}`;
+    card.querySelector('.bar > i').style.width = `${m.hp_pct}%`;
+    card.querySelector('.ar-hp-n').textContent = m.max_hp ? `${fmt(m.hp)}/${fmt(m.max_hp)}` : `${m.hp_pct}%`;
+    card.querySelector('.ar-facts').textContent = m.max_hp
+      ? `⚔️ ${fmt(m.attack)} · 🛡️ ${m.resistance}% · ⚡ ${m.speed} · ${m.attacks_in > 0 ? `attacca tra ${Math.ceil(m.attacks_in)}s` : 'attacco imminente'}`
+      : `⚡ Velocità ${m.speed}`;
+    const actions = card.querySelector('.ar-actions');
+    const sig = `${m.aoe}|${p.scouter}|${p.special.name}|${p.special.mana}`;
+    if (actions.dataset.sig !== sig) { actions.dataset.sig = sig; actions.innerHTML = mobButtons(m, p); }
+  });
+  box.querySelectorAll('.ar-mob').forEach((card) => {
+    if (seen.has(card.dataset.id) || card.classList.contains('gone')) return;
+    card.classList.add('gone'); // defeated or fled: it fades out instead of vanishing
+    setTimeout(() => card.remove(), 700);
+  });
+  const empty = $('#ar-empty');
+  empty.hidden = mobs.length > 0;
+  empty.textContent = paused ? 'Nessun nemico in vista: i combattimenti automatici sono in pausa.' : 'Nessun nemico in vista. Questa pagina si aggiorna da sola quando ne arriva uno.';
+  tickArena();
+}
+
+function tickArena() {
+  if (!arena.data || !arena.data.player || !$('#ar-status')) return;
+  const p = arena.data.player;
+  const wait = arenaReadyIn();
+  $('#ar-status').innerHTML = `${p.shield ? `<span class="pill">🛡️ ${fmt(p.shield)}</span>` : ''}${p.resting ? '<span class="pill premium">🛌 Stai riposando</span>'
+    : wait > 0 ? `<span class="pill">⏳ ${Math.ceil(wait)}s</span>` : '<span class="pill good">✅ Pronto</span>'}`;
+  document.querySelectorAll('#ar-mobs [data-act]').forEach((b) => {
+    b.disabled = arena.busy || ((wait > 0 || p.resting) && ARENA_COOLDOWN.has(b.dataset.act));
+  });
+}
+
+async function arenaClick(e) {
+  const b = e.target.closest('[data-act]');
+  if (!b || b.disabled || arena.busy) return;
+  arena.busy = true; tickArena();
+  const card = b.closest('.ar-mob');
+  try {
+    const r = await act('/api/combat', { mob: Number(b.dataset.mob), action: b.dataset.act });
+    if (r.ok && ARENA_COOLDOWN.has(b.dataset.act) && b.dataset.act !== 'defend') {
+      card.classList.remove('hit'); void card.offsetWidth; card.classList.add('hit');
+    }
+    arena.log.unshift({ text: r.message, ok: r.ok });
+    arena.log.length = Math.min(arena.log.length, 4);
+    $('#ar-log').innerHTML = arena.log.map((l, i) => `<div class="${l.ok ? '' : 'bad'}${i ? ' old' : ''}">${esc(l.text)}</div>`).join('');
+    arena.busy = false;
+    setArena(r);
+  } catch (err) {
+    arena.busy = false; tickArena();
+  }
 }
 
 // ---------- games catalogue (browse only) ----------

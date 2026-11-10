@@ -418,3 +418,30 @@ h1 { font-size: clamp(22px, 5vw, 32px); }
 .gdetail .case .art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .gdetail .gbody { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 @media (max-width: 520px) { .gdetail { flex-direction: column; align-items: center; } .gdetail .gbody { width: 100%; } }
+
+/* ---------- arena ---------- */
+.ar { display: grid; gap: 14px; }
+.ar .bar { flex: 1; height: 12px; }
+.ar .bar > i { transition: width .5s ease; }
+.ar .bar.hp > i { background: linear-gradient(90deg, #c42727, #ff6b6b); }
+.ar .bar.mana > i { background: linear-gradient(90deg, #2f6fd6, #5b9dff); }
+.ar-stat { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-variant-numeric: tabular-nums; }
+.ar-stat > span:last-child { min-width: 78px; text-align: right; font-size: 13px; color: var(--muted); }
+.ar-me { position: sticky; top: 58px; z-index: 5; }
+.ar-log { display: grid; gap: 4px; font-size: 14px; white-space: pre-line; }
+.ar-log > div { padding: 8px 12px; border-radius: 10px; background: var(--panel); border-left: 3px solid var(--good); }
+.ar-log > div.bad { border-left-color: var(--bad); }
+.ar-log > div.old { opacity: .55; }
+.ar-mobs { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.ar-mob { display: flex; gap: 12px; padding: 12px; transition: opacity .6s ease, transform .6s ease; }
+.ar-mob.boss { border-color: color-mix(in srgb, var(--premium) 60%, var(--line)); }
+.ar-mob.gone { opacity: 0; transform: scale(.94); pointer-events: none; }
+.ar-mob > img { width: 96px; height: 96px; flex: none; object-fit: cover; border-radius: 10px; background: var(--panel-2); }
+.ar-body { flex: 1; min-width: 0; }
+.ar-facts { margin-top: 6px; font-size: 13px; }
+.ar-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.ar-actions .btn { padding: 8px 12px; }
+.ar-mob.hit { animation: ar-hit .35s ease; }
+@keyframes ar-hit { 20% { transform: translateX(-6px); } 50% { transform: translateX(5px); } 80% { transform: translateX(-2px); } }
+@media (max-width: 480px) { .ar-mob > img { width: 64px; height: 64px; } }
+@media (prefers-reduced-motion: reduce) { .ar-mob.hit { animation: none; } .ar .bar > i { transition: none; } }

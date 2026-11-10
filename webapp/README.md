@@ -2,7 +2,7 @@
 
 A fast window on the game: character catalogue (search, filters, a full sheet per character), profile with titles,
 stats, achievements by saga (with their Nostr badge state), season pass, dungeons, and the Nostr link.
-It only reads game state, except the Nostr link, which it manages itself.
+Fight actions are handed to the bot (see Arena below).
 
 - **Run**: `python -m webapp` (port `WEBAPP_PORT`, default 8080). In Docker it is part of `docker compose up`.
 - **Needs** the same database settings as the bot (`DB_*` in `.env`), plus `WEBAPP_URL` (the public address the
@@ -15,6 +15,23 @@ It only reads game state, except the Nostr link, which it manages itself.
   at `/img/<name>/<width>.webp`. Badge pictures are public at `/badges/<achievement>-<tier>.png`.
 - **Share links**: `/p/<id>` previews a character in chats (name, picture, attack) and opens the app on it.
 - **Speed**: the whole catalogue (about 450 cards) is sent once, gzipped, and searched in the browser.
+
+## Arena (`#/arena`): the fights as a page
+
+The mobs of the group and of the player's private chat (solo dungeons), each with its health bar and the same buttons
+as the card in the chat (attack, special, defence, area attacks, flee, Scan), plus the player's own HP, mana and
+cooldown. The page asks for the state every 2.5 seconds and patches the cards in place.
+
+- **Who plays the action**: the bot, never the web app. A button writes a row in `web_combat_action`; the bot picks it
+  up (a thread polling every 0.4 s), runs it through the very handler of the chat's buttons and writes the answer back.
+  So the rules are the same, the card in the chat is refreshed as usual, and dungeon events still happen. An action the
+  bot does not pick up within 15 seconds is dropped: with the bot down the page says so and nothing lands later.
+- **What is shown**: like the chat, everyone sees the share of health left; the numbers need an equipped Scouter.
+- **Getting in**: `/arena` in the private chat sends a button that opens the page inside Telegram (a Mini App). There
+  Telegram's signed `initData` logs the player in (`POST /api/login/telegram`), no link needed. In the group, the
+  🖥 Arena button under each mob and `/arena` lead to the private chat first: Telegram opens pages in place only there.
+  With a Mini App registered in BotFather, put its direct link in `ARENA_LINK` and the group buttons open it at once.
+- In a browser the page works with the usual login link.
 
 ## Putting the public part on Vercel
 

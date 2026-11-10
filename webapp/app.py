@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from database import Base, Database
-from webapp import auth, data
+from webapp import auth, combat, data
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
@@ -27,7 +27,8 @@ app.add_middleware(GZipMiddleware, minimum_size=1024)
 @app.on_event("startup")
 def create_tables():
     import models.webapp  # noqa: F401  (registers the table)
-    Base.metadata.create_all(bind=Database().engine, tables=[models.webapp.WebLoginToken.__table__])
+    Base.metadata.create_all(bind=Database().engine, tables=[models.webapp.WebLoginToken.__table__,
+                                                             models.webapp.WebCombatAction.__table__])
 
 
 def current_user(aroma_session: str = Cookie(default=None)):
@@ -273,6 +274,37 @@ def me_transform(body: TransformBody, user_id: int = Depends(current_user)):
 @app.post("/api/dungeons/start", dependencies=[Depends(same_site_request)])
 def dungeon_start(body: DungeonBody, user_id: int = Depends(current_user)):
     return data.start_solo_dungeon(user_id, body.id)
+
+
+class CombatBody(BaseModel):
+    mob: int
+    action: str
+
+
+@app.get("/api/combat")
+def combat_state(user_id: int = Depends(current_user)):
+    return combat.state(user_id)
+
+
+@app.post("/api/combat", dependencies=[Depends(same_site_request)])
+def combat_act(body: CombatBody, user_id: int = Depends(current_user)):
+    return combat.act(user_id, body.mob, body.action)
+
+
+class TelegramLoginBody(BaseModel):
+    init_data: str
+
+
+@app.post("/api/login/telegram", dependencies=[Depends(same_site_request)])
+def login_telegram(body: TelegramLoginBody, response: Response):
+    """Opened inside Telegram as a Mini App: Telegram itself vouches for who is looking, no link needed."""
+    user_id = auth.telegram_user(body.init_data)
+    if not user_id or not data.is_player(user_id):
+        raise HTTPException(status_code=403, detail="telegram login refused")
+    # SameSite=None: on Telegram Web the Mini App runs in a frame of another site, where a Lax cookie is not sent.
+    response.set_cookie(auth.COOKIE, auth.make_session(user_id), max_age=auth.SESSION_MAX_AGE, httponly=True,
+                        samesite="none", secure=True)
+    return {"ok": True}
 
 
 @app.get("/api/market")

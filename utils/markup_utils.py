@@ -5,6 +5,14 @@ from services.pve_service import PvEService
 
 pve_service = PvEService()
 
+_arena_link = None
+
+
+def set_arena_link(link):
+    global _arena_link
+    _arena_link = link
+
+
 def get_combat_markup(enemy_type, enemy_id, chat_id, can_use_items=None):
     """Generate combat markup with all required buttons"""
     if can_use_items is None:
@@ -34,6 +42,9 @@ def get_combat_markup(enemy_type, enemy_id, chat_id, can_use_items=None):
         types.InlineKeyboardButton("🏃 Fuggi", callback_data=f"flee_enemy|{enemy_type}|{enemy_id}"),
         types.InlineKeyboardButton("🔍 Scan", callback_data=f"scan_mob|{enemy_id}")
     )
+    # The same fight as a page that updates in place (set at startup: without it the card stays as it was).
+    if _arena_link:
+        markup.add(types.InlineKeyboardButton("🖥 Arena", url=_arena_link))
         
     return markup
 
