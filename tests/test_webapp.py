@@ -14,6 +14,8 @@ from models.nostr import NostrBadgeOutbox, NostrLinkChallenge
 from models.character_ownership import CharacterOwnership
 from models.user import Utente
 from services.character_loader import get_character_loader
+from services.item_service import ItemService
+from services.user_service import UserService
 from models.webapp import WebLoginToken
 from webapp import auth
 from webapp.app import app
