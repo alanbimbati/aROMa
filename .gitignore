@@ -88,3 +88,6 @@ webapp/dist/
 cache/game_covers/
 cache/libretro_*.json
 .env.beta
+# What CI's upgrade rehearsal runs: the patterns above would hide them from it
+!scripts/ci/seed_synthetic_players.py
+!scripts/verify_launch.py

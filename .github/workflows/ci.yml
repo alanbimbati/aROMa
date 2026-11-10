@@ -63,9 +63,14 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - run: pip install -r requirements.txt -r requirements.dev.txt
+      # Both steps name the same database file: the export reads the tables the tests created.
       - name: Web app tests
-        run: python -m pytest tests/test_webapp.py --timeout=60 --timeout-method=signal -q -p no:cacheprovider
+        env:
+          SQLITE_PATH: ${{ runner.temp }}/web.db
+        run: python -m pytest tests/test_webapp.py tests/test_arena.py --timeout=60 --timeout-method=signal -q -p no:cacheprovider
       - name: Static export builds
+        env:
+          SQLITE_PATH: ${{ runner.temp }}/web.db
         run: |
           EXPORT_DIR=$RUNNER_TEMP/site API_ORIGIN=https://api.example.org WEBAPP_URL=https://aroma.example.org \
             DB_TYPE=sqlite TEST_DB=1 python -m webapp.export_static
