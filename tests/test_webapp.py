@@ -672,6 +672,8 @@ class TestInventoryGuildForge(unittest.TestCase):
     def test_using_a_potion_restores_what_it_promises(self):
         from models.items import Collezionabili
         from services.potion_service import PotionService
+        from services.item_service import ItemService
+        from services.user_service import UserService
         potion = next(p for p in PotionService().get_all_potions() if p['tipo'] == 'mana_potion')
         session = Database().get_session()
         user = session.query(Utente).filter_by(id_telegram=self.BOSS).first()
