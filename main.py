@@ -58,6 +58,7 @@ from services.cultivation_service import CultivationService
 stat_service = StatBuildService()
 
 from utils.markup_utils import get_combat_markup
+from utils.ephemeral import send_ephemeral_reply, player_combat_report
 from utils.ghost_cleanup import cleanup_ghost_users
 from services.leveling_service import LevelingService
 from services.boot_service import BootService
@@ -136,6 +137,16 @@ def safe_answer_callback(call_id, text=None, show_alert=False):
             pass
         else:
             print(f"[ERROR] Failed to answer callback {call_id}: {e}")
+
+def send_combat_report(call, cooldown_multiplier=1):
+    """After an action in the group, tell the player alone their HP, mana and cooldown."""
+    if call.message.chat.type == 'private':
+        return
+    try:
+        fighter = user_service.get_user(call.from_user.id)
+        send_ephemeral_reply(bot, call, player_combat_report(fighter, cooldown_multiplier))
+    except Exception as e:
+        print(f"[EPHEMERAL] combat report failed: {e}")
 
 def safe_edit_message(text, chat_id, message_id, reply_markup=None, parse_mode='markdown', message_obj=None):
     """Safely edit a message, handling both text and media (caption)"""
@@ -10292,8 +10303,13 @@ def callback_query(call):
             safe_answer_callback(call.id, "❌ Dati mostro non trovati. Forse è fuggito?", show_alert=True)
             return
             
-        msg = f"🔍 ANALISI SCOUTER: {mob['name']}\n\n"
         stats_text = format_mob_stats(mob, show_full=True)
+        # An alert is cut at 200 characters and has no formatting: the full sheet goes to the player alone.
+        if send_ephemeral_reply(bot, call, f"🔍 *ANALISI SCOUTER: {escape_markdown(mob['name'])}*\n\n{stats_text}"):
+            safe_answer_callback(call.id, "🔍 Scouter attivo!")
+            return
+
+        msg = f"🔍 ANALISI SCOUTER: {mob['name']}\n\n"
         # Remove markdown bolding for alert compatibility
         stats_text = stats_text.replace("**", "")
         msg += stats_text
@@ -10383,6 +10399,8 @@ def callback_query(call):
             else:
                 markup = get_combat_markup(enemy_type, enemy_id, call.message.chat.id)
                 send_combat_message(call.message.chat.id, full_msg, image_path, markup, enemy_id, old_msg_id)
+
+            send_combat_report(call)
                 
             # Check for new mobs (Dungeon progression)
             if extra_data and 'new_mob_ids' in extra_data and extra_data['new_mob_ids']:
@@ -10490,6 +10508,8 @@ def callback_query(call):
             else:
                 markup = get_combat_markup(enemy_type, enemy_id, call.message.chat.id)
                 send_combat_message(call.message.chat.id, full_msg, image_path, markup, enemy_id, old_msg_id)
+
+            send_combat_report(call)
                 
             if extra_data and 'new_mob_ids' in extra_data:
                 for new_mob_id in extra_data['new_mob_ids']:
@@ -10564,11 +10584,11 @@ def callback_query(call):
                 print(f"Error updating after flee: {e}")
                 
         else:
-            # Failed to flee
-            safe_answer_callback(call.id, "🚫 Fuga fallita!", show_alert=False)
-            bot.send_message(call.message.chat.id, f"Running refused: {msg}", parse_mode='markdown')
-            # actually safe_answer_callback with alert is better for failure
-            safe_answer_callback(call.id, msg, show_alert=True)
+            # A failed flee concerns the player alone: no message in the group.
+            if send_ephemeral_reply(bot, call, f"🚫 *Fuga fallita!*\n{msg}"):
+                safe_answer_callback(call.id, "🚫 Fuga fallita!")
+            else:
+                safe_answer_callback(call.id, msg, show_alert=True)
 
     elif action.startswith("aoe_attack_enemy|") or action.startswith("special_aoe_attack_enemy|"):
         # AoE attack on all enemies: aoe_attack_enemy|{type}|{id} or special_aoe_attack_enemy|{type}|{id}
@@ -10621,6 +10641,7 @@ def callback_query(call):
             # Send the summary message
             # We don't use send_combat_message here because it's a multi-target summary
             sent_msg = bot.send_message(call.message.chat.id, full_msg, parse_mode='markdown')
+            send_combat_report(call, cooldown_multiplier=2)
             
             # Re-display all surviving mobs
             if extra_data and 'mob_ids' in extra_data:
@@ -10823,6 +10844,7 @@ def callback_query(call):
                 send_combat_message(call.message.chat.id, full_msg, None, markup, mob_id, old_msg_id)
             else:
                 bot.send_message(call.message.chat.id, full_msg, parse_mode='markdown')
+            send_combat_report(call)
         else:
             safe_answer_callback(call.id, msg, show_alert=True)
     
