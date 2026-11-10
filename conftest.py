@@ -38,6 +38,10 @@ def _empty_database_per_module():
     from database import Base, Database
     gc.collect()  # a session a previous file leaked holds its write lock until it is collected
     engine = Database().engine
+    if engine.dialect.name != 'sqlite':
+        # Never empty a real database: on PostgreSQL the tests run on whatever is there, as before.
+        yield
+        return
     with engine.begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):
             if table.name in CATALOG_TABLES:
