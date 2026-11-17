@@ -2153,7 +2153,8 @@ class PvEService:
                     death_messages = []
                     
                     for target in targets:
-                        is_aoe_target = is_aoe
+                        # a dungeon mob hits every participant, but level_budget already sizes that hit per player
+                        is_aoe_target = is_aoe and not mob.dungeon_id
                         damage = self.combat_service.calculate_mob_damage_to_user(mob, target, is_aoe=is_aoe_target, is_boss=mob.is_boss)
                         
                         # Apply special attack multiplier

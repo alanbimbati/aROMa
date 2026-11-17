@@ -11344,8 +11344,6 @@ def spawn_weekly_boss_job():
                 pve_service.update_mob_message_id(boss_id, sent_boss_msg.message_id)
 
 def mob_attack_job():
-    if combat_paused():
-        return
     # Both mobs and bosses auto-attack periodically (all are Mob now, bosses have is_boss=True)
     
     # Process all enemy attacks (mobs and bosses)
@@ -11361,8 +11359,10 @@ def mob_attack_job():
             print(f"[DEBUG] Found {len(active_enemies)} active enemies. Processing attacks...")
             for enemy in active_enemies:
                 try:
-                    # Pass the chat_id where the enemy is located
                     chat_id = enemy.chat_id if enemy.chat_id else GRUPPO_AROMA
+                    # the pause is for the group only: private dungeons keep fighting back
+                    if chat_id == GRUPPO_AROMA and combat_paused():
+                        continue
                     attack_events = pve_service.mob_random_attack(specific_mob_id=enemy.id, chat_id=chat_id)
                     if attack_events:
                         markup = get_combat_markup("mob", enemy.id, chat_id)

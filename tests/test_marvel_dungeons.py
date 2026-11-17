@@ -138,3 +138,12 @@ def test_combat_pause_switch(monkeypatch):
     assert settings.combat_paused() is True
     from services.dungeon_service import DungeonService
     assert DungeonService().check_daily_dungeon_trigger(chat_id=1) is None  # paused: it touches nothing
+
+
+def test_a_dungeon_mob_does_not_hit_for_a_flat_1():
+    from types import SimpleNamespace
+    from services.combat_service import CombatService
+    user = SimpleNamespace(livello=14, invincible_until=None, allocated_resistance=0)
+    mob = SimpleNamespace(attack_damage=23, name='Sakaariano')  # a real level-35 dungeon mob seen in production
+    hits = [CombatService().calculate_mob_damage_to_user(mob, user) for _ in range(200)]
+    assert min(hits) >= 3

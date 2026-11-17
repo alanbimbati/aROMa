@@ -119,35 +119,15 @@ class CombatService:
         base_damage = mob.attack_damage if mob.attack_damage else 10
         multiplier = 1.0
         
-        # AoE Check logic typically handled outside, but if passed down:
-        # We assume 'base_damage' passed here is the raw mob damage.
-        # If is_aoe is True, we apply a reduction unless user is primary target.
-        # But wait, identifying primary target here is tricky without context.
-        # Let's assume the CALLER adjusts base_damage or multiplier passed?
-        # No, let's keep it simple: caller passes the 'effective' multiplier if needed, 
-        # or we follow the standard logic:
-        # Standard logic in PveService was: 0.7 for primary, 0.5 for others. 
-        # Here we just calculate raw mitigation.
-        
-        # Level Scaling
         user_level = getattr(user, 'livello', 1) or 1
         level_factor = 1 + (user_level * 0.02)
-        
-        # Initial Damage Calculation
-        # The formula in PveService was: (base * 0.5 * multiplier) / level_factor
-        # Let's stick to that but allow multiplier injection.
-        # REDUCED FACTOR from 0.5 to 0.25 to prevent one-shots
-        
-        adjusted_damage = int((base_damage * 0.25) / level_factor)
-        damage = int(adjusted_damage * random.uniform(0.8, 1.2))
-        
-        # DEBUG LOGGING for excessive damage
+        # kept as a float until the end: truncating at every step turned a few points of damage into a flat 1
+        damage = (base_damage * 0.25) / level_factor * random.uniform(0.8, 1.2)
         if damage > 200:
-            print(f"[COMBAT_DEBUG] Mob {mob.name} (Atk: {base_damage}) vs User (Lvl: {user_level}, Factor: {level_factor:.2f}). BaseDmg: {base_damage} -> Adj: {adjusted_damage} -> Final: {damage}")
+            print(f"[COMBAT_DEBUG] Mob {mob.name} (Atk: {base_damage}) vs User (Lvl: {user_level}). Final: {damage:.0f}")
 
         if is_aoe:
-            # Default AoE reduction if not specific
-            damage = int(damage * 0.5)
+            damage *= 0.5
 
         # Resistance Calculation
         user_res = getattr(user, 'allocated_resistance', 0) or 0
@@ -165,10 +145,9 @@ class CombatService:
         user_res = min(user_res, 75)
         
         if user_res > 0:
-            reduction_factor = 100 / (100 + user_res)
-            damage = int(damage * reduction_factor)
-            
-        return max(1, damage)
+            damage *= 100 / (100 + user_res)
+
+        return max(1, round(damage))
 
     def calculate_counterattack_damage(self, attacker, defender, parry_multiplier=1.2, is_perfect=False):
         """
