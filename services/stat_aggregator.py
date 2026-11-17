@@ -230,8 +230,8 @@ class StatAggregator:
         elif event_type == 'CRAFTING_COMPLETE':
             self._increment_stat(user_id, 'items_crafted', 1)
             
-        elif event_type == 'PROFESSION_LEVELUP':
-            self._set_stat(user_id, 'profession_level', value)
+        elif event_type == 'PROFESSION_LEVELUP' and context.get('profession', 'armorsmith') == 'armorsmith':
+            self._set_stat(user_id, 'profession_level', value)  # the armorsmith one: alchemy and garden keep their own
 
         # --- PROFESSION EVENTS (Garden & Alchemy) ---
         elif event_type == 'garden_plant':

@@ -16,6 +16,12 @@ from sqlalchemy import text, func
 from models.resources import Resource, UserResource, RefinedMaterial, UserRefinedMaterial, RefineryDaily, RefineryQueue
 from models.equipment import Equipment, UserEquipment
 
+
+def _round_randomly(x):
+    """2.3 gives 3 one time in three: a small batch keeps its fair chance at a rare material instead of always 0."""
+    whole = int(x)
+    return whole + (1 if random.random() < x - whole else 0)
+
 class CraftingService:
     """Manages equipment crafting and resources"""
     
@@ -29,7 +35,7 @@ class CraftingService:
             'name': 'armorsmith',
             'label': 'Armaiolo',
             'icon': '🔨',
-            'prefix': 'profession', # Legacy: profession_level
+            'prefix': 'armorsmith',
             'resources': [1, 2, 3, 6, 7]
         },
         'alchemy': {
@@ -434,9 +440,9 @@ class CraftingService:
                 mat_ids = [7, 8, 9] # Compost, Concime, Essenza
                 mat_names = ['Compost Organico', 'Concime Arricchito', 'Essenza Botanica']
             
-            qty_t3 = int(total_mass * (t3_chance / 100.0) * random.uniform(0.8, 1.2))
+            qty_t3 = _round_randomly(total_mass * (t3_chance / 100.0) * random.uniform(0.8, 1.2))
             remaining = total_mass - qty_t3
-            qty_t2 = int(remaining * (t2_chance / (100.0 - t3_chance)) * random.uniform(0.8, 1.2))
+            qty_t2 = min(remaining, _round_randomly(remaining * (t2_chance / (100.0 - t3_chance)) * random.uniform(0.8, 1.2)))
             qty_t1 = max(0, total_mass - qty_t3 - qty_t2)
             
             results = {mat_names[0]: qty_t1, mat_names[1]: qty_t2, mat_names[2]: qty_t3}
@@ -614,9 +620,10 @@ class CraftingService:
                 }
             
             # Check crafting slots (armory_level = number of parallel crafts allowed)
-            active_jobs = session.query(func.count(RefineryQueue.id)).filter(
-                RefineryQueue.guild_id == guild_id,
-                RefineryQueue.status == 'in_progress'
+            from models.crafting import CraftingQueue
+            active_jobs = session.query(func.count(CraftingQueue.id)).filter(
+                CraftingQueue.guild_id == guild_id,
+                CraftingQueue.status == 'in_progress'
             ).scalar() or 0
             
             if active_jobs >= armory_level:
@@ -682,8 +689,6 @@ class CraftingService:
             # Add to crafting queue
             completion_time = datetime.now() + timedelta(seconds=crafting_time)
             
-            # Wait, the model for crafting_queue is CraftingQueue, imported as such
-            from models.crafting import CraftingQueue
             new_job = CraftingQueue(
                 guild_id=guild_id,
                 user_id=user_id,
@@ -872,6 +877,7 @@ class CraftingService:
         `session` is accepted because the alchemy and garden services pass theirs, but the write always
         goes through its own short session, so it never waits on the caller's open transaction."""
         info = self.get_profession_info(user_id, profession_name)
+        prefix = self.PROFESSIONS.get(profession_name, self.PROFESSIONS['armorsmith'])['prefix']
         current_xp = info['xp']
         current_level = info['level']
         
@@ -901,24 +907,24 @@ class CraftingService:
             # Update XP (Atomic UPSERT style)
             xp_entry = session.query(UserStat).filter_by(
                 user_id=user_id, 
-                stat_key=f'{profession_name}_xp'
+                stat_key=f'{prefix}_xp'
             ).first()
             
             if xp_entry:
                 xp_entry.value = new_xp
             else:
-                xp_entry = UserStat(user_id=user_id, stat_key=f'{profession_name}_xp', value=new_xp)
+                xp_entry = UserStat(user_id=user_id, stat_key=f'{prefix}_xp', value=new_xp)
                 session.add(xp_entry)
             
             # Update Level
             lvl_entry = session.query(UserStat).filter_by(
                 user_id=user_id, 
-                stat_key=f'{profession_name}_level'
+                stat_key=f'{prefix}_level'
             ).first()
             if lvl_entry:
                 lvl_entry.value = new_level
             else:
-                lvl_entry = UserStat(user_id=user_id, stat_key=f'{profession_name}_level', value=new_level)
+                lvl_entry = UserStat(user_id=user_id, stat_key=f'{prefix}_level', value=new_level)
                 session.add(lvl_entry)
             
             session.commit()
